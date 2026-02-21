@@ -8,6 +8,16 @@ impl Status {
     const NEGATIVE_BIT: u8 = 0b1000_0000;
 
     #[must_use]
+    pub const fn with_bits(bits: u8) -> Self {
+        Self { bits }
+    }
+
+    #[must_use]
+    pub const fn bits(self) -> u8 {
+        self.bits
+    }
+
+    #[must_use]
     pub fn zero(&self) -> bool {
         self.bits & Self::ZERO_BIT != 0
     }
