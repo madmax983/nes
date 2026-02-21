@@ -10,7 +10,8 @@ $proofFiles = @(
     (Join-Path $repoRoot "crates/nes-proof/src/cpu_model.rs"),
     (Join-Path $repoRoot "crates/nes-proof/src/status_flags.rs"),
     (Join-Path $repoRoot "crates/nes-proof/src/bus_map.rs"),
-    (Join-Path $repoRoot "crates/nes-proof/src/mapper_nrom_uxrom.rs")
+    (Join-Path $repoRoot "crates/nes-proof/src/mapper_nrom_uxrom.rs"),
+    (Join-Path $repoRoot "crates/nes-proof/src/mapper_mmc1.rs")
 )
 
 foreach ($file in $proofFiles) {
