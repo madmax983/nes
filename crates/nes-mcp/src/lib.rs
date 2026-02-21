@@ -1,3 +1,3 @@
-pub fn crate_bootstrap_marker() -> &'static str {
-    "ok"
-}
+mod tools;
+
+pub use tools::{tool_catalog, ToolDefinition};
