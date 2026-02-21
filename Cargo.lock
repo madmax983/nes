@@ -13,6 +13,9 @@ version = "0.1.0"
 [[package]]
 name = "nes-mcp"
 version = "0.1.0"
+dependencies = [
+ "nes-core",
+]
 
 [[package]]
 name = "nes-proof"
