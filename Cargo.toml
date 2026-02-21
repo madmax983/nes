@@ -1,6 +1,10 @@
-[package]
-name = "nes-mcp"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+[workspace]
+resolver = "2"
+members = [
+    "crates/nes-core",
+    "crates/nes-mcp",
+    "crates/nes-desktop",
+    "crates/nes-web",
+    "crates/nes-proof",
+    "crates/nes-test-harness",
+]
