@@ -28,4 +28,3 @@ pub fn map_region(addr: u16) -> BusRegion {
         _ => BusRegion::CartridgePrgRom,
     }
 }
-

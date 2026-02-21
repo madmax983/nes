@@ -1,4 +1,4 @@
-use nes_core::bus::{map_region, BusRegion};
+use nes_core::bus::{BusRegion, map_region};
 
 #[test]
 fn address_regions_are_unambiguous() {
