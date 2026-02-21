@@ -9,6 +9,9 @@ version = "0.1.0"
 [[package]]
 name = "nes-desktop"
 version = "0.1.0"
+dependencies = [
+ "nes-core",
+]
 
 [[package]]
 name = "nes-mcp"

@@ -4,4 +4,4 @@ pub mod cpu;
 pub mod mapper;
 mod scheduler;
 
-pub use api::{Command, CoreError, CoreQuery, EmulatorState, NesCore, QueryResult};
+pub use api::{Button, Command, CoreError, CoreQuery, EmulatorState, NesCore, QueryResult};

@@ -3,11 +3,41 @@ use core::fmt;
 use crate::scheduler::Scheduler;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Button {
+    A,
+    B,
+    Select,
+    Start,
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Button {
+    #[must_use]
+    pub fn bit_mask(self) -> u8 {
+        match self {
+            Self::A => 0b0000_0001,
+            Self::B => 0b0000_0010,
+            Self::Select => 0b0000_0100,
+            Self::Start => 0b0000_1000,
+            Self::Up => 0b0001_0000,
+            Self::Down => 0b0010_0000,
+            Self::Left => 0b0100_0000,
+            Self::Right => 0b1000_0000,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Pause,
     Resume,
     StepCpu,
     StepFrame,
+    PressButton(Button),
+    ReleaseButton(Button),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +59,7 @@ pub enum QueryResult {
 pub struct NesCore {
     paused: bool,
     scheduler: Scheduler,
+    controller_bits: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +83,7 @@ impl NesCore {
         Self {
             paused: false,
             scheduler: Scheduler::new(),
+            controller_bits: 0,
         }
     }
 
@@ -66,12 +98,18 @@ impl NesCore {
     }
 
     #[must_use]
+    pub fn controller_bits(&self) -> u8 {
+        self.controller_bits
+    }
+
+    #[must_use]
     pub fn state_hash(&self) -> u64 {
         let paused = if self.paused { 1_u64 } else { 0_u64 };
         paused
             ^ self.scheduler.cpu_cycles().rotate_left(13)
             ^ self.scheduler.ppu_cycles().rotate_left(29)
             ^ self.scheduler.apu_cycles().rotate_left(47)
+            ^ (self.controller_bits as u64).rotate_left(7)
     }
 
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
@@ -90,6 +128,14 @@ impl NesCore {
             }
             Command::StepFrame => {
                 self.scheduler.step_frame();
+                Ok(())
+            }
+            Command::PressButton(button) => {
+                self.controller_bits |= button.bit_mask();
+                Ok(())
+            }
+            Command::ReleaseButton(button) => {
+                self.controller_bits &= !button.bit_mask();
                 Ok(())
             }
         }
