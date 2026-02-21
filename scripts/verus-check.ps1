@@ -8,7 +8,8 @@ if (-not (Test-Path $verus)) {
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $proofFiles = @(
     (Join-Path $repoRoot "crates/nes-proof/src/cpu_model.rs"),
-    (Join-Path $repoRoot "crates/nes-proof/src/status_flags.rs")
+    (Join-Path $repoRoot "crates/nes-proof/src/status_flags.rs"),
+    (Join-Path $repoRoot "crates/nes-proof/src/bus_map.rs")
 )
 
 foreach ($file in $proofFiles) {

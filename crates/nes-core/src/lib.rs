@@ -1,4 +1,5 @@
 mod api;
+pub mod bus;
 pub mod cpu;
 mod scheduler;
 
