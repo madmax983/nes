@@ -1,4 +1,11 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SchedulerSnapshot {
+    pub cpu_cycles: u64,
+    pub ppu_cycles: u64,
+    pub apu_cycles: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Scheduler {
     cpu_cycles: u64,
     ppu_cycles: u64,
@@ -28,6 +35,21 @@ impl Scheduler {
         for _ in 0..Self::FRAME_CPU_CYCLES {
             self.step_cpu();
         }
+    }
+
+    #[must_use]
+    pub fn snapshot(&self) -> SchedulerSnapshot {
+        SchedulerSnapshot {
+            cpu_cycles: self.cpu_cycles,
+            ppu_cycles: self.ppu_cycles,
+            apu_cycles: self.apu_cycles,
+        }
+    }
+
+    pub fn restore(&mut self, snapshot: SchedulerSnapshot) {
+        self.cpu_cycles = snapshot.cpu_cycles;
+        self.ppu_cycles = snapshot.ppu_cycles;
+        self.apu_cycles = snapshot.apu_cycles;
     }
 
     #[must_use]

@@ -1,6 +1,7 @@
 use core::fmt;
 
-use crate::scheduler::Scheduler;
+use crate::replay::replay_commands;
+use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -53,6 +54,13 @@ pub struct EmulatorState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryResult {
     EmulatorState(EmulatorState),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoreSnapshot {
+    pub paused: bool,
+    pub controller_bits: u8,
+    pub scheduler: SchedulerSnapshot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +118,25 @@ impl NesCore {
             ^ self.scheduler.ppu_cycles().rotate_left(29)
             ^ self.scheduler.apu_cycles().rotate_left(47)
             ^ (self.controller_bits as u64).rotate_left(7)
+    }
+
+    #[must_use]
+    pub fn save_state(&self) -> CoreSnapshot {
+        CoreSnapshot {
+            paused: self.paused,
+            controller_bits: self.controller_bits,
+            scheduler: self.scheduler.snapshot(),
+        }
+    }
+
+    pub fn load_state(&mut self, snapshot: &CoreSnapshot) {
+        self.paused = snapshot.paused;
+        self.controller_bits = snapshot.controller_bits;
+        self.scheduler.restore(snapshot.scheduler);
+    }
+
+    pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
+        replay_commands(self, commands)
     }
 
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
