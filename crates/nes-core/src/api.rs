@@ -2,11 +2,14 @@ use core::fmt;
 
 use crate::cpu::{Cpu, CpuError, CpuSnapshot};
 use crate::replay::replay_commands;
+use crate::rom::{RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
 const DEFAULT_START_PC: u16 = 0xC000;
 const DEFAULT_SPEED_PERMILLE: u16 = 1_000;
 const BASE_FPS_MILLI: u32 = 60_000;
+const PRG_16K_BYTES: usize = 16 * 1024;
+const PRG_32K_BYTES: usize = 32 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -83,6 +86,13 @@ pub struct CoreSnapshot {
     pub cpu: CpuSnapshot,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RomLoadInfo {
+    pub mapper_id: u8,
+    pub prg_rom_bytes: usize,
+    pub reset_pc: u16,
+}
+
 #[derive(Debug, Clone)]
 pub struct NesCore {
     paused: bool,
@@ -97,6 +107,7 @@ pub struct NesCore {
 pub enum CoreError {
     UnsupportedCommand,
     InvalidSpeed(u16),
+    RomLoadFailed(RomError),
     CpuStepFailed(CpuError),
 }
 
@@ -105,6 +116,7 @@ impl fmt::Display for CoreError {
         match self {
             Self::UnsupportedCommand => f.write_str("unsupported command"),
             Self::InvalidSpeed(speed) => write!(f, "invalid speed multiplier: {speed}"),
+            Self::RomLoadFailed(err) => write!(f, "rom load failed: {err}"),
             Self::CpuStepFailed(err) => write!(f, "cpu step failed: {err}"),
         }
     }
@@ -223,6 +235,49 @@ impl NesCore {
 
     pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
         replay_commands(self, commands)
+    }
+
+    pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
+        let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
+        if rom.mapper_id != 0 {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
+                rom.mapper_id,
+            )));
+        }
+
+        match rom.prg_rom.len() {
+            PRG_16K_BYTES => {
+                self.cpu.load_bytes(0x8000, rom.prg_rom);
+                self.cpu.load_bytes(0xC000, rom.prg_rom);
+            }
+            PRG_32K_BYTES => {
+                self.cpu.load_bytes(0x8000, rom.prg_rom);
+            }
+            other => {
+                return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                    other,
+                )));
+            }
+        }
+
+        let reset_pc = {
+            let lo = self.cpu.read_byte(0xFFFC);
+            let hi = self.cpu.read_byte(0xFFFD);
+            let pc = u16::from_le_bytes([lo, hi]);
+            if pc == 0 { 0x8000 } else { pc }
+        };
+
+        self.paused = false;
+        self.controller_bits = 0;
+        self.scheduler.reset();
+        self.cpu.reset(reset_pc);
+        self.last_cpu_trace = None;
+
+        Ok(RomLoadInfo {
+            mapper_id: rom.mapper_id,
+            prg_rom_bytes: rom.prg_rom.len(),
+            reset_pc,
+        })
     }
 
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {

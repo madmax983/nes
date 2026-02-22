@@ -9,11 +9,42 @@ fn params(pairs: &[(&str, &str)]) -> ToolParams {
     map
 }
 
+fn sample_nrom16_ines() -> Vec<u8> {
+    let mut rom = vec![0_u8; 16 + 16 * 1024];
+    rom[0] = 0x4E;
+    rom[1] = 0x45;
+    rom[2] = 0x53;
+    rom[3] = 0x1A;
+    rom[4] = 1;
+    rom[5] = 0;
+
+    let prg_start = 16;
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x42;
+    rom[prg_start + 0x3FFC] = 0x00;
+    rom[prg_start + 0x3FFD] = 0x80;
+    rom
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push_str(&format!("{byte:02X}"));
+    }
+    output
+}
+
 #[test]
 fn every_catalog_tool_has_dispatch_path() {
     let mut core = NesCore::new();
+    let rom_hex = hex_encode(&sample_nrom16_ines());
     for tool in tool_catalog() {
         let params = match tool.name {
+            "load_rom" => {
+                let mut map = ToolParams::new();
+                map.insert("rom_hex".to_owned(), rom_hex.clone());
+                map
+            }
             "press_button" | "release_button" => params(&[("button", "A")]),
             "set_controller_state" => params(&[("bits", "0x5A")]),
             "set_speed" => params(&[("multiplier", "1.5")]),
@@ -89,4 +120,35 @@ fn save_and_load_state_round_trip_restores_state_hash() {
 
     dispatch_tool(&mut core, "load_state", &params(&[("slot", "slot0")])).unwrap();
     assert_eq!(saved_hash, core.state_hash());
+}
+
+#[test]
+fn load_rom_tool_maps_program_into_core_execution_path() {
+    let mut core = NesCore::new();
+    let rom_hex = hex_encode(&sample_nrom16_ines());
+
+    let output = dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).unwrap();
+    match output {
+        DispatchOutput::RomLoaded {
+            mapper_id,
+            prg_rom_bytes,
+            reset_pc,
+        } => {
+            assert_eq!(mapper_id, 0);
+            assert_eq!(prg_rom_bytes, 16 * 1024);
+            assert_eq!(reset_pc, 0x8000);
+        }
+        other => panic!("unexpected load_rom output: {other:?}"),
+    }
+
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
+
+    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).unwrap();
+    match regs {
+        DispatchOutput::Registers { a, pc, .. } => {
+            assert_eq!(a, 0x42);
+            assert_eq!(pc, 0x8002);
+        }
+        other => panic!("unexpected registers output: {other:?}"),
+    }
 }

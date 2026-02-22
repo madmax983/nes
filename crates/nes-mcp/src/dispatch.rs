@@ -1,5 +1,6 @@
 use core::fmt;
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
 use std::sync::{Mutex, OnceLock};
 
 use nes_core::{Button, Command, CoreQuery, CoreSnapshot, NesCore, QueryResult};
@@ -51,6 +52,11 @@ pub enum DispatchOutput {
     },
     StateSlot {
         slot: String,
+    },
+    RomLoaded {
+        mapper_id: u8,
+        prg_rom_bytes: usize,
+        reset_pc: u16,
     },
 }
 
@@ -224,7 +230,18 @@ pub fn dispatch_tool(
                 Err(DispatchError::StateSlotNotFound(slot))
             }
         }
-        "load_rom" | "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
+        "load_rom" => {
+            let rom_bytes = parse_rom_payload(params)?;
+            let info = core
+                .load_ines_rom(&rom_bytes)
+                .map_err(|err| DispatchError::Core(err.to_string()))?;
+            Ok(DispatchOutput::RomLoaded {
+                mapper_id: info.mapper_id,
+                prg_rom_bytes: info.prg_rom_bytes,
+                reset_pc: info.reset_pc,
+            })
+        }
+        "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }
         _ => Err(DispatchError::UnknownTool(tool_name.to_owned())),
@@ -326,5 +343,58 @@ fn parse_integer(raw: &str) -> Result<u64, DispatchError> {
     } else {
         raw.parse::<u64>()
             .map_err(|_| DispatchError::InvalidParams(format!("invalid integer literal '{raw}'")))
+    }
+}
+
+fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
+    if let Some(path) = params.get("rom_path") {
+        return fs::read(path).map_err(|err| {
+            DispatchError::InvalidParams(format!("unable to read rom_path '{path}': {err}"))
+        });
+    }
+
+    let Some(hex) = params.get("rom_hex") else {
+        return Err(DispatchError::InvalidParams(
+            "provide rom_hex or rom_path".to_owned(),
+        ));
+    };
+    parse_hex_bytes(hex)
+}
+
+fn parse_hex_bytes(raw: &str) -> Result<Vec<u8>, DispatchError> {
+    let mut cleaned = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if !ch.is_ascii_whitespace() && ch != '_' {
+            cleaned.push(ch);
+        }
+    }
+
+    if !cleaned.len().is_multiple_of(2) {
+        return Err(DispatchError::InvalidParams(
+            "rom_hex must have an even number of hex digits".to_owned(),
+        ));
+    }
+
+    let mut bytes = Vec::with_capacity(cleaned.len() / 2);
+    let as_bytes = cleaned.as_bytes();
+    let mut index = 0;
+    while index < as_bytes.len() {
+        let hi = decode_hex_nibble(as_bytes[index], index)?;
+        let lo = decode_hex_nibble(as_bytes[index + 1], index + 1)?;
+        bytes.push((hi << 4) | lo);
+        index += 2;
+    }
+    Ok(bytes)
+}
+
+fn decode_hex_nibble(ch: u8, index: usize) -> Result<u8, DispatchError> {
+    match ch {
+        b'0'..=b'9' => Ok(ch - b'0'),
+        b'a'..=b'f' => Ok(ch - b'a' + 10),
+        b'A'..=b'F' => Ok(ch - b'A' + 10),
+        _ => Err(DispatchError::InvalidParams(format!(
+            "rom_hex has invalid hex digit '{}' at index {}",
+            ch as char, index
+        ))),
     }
 }
