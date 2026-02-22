@@ -179,6 +179,29 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
+            0xC9 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("CMP #${imm:02X}"));
+                self.status.update_compare(self.a, imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xD0 => {
+                let offset = self.read(snapshot.pc.wrapping_add(1));
+                let next_pc = snapshot.pc.wrapping_add(2);
+                let target = branch_target(next_pc, offset);
+                let trace = format_trace(snapshot, &[opcode, offset], &format!("BNE ${target:04X}"));
+                self.pc = if !self.status.zero() { target } else { next_pc };
+                Ok(trace)
+            }
+            0xF0 => {
+                let offset = self.read(snapshot.pc.wrapping_add(1));
+                let next_pc = snapshot.pc.wrapping_add(2);
+                let target = branch_target(next_pc, offset);
+                let trace = format_trace(snapshot, &[opcode, offset], &format!("BEQ ${target:04X}"));
+                self.pc = if self.status.zero() { target } else { next_pc };
+                Ok(trace)
+            }
             0xAA => {
                 let trace = format_trace(snapshot, &[opcode], "TAX");
                 self.x = self.a;
@@ -230,6 +253,16 @@ impl Cpu {
         self.sp = self.sp.wrapping_add(1);
         let addr = STACK_BASE.wrapping_add(self.sp as u16);
         self.memory[addr as usize]
+    }
+}
+
+#[must_use]
+fn branch_target(next_pc: u16, offset: u8) -> u16 {
+    let signed = i16::from(offset as i8);
+    if signed >= 0 {
+        next_pc.wrapping_add(signed as u16)
+    } else {
+        next_pc.wrapping_sub((-signed) as u16)
     }
 }
 

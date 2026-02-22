@@ -73,6 +73,61 @@ fn jsr_and_rts_round_trip_through_stack() {
 }
 
 #[test]
+fn beq_taken_when_zero_flag_is_set() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x01, 0xC9, 0x01, 0xF0, 0x02, 0xA2, 0x00, 0xA2, 0x7F]);
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+
+    let branch_trace = cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.pc(), 0xC008);
+    assert_eq!(
+        branch_trace,
+        "C004  F0 02     BEQ $C008                       A:01 X:00 Y:00 P:27 SP:FD"
+    );
+
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.x(), 0x7F);
+    assert_eq!(cpu.pc(), 0xC00A);
+}
+
+#[test]
+fn bne_taken_when_zero_flag_is_clear() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x01, 0xC9, 0x02, 0xD0, 0x02, 0xA2, 0x00, 0xA2, 0x55]);
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+
+    let branch_trace = cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.pc(), 0xC008);
+    assert_eq!(
+        branch_trace,
+        "C004  D0 02     BNE $C008                       A:01 X:00 Y:00 P:A4 SP:FD"
+    );
+
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.x(), 0x55);
+    assert_eq!(cpu.pc(), 0xC00A);
+}
+
+#[test]
+fn beq_not_taken_when_zero_flag_is_clear() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x01, 0xC9, 0x02, 0xF0, 0x02, 0xA2, 0x33, 0xA2, 0x55]);
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.pc(), 0xC006);
+
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.x(), 0x33);
+}
+
+#[test]
 fn nestest_style_trace_for_lda_immediate_matches_expected_prefix() {
     let mut cpu = Cpu::new(0xC000);
     cpu.load_bytes(0xC000, &[0xA9, 0x01]);
