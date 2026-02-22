@@ -2,6 +2,8 @@ use core::fmt;
 
 use crate::cpu::status::Status;
 
+const STACK_BASE: u16 = 0x0100;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuError {
     UnknownOpcode(u8),
@@ -83,6 +85,16 @@ impl Cpu {
     }
 
     #[must_use]
+    pub const fn sp(&self) -> u8 {
+        self.sp
+    }
+
+    #[must_use]
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
+
+    #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
         CpuSnapshot {
             pc: self.pc,
@@ -122,6 +134,27 @@ impl Cpu {
 
         let opcode = self.read(snapshot.pc);
         match opcode {
+            0x20 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let target = u16::from_le_bytes([low, high]);
+                let trace = format_trace(snapshot, &[opcode, low, high], &format!("JSR ${target:04X}"));
+
+                let return_addr = snapshot.pc.wrapping_add(2);
+                self.push((return_addr >> 8) as u8);
+                self.push(return_addr as u8);
+                self.pc = target;
+                Ok(trace)
+            }
+            0x60 => {
+                let trace = format_trace(snapshot, &[opcode], "RTS");
+
+                let low = self.pull();
+                let high = self.pull();
+                let return_addr = u16::from_le_bytes([low, high]);
+                self.pc = return_addr.wrapping_add(1);
+                Ok(trace)
+            }
             0xA9 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
                 let trace = format_trace(snapshot, &[opcode, imm], &format!("LDA #${imm:02X}"));
@@ -184,6 +217,18 @@ impl Cpu {
     }
 
     fn read(&self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
+
+    fn push(&mut self, value: u8) {
+        let addr = STACK_BASE.wrapping_add(self.sp as u16);
+        self.memory[addr as usize] = value;
+        self.sp = self.sp.wrapping_sub(1);
+    }
+
+    fn pull(&mut self) -> u8 {
+        self.sp = self.sp.wrapping_add(1);
+        let addr = STACK_BASE.wrapping_add(self.sp as u16);
         self.memory[addr as usize]
     }
 }

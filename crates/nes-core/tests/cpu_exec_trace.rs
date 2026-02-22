@@ -42,6 +42,37 @@ fn cpu_executes_ldx_ldy_txa_tya_sequence() {
 }
 
 #[test]
+fn jsr_and_rts_round_trip_through_stack() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0x20, 0x05, 0xC0, 0xEA, 0xEA, 0xE8, 0x60]);
+
+    let jsr_trace = cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.pc(), 0xC005);
+    assert_eq!(cpu.sp(), 0xFB);
+    assert_eq!(cpu.read_byte(0x01FD), 0xC0);
+    assert_eq!(cpu.read_byte(0x01FC), 0x02);
+    assert_eq!(
+        jsr_trace,
+        "C000  20 05 C0  JSR $C005                       A:00 X:00 Y:00 P:24 SP:FD"
+    );
+
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.x(), 0x01);
+    assert_eq!(cpu.pc(), 0xC006);
+
+    let rts_trace = cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.pc(), 0xC003);
+    assert_eq!(cpu.sp(), 0xFD);
+    assert_eq!(
+        rts_trace,
+        "C006  60        RTS                             A:00 X:01 Y:00 P:24 SP:FB"
+    );
+
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.pc(), 0xC004);
+}
+
+#[test]
 fn nestest_style_trace_for_lda_immediate_matches_expected_prefix() {
     let mut cpu = Cpu::new(0xC000);
     cpu.load_bytes(0xC000, &[0xA9, 0x01]);
