@@ -78,6 +78,11 @@ impl Cpu {
     }
 
     #[must_use]
+    pub const fn y(&self) -> u8 {
+        self.y
+    }
+
+    #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
         CpuSnapshot {
             pc: self.pc,
@@ -125,10 +130,40 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
+            0xA2 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("LDX #${imm:02X}"));
+                self.x = imm;
+                self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xA0 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("LDY #${imm:02X}"));
+                self.y = imm;
+                self.status.update_zn(self.y);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0xAA => {
                 let trace = format_trace(snapshot, &[opcode], "TAX");
                 self.x = self.a;
                 self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x8A => {
+                let trace = format_trace(snapshot, &[opcode], "TXA");
+                self.a = self.x;
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x98 => {
+                let trace = format_trace(snapshot, &[opcode], "TYA");
+                self.a = self.y;
+                self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
