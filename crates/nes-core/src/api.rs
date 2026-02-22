@@ -4,6 +4,10 @@ use crate::cpu::{Cpu, CpuError, CpuSnapshot};
 use crate::replay::replay_commands;
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
+const DEFAULT_START_PC: u16 = 0xC000;
+const DEFAULT_SPEED_PERMILLE: u16 = 1_000;
+const BASE_FPS_MILLI: u32 = 60_000;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
     A,
@@ -36,30 +40,44 @@ impl Button {
 pub enum Command {
     Pause,
     Resume,
+    Reset,
+    PowerCycle,
     StepCpu,
+    StepScanline,
     StepFrame,
+    SetControllerState(u8),
     PressButton(Button),
     ReleaseButton(Button),
+    SetSpeed(u16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreQuery {
     EmulatorState,
+    Registers,
+    Memory(u16),
+    FpsMilli,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmulatorState {
     pub paused: bool,
+    pub speed_permille: u16,
+    pub controller_bits: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryResult {
     EmulatorState(EmulatorState),
+    Registers(CpuSnapshot),
+    Memory(u8),
+    FpsMilli(u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CoreSnapshot {
     pub paused: bool,
+    pub speed_permille: u16,
     pub controller_bits: u8,
     pub scheduler: SchedulerSnapshot,
     pub cpu: CpuSnapshot,
@@ -68,6 +86,7 @@ pub struct CoreSnapshot {
 #[derive(Debug, Clone)]
 pub struct NesCore {
     paused: bool,
+    speed_permille: u16,
     scheduler: Scheduler,
     controller_bits: u8,
     cpu: Cpu,
@@ -77,6 +96,7 @@ pub struct NesCore {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
     UnsupportedCommand,
+    InvalidSpeed(u16),
     CpuStepFailed(CpuError),
 }
 
@@ -84,6 +104,7 @@ impl fmt::Display for CoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnsupportedCommand => f.write_str("unsupported command"),
+            Self::InvalidSpeed(speed) => write!(f, "invalid speed multiplier: {speed}"),
             Self::CpuStepFailed(err) => write!(f, "cpu step failed: {err}"),
         }
     }
@@ -96,9 +117,10 @@ impl NesCore {
     pub fn new() -> Self {
         Self {
             paused: false,
+            speed_permille: DEFAULT_SPEED_PERMILLE,
             scheduler: Scheduler::new(),
             controller_bits: 0,
-            cpu: Cpu::new(0xC000),
+            cpu: Cpu::new(DEFAULT_START_PC),
             last_cpu_trace: None,
         }
     }
@@ -106,6 +128,11 @@ impl NesCore {
     #[must_use]
     pub fn is_paused(&self) -> bool {
         self.paused
+    }
+
+    #[must_use]
+    pub const fn speed_permille(&self) -> u16 {
+        self.speed_permille
     }
 
     #[must_use]
@@ -143,6 +170,21 @@ impl NesCore {
     }
 
     #[must_use]
+    pub fn cpu_snapshot(&self) -> CpuSnapshot {
+        self.cpu.snapshot()
+    }
+
+    #[must_use]
+    pub fn read_memory(&self, addr: u16) -> u8 {
+        self.cpu.read_byte(addr)
+    }
+
+    #[must_use]
+    pub fn fps_milli(&self) -> u32 {
+        BASE_FPS_MILLI.saturating_mul(self.speed_permille as u32) / DEFAULT_SPEED_PERMILLE as u32
+    }
+
+    #[must_use]
     pub fn state_hash(&self) -> u64 {
         let paused = if self.paused { 1_u64 } else { 0_u64 };
         let cpu = self.cpu.snapshot();
@@ -150,6 +192,7 @@ impl NesCore {
             ^ self.scheduler.cpu_cycles().rotate_left(13)
             ^ self.scheduler.ppu_cycles().rotate_left(29)
             ^ self.scheduler.apu_cycles().rotate_left(47)
+            ^ (self.speed_permille as u64).rotate_left(3)
             ^ (self.controller_bits as u64).rotate_left(7)
             ^ (cpu.pc as u64).rotate_left(19)
             ^ (cpu.a as u64).rotate_left(23)
@@ -162,6 +205,7 @@ impl NesCore {
     pub fn save_state(&self) -> CoreSnapshot {
         CoreSnapshot {
             paused: self.paused,
+            speed_permille: self.speed_permille,
             controller_bits: self.controller_bits,
             scheduler: self.scheduler.snapshot(),
             cpu: self.cpu.snapshot(),
@@ -170,6 +214,7 @@ impl NesCore {
 
     pub fn load_state(&mut self, snapshot: &CoreSnapshot) {
         self.paused = snapshot.paused;
+        self.speed_permille = snapshot.speed_permille;
         self.controller_bits = snapshot.controller_bits;
         self.scheduler.restore(snapshot.scheduler);
         self.cpu.restore(snapshot.cpu);
@@ -190,14 +235,34 @@ impl NesCore {
                 self.paused = false;
                 Ok(())
             }
+            Command::Reset => {
+                self.reset_runtime();
+                Ok(())
+            }
+            Command::PowerCycle => {
+                self.reset_runtime();
+                self.speed_permille = DEFAULT_SPEED_PERMILLE;
+                Ok(())
+            }
             Command::StepCpu => {
-                let trace = self.cpu.step_with_trace().map_err(CoreError::CpuStepFailed)?;
+                let trace = self
+                    .cpu
+                    .step_with_trace()
+                    .map_err(CoreError::CpuStepFailed)?;
                 self.last_cpu_trace = Some(trace);
                 self.scheduler.step_cpu();
                 Ok(())
             }
+            Command::StepScanline => {
+                self.scheduler.step_scanline();
+                Ok(())
+            }
             Command::StepFrame => {
                 self.scheduler.step_frame();
+                Ok(())
+            }
+            Command::SetControllerState(bits) => {
+                self.controller_bits = bits;
                 Ok(())
             }
             Command::PressButton(button) => {
@@ -208,6 +273,13 @@ impl NesCore {
                 self.controller_bits &= !button.bit_mask();
                 Ok(())
             }
+            Command::SetSpeed(speed) => {
+                if speed == 0 {
+                    return Err(CoreError::InvalidSpeed(speed));
+                }
+                self.speed_permille = speed;
+                Ok(())
+            }
         }
     }
 
@@ -216,8 +288,21 @@ impl NesCore {
         match query {
             CoreQuery::EmulatorState => QueryResult::EmulatorState(EmulatorState {
                 paused: self.paused,
+                speed_permille: self.speed_permille,
+                controller_bits: self.controller_bits,
             }),
+            CoreQuery::Registers => QueryResult::Registers(self.cpu.snapshot()),
+            CoreQuery::Memory(addr) => QueryResult::Memory(self.cpu.read_byte(addr)),
+            CoreQuery::FpsMilli => QueryResult::FpsMilli(self.fps_milli()),
         }
+    }
+
+    fn reset_runtime(&mut self) {
+        self.paused = false;
+        self.controller_bits = 0;
+        self.scheduler.reset();
+        self.cpu.reset(DEFAULT_START_PC);
+        self.last_cpu_trace = None;
     }
 }
 

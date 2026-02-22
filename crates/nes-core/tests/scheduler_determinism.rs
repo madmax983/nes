@@ -24,3 +24,19 @@ fn identical_command_sequences_yield_identical_state_hash() {
     }
     assert_eq!(a.state_hash(), b.state_hash());
 }
+
+#[test]
+fn step_scanline_advances_cycles_less_than_frame() {
+    let mut core = NesCore::new();
+    let c0 = core.total_cycles();
+
+    core.execute(Command::StepScanline).unwrap();
+    let c1 = core.total_cycles();
+
+    core.execute(Command::StepFrame).unwrap();
+    let c2 = core.total_cycles();
+
+    assert!(c1 > c0);
+    assert!(c2 > c1);
+    assert!(c1 - c0 < c2 - c1);
+}

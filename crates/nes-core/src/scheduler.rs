@@ -14,6 +14,7 @@ pub struct Scheduler {
 
 impl Scheduler {
     pub const FRAME_CPU_CYCLES: u64 = 29_780;
+    pub const SCANLINE_CPU_CYCLES: u64 = 113;
     const PPU_PER_CPU: u64 = 3;
 
     #[must_use]
@@ -37,6 +38,12 @@ impl Scheduler {
         }
     }
 
+    pub fn step_scanline(&mut self) {
+        for _ in 0..Self::SCANLINE_CPU_CYCLES {
+            self.step_cpu();
+        }
+    }
+
     #[must_use]
     pub fn snapshot(&self) -> SchedulerSnapshot {
         SchedulerSnapshot {
@@ -50,6 +57,12 @@ impl Scheduler {
         self.cpu_cycles = snapshot.cpu_cycles;
         self.ppu_cycles = snapshot.ppu_cycles;
         self.apu_cycles = snapshot.apu_cycles;
+    }
+
+    pub fn reset(&mut self) {
+        self.cpu_cycles = 0;
+        self.ppu_cycles = 0;
+        self.apu_cycles = 0;
     }
 
     #[must_use]

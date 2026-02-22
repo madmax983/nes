@@ -2,7 +2,7 @@ mod dispatch;
 mod output;
 mod tools;
 
-pub use dispatch::{DispatchError, dispatch_tool};
+pub use dispatch::{DispatchError, DispatchOutput, ToolParams, dispatch_tool};
 pub use output::{
     AudioChunk, FrameChunk, OutputMetadata, audio_chunk, frame_chunk, latest_output_metadata,
 };

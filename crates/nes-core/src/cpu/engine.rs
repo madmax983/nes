@@ -115,6 +115,15 @@ impl Cpu {
         self.status = Status::with_bits(snapshot.status);
     }
 
+    pub fn reset(&mut self, start_pc: u16) {
+        self.pc = start_pc;
+        self.a = 0;
+        self.x = 0;
+        self.y = 0;
+        self.sp = 0xFD;
+        self.status = Status::with_bits(0x24);
+    }
+
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {
         let start = start as usize;
         let end = start.saturating_add(bytes.len()).min(self.memory.len());
@@ -138,7 +147,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let target = u16::from_le_bytes([low, high]);
-                let trace = format_trace(snapshot, &[opcode, low, high], &format!("JSR ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("JSR ${target:04X}"),
+                );
 
                 let return_addr = snapshot.pc.wrapping_add(2);
                 self.push((return_addr >> 8) as u8);
@@ -190,7 +203,8 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace = format_trace(snapshot, &[opcode, offset], &format!("BNE ${target:04X}"));
+                let trace =
+                    format_trace(snapshot, &[opcode, offset], &format!("BNE ${target:04X}"));
                 self.pc = if !self.status.zero() { target } else { next_pc };
                 Ok(trace)
             }
@@ -198,7 +212,8 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace = format_trace(snapshot, &[opcode, offset], &format!("BEQ ${target:04X}"));
+                let trace =
+                    format_trace(snapshot, &[opcode, offset], &format!("BEQ ${target:04X}"));
                 self.pc = if self.status.zero() { target } else { next_pc };
                 Ok(trace)
             }
