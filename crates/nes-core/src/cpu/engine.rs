@@ -1,8 +1,30 @@
+use core::fmt;
+
 use crate::cpu::status::Status;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuError {
     UnknownOpcode(u8),
+}
+
+impl fmt::Display for CpuError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownOpcode(opcode) => write!(f, "unknown opcode 0x{opcode:02X}"),
+        }
+    }
+}
+
+impl std::error::Error for CpuError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CpuSnapshot {
+    pub pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub sp: u8,
+    pub status: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +75,27 @@ impl Cpu {
     #[must_use]
     pub const fn x(&self) -> u8 {
         self.x
+    }
+
+    #[must_use]
+    pub fn snapshot(&self) -> CpuSnapshot {
+        CpuSnapshot {
+            pc: self.pc,
+            a: self.a,
+            x: self.x,
+            y: self.y,
+            sp: self.sp,
+            status: self.status.bits(),
+        }
+    }
+
+    pub fn restore(&mut self, snapshot: CpuSnapshot) {
+        self.pc = snapshot.pc;
+        self.a = snapshot.a;
+        self.x = snapshot.x;
+        self.y = snapshot.y;
+        self.sp = snapshot.sp;
+        self.status = Status::with_bits(snapshot.status);
     }
 
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {

@@ -1,5 +1,6 @@
 use core::fmt;
 
+use crate::cpu::{Cpu, CpuError, CpuSnapshot};
 use crate::replay::replay_commands;
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
@@ -61,24 +62,29 @@ pub struct CoreSnapshot {
     pub paused: bool,
     pub controller_bits: u8,
     pub scheduler: SchedulerSnapshot,
+    pub cpu: CpuSnapshot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct NesCore {
     paused: bool,
     scheduler: Scheduler,
     controller_bits: u8,
+    cpu: Cpu,
+    last_cpu_trace: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
     UnsupportedCommand,
+    CpuStepFailed(CpuError),
 }
 
 impl fmt::Display for CoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnsupportedCommand => f.write_str("unsupported command"),
+            Self::CpuStepFailed(err) => write!(f, "cpu step failed: {err}"),
         }
     }
 }
@@ -92,6 +98,8 @@ impl NesCore {
             paused: false,
             scheduler: Scheduler::new(),
             controller_bits: 0,
+            cpu: Cpu::new(0xC000),
+            last_cpu_trace: None,
         }
     }
 
@@ -110,14 +118,44 @@ impl NesCore {
         self.controller_bits
     }
 
+    pub fn load_cpu_bytes(&mut self, start: u16, bytes: &[u8]) {
+        self.cpu.load_bytes(start, bytes);
+    }
+
+    #[must_use]
+    pub fn cpu_pc(&self) -> u16 {
+        self.cpu.pc()
+    }
+
+    #[must_use]
+    pub fn cpu_a(&self) -> u8 {
+        self.cpu.a()
+    }
+
+    #[must_use]
+    pub fn cpu_x(&self) -> u8 {
+        self.cpu.x()
+    }
+
+    #[must_use]
+    pub fn last_cpu_trace(&self) -> Option<&str> {
+        self.last_cpu_trace.as_deref()
+    }
+
     #[must_use]
     pub fn state_hash(&self) -> u64 {
         let paused = if self.paused { 1_u64 } else { 0_u64 };
+        let cpu = self.cpu.snapshot();
         paused
             ^ self.scheduler.cpu_cycles().rotate_left(13)
             ^ self.scheduler.ppu_cycles().rotate_left(29)
             ^ self.scheduler.apu_cycles().rotate_left(47)
             ^ (self.controller_bits as u64).rotate_left(7)
+            ^ (cpu.pc as u64).rotate_left(19)
+            ^ (cpu.a as u64).rotate_left(23)
+            ^ (cpu.x as u64).rotate_left(31)
+            ^ (cpu.y as u64).rotate_left(37)
+            ^ (cpu.status as u64).rotate_left(41)
     }
 
     #[must_use]
@@ -126,6 +164,7 @@ impl NesCore {
             paused: self.paused,
             controller_bits: self.controller_bits,
             scheduler: self.scheduler.snapshot(),
+            cpu: self.cpu.snapshot(),
         }
     }
 
@@ -133,6 +172,8 @@ impl NesCore {
         self.paused = snapshot.paused;
         self.controller_bits = snapshot.controller_bits;
         self.scheduler.restore(snapshot.scheduler);
+        self.cpu.restore(snapshot.cpu);
+        self.last_cpu_trace = None;
     }
 
     pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
@@ -150,6 +191,8 @@ impl NesCore {
                 Ok(())
             }
             Command::StepCpu => {
+                let trace = self.cpu.step_with_trace().map_err(CoreError::CpuStepFailed)?;
+                self.last_cpu_trace = Some(trace);
                 self.scheduler.step_cpu();
                 Ok(())
             }

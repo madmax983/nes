@@ -11,12 +11,14 @@ fn recorded_command_log_replays_to_identical_state_hash() {
         Command::StepFrame,
     ];
 
+    a.load_cpu_bytes(0xC000, &[0xEA]);
     for cmd in &log {
         a.execute(*cmd).unwrap();
     }
     let target = a.state_hash();
 
     let mut b = NesCore::new();
+    b.load_cpu_bytes(0xC000, &[0xEA]);
     b.replay(&log).unwrap();
     assert_eq!(target, b.state_hash());
 }

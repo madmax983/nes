@@ -1,4 +1,4 @@
 mod engine;
 pub mod status;
 
-pub use engine::{Cpu, CpuError};
+pub use engine::{Cpu, CpuError, CpuSnapshot};
