@@ -10,6 +10,7 @@ const DEFAULT_SPEED_PERMILLE: u16 = 1_000;
 const BASE_FPS_MILLI: u32 = 60_000;
 const PRG_16K_BYTES: usize = 16 * 1024;
 const PRG_32K_BYTES: usize = 32 * 1024;
+const PRG_BANK_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -239,26 +240,7 @@ impl NesCore {
 
     pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
         let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
-        if rom.mapper_id != 0 {
-            return Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
-                rom.mapper_id,
-            )));
-        }
-
-        match rom.prg_rom.len() {
-            PRG_16K_BYTES => {
-                self.cpu.load_bytes(0x8000, rom.prg_rom);
-                self.cpu.load_bytes(0xC000, rom.prg_rom);
-            }
-            PRG_32K_BYTES => {
-                self.cpu.load_bytes(0x8000, rom.prg_rom);
-            }
-            other => {
-                return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
-                    other,
-                )));
-            }
-        }
+        self.map_prg_rom(rom.mapper_id, rom.prg_rom)?;
 
         let reset_pc = {
             let lo = self.cpu.read_byte(0xFFFC);
@@ -358,6 +340,49 @@ impl NesCore {
         self.scheduler.reset();
         self.cpu.reset(DEFAULT_START_PC);
         self.last_cpu_trace = None;
+    }
+
+    fn map_prg_rom(&mut self, mapper_id: u8, prg_rom: &[u8]) -> Result<(), CoreError> {
+        match mapper_id {
+            0 => self.map_nrom(prg_rom),
+            1 | 2 => self.map_first_and_last_bank(prg_rom),
+            _ => Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
+                mapper_id,
+            ))),
+        }
+    }
+
+    fn map_nrom(&mut self, prg_rom: &[u8]) -> Result<(), CoreError> {
+        match prg_rom.len() {
+            PRG_16K_BYTES => {
+                self.cpu.load_bytes(0x8000, prg_rom);
+                self.cpu.load_bytes(0xC000, prg_rom);
+                Ok(())
+            }
+            PRG_32K_BYTES => {
+                self.cpu.load_bytes(0x8000, prg_rom);
+                Ok(())
+            }
+            other => Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                other,
+            ))),
+        }
+    }
+
+    fn map_first_and_last_bank(&mut self, prg_rom: &[u8]) -> Result<(), CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_BANK_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+
+        let low_bank = &prg_rom[..PRG_BANK_BYTES];
+        let high_bank_start = prg_rom.len() - PRG_BANK_BYTES;
+        let high_bank = &prg_rom[high_bank_start..];
+
+        self.cpu.load_bytes(0x8000, low_bank);
+        self.cpu.load_bytes(0xC000, high_bank);
+        Ok(())
     }
 }
 

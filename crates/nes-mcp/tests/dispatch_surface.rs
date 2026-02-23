@@ -26,6 +26,33 @@ fn sample_nrom16_ines() -> Vec<u8> {
     rom
 }
 
+fn sample_uxrom3_ines() -> Vec<u8> {
+    let mut rom = vec![0_u8; 16 + 3 * 16 * 1024];
+    rom[0] = 0x4E;
+    rom[1] = 0x45;
+    rom[2] = 0x53;
+    rom[3] = 0x1A;
+    rom[4] = 3;
+    rom[5] = 0;
+    rom[6] = 0x20; // mapper 2 low nibble in flags6 high bits.
+
+    let prg_start = 16;
+    let bank_size = 16 * 1024;
+
+    // First bank ($8000) has distinct immediate value.
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x11;
+
+    // Last bank ($C000) contains reset entry and different immediate value.
+    let last_bank = prg_start + 2 * bank_size;
+    rom[last_bank] = 0xA9;
+    rom[last_bank + 1] = 0x99;
+    rom[last_bank + 0x3FFC] = 0x00;
+    rom[last_bank + 0x3FFD] = 0xC0;
+
+    rom
+}
+
 fn hex_encode(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
@@ -148,6 +175,42 @@ fn load_rom_tool_maps_program_into_core_execution_path() {
         DispatchOutput::Registers { a, pc, .. } => {
             assert_eq!(a, 0x42);
             assert_eq!(pc, 0x8002);
+        }
+        other => panic!("unexpected registers output: {other:?}"),
+    }
+}
+
+#[test]
+fn load_rom_tool_supports_uxrom_boot_mapping() {
+    let mut core = NesCore::new();
+    let rom_hex = hex_encode(&sample_uxrom3_ines());
+
+    let output = dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).unwrap();
+    match output {
+        DispatchOutput::RomLoaded {
+            mapper_id,
+            prg_rom_bytes,
+            reset_pc,
+        } => {
+            assert_eq!(mapper_id, 2);
+            assert_eq!(prg_rom_bytes, 3 * 16 * 1024);
+            assert_eq!(reset_pc, 0xC000);
+        }
+        other => panic!("unexpected load_rom output: {other:?}"),
+    }
+
+    let low = dispatch_tool(&mut core, "read_memory", &params(&[("address", "0x8001")])).unwrap();
+    match low {
+        DispatchOutput::Memory { value, .. } => assert_eq!(value, 0x11),
+        other => panic!("unexpected memory output: {other:?}"),
+    }
+
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
+    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).unwrap();
+    match regs {
+        DispatchOutput::Registers { a, pc, .. } => {
+            assert_eq!(a, 0x99);
+            assert_eq!(pc, 0xC002);
         }
         other => panic!("unexpected registers output: {other:?}"),
     }
