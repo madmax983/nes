@@ -1,6 +1,7 @@
 use core::fmt;
 
-use crate::cpu::{Cpu, CpuError, CpuSnapshot};
+use crate::cpu::{Cpu, CpuError, CpuPrgWrite, CpuSnapshot};
+use crate::mapper::{Mmc1, Nrom, Uxrom};
 use crate::replay::replay_commands;
 use crate::rom::{RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
@@ -95,11 +96,38 @@ pub struct RomLoadInfo {
 }
 
 #[derive(Debug, Clone)]
+enum LoadedMapper {
+    Nrom(Nrom),
+    Uxrom(Uxrom),
+    Mmc1(Mmc1),
+}
+
+impl LoadedMapper {
+    fn read_prg(&self, addr: u16) -> u8 {
+        match self {
+            Self::Nrom(mapper) => mapper.read_prg(addr),
+            Self::Uxrom(mapper) => mapper.read_prg(addr),
+            Self::Mmc1(mapper) => mapper.read_prg(addr),
+        }
+    }
+
+    fn write_prg(&mut self, addr: u16, value: u8) {
+        match self {
+            Self::Nrom(mapper) => mapper.write_prg(addr, value),
+            Self::Uxrom(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc1(mapper) => mapper.write_prg(addr, value),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct NesCore {
     paused: bool,
     speed_permille: u16,
     scheduler: Scheduler,
     controller_bits: u8,
+    mapper: Option<LoadedMapper>,
+    reset_pc: u16,
     cpu: Cpu,
     last_cpu_trace: Option<String>,
 }
@@ -133,6 +161,8 @@ impl NesCore {
             speed_permille: DEFAULT_SPEED_PERMILLE,
             scheduler: Scheduler::new(),
             controller_bits: 0,
+            mapper: None,
+            reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
             last_cpu_trace: None,
         }
@@ -159,6 +189,10 @@ impl NesCore {
     }
 
     pub fn load_cpu_bytes(&mut self, start: u16, bytes: &[u8]) {
+        if start >= 0x8000 {
+            self.mapper = None;
+            self.reset_pc = DEFAULT_START_PC;
+        }
         self.cpu.load_bytes(start, bytes);
     }
 
@@ -190,6 +224,11 @@ impl NesCore {
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
         self.cpu.read_byte(addr)
+    }
+
+    pub fn write_cpu_bus(&mut self, addr: u16, value: u8) {
+        self.cpu.write_byte(addr, value);
+        self.apply_cpu_prg_writes(&[CpuPrgWrite { addr, value }]);
     }
 
     #[must_use]
@@ -231,6 +270,8 @@ impl NesCore {
         self.controller_bits = snapshot.controller_bits;
         self.scheduler.restore(snapshot.scheduler);
         self.cpu.restore(snapshot.cpu);
+        self.mapper = None;
+        self.reset_pc = DEFAULT_START_PC;
         self.last_cpu_trace = None;
     }
 
@@ -240,7 +281,9 @@ impl NesCore {
 
     pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
         let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
-        self.map_prg_rom(rom.mapper_id, rom.prg_rom)?;
+        let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom)?;
+        self.mapper = Some(mapper);
+        self.sync_mapper_prg_window();
 
         let reset_pc = {
             let lo = self.cpu.read_byte(0xFFFC);
@@ -248,6 +291,7 @@ impl NesCore {
             let pc = u16::from_le_bytes([lo, hi]);
             if pc == 0 { 0x8000 } else { pc }
         };
+        self.reset_pc = reset_pc;
 
         self.paused = false;
         self.controller_bits = 0;
@@ -287,6 +331,8 @@ impl NesCore {
                     .step_with_trace()
                     .map_err(CoreError::CpuStepFailed)?;
                 self.last_cpu_trace = Some(trace);
+                let prg_writes = self.cpu.take_prg_writes();
+                self.apply_cpu_prg_writes(&prg_writes);
                 self.scheduler.step_cpu();
                 Ok(())
             }
@@ -338,30 +384,25 @@ impl NesCore {
         self.paused = false;
         self.controller_bits = 0;
         self.scheduler.reset();
-        self.cpu.reset(DEFAULT_START_PC);
+        self.cpu.reset(self.reset_pc);
         self.last_cpu_trace = None;
     }
 
-    fn map_prg_rom(&mut self, mapper_id: u8, prg_rom: &[u8]) -> Result<(), CoreError> {
+    fn build_mapper(&self, mapper_id: u8, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
         match mapper_id {
-            0 => self.map_nrom(prg_rom),
-            1 | 2 => self.map_first_and_last_bank(prg_rom),
+            0 => self.build_nrom(prg_rom),
+            1 => self.build_mmc1(prg_rom),
+            2 => self.build_uxrom(prg_rom),
             _ => Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
                 mapper_id,
             ))),
         }
     }
 
-    fn map_nrom(&mut self, prg_rom: &[u8]) -> Result<(), CoreError> {
+    fn build_nrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
         match prg_rom.len() {
-            PRG_16K_BYTES => {
-                self.cpu.load_bytes(0x8000, prg_rom);
-                self.cpu.load_bytes(0xC000, prg_rom);
-                Ok(())
-            }
-            PRG_32K_BYTES => {
-                self.cpu.load_bytes(0x8000, prg_rom);
-                Ok(())
+            PRG_16K_BYTES | PRG_32K_BYTES => {
+                Ok(LoadedMapper::Nrom(Nrom::from_prg_rom(prg_rom.to_vec())))
             }
             other => Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
                 other,
@@ -369,20 +410,50 @@ impl NesCore {
         }
     }
 
-    fn map_first_and_last_bank(&mut self, prg_rom: &[u8]) -> Result<(), CoreError> {
+    fn build_uxrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
         if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_BANK_BYTES) {
             return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
                 prg_rom.len(),
             )));
         }
+        Ok(LoadedMapper::Uxrom(Uxrom::from_prg_rom(prg_rom.to_vec())))
+    }
 
-        let low_bank = &prg_rom[..PRG_BANK_BYTES];
-        let high_bank_start = prg_rom.len() - PRG_BANK_BYTES;
-        let high_bank = &prg_rom[high_bank_start..];
+    fn build_mmc1(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_BANK_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc1(Mmc1::from_prg_rom(prg_rom.to_vec(), 1)))
+    }
 
-        self.cpu.load_bytes(0x8000, low_bank);
-        self.cpu.load_bytes(0xC000, high_bank);
-        Ok(())
+    fn sync_mapper_prg_window(&mut self) {
+        if let Some(mapper) = self.mapper.as_ref() {
+            for addr in 0x8000..=0xFFFF {
+                let value = mapper.read_prg(addr);
+                self.cpu.write_byte(addr, value);
+            }
+        }
+    }
+
+    fn apply_cpu_prg_writes(&mut self, writes: &[CpuPrgWrite]) {
+        let remap_needed = if let Some(mapper) = self.mapper.as_mut() {
+            let mut wrote_prg = false;
+            for write in writes {
+                if write.addr >= 0x8000 {
+                    mapper.write_prg(write.addr, write.value);
+                    wrote_prg = true;
+                }
+            }
+            wrote_prg
+        } else {
+            false
+        };
+
+        if remap_needed {
+            self.sync_mapper_prg_window();
+        }
     }
 }
 

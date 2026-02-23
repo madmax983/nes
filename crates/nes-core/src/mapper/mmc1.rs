@@ -29,6 +29,19 @@ impl Mmc1 {
     }
 
     #[must_use]
+    pub fn from_prg_rom(prg_rom: Vec<u8>, chr_bank_count: u8) -> Self {
+        let prg_bank_count = (prg_rom.len() / (16 * 1024)) as u8;
+        Self {
+            prg_bank_count: prg_bank_count.max(1),
+            _chr_bank_count: chr_bank_count.max(1),
+            shift_register: Self::SHIFT_RESET,
+            shift_count: 0,
+            selected_prg_bank: 0,
+            prg_rom,
+        }
+    }
+
+    #[must_use]
     pub fn shift_is_reset(&self) -> bool {
         self.shift_register == Self::SHIFT_RESET && self.shift_count == 0
     }

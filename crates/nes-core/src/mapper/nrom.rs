@@ -16,6 +16,11 @@ impl Nrom {
     }
 
     #[must_use]
+    pub fn from_prg_rom(prg_rom: Vec<u8>) -> Self {
+        Self { prg_rom }
+    }
+
+    #[must_use]
     pub fn read_prg(&self, addr: u16) -> u8 {
         <Self as Mapper>::read_prg(self, addr)
     }

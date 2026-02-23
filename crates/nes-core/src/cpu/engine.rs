@@ -30,6 +30,12 @@ pub struct CpuSnapshot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CpuPrgWrite {
+    pub addr: u16,
+    pub value: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TraceSnapshot {
     pc: u16,
     a: u8,
@@ -48,6 +54,7 @@ pub struct Cpu {
     sp: u8,
     status: Status,
     memory: [u8; 0x1_0000],
+    prg_writes: Vec<CpuPrgWrite>,
 }
 
 impl Cpu {
@@ -61,6 +68,7 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
+            prg_writes: Vec::new(),
         }
     }
 
@@ -94,6 +102,10 @@ impl Cpu {
         self.memory[addr as usize]
     }
 
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
+        self.memory[addr as usize] = value;
+    }
+
     #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
         CpuSnapshot {
@@ -113,6 +125,7 @@ impl Cpu {
         self.y = snapshot.y;
         self.sp = snapshot.sp;
         self.status = Status::with_bits(snapshot.status);
+        self.prg_writes.clear();
     }
 
     pub fn reset(&mut self, start_pc: u16) {
@@ -122,6 +135,7 @@ impl Cpu {
         self.y = 0;
         self.sp = 0xFD;
         self.status = Status::with_bits(0x24);
+        self.prg_writes.clear();
     }
 
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {
@@ -132,6 +146,8 @@ impl Cpu {
     }
 
     pub fn step_with_trace(&mut self) -> Result<String, CpuError> {
+        self.prg_writes.clear();
+
         let snapshot = TraceSnapshot {
             pc: self.pc,
             a: self.a,
@@ -224,6 +240,16 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
+            0x8D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("STA ${addr:04X}"));
+                self.write_and_track(addr, self.a);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0x8A => {
                 let trace = format_trace(snapshot, &[opcode], "TXA");
                 self.a = self.x;
@@ -256,6 +282,17 @@ impl Cpu {
 
     fn read(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
+    }
+
+    fn write_and_track(&mut self, addr: u16, value: u8) {
+        self.write_byte(addr, value);
+        if addr >= 0x8000 {
+            self.prg_writes.push(CpuPrgWrite { addr, value });
+        }
+    }
+
+    pub fn take_prg_writes(&mut self) -> Vec<CpuPrgWrite> {
+        core::mem::take(&mut self.prg_writes)
     }
 
     fn push(&mut self, value: u8) {

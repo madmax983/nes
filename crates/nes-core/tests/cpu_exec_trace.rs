@@ -1,4 +1,4 @@
-use nes_core::cpu::{Cpu, CpuError};
+use nes_core::cpu::{Cpu, CpuError, CpuPrgWrite};
 
 #[test]
 fn cpu_executes_lda_tax_inx_sequence() {
@@ -181,4 +181,29 @@ fn nop_advances_pc_and_preserves_registers() {
     assert_eq!(cpu.pc(), 0x9001);
     assert_eq!(cpu.a(), 0x00);
     assert_eq!(cpu.x(), 0x00);
+}
+
+#[test]
+fn sta_absolute_writes_memory_and_emits_prg_write() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x05, 0x8D, 0x00, 0x80]);
+
+    cpu.step_with_trace().unwrap();
+
+    let trace = cpu.step_with_trace().unwrap();
+
+    assert_eq!(cpu.read_byte(0x8000), 0x05);
+    assert_eq!(cpu.pc(), 0xC005);
+    assert_eq!(
+        trace,
+        "C002  8D 00 80  STA $8000                       A:05 X:00 Y:00 P:24 SP:FD"
+    );
+
+    assert_eq!(
+        cpu.take_prg_writes(),
+        vec![CpuPrgWrite {
+            addr: 0x8000,
+            value: 0x05
+        }]
+    );
 }

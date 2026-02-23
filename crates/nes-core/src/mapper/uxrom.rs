@@ -24,6 +24,16 @@ impl Uxrom {
     }
 
     #[must_use]
+    pub fn from_prg_rom(prg_rom: Vec<u8>) -> Self {
+        let bank_count = (prg_rom.len() / (16 * 1024)) as u8;
+        Self {
+            bank_count: bank_count.max(1),
+            selected_bank: 0,
+            prg_rom,
+        }
+    }
+
+    #[must_use]
     pub fn selected_bank(&self) -> u8 {
         self.selected_bank
     }
