@@ -179,6 +179,757 @@ impl Cpu {
 
         let opcode = self.read(snapshot.pc);
         match opcode {
+            0x00 => {
+                let trace = format_trace(snapshot, &[opcode], "BRK");
+                let return_pc = snapshot.pc.wrapping_add(2);
+                self.push((return_pc >> 8) as u8);
+                self.push(return_pc as u8);
+                self.push(self.status.bits_for_php());
+                self.status.set_interrupt_disable(true);
+                self.pc = self.read_u16(0xFFFE);
+                Ok(trace)
+            }
+            0x01 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA (${zp:02X},X)"));
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x05 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA ${zp:02X}"));
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x06 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp as u16;
+                let value = self.read(addr);
+                let next = self.asl_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ASL ${zp:02X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x09 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("ORA #${imm:02X}"));
+                self.ora_value(imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x0B => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("ANC #${imm:02X}"));
+                self.and_value(imm);
+                self.status.set_carry(self.status.negative());
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x0A => {
+                let trace = format_trace(snapshot, &[opcode], "ASL A");
+                self.a = self.asl_value(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x0D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("ORA ${addr:04X}"));
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x0E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let next = self.asl_value(value);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("ASL ${addr:04X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x11 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA (${zp:02X}),Y"));
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x15 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA ${zp:02X},X"));
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x16 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let next = self.asl_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ASL ${zp:02X},X"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x19 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ORA ${base:04X},Y"),
+                );
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x1D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ORA ${base:04X},X"),
+                );
+                self.ora_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x1E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let next = self.asl_value(value);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ASL ${base:04X},X"),
+                );
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x03 | 0x07 | 0x0F | 0x13 | 0x17 | 0x1B | 0x1F => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0x03 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("SLO (${zp:02X},X)"),
+                        )
+                    }
+                    0x07 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("SLO ${zp:02X}"))
+                    }
+                    0x0F => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("SLO ${addr:04X}"))
+                    }
+                    0x13 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("SLO (${zp:02X}),Y"))
+                    }
+                    0x17 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.x) as u16;
+                        (addr, vec![opcode, zp], format!("SLO ${zp:02X},X"))
+                    }
+                    0x1B => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("SLO ${base:04X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.x as u16);
+                        (addr, vec![opcode, low, high], format!("SLO ${base:04X},X"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let value = self.read(addr);
+                let next = self.asl_value(value);
+                self.write_and_track(addr, next);
+                self.ora_value(next);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0x23 | 0x27 | 0x2F | 0x33 | 0x37 | 0x3B | 0x3F => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0x23 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("RLA (${zp:02X},X)"),
+                        )
+                    }
+                    0x27 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("RLA ${zp:02X}"))
+                    }
+                    0x2F => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("RLA ${addr:04X}"))
+                    }
+                    0x33 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("RLA (${zp:02X}),Y"))
+                    }
+                    0x37 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.x) as u16;
+                        (addr, vec![opcode, zp], format!("RLA ${zp:02X},X"))
+                    }
+                    0x3B => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("RLA ${base:04X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.x as u16);
+                        (addr, vec![opcode, low, high], format!("RLA ${base:04X},X"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let value = self.read(addr);
+                let next = self.rol_value(value);
+                self.write_and_track(addr, next);
+                self.and_value(next);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0x43 | 0x47 | 0x4F | 0x53 | 0x57 | 0x5B | 0x5F => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0x43 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("SRE (${zp:02X},X)"),
+                        )
+                    }
+                    0x47 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("SRE ${zp:02X}"))
+                    }
+                    0x4F => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("SRE ${addr:04X}"))
+                    }
+                    0x53 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("SRE (${zp:02X}),Y"))
+                    }
+                    0x57 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.x) as u16;
+                        (addr, vec![opcode, zp], format!("SRE ${zp:02X},X"))
+                    }
+                    0x5B => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("SRE ${base:04X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.x as u16);
+                        (addr, vec![opcode, low, high], format!("SRE ${base:04X},X"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let value = self.read(addr);
+                let next = self.lsr_value(value);
+                self.write_and_track(addr, next);
+                self.eor_value(next);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0x63 | 0x67 | 0x6F | 0x73 | 0x77 | 0x7B | 0x7F => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0x63 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("RRA (${zp:02X},X)"),
+                        )
+                    }
+                    0x67 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("RRA ${zp:02X}"))
+                    }
+                    0x6F => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("RRA ${addr:04X}"))
+                    }
+                    0x73 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("RRA (${zp:02X}),Y"))
+                    }
+                    0x77 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.x) as u16;
+                        (addr, vec![opcode, zp], format!("RRA ${zp:02X},X"))
+                    }
+                    0x7B => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("RRA ${base:04X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.x as u16);
+                        (addr, vec![opcode, low, high], format!("RRA ${base:04X},X"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let value = self.read(addr);
+                let next = self.ror_value(value);
+                self.write_and_track(addr, next);
+                self.adc_value(next);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0xC3 | 0xC7 | 0xCF | 0xD3 | 0xD7 | 0xDB | 0xDF => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0xC3 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("DCP (${zp:02X},X)"),
+                        )
+                    }
+                    0xC7 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("DCP ${zp:02X}"))
+                    }
+                    0xCF => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("DCP ${addr:04X}"))
+                    }
+                    0xD3 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("DCP (${zp:02X}),Y"))
+                    }
+                    0xD7 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.x) as u16;
+                        (addr, vec![opcode, zp], format!("DCP ${zp:02X},X"))
+                    }
+                    0xDB => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("DCP ${base:04X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.x as u16);
+                        (addr, vec![opcode, low, high], format!("DCP ${base:04X},X"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let next = self.read(addr).wrapping_sub(1);
+                self.write_and_track(addr, next);
+                self.status.update_compare(self.a, next);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0xE3 | 0xE7 | 0xEF | 0xF3 | 0xF7 | 0xFB | 0xFF => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0xE3 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("ISC (${zp:02X},X)"),
+                        )
+                    }
+                    0xE7 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("ISC ${zp:02X}"))
+                    }
+                    0xEF => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("ISC ${addr:04X}"))
+                    }
+                    0xF3 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("ISC (${zp:02X}),Y"))
+                    }
+                    0xF7 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.x) as u16;
+                        (addr, vec![opcode, zp], format!("ISC ${zp:02X},X"))
+                    }
+                    0xFB => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("ISC ${base:04X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.x as u16);
+                        (addr, vec![opcode, low, high], format!("ISC ${base:04X},X"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let next = self.read(addr).wrapping_add(1);
+                self.write_and_track(addr, next);
+                self.sbc_value(next);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0xA3 | 0xA7 | 0xAF | 0xB3 | 0xB7 | 0xBF => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0xA3 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("LAX (${zp:02X},X)"),
+                        )
+                    }
+                    0xA7 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("LAX ${zp:02X}"))
+                    }
+                    0xAF => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("LAX ${addr:04X}"))
+                    }
+                    0xB3 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let base = self.read_u16_zp(zp);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, zp], format!("LAX (${zp:02X}),Y"))
+                    }
+                    0xB7 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.y) as u16;
+                        (addr, vec![opcode, zp], format!("LAX ${zp:02X},Y"))
+                    }
+                    _ => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let base = u16::from_le_bytes([low, high]);
+                        let addr = base.wrapping_add(self.y as u16);
+                        (addr, vec![opcode, low, high], format!("LAX ${base:04X},Y"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let value = self.read(addr);
+                self.a = value;
+                self.x = value;
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0x83 | 0x87 | 0x8F | 0x97 => {
+                let (addr, bytes, mnemonic) = match opcode {
+                    0x83 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let ptr = zp.wrapping_add(self.x);
+                        (
+                            self.read_u16_zp(ptr),
+                            vec![opcode, zp],
+                            format!("SAX (${zp:02X},X)"),
+                        )
+                    }
+                    0x87 => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        (zp as u16, vec![opcode, zp], format!("SAX ${zp:02X}"))
+                    }
+                    0x8F => {
+                        let low = self.read(snapshot.pc.wrapping_add(1));
+                        let high = self.read(snapshot.pc.wrapping_add(2));
+                        let addr = u16::from_le_bytes([low, high]);
+                        (addr, vec![opcode, low, high], format!("SAX ${addr:04X}"))
+                    }
+                    _ => {
+                        let zp = self.read(snapshot.pc.wrapping_add(1));
+                        let addr = zp.wrapping_add(self.y) as u16;
+                        (addr, vec![opcode, zp], format!("SAX ${zp:02X},Y"))
+                    }
+                };
+                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                self.write_and_track(addr, self.a & self.x);
+                self.pc = self.pc.wrapping_add(bytes.len() as u16);
+                Ok(trace)
+            }
+            0x21 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND (${zp:02X},X)"));
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x25 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND ${zp:02X}"));
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x29 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("AND #${imm:02X}"));
+                self.and_value(imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x2D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("AND ${addr:04X}"));
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x2B => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("ANC #${imm:02X}"));
+                self.and_value(imm);
+                self.status.set_carry(self.status.negative());
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x31 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND (${zp:02X}),Y"));
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x35 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND ${zp:02X},X"));
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x39 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("AND ${base:04X},Y"),
+                );
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x3D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("AND ${base:04X},X"),
+                );
+                self.and_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x41 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR (${zp:02X},X)"));
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x45 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR ${zp:02X}"));
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x49 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("EOR #${imm:02X}"));
+                self.eor_value(imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x4B => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("ALR #${imm:02X}"));
+                self.and_value(imm);
+                self.a = self.lsr_value(self.a);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x4D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("EOR ${addr:04X}"));
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x51 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR (${zp:02X}),Y"));
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x55 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR ${zp:02X},X"));
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x59 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("EOR ${base:04X},Y"),
+                );
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x5D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("EOR ${base:04X},X"),
+                );
+                self.eor_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0x20 => {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
@@ -203,6 +954,22 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
+            0x26 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp as u16;
+                let value = self.read(addr);
+                let next = self.rol_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROL ${zp:02X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x2A => {
+                let trace = format_trace(snapshot, &[opcode], "ROL A");
+                self.a = self.rol_value(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
             0x2C => {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
@@ -212,6 +979,25 @@ impl Cpu {
                     format_trace(snapshot, &[opcode, low, high], &format!("BIT ${addr:04X}"));
                 self.status.update_bit_test(self.a, operand);
                 self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x2E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let next = self.rol_value(value);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("ROL ${addr:04X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x28 => {
+                let trace = format_trace(snapshot, &[opcode], "PLP");
+                let bits = self.pull();
+                self.status.restore_from_stack(bits);
+                self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0x4C => {
@@ -226,6 +1012,49 @@ impl Cpu {
                 self.pc = target;
                 Ok(trace)
             }
+            0x46 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp as u16;
+                let value = self.read(addr);
+                let next = self.lsr_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LSR ${zp:02X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x4A => {
+                let trace = format_trace(snapshot, &[opcode], "LSR A");
+                self.a = self.lsr_value(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x4E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let next = self.lsr_value(value);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("LSR ${addr:04X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x40 => {
+                let trace = format_trace(snapshot, &[opcode], "RTI");
+                let bits = self.pull();
+                self.status.restore_from_stack(bits);
+                let low = self.pull();
+                let high = self.pull();
+                self.pc = u16::from_le_bytes([low, high]);
+                Ok(trace)
+            }
+            0x48 => {
+                let trace = format_trace(snapshot, &[opcode], "PHA");
+                self.push(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
             0x60 => {
                 let trace = format_trace(snapshot, &[opcode], "RTS");
 
@@ -233,6 +1062,16 @@ impl Cpu {
                 let high = self.pull();
                 let return_addr = u16::from_le_bytes([low, high]);
                 self.pc = return_addr.wrapping_add(1);
+                Ok(trace)
+            }
+            0x61 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC (${zp:02X},X)"));
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x6C => {
@@ -248,16 +1087,153 @@ impl Cpu {
                 self.pc = target;
                 Ok(trace)
             }
+            0x66 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp as u16;
+                let value = self.read(addr);
+                let next = self.ror_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROR ${zp:02X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x65 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC ${zp:02X}"));
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x69 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("ADC #${imm:02X}"));
+                self.adc_value(imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x6A => {
+                let trace = format_trace(snapshot, &[opcode], "ROR A");
+                self.a = self.ror_value(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x6B => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("ARR #${imm:02X}"));
+                self.and_value(imm);
+                self.a = self.ror_value(self.a);
+                self.status.set_carry(self.a & 0x40 != 0);
+                self.status
+                    .set_overflow(((self.a >> 6) ^ (self.a >> 5)) & 1 != 0);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x6E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let next = self.ror_value(value);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("ROR ${addr:04X}"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x6D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("ADC ${addr:04X}"));
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x68 => {
+                let trace = format_trace(snapshot, &[opcode], "PLA");
+                self.a = self.pull();
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x71 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC (${zp:02X}),Y"));
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x75 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC ${zp:02X},X"));
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0x78 => {
                 let trace = format_trace(snapshot, &[opcode], "SEI");
                 self.status.set_interrupt_disable(true);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
+            0x79 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ADC ${base:04X},Y"),
+                );
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x7D => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ADC ${base:04X},X"),
+                );
+                self.adc_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0x85 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let trace = format_trace(snapshot, &[opcode, zp], &format!("STA ${zp:02X}"));
                 self.write_and_track(zp as u16, self.a);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x81 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("STA (${zp:02X},X)"));
+                self.write_and_track(addr, self.a);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x84 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("STY ${zp:02X}"));
+                self.write_and_track(zp as u16, self.y);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
@@ -292,6 +1268,16 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
+            0x8C => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("STY ${addr:04X}"));
+                self.write_and_track(addr, self.y);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0x8E => {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
@@ -315,6 +1301,15 @@ impl Cpu {
                 };
                 Ok(trace)
             }
+            0x91 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("STA (${zp:02X}),Y"));
+                self.write_and_track(addr, self.a);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0x95 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
@@ -323,11 +1318,39 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
+            0x94 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("STY ${zp:02X},X"));
+                self.write_and_track(addr, self.y);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x56 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let next = self.lsr_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LSR ${zp:02X},X"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0x96 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.y) as u16;
                 let trace = format_trace(snapshot, &[opcode, zp], &format!("STX ${zp:02X},Y"));
                 self.write_and_track(addr, self.x);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x36 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let next = self.rol_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROL ${zp:02X},X"));
+                self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
@@ -372,11 +1395,86 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
+            0x5E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let next = self.lsr_value(value);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("LSR ${base:04X},X"),
+                );
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x3E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let next = self.rol_value(value);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ROL ${base:04X},X"),
+                );
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x76 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let next = self.ror_value(value);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROR ${zp:02X},X"));
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x7E => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let next = self.ror_value(value);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("ROR ${base:04X},X"),
+                );
+                self.write_and_track(addr, next);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x08 => {
+                let trace = format_trace(snapshot, &[opcode], "PHP");
+                self.push(self.status.bits_for_php());
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
             0xA0 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
                 let trace = format_trace(snapshot, &[opcode, imm], &format!("LDY #${imm:02X}"));
                 self.y = imm;
                 self.status.update_zn(self.y);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xA1 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA (${zp:02X},X)"));
+                self.a = value;
+                self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
@@ -388,6 +1486,15 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
+            0xA4 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDY ${zp:02X}"));
+                self.y = value;
+                self.status.update_zn(self.y);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0xA5 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
@@ -395,6 +1502,22 @@ impl Cpu {
                 self.a = value;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xA6 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDX ${zp:02X}"));
+                self.x = value;
+                self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xA8 => {
+                let trace = format_trace(snapshot, &[opcode], "TAY");
+                self.y = self.a;
+                self.status.update_zn(self.y);
+                self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0xA9 => {
@@ -410,6 +1533,15 @@ impl Cpu {
                 self.x = self.a;
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0xAB => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("LAX #${imm:02X}"));
+                self.a = imm;
+                self.x = imm;
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xAC => {
@@ -454,6 +1586,70 @@ impl Cpu {
                 self.pc = if self.status.carry() { target } else { next_pc };
                 Ok(trace)
             }
+            0xBA => {
+                let trace = format_trace(snapshot, &[opcode], "TSX");
+                self.x = self.sp;
+                self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0xB1 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA (${zp:02X}),Y"));
+                self.a = value;
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xB4 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDY ${zp:02X},X"));
+                self.y = value;
+                self.status.update_zn(self.y);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xB5 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA ${zp:02X},X"));
+                self.a = value;
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xB6 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.y) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDX ${zp:02X},Y"));
+                self.x = value;
+                self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xB9 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("LDA ${base:04X},Y"),
+                );
+                self.a = value;
+                self.status.update_zn(self.a);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0xBD => {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
@@ -469,10 +1665,78 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
+            0xBC => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("LDY ${base:04X},X"),
+                );
+                self.y = value;
+                self.status.update_zn(self.y);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xBE => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("LDX ${base:04X},Y"),
+                );
+                self.x = value;
+                self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0xC0 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
                 let trace = format_trace(snapshot, &[opcode, imm], &format!("CPY #${imm:02X}"));
                 self.status.update_compare(self.y, imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xC1 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP (${zp:02X},X)"));
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xC4 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("CPY ${zp:02X}"));
+                self.status.update_compare(self.y, value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xC5 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP ${zp:02X}"));
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xC6 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp as u16;
+                let value = self.read(addr).wrapping_sub(1);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("DEC ${zp:02X}"));
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
@@ -490,11 +1754,43 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
+            0xCC => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("CPY ${addr:04X}"));
+                self.status.update_compare(self.y, value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xCD => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("CMP ${addr:04X}"));
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0xCA => {
                 let trace = format_trace(snapshot, &[opcode], "DEX");
                 self.x = self.x.wrapping_sub(1);
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0xCB => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("AXS #${imm:02X}"));
+                let anded = self.a & self.x;
+                self.x = anded.wrapping_sub(imm);
+                self.status.set_carry(anded >= imm);
+                self.status.update_zn(self.x);
+                self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xD0 => {
@@ -506,16 +1802,127 @@ impl Cpu {
                 self.pc = if !self.status.zero() { target } else { next_pc };
                 Ok(trace)
             }
+            0xD1 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP (${zp:02X}),Y"));
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xD5 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP ${zp:02X},X"));
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xD6 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr).wrapping_sub(1);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("DEC ${zp:02X},X"));
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0xD8 => {
                 let trace = format_trace(snapshot, &[opcode], "CLD");
                 self.status.set_decimal(false);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
+            0xD9 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("CMP ${base:04X},Y"),
+                );
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xDD => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("CMP ${base:04X},X"),
+                );
+                self.status.update_compare(self.a, value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xDE => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr).wrapping_sub(1);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("DEC ${base:04X},X"),
+                );
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
             0xE0 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
                 let trace = format_trace(snapshot, &[opcode, imm], &format!("CPX #${imm:02X}"));
                 self.status.update_compare(self.x, imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xE1 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(self.x);
+                let addr = self.read_u16_zp(ptr);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC (${zp:02X},X)"));
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xE4 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("CPX ${zp:02X}"));
+                self.status.update_compare(self.x, value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xE5 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let value = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC ${zp:02X}"));
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xE6 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp as u16;
+                let value = self.read(addr).wrapping_add(1);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("INC ${zp:02X}"));
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
@@ -526,9 +1933,57 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
+            0xE9 => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("SBC #${imm:02X}"));
+                self.sbc_value(imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xEB => {
+                let imm = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, imm], &format!("SBC #${imm:02X}"));
+                self.sbc_value(imm);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
             0xEA => {
                 let trace = format_trace(snapshot, &[opcode], "NOP");
                 self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0xEE => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr).wrapping_add(1);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("INC ${addr:04X}"));
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xEC => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("CPX ${addr:04X}"));
+                self.status.update_compare(self.x, value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xED => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("SBC ${addr:04X}"));
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0xF0 => {
@@ -538,6 +1993,93 @@ impl Cpu {
                 let trace =
                     format_trace(snapshot, &[opcode, offset], &format!("BEQ ${target:04X}"));
                 self.pc = if self.status.zero() { target } else { next_pc };
+                Ok(trace)
+            }
+            0xF1 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC (${zp:02X}),Y"));
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xF5 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC ${zp:02X},X"));
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xF6 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let value = self.read(addr).wrapping_add(1);
+                let trace = format_trace(snapshot, &[opcode, zp], &format!("INC ${zp:02X},X"));
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xF9 => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.y as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("SBC ${base:04X},Y"),
+                );
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xCE => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let value = self.read(addr).wrapping_sub(1);
+                let trace =
+                    format_trace(snapshot, &[opcode, low, high], &format!("DEC ${addr:04X}"));
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xFE => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr).wrapping_add(1);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("INC ${base:04X},X"),
+                );
+                self.write_and_track(addr, value);
+                self.status.update_zn(value);
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xFD => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let value = self.read(addr);
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    &format!("SBC ${base:04X},X"),
+                );
+                self.sbc_value(value);
+                self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x10 => {
@@ -553,6 +2095,17 @@ impl Cpu {
                 };
                 Ok(trace)
             }
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => {
+                let trace = format_trace(snapshot, &[opcode], "NOP");
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x18 => {
+                let trace = format_trace(snapshot, &[opcode], "CLC");
+                self.status.set_carry(false);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
             0x30 => {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
@@ -564,6 +2117,70 @@ impl Cpu {
                 } else {
                     next_pc
                 };
+                Ok(trace)
+            }
+            0x38 => {
+                let trace = format_trace(snapshot, &[opcode], "SEC");
+                self.status.set_carry(true);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x58 => {
+                let trace = format_trace(snapshot, &[opcode], "CLI");
+                self.status.set_interrupt_disable(false);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x50 => {
+                let offset = self.read(snapshot.pc.wrapping_add(1));
+                let next_pc = snapshot.pc.wrapping_add(2);
+                let target = branch_target(next_pc, offset);
+                let trace =
+                    format_trace(snapshot, &[opcode, offset], &format!("BVC ${target:04X}"));
+                self.pc = if !self.status.overflow() {
+                    target
+                } else {
+                    next_pc
+                };
+                Ok(trace)
+            }
+            0x04 | 0x44 | 0x64 | 0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 | 0x14 | 0x34 | 0x54 | 0x74
+            | 0xD4 | 0xF4 => {
+                let operand = self.read(snapshot.pc.wrapping_add(1));
+                let trace = format_trace(snapshot, &[opcode, operand], "NOP");
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0xB8 => {
+                let trace = format_trace(snapshot, &[opcode], "CLV");
+                self.status.set_overflow(false);
+                self.pc = self.pc.wrapping_add(1);
+                Ok(trace)
+            }
+            0x70 => {
+                let offset = self.read(snapshot.pc.wrapping_add(1));
+                let next_pc = snapshot.pc.wrapping_add(2);
+                let target = branch_target(next_pc, offset);
+                let trace =
+                    format_trace(snapshot, &[opcode, offset], &format!("BVS ${target:04X}"));
+                self.pc = if self.status.overflow() {
+                    target
+                } else {
+                    next_pc
+                };
+                Ok(trace)
+            }
+            0x0C | 0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let trace = format_trace(snapshot, &[opcode, low, high], "NOP");
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0xF8 => {
+                let trace = format_trace(snapshot, &[opcode], "SED");
+                self.status.set_decimal(true);
+                self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             _ => Err(CpuError::UnknownOpcode(opcode)),
@@ -580,12 +2197,79 @@ impl Cpu {
         u16::from_le_bytes([low, high])
     }
 
+    fn read_u16_zp(&self, addr: u8) -> u16 {
+        let low = self.read(addr as u16);
+        let high = self.read(addr.wrapping_add(1) as u16);
+        u16::from_le_bytes([low, high])
+    }
+
     fn write_and_track(&mut self, addr: u16, value: u8) {
         self.write_byte(addr, value);
         self.writes.push(CpuWrite { addr, value });
         if addr >= 0x8000 {
             self.prg_writes.push(CpuPrgWrite { addr, value });
         }
+    }
+
+    fn lsr_value(&mut self, value: u8) -> u8 {
+        self.status.set_carry(value & 0x01 != 0);
+        let next = value >> 1;
+        self.status.update_zn(next);
+        next
+    }
+
+    fn asl_value(&mut self, value: u8) -> u8 {
+        self.status.set_carry(value & 0x80 != 0);
+        let next = value << 1;
+        self.status.update_zn(next);
+        next
+    }
+
+    fn rol_value(&mut self, value: u8) -> u8 {
+        let carry_in = u8::from(self.status.carry());
+        self.status.set_carry(value & 0x80 != 0);
+        let next = (value << 1) | carry_in;
+        self.status.update_zn(next);
+        next
+    }
+
+    fn ror_value(&mut self, value: u8) -> u8 {
+        let carry_in = if self.status.carry() { 0x80 } else { 0x00 };
+        self.status.set_carry(value & 0x01 != 0);
+        let next = (value >> 1) | carry_in;
+        self.status.update_zn(next);
+        next
+    }
+
+    fn adc_value(&mut self, value: u8) {
+        let a = self.a;
+        let carry_in = u8::from(self.status.carry());
+        let sum = u16::from(a) + u16::from(value) + u16::from(carry_in);
+        let result = sum as u8;
+        self.status.set_carry(sum > 0xFF);
+        self.status
+            .set_overflow(((!(a ^ value) & (a ^ result)) & 0x80) != 0);
+        self.a = result;
+        self.status.update_zn(self.a);
+    }
+
+    fn sbc_value(&mut self, value: u8) {
+        self.adc_value(value ^ 0xFF);
+    }
+
+    fn ora_value(&mut self, value: u8) {
+        self.a |= value;
+        self.status.update_zn(self.a);
+    }
+
+    fn and_value(&mut self, value: u8) {
+        self.a &= value;
+        self.status.update_zn(self.a);
+    }
+
+    fn eor_value(&mut self, value: u8) {
+        self.a ^= value;
+        self.status.update_zn(self.a);
     }
 
     pub fn take_writes(&mut self) -> Vec<CpuWrite> {

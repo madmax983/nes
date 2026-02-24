@@ -31,9 +31,9 @@ fn step_cpu_executes_instruction_and_tracks_trace() {
 #[test]
 fn step_cpu_surfaces_unknown_opcode_errors() {
     let mut core = NesCore::new();
-    core.load_cpu_bytes(0xC000, &[0xFF]);
+    core.load_cpu_bytes(0xC000, &[0x02]);
 
     let err = core.execute(Command::StepCpu).unwrap_err();
 
-    assert_eq!(err, CoreError::CpuStepFailed(CpuError::UnknownOpcode(0xFF)));
+    assert_eq!(err, CoreError::CpuStepFailed(CpuError::UnknownOpcode(0x02)));
 }

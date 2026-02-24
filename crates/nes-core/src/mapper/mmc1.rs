@@ -4,6 +4,7 @@ use super::Mapper;
 pub struct Mmc1 {
     prg_bank_count: u8,
     _chr_bank_count: u8,
+    control: u8,
     shift_register: u8,
     shift_count: u8,
     selected_prg_bank: u8,
@@ -12,6 +13,7 @@ pub struct Mmc1 {
 
 impl Mmc1 {
     const SHIFT_RESET: u8 = 0x10;
+    const CONTROL_RESET: u8 = 0x0C;
 
     #[must_use]
     pub fn new(prg_bank_count: u8, chr_bank_count: u8) -> Self {
@@ -21,6 +23,7 @@ impl Mmc1 {
         Self {
             prg_bank_count: effective_prg_banks,
             _chr_bank_count: chr_bank_count.max(1),
+            control: Self::CONTROL_RESET,
             shift_register: Self::SHIFT_RESET,
             shift_count: 0,
             selected_prg_bank: 0,
@@ -34,6 +37,7 @@ impl Mmc1 {
         Self {
             prg_bank_count: prg_bank_count.max(1),
             _chr_bank_count: chr_bank_count.max(1),
+            control: Self::CONTROL_RESET,
             shift_register: Self::SHIFT_RESET,
             shift_count: 0,
             selected_prg_bank: 0,
@@ -66,8 +70,15 @@ impl Mmc1 {
     }
 
     fn commit_shift_register(&mut self, addr: u16) {
-        if addr >= 0xE000 {
-            self.selected_prg_bank = self.shift_register % self.prg_bank_count;
+        let value = self.shift_register & 0x1F;
+        match addr {
+            0x8000..=0x9FFF => {
+                self.control = value;
+            }
+            0xE000..=0xFFFF => {
+                self.selected_prg_bank = value & 0x0F;
+            }
+            _ => {}
         }
         self.reset_shift();
     }
@@ -90,16 +101,42 @@ impl Mmc1 {
 
 impl Mapper for Mmc1 {
     fn read_prg(&self, addr: u16) -> u8 {
-        if addr < 0xC000 {
-            self.read_bank(self.selected_prg_bank, addr)
-        } else {
-            self.read_bank(self.prg_bank_count - 1, addr)
-        }
+        let bank_count = self.prg_bank_count.max(1);
+        let prg_mode = (self.control >> 2) & 0b11;
+        let selected = self.selected_prg_bank % bank_count;
+
+        let bank = match prg_mode {
+            0 | 1 => {
+                let lower = (selected & 0xFE) % bank_count;
+                if addr < 0xC000 {
+                    lower
+                } else {
+                    lower.wrapping_add(1) % bank_count
+                }
+            }
+            2 => {
+                if addr < 0xC000 {
+                    0
+                } else {
+                    selected
+                }
+            }
+            _ => {
+                if addr < 0xC000 {
+                    selected
+                } else {
+                    bank_count - 1
+                }
+            }
+        };
+
+        self.read_bank(bank, addr)
     }
 
     fn write_prg(&mut self, addr: u16, value: u8) {
         if value & 0x80 != 0 {
             self.reset_shift();
+            self.control |= Self::CONTROL_RESET;
             return;
         }
 

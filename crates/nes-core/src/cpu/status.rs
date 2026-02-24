@@ -89,9 +89,18 @@ impl Status {
         self.set_negative(rhs & Self::NEGATIVE_BIT != 0);
     }
 
+    pub fn restore_from_stack(&mut self, bits: u8) {
+        self.bits = (bits | Self::UNUSED_BIT) & !Self::BREAK_BIT;
+    }
+
     #[must_use]
     pub fn bits_for_stack_push(self) -> u8 {
         (self.bits | Self::UNUSED_BIT) & !Self::BREAK_BIT
+    }
+
+    #[must_use]
+    pub fn bits_for_php(self) -> u8 {
+        self.bits | Self::UNUSED_BIT | Self::BREAK_BIT
     }
 
     fn set_flag(&mut self, mask: u8, enabled: bool) {

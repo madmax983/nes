@@ -165,10 +165,10 @@ fn nestest_style_trace_for_ldx_immediate_matches_expected_prefix() {
 #[test]
 fn unknown_opcode_returns_error() {
     let mut cpu = Cpu::new(0x8000);
-    cpu.load_bytes(0x8000, &[0xFF]);
+    cpu.load_bytes(0x8000, &[0x02]);
 
     let err = cpu.step_with_trace().unwrap_err();
-    assert_eq!(err, CpuError::UnknownOpcode(0xFF));
+    assert_eq!(err, CpuError::UnknownOpcode(0x02));
 }
 
 #[test]
