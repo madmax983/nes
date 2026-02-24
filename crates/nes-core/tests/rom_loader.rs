@@ -14,6 +14,21 @@ fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
     rom
 }
 
+fn sample_nes2(mapper_id: u8, prg_banks: u8, chr_banks: u8) -> Vec<u8> {
+    let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024 + chr_banks as usize * 8 * 1024];
+    rom[0] = 0x4E; // N
+    rom[1] = 0x45; // E
+    rom[2] = 0x53; // S
+    rom[3] = 0x1A;
+    rom[4] = prg_banks;
+    rom[5] = chr_banks;
+    rom[6] = (mapper_id & 0x0F) << 4;
+    rom[7] = (mapper_id & 0xF0) | 0x08; // NES 2.0 marker
+    rom[8] = 0; // no extended mapper bits
+    rom[9] = 0; // no extended PRG/CHR size bits
+    rom
+}
+
 #[test]
 fn load_nrom16_maps_prg_and_respects_reset_vector() {
     let mut rom = sample_ines(0, 1);
@@ -36,6 +51,34 @@ fn load_nrom16_maps_prg_and_respects_reset_vector() {
     core.execute(Command::StepCpu).unwrap();
     assert_eq!(core.cpu_a(), 0x42);
     assert_eq!(core.cpu_pc(), 0x8002);
+}
+
+#[test]
+fn load_nes2_nrom32_maps_prg_and_respects_reset_vector() {
+    let mut rom = sample_nes2(0, 2, 1);
+    let prg_start = 16;
+    let bank_size = 16 * 1024;
+
+    // First bank ($8000): LDA #$42
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x42;
+
+    // Second bank ($C000): LDA #$99; reset vector -> $C000
+    let second_bank = prg_start + bank_size;
+    rom[second_bank] = 0xA9;
+    rom[second_bank + 1] = 0x99;
+    rom[second_bank + 0x3FFC] = 0x00;
+    rom[second_bank + 0x3FFD] = 0xC0;
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(info.mapper_id, 0);
+    assert_eq!(info.prg_rom_bytes, 32 * 1024);
+    assert_eq!(core.cpu_pc(), 0xC000);
+
+    core.execute(Command::StepCpu).unwrap();
+    assert_eq!(core.cpu_a(), 0x99);
 }
 
 #[test]

@@ -16,7 +16,8 @@ pub struct InesRom<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RomError {
     InvalidMagic,
-    UnsupportedNes2,
+    UnsupportedNes2SizeEncoding,
+    UnsupportedNes2ExtendedMapper(u16),
     MissingPrgRom,
     UnsupportedMapper(u8),
     UnsupportedPrgLayout(usize),
@@ -27,7 +28,12 @@ impl fmt::Display for RomError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidMagic => f.write_str("invalid iNES magic header"),
-            Self::UnsupportedNes2 => f.write_str("NES 2.0 ROMs are not supported in this slice"),
+            Self::UnsupportedNes2SizeEncoding => {
+                f.write_str("NES 2.0 exponent/multiplier size encoding is not supported")
+            }
+            Self::UnsupportedNes2ExtendedMapper(mapper) => {
+                write!(f, "NES 2.0 extended mapper id {mapper} is not supported")
+            }
             Self::MissingPrgRom => f.write_str("ROM has no PRG banks"),
             Self::UnsupportedMapper(mapper) => write!(f, "unsupported mapper id {mapper}"),
             Self::UnsupportedPrgLayout(bytes) => write!(f, "unsupported PRG layout size {bytes}"),
@@ -56,16 +62,39 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
         return Err(RomError::InvalidMagic);
     }
 
-    let prg_banks = bytes[4] as usize;
-    let chr_banks = bytes[5] as usize;
-    if prg_banks == 0 {
-        return Err(RomError::MissingPrgRom);
-    }
-
     let flags6 = bytes[6];
     let flags7 = bytes[7];
-    if (flags7 & 0b0000_1100) == 0b0000_1000 {
-        return Err(RomError::UnsupportedNes2);
+    let is_nes2 = (flags7 & 0b0000_1100) == 0b0000_1000;
+
+    let (mapper_id, prg_banks, chr_banks) = if is_nes2 {
+        let mapper_low = (flags6 >> 4) | (flags7 & 0xF0);
+        let mapper_high = bytes[8] & 0x0F;
+        let mapper_extended = ((mapper_high as u16) << 8) | mapper_low as u16;
+        if mapper_high != 0 {
+            return Err(RomError::UnsupportedNes2ExtendedMapper(mapper_extended));
+        }
+
+        let prg_msb = bytes[9] & 0x0F;
+        let chr_msb = (bytes[9] >> 4) & 0x0F;
+        if prg_msb == 0x0F || chr_msb == 0x0F {
+            return Err(RomError::UnsupportedNes2SizeEncoding);
+        }
+
+        (
+            mapper_low,
+            bytes[4] as usize | ((prg_msb as usize) << 8),
+            bytes[5] as usize | ((chr_msb as usize) << 8),
+        )
+    } else {
+        (
+            flags6 >> 4 | (flags7 & 0xF0),
+            bytes[4] as usize,
+            bytes[5] as usize,
+        )
+    };
+
+    if prg_banks == 0 {
+        return Err(RomError::MissingPrgRom);
     }
 
     let trainer_bytes = if flags6 & 0b0000_0100 != 0 {
@@ -86,7 +115,6 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
         });
     }
 
-    let mapper_id = (flags6 >> 4) | (flags7 & 0xF0);
     let prg_end = prg_start + prg_rom_len;
     Ok(InesRom {
         mapper_id,
