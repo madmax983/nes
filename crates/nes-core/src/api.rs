@@ -79,13 +79,15 @@ pub enum QueryResult {
     FpsMilli(u32),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreSnapshot {
     pub paused: bool,
     pub speed_permille: u16,
     pub controller_bits: u8,
     pub scheduler: SchedulerSnapshot,
     pub cpu: CpuSnapshot,
+    mapper: Option<LoadedMapper>,
+    reset_pc: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,7 +97,7 @@ pub struct RomLoadInfo {
     pub reset_pc: u16,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum LoadedMapper {
     Nrom(Nrom),
     Uxrom(Uxrom),
@@ -251,6 +253,7 @@ impl NesCore {
             ^ (cpu.x as u64).rotate_left(31)
             ^ (cpu.y as u64).rotate_left(37)
             ^ (cpu.status as u64).rotate_left(41)
+            ^ self.mapper_hash_component().rotate_left(53)
     }
 
     #[must_use]
@@ -261,6 +264,8 @@ impl NesCore {
             controller_bits: self.controller_bits,
             scheduler: self.scheduler.snapshot(),
             cpu: self.cpu.snapshot(),
+            mapper: self.mapper.clone(),
+            reset_pc: self.reset_pc,
         }
     }
 
@@ -270,8 +275,9 @@ impl NesCore {
         self.controller_bits = snapshot.controller_bits;
         self.scheduler.restore(snapshot.scheduler);
         self.cpu.restore(snapshot.cpu);
-        self.mapper = None;
-        self.reset_pc = DEFAULT_START_PC;
+        self.mapper = snapshot.mapper.clone();
+        self.reset_pc = snapshot.reset_pc;
+        self.sync_mapper_prg_window();
         self.last_cpu_trace = None;
     }
 
@@ -453,6 +459,15 @@ impl NesCore {
 
         if remap_needed {
             self.sync_mapper_prg_window();
+        }
+    }
+
+    fn mapper_hash_component(&self) -> u64 {
+        match self.mapper.as_ref() {
+            None => 0,
+            Some(LoadedMapper::Nrom(_)) => 0x10,
+            Some(LoadedMapper::Uxrom(mapper)) => 0x20 ^ mapper.selected_bank() as u64,
+            Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
         }
     }
 }

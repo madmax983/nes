@@ -1,6 +1,6 @@
 use super::Mapper;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mmc1 {
     prg_bank_count: u8,
     _chr_bank_count: u8,

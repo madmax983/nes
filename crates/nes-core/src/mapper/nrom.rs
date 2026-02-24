@@ -1,6 +1,6 @@
 use super::Mapper;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Nrom {
     prg_rom: Vec<u8>,
 }

@@ -1,6 +1,6 @@
 use super::Mapper;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Uxrom {
     bank_count: u8,
     selected_bank: u8,

@@ -221,7 +221,7 @@ pub fn dispatch_tool(
                 let slots = saved_states()
                     .lock()
                     .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-                slots.get(&slot).copied()
+                slots.get(&slot).cloned()
             };
             if let Some(snapshot) = snapshot {
                 core.load_state(&snapshot);
