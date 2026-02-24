@@ -16,6 +16,7 @@ fn catalog_contains_required_user_facing_tools() {
         "get_frame",
         "get_audio_chunk",
         "get_fps",
+        "get_ppu_frame_counter",
         "get_emulator_state",
         "read_memory",
         "read_registers",

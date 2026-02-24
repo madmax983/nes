@@ -32,5 +32,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verus-check.ps1
 
 - `NESTEST_ROM_PATH`
 - `BLARGG_CPU_ROM_PATH`
+- `SMB_ROM_PATH`
 
 ROM tests are currently checked in as ignored gates until ROM paths are supplied in CI or local runs.

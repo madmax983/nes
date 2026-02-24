@@ -35,3 +35,15 @@ fn controller_state_and_speed_are_queryable() {
         QueryResult::FpsMilli(90_000)
     );
 }
+
+#[test]
+fn ppu_frame_counter_is_queryable() {
+    let mut core = NesCore::new();
+    core.execute(Command::StepFrame).unwrap();
+    core.execute(Command::StepFrame).unwrap();
+
+    match core.query(CoreQuery::PpuFrameCounter) {
+        QueryResult::PpuFrameCounter(frame_counter) => assert!(frame_counter >= 1),
+        other => panic!("unexpected query result: {other:?}"),
+    }
+}

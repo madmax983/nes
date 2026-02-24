@@ -42,6 +42,9 @@ pub enum DispatchOutput {
     Fps {
         fps_milli: u32,
     },
+    PpuFrameCounter {
+        frame_counter: u64,
+    },
     Frame {
         seq: u64,
         bytes: usize,
@@ -153,6 +156,14 @@ pub fn dispatch_tool(
             QueryResult::FpsMilli(fps_milli) => Ok(DispatchOutput::Fps { fps_milli }),
             _ => Err(DispatchError::Internal(
                 "unexpected core query result for get_fps".to_owned(),
+            )),
+        },
+        "get_ppu_frame_counter" => match core.query(CoreQuery::PpuFrameCounter) {
+            QueryResult::PpuFrameCounter(frame_counter) => {
+                Ok(DispatchOutput::PpuFrameCounter { frame_counter })
+            }
+            _ => Err(DispatchError::Internal(
+                "unexpected core query result for get_ppu_frame_counter".to_owned(),
             )),
         },
         "get_emulator_state" => match core.query(CoreQuery::EmulatorState) {

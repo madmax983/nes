@@ -1,7 +1,8 @@
 use core::fmt;
 
-use crate::cpu::{Cpu, CpuError, CpuPrgWrite, CpuSnapshot};
+use crate::cpu::{Cpu, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{Mmc1, Nrom, Uxrom};
+use crate::ppu::{Ppu, PpuSnapshot};
 use crate::replay::replay_commands;
 use crate::rom::{RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
@@ -62,6 +63,7 @@ pub enum CoreQuery {
     Registers,
     Memory(u16),
     FpsMilli,
+    PpuFrameCounter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +79,7 @@ pub enum QueryResult {
     Registers(CpuSnapshot),
     Memory(u8),
     FpsMilli(u32),
+    PpuFrameCounter(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +88,7 @@ pub struct CoreSnapshot {
     pub speed_permille: u16,
     pub controller_bits: u8,
     pub scheduler: SchedulerSnapshot,
+    pub ppu: PpuSnapshot,
     pub cpu: CpuSnapshot,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
@@ -127,6 +131,7 @@ pub struct NesCore {
     paused: bool,
     speed_permille: u16,
     scheduler: Scheduler,
+    ppu: Ppu,
     controller_bits: u8,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
@@ -162,6 +167,7 @@ impl NesCore {
             paused: false,
             speed_permille: DEFAULT_SPEED_PERMILLE,
             scheduler: Scheduler::new(),
+            ppu: Ppu::new(),
             controller_bits: 0,
             mapper: None,
             reset_pc: DEFAULT_START_PC,
@@ -230,7 +236,13 @@ impl NesCore {
 
     pub fn write_cpu_bus(&mut self, addr: u16, value: u8) {
         self.cpu.write_byte(addr, value);
-        self.apply_cpu_prg_writes(&[CpuPrgWrite { addr, value }]);
+        self.apply_cpu_writes(&[CpuWrite { addr, value }]);
+        self.sync_ppu_register_image();
+    }
+
+    #[must_use]
+    pub fn ppu_frame_counter(&self) -> u64 {
+        self.ppu.frame_counter()
     }
 
     #[must_use]
@@ -253,6 +265,8 @@ impl NesCore {
             ^ (cpu.x as u64).rotate_left(31)
             ^ (cpu.y as u64).rotate_left(37)
             ^ (cpu.status as u64).rotate_left(41)
+            ^ self.ppu.frame_counter().rotate_left(11)
+            ^ (self.ppu.status() as u64).rotate_left(17)
             ^ self.mapper_hash_component().rotate_left(53)
     }
 
@@ -263,6 +277,7 @@ impl NesCore {
             speed_permille: self.speed_permille,
             controller_bits: self.controller_bits,
             scheduler: self.scheduler.snapshot(),
+            ppu: self.ppu.snapshot(),
             cpu: self.cpu.snapshot(),
             mapper: self.mapper.clone(),
             reset_pc: self.reset_pc,
@@ -274,10 +289,12 @@ impl NesCore {
         self.speed_permille = snapshot.speed_permille;
         self.controller_bits = snapshot.controller_bits;
         self.scheduler.restore(snapshot.scheduler);
+        self.ppu.restore(snapshot.ppu);
         self.cpu.restore(snapshot.cpu);
         self.mapper = snapshot.mapper.clone();
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
+        self.sync_ppu_register_image();
         self.last_cpu_trace = None;
     }
 
@@ -302,7 +319,9 @@ impl NesCore {
         self.paused = false;
         self.controller_bits = 0;
         self.scheduler.reset();
+        self.ppu.reset();
         self.cpu.reset(reset_pc);
+        self.sync_ppu_register_image();
         self.last_cpu_trace = None;
 
         Ok(RomLoadInfo {
@@ -337,17 +356,34 @@ impl NesCore {
                     .step_with_trace()
                     .map_err(CoreError::CpuStepFailed)?;
                 self.last_cpu_trace = Some(trace);
-                let prg_writes = self.cpu.take_prg_writes();
-                self.apply_cpu_prg_writes(&prg_writes);
+                let writes = self.cpu.take_writes();
+                self.apply_cpu_writes(&writes);
                 self.scheduler.step_cpu();
+                self.ppu.step_cycles(3);
+                if self.ppu.take_nmi_pending() {
+                    self.cpu.service_nmi();
+                }
+                self.sync_ppu_register_image();
                 Ok(())
             }
             Command::StepScanline => {
                 self.scheduler.step_scanline();
+                self.ppu
+                    .step_cycles(Scheduler::SCANLINE_CPU_CYCLES.saturating_mul(3));
+                if self.ppu.take_nmi_pending() {
+                    self.cpu.service_nmi();
+                }
+                self.sync_ppu_register_image();
                 Ok(())
             }
             Command::StepFrame => {
                 self.scheduler.step_frame();
+                self.ppu
+                    .step_cycles(Scheduler::FRAME_CPU_CYCLES.saturating_mul(3));
+                if self.ppu.take_nmi_pending() {
+                    self.cpu.service_nmi();
+                }
+                self.sync_ppu_register_image();
                 Ok(())
             }
             Command::SetControllerState(bits) => {
@@ -383,6 +419,7 @@ impl NesCore {
             CoreQuery::Registers => QueryResult::Registers(self.cpu.snapshot()),
             CoreQuery::Memory(addr) => QueryResult::Memory(self.cpu.read_byte(addr)),
             CoreQuery::FpsMilli => QueryResult::FpsMilli(self.fps_milli()),
+            CoreQuery::PpuFrameCounter => QueryResult::PpuFrameCounter(self.ppu.frame_counter()),
         }
     }
 
@@ -390,7 +427,9 @@ impl NesCore {
         self.paused = false;
         self.controller_bits = 0;
         self.scheduler.reset();
+        self.ppu.reset();
         self.cpu.reset(self.reset_pc);
+        self.sync_ppu_register_image();
         self.last_cpu_trace = None;
     }
 
@@ -443,7 +482,7 @@ impl NesCore {
         }
     }
 
-    fn apply_cpu_prg_writes(&mut self, writes: &[CpuPrgWrite]) {
+    fn apply_cpu_writes(&mut self, writes: &[CpuWrite]) {
         let remap_needed = if let Some(mapper) = self.mapper.as_mut() {
             let mut wrote_prg = false;
             for write in writes {
@@ -457,8 +496,23 @@ impl NesCore {
             false
         };
 
+        let ppu_changed = {
+            let mut changed = false;
+            for write in writes {
+                if (0x2000..=0x3FFF).contains(&write.addr) {
+                    self.ppu
+                        .write_register(normalize_ppu_register_addr(write.addr), write.value);
+                    changed = true;
+                }
+            }
+            changed
+        };
+
         if remap_needed {
             self.sync_mapper_prg_window();
+        }
+        if ppu_changed {
+            self.sync_ppu_register_image();
         }
     }
 
@@ -470,6 +524,17 @@ impl NesCore {
             Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
         }
     }
+
+    fn sync_ppu_register_image(&mut self) {
+        self.cpu.write_byte(0x2000, self.ppu.ctrl());
+        self.cpu.write_byte(0x2001, self.ppu.mask());
+        self.cpu.write_byte(0x2002, self.ppu.status());
+    }
+}
+
+#[must_use]
+fn normalize_ppu_register_addr(addr: u16) -> u16 {
+    0x2000 + ((addr - 0x2000) % 8)
 }
 
 impl Default for NesCore {

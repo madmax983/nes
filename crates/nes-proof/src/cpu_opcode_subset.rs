@@ -3,15 +3,19 @@ use vstd::prelude::*;
 verus! {
 
 spec fn supported_subset(opcode: nat) -> bool {
-    opcode == 0x20 || opcode == 0x60
-        || opcode == 0xA9 || opcode == 0xA2 || opcode == 0xA0 || opcode == 0x8D
-        || opcode == 0xAA || opcode == 0x8A || opcode == 0x98
-        || opcode == 0xE8 || opcode == 0xEA
+    opcode == 0x20 || opcode == 0x60 || opcode == 0x4C
+        || opcode == 0xA9 || opcode == 0xA2 || opcode == 0xA0
+        || opcode == 0x8D || opcode == 0x8E || opcode == 0x2C
+        || opcode == 0xAA || opcode == 0x8A || opcode == 0x98 || opcode == 0x9A
+        || opcode == 0xE8 || opcode == 0xEA || opcode == 0x78 || opcode == 0xD8
+        || opcode == 0x10 || opcode == 0x30
 }
 
 spec fn opcode_len(opcode: nat) -> nat {
-    if opcode == 0x20 || opcode == 0x8D {
+    if opcode == 0x20 || opcode == 0x4C || opcode == 0x8D || opcode == 0x8E || opcode == 0x2C {
         3
+    } else if opcode == 0x10 || opcode == 0x30 {
+        2
     } else if opcode == 0xA9 || opcode == 0xA2 || opcode == 0xA0 {
         2
     } else {
@@ -20,9 +24,10 @@ spec fn opcode_len(opcode: nat) -> nat {
 }
 
 spec fn linear_subset(opcode: nat) -> bool {
-    opcode == 0xA9 || opcode == 0xA2 || opcode == 0xA0 || opcode == 0x8D
-        || opcode == 0xAA || opcode == 0x8A || opcode == 0x98
-        || opcode == 0xE8 || opcode == 0xEA
+    opcode == 0xA9 || opcode == 0xA2 || opcode == 0xA0
+        || opcode == 0x8D || opcode == 0x8E || opcode == 0x2C
+        || opcode == 0xAA || opcode == 0x8A || opcode == 0x98 || opcode == 0x9A
+        || opcode == 0xE8 || opcode == 0xEA || opcode == 0x78 || opcode == 0xD8
 }
 
 spec fn next_pc_linear(pc: nat, opcode: nat) -> nat
@@ -68,7 +73,8 @@ proof fn immediate_subset_advances_two_bytes(pc: nat, opcode: nat)
 proof fn single_byte_linear_subset_advances_one_byte(pc: nat, opcode: nat)
     requires
         pc < 0x1_0000,
-        opcode == 0xAA || opcode == 0x8A || opcode == 0x98 || opcode == 0xE8 || opcode == 0xEA
+        opcode == 0xAA || opcode == 0x8A || opcode == 0x98 || opcode == 0x9A
+            || opcode == 0xE8 || opcode == 0xEA || opcode == 0x78 || opcode == 0xD8
     ensures next_pc_linear(pc, opcode) == (pc + 1) % 0x1_0000
 {
 }
@@ -76,6 +82,12 @@ proof fn single_byte_linear_subset_advances_one_byte(pc: nat, opcode: nat)
 proof fn sta_absolute_advances_three_bytes(pc: nat)
     requires pc < 0x1_0000
     ensures next_pc_linear(pc, 0x8D) == (pc + 3) % 0x1_0000
+{
+}
+
+proof fn branch_subset_advances_two_bytes_when_not_taken(pc: nat, opcode: nat)
+    requires pc < 0x1_0000, opcode == 0x10 || opcode == 0x30
+    ensures opcode_len(opcode) == 2
 {
 }
 

@@ -135,6 +135,19 @@ fn read_registers_and_memory_tools_reflect_core_state() {
 }
 
 #[test]
+fn get_ppu_frame_counter_reflects_core_progress() {
+    let mut core = NesCore::new();
+    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).unwrap();
+
+    let output = dispatch_tool(&mut core, "get_ppu_frame_counter", &ToolParams::new()).unwrap();
+    match output {
+        DispatchOutput::PpuFrameCounter { frame_counter } => assert!(frame_counter >= 1),
+        other => panic!("unexpected get_ppu_frame_counter output: {other:?}"),
+    }
+}
+
+#[test]
 fn save_and_load_state_round_trip_restores_state_hash() {
     let mut core = NesCore::new();
     core.load_cpu_bytes(0xC000, &[0xEA]);

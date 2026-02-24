@@ -207,3 +207,64 @@ fn sta_absolute_writes_memory_and_emits_prg_write() {
         }]
     );
 }
+
+#[test]
+fn txs_and_stx_absolute_update_stack_and_memory() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA2, 0xAB, 0x9A, 0x8E, 0x34, 0x12]);
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+
+    assert_eq!(cpu.sp(), 0xAB);
+    assert_eq!(cpu.read_byte(0x1234), 0xAB);
+    assert_eq!(cpu.pc(), 0xC006);
+}
+
+#[test]
+fn bpl_and_bmi_follow_negative_flag() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(
+        0xC000,
+        &[
+            0xA9, 0x01, // LDA #$01 (N clear)
+            0x10, 0x02, // BPL +2 (taken)
+            0xA2, 0x00, // skipped
+            0xA2, 0x7F, // executed
+            0xA9, 0x80, // LDA #$80 (N set)
+            0x30, 0x02, // BMI +2 (taken)
+            0xA2, 0x01, // skipped
+            0xA2, 0x55, // executed
+        ],
+    );
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.x(), 0x7F);
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+    assert_eq!(cpu.x(), 0x55);
+}
+
+#[test]
+fn sta_absolute_x_writes_indexed_target() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x77, 0xA2, 0x01, 0x9D, 0x00, 0x80]);
+
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+    cpu.step_with_trace().unwrap();
+
+    assert_eq!(cpu.read_byte(0x8001), 0x77);
+    assert_eq!(
+        cpu.take_prg_writes(),
+        vec![CpuPrgWrite {
+            addr: 0x8001,
+            value: 0x77
+        }]
+    );
+}
