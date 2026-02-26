@@ -8,6 +8,6 @@ mod rom;
 mod scheduler;
 
 pub use api::{
-    Button, Command, CoreError, CoreQuery, CoreSnapshot, EmulatorState, NesCore, QueryResult,
-    RomLoadInfo,
+    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, Button, Command, CoreError, CoreQuery, CoreSnapshot,
+    EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, QueryResult, RomLoadInfo,
 };

@@ -1,4 +1,4 @@
-use nes_core::{Button, Command, NesCore};
+use nes_core::{AUDIO_CHUNK_SAMPLES, Button, Command, NesCore};
 use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 
 fn params(pairs: &[(&str, &str)]) -> ToolParams {
@@ -144,6 +144,26 @@ fn get_ppu_frame_counter_reflects_core_progress() {
     match output {
         DispatchOutput::PpuFrameCounter { frame_counter } => assert!(frame_counter >= 1),
         other => panic!("unexpected get_ppu_frame_counter output: {other:?}"),
+    }
+}
+
+#[test]
+fn get_frame_reports_full_rgba_payload_size() {
+    let mut core = NesCore::new();
+    let output = dispatch_tool(&mut core, "get_frame", &ToolParams::new()).unwrap();
+    match output {
+        DispatchOutput::Frame { bytes, .. } => assert_eq!(bytes, 256 * 240 * 4),
+        other => panic!("unexpected get_frame output: {other:?}"),
+    }
+}
+
+#[test]
+fn get_audio_chunk_reports_expected_sample_count() {
+    let mut core = NesCore::new();
+    let output = dispatch_tool(&mut core, "get_audio_chunk", &ToolParams::new()).unwrap();
+    match output {
+        DispatchOutput::Audio { samples, .. } => assert_eq!(samples, AUDIO_CHUNK_SAMPLES),
+        other => panic!("unexpected get_audio_chunk output: {other:?}"),
     }
 }
 

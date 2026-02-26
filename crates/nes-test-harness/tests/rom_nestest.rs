@@ -38,8 +38,9 @@ fn nestest_boot_sequence_matches_expected_prefix() {
         "C009  AD 02 20  LDA $2002",
         "C00C  10 FB     BPL $C009",
     ];
+    let expected_cycles = [2_u64, 4, 6, 8, 12, 15];
 
-    for expected_prefix in expected {
+    for (step, expected_prefix) in expected.iter().enumerate() {
         core.execute(Command::StepCpu).unwrap_or_else(|err| {
             panic!(
                 "nestest prefix step failed at pc={:04X}: {err}",
@@ -52,6 +53,11 @@ fn nestest_boot_sequence_matches_expected_prefix() {
         assert!(
             trace.starts_with(expected_prefix),
             "trace prefix mismatch\nexpected: {expected_prefix}\nactual:   {trace}"
+        );
+        assert_eq!(
+            core.total_cycles(),
+            expected_cycles[step],
+            "unexpected cycle total after trace {expected_prefix}",
         );
     }
 }

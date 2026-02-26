@@ -26,22 +26,12 @@ impl Scheduler {
         }
     }
 
-    pub fn step_cpu(&mut self) {
-        self.cpu_cycles = self.cpu_cycles.saturating_add(1);
-        self.ppu_cycles = self.ppu_cycles.saturating_add(Self::PPU_PER_CPU);
-        self.apu_cycles = self.apu_cycles.saturating_add(1);
-    }
-
-    pub fn step_frame(&mut self) {
-        for _ in 0..Self::FRAME_CPU_CYCLES {
-            self.step_cpu();
-        }
-    }
-
-    pub fn step_scanline(&mut self) {
-        for _ in 0..Self::SCANLINE_CPU_CYCLES {
-            self.step_cpu();
-        }
+    pub fn step_cpu_cycles(&mut self, cycles: u64) {
+        self.cpu_cycles = self.cpu_cycles.saturating_add(cycles);
+        self.ppu_cycles = self
+            .ppu_cycles
+            .saturating_add(cycles.saturating_mul(Self::PPU_PER_CPU));
+        self.apu_cycles = self.apu_cycles.saturating_add(cycles);
     }
 
     #[must_use]

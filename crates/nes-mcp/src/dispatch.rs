@@ -3,9 +3,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::sync::{Mutex, OnceLock};
 
-use nes_core::{Button, Command, CoreQuery, CoreSnapshot, NesCore, QueryResult};
+use nes_core::{
+    Button, Command, CoreQuery, CoreSnapshot, FRAME_HEIGHT, FRAME_WIDTH, NesCore, QueryResult,
+};
 
-use crate::output::{audio_chunk, frame_chunk, latest_output_metadata};
+use crate::output::{
+    audio_chunk, frame_chunk, latest_output_metadata, publish_audio, publish_frame,
+};
 
 pub type ToolParams = BTreeMap<String, String>;
 
@@ -199,6 +203,7 @@ pub fn dispatch_tool(
             }
         }
         "get_frame" => {
+            sync_frame_output(core);
             let default_seq = latest_output_metadata().frame_seq.saturating_add(1);
             let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
             let chunk = frame_chunk(requested_seq)
@@ -209,6 +214,7 @@ pub fn dispatch_tool(
             })
         }
         "get_audio_chunk" => {
+            sync_audio_output(core);
             let default_seq = latest_output_metadata().audio_seq.saturating_add(1);
             let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
             let chunk = audio_chunk(requested_seq)
@@ -262,6 +268,18 @@ pub fn dispatch_tool(
 fn execute_command(core: &mut NesCore, command: Command) -> Result<(), DispatchError> {
     core.execute(command)
         .map_err(|err| DispatchError::Core(err.to_string()))
+}
+
+fn sync_frame_output(core: &NesCore) {
+    publish_frame(
+        FRAME_WIDTH as u32,
+        FRAME_HEIGHT as u32,
+        core.framebuffer_rgba(),
+    );
+}
+
+fn sync_audio_output(core: &mut NesCore) {
+    publish_audio(core.audio_chunk_i16());
 }
 
 fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {

@@ -13,6 +13,14 @@ const BASE_FPS_MILLI: u32 = 60_000;
 const PRG_16K_BYTES: usize = 16 * 1024;
 const PRG_32K_BYTES: usize = 32 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
+pub const FRAME_WIDTH: usize = 256;
+pub const FRAME_HEIGHT: usize = 240;
+pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
+pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
+pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
+const AUDIO_MAX_AMPLITUDE: i16 = 12_000;
+const AUDIO_MIN_FREQ_HZ: u32 = 55;
+const AUDIO_MAX_FREQ_HZ: u32 = 1_760;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -90,6 +98,7 @@ pub struct CoreSnapshot {
     pub scheduler: SchedulerSnapshot,
     pub ppu: PpuSnapshot,
     pub cpu: CpuSnapshot,
+    audio_phase: u32,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
 }
@@ -136,6 +145,7 @@ pub struct NesCore {
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
     cpu: Cpu,
+    audio_phase: u32,
     last_cpu_trace: Option<String>,
 }
 
@@ -172,6 +182,7 @@ impl NesCore {
             mapper: None,
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
+            audio_phase: 0,
             last_cpu_trace: None,
         }
     }
@@ -251,6 +262,89 @@ impl NesCore {
     }
 
     #[must_use]
+    pub fn framebuffer_rgba(&self) -> Vec<u8> {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        self.fill_framebuffer_rgba(&mut frame);
+        frame
+    }
+
+    pub fn fill_framebuffer_rgba(&self, frame: &mut [u8]) {
+        if frame.len() != FRAME_RGBA_BYTES {
+            return;
+        }
+
+        let regs = self.cpu.snapshot();
+        let frame_phase = self.ppu.frame_counter() as u8;
+        let tint = self.ppu.ctrl() ^ self.ppu.mask() ^ self.controller_bits;
+        let in_vblank = self.ppu.status() & 0x80 != 0;
+
+        for y in 0..FRAME_HEIGHT {
+            let y8 = y as u8;
+            for x in 0..FRAME_WIDTH {
+                let x8 = x as u8;
+                let idx = (y * FRAME_WIDTH + x) * 4;
+
+                let wave = x8.rotate_left(1).wrapping_add(y8.rotate_left(2));
+                let motion = frame_phase.wrapping_mul(3).wrapping_add(wave);
+
+                let mut r = x8.wrapping_add(regs.a).wrapping_add(motion);
+                let mut g = y8.wrapping_add(regs.x).wrapping_add(tint);
+                let mut b = (x8 ^ y8).wrapping_add(regs.y).wrapping_add(frame_phase);
+
+                if in_vblank {
+                    r = r.saturating_add(24);
+                    g = g.saturating_add(24);
+                    b = b.saturating_add(16);
+                }
+
+                frame[idx] = r;
+                frame[idx + 1] = g;
+                frame[idx + 2] = b;
+                frame[idx + 3] = 0xFF;
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn audio_chunk_i16(&mut self) -> Vec<i16> {
+        let mut samples = vec![0_i16; AUDIO_CHUNK_SAMPLES];
+        self.fill_audio_chunk_i16(&mut samples);
+        samples
+    }
+
+    pub fn fill_audio_chunk_i16(&mut self, samples: &mut [i16]) {
+        let regs = self.cpu.snapshot();
+        let button_energy = self.controller_bits.count_ones().saturating_mul(19);
+        let mut freq_hz = 110_u32
+            .saturating_add((regs.a as u32).saturating_mul(2))
+            .saturating_add(regs.x as u32)
+            .saturating_add((regs.y as u32) / 2)
+            .saturating_add(button_energy);
+        if self.ppu.status() & 0x80 != 0 {
+            freq_hz = freq_hz.saturating_add(55);
+        }
+        freq_hz = freq_hz.clamp(AUDIO_MIN_FREQ_HZ, AUDIO_MAX_FREQ_HZ);
+
+        let phase_step = ((u64::from(freq_hz) << 32) / u64::from(AUDIO_SAMPLE_RATE)) as u32;
+        let duty_threshold = if self.controller_bits & Button::B.bit_mask() != 0 {
+            0xC000_0000
+        } else {
+            0x8000_0000
+        };
+
+        let mut amplitude = if self.paused { 0 } else { AUDIO_MAX_AMPLITUDE };
+        if self.ppu.status() & 0x80 != 0 {
+            amplitude /= 2;
+        }
+
+        for sample in samples.iter_mut() {
+            self.audio_phase = self.audio_phase.wrapping_add(phase_step);
+            let high = self.audio_phase < duty_threshold;
+            *sample = if high { amplitude } else { -amplitude };
+        }
+    }
+
+    #[must_use]
     pub fn state_hash(&self) -> u64 {
         let paused = if self.paused { 1_u64 } else { 0_u64 };
         let cpu = self.cpu.snapshot();
@@ -267,6 +361,7 @@ impl NesCore {
             ^ (cpu.status as u64).rotate_left(41)
             ^ self.ppu.frame_counter().rotate_left(11)
             ^ (self.ppu.status() as u64).rotate_left(17)
+            ^ (self.audio_phase as u64).rotate_left(59)
             ^ self.mapper_hash_component().rotate_left(53)
     }
 
@@ -279,6 +374,7 @@ impl NesCore {
             scheduler: self.scheduler.snapshot(),
             ppu: self.ppu.snapshot(),
             cpu: self.cpu.snapshot(),
+            audio_phase: self.audio_phase,
             mapper: self.mapper.clone(),
             reset_pc: self.reset_pc,
         }
@@ -291,6 +387,7 @@ impl NesCore {
         self.scheduler.restore(snapshot.scheduler);
         self.ppu.restore(snapshot.ppu);
         self.cpu.restore(snapshot.cpu);
+        self.audio_phase = snapshot.audio_phase;
         self.mapper = snapshot.mapper.clone();
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
@@ -321,6 +418,7 @@ impl NesCore {
         self.scheduler.reset();
         self.ppu.reset();
         self.cpu.reset(reset_pc);
+        self.audio_phase = 0;
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
 
@@ -351,39 +449,15 @@ impl NesCore {
                 Ok(())
             }
             Command::StepCpu => {
-                let trace = self
-                    .cpu
-                    .step_with_trace()
-                    .map_err(CoreError::CpuStepFailed)?;
-                self.last_cpu_trace = Some(trace);
-                let writes = self.cpu.take_writes();
-                self.apply_cpu_writes(&writes);
-                self.scheduler.step_cpu();
-                self.ppu.step_cycles(3);
-                if self.ppu.take_nmi_pending() {
-                    self.cpu.service_nmi();
-                }
-                self.sync_ppu_register_image();
+                self.step_single_instruction()?;
                 Ok(())
             }
             Command::StepScanline => {
-                self.scheduler.step_scanline();
-                self.ppu
-                    .step_cycles(Scheduler::SCANLINE_CPU_CYCLES.saturating_mul(3));
-                if self.ppu.take_nmi_pending() {
-                    self.cpu.service_nmi();
-                }
-                self.sync_ppu_register_image();
+                self.step_until_cpu_cycles(Scheduler::SCANLINE_CPU_CYCLES)?;
                 Ok(())
             }
             Command::StepFrame => {
-                self.scheduler.step_frame();
-                self.ppu
-                    .step_cycles(Scheduler::FRAME_CPU_CYCLES.saturating_mul(3));
-                if self.ppu.take_nmi_pending() {
-                    self.cpu.service_nmi();
-                }
-                self.sync_ppu_register_image();
+                self.step_until_cpu_cycles(Scheduler::FRAME_CPU_CYCLES)?;
                 Ok(())
             }
             Command::SetControllerState(bits) => {
@@ -423,12 +497,41 @@ impl NesCore {
         }
     }
 
+    fn step_single_instruction(&mut self) -> Result<u64, CoreError> {
+        let (trace, cpu_cycles) = self
+            .cpu
+            .step_with_trace_and_cycles()
+            .map_err(CoreError::CpuStepFailed)?;
+        self.last_cpu_trace = Some(trace);
+
+        let writes = self.cpu.take_writes();
+        self.apply_cpu_writes(&writes);
+
+        let cpu_cycles = u64::from(cpu_cycles);
+        self.scheduler.step_cpu_cycles(cpu_cycles);
+        self.ppu.step_cycles(cpu_cycles.saturating_mul(3));
+        if self.ppu.take_nmi_pending() {
+            self.cpu.service_nmi();
+        }
+        self.sync_ppu_register_image();
+        Ok(cpu_cycles)
+    }
+
+    fn step_until_cpu_cycles(&mut self, budget: u64) -> Result<(), CoreError> {
+        let start = self.scheduler.cpu_cycles();
+        while self.scheduler.cpu_cycles().saturating_sub(start) < budget {
+            let _ = self.step_single_instruction()?;
+        }
+        Ok(())
+    }
+
     fn reset_runtime(&mut self) {
         self.paused = false;
         self.controller_bits = 0;
         self.scheduler.reset();
         self.ppu.reset();
         self.cpu.reset(self.reset_pc);
+        self.audio_phase = 0;
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
     }

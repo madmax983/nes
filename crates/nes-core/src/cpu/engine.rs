@@ -4,6 +4,28 @@ use crate::cpu::status::Status;
 
 const STACK_BASE: u16 = 0x0100;
 
+// 6502 base CPU cycles per opcode. Dynamic penalties (branch taken/page cross)
+// are applied separately where applicable.
+const CPU_BASE_CYCLES: [u8; 256] = [
+    // 0x00
+    7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, // 0x10
+    2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, // 0x20
+    6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6, // 0x30
+    2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, // 0x40
+    6, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 3, 4, 6, 6, // 0x50
+    2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, // 0x60
+    6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 5, 4, 6, 6, // 0x70
+    2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, // 0x80
+    2, 6, 2, 6, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4, // 0x90
+    2, 6, 2, 6, 4, 4, 4, 4, 2, 5, 2, 5, 5, 5, 5, 5, // 0xA0
+    2, 6, 2, 6, 3, 3, 3, 3, 2, 2, 2, 2, 4, 4, 4, 4, // 0xB0
+    2, 5, 2, 5, 4, 4, 4, 4, 2, 4, 2, 4, 4, 4, 4, 4, // 0xC0
+    2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6, // 0xD0
+    2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7, // 0xE0
+    2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6, // 0xF0
+    2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuError {
     UnknownOpcode(u8),
@@ -165,6 +187,10 @@ impl Cpu {
     }
 
     pub fn step_with_trace(&mut self) -> Result<String, CpuError> {
+        self.step_with_trace_and_cycles().map(|(trace, _)| trace)
+    }
+
+    pub fn step_with_trace_and_cycles(&mut self) -> Result<(String, u8), CpuError> {
         self.writes.clear();
         self.prg_writes.clear();
 
@@ -178,7 +204,8 @@ impl Cpu {
         };
 
         let opcode = self.read(snapshot.pc);
-        match opcode {
+        let cycles = self.instruction_cycles(snapshot, opcode);
+        let step = match opcode {
             0x00 => {
                 let trace = format_trace(snapshot, &[opcode], "BRK");
                 let return_pc = snapshot.pc.wrapping_add(2);
@@ -2184,7 +2211,9 @@ impl Cpu {
                 Ok(trace)
             }
             _ => Err(CpuError::UnknownOpcode(opcode)),
-        }
+        };
+
+        step.map(|trace| (trace, cycles))
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -2272,6 +2301,114 @@ impl Cpu {
         self.status.update_zn(self.a);
     }
 
+    fn instruction_cycles(&self, snapshot: TraceSnapshot, opcode: u8) -> u8 {
+        let mut cycles = CPU_BASE_CYCLES[opcode as usize];
+
+        if Self::is_branch_opcode(opcode) {
+            if self.branch_taken(snapshot, opcode) {
+                cycles = cycles.saturating_add(1);
+                let offset = self.read(snapshot.pc.wrapping_add(1));
+                let next_pc = snapshot.pc.wrapping_add(2);
+                let target = branch_target(next_pc, offset);
+                if page_crossed(next_pc, target) {
+                    cycles = cycles.saturating_add(1);
+                }
+            }
+            return cycles;
+        }
+
+        if Self::abs_x_page_penalty_opcode(opcode) {
+            let base = self.absolute_operand_base(snapshot);
+            let indexed = base.wrapping_add(snapshot.x as u16);
+            if page_crossed(base, indexed) {
+                cycles = cycles.saturating_add(1);
+            }
+            return cycles;
+        }
+
+        if Self::abs_y_page_penalty_opcode(opcode) {
+            let base = self.absolute_operand_base(snapshot);
+            let indexed = base.wrapping_add(snapshot.y as u16);
+            if page_crossed(base, indexed) {
+                cycles = cycles.saturating_add(1);
+            }
+            return cycles;
+        }
+
+        if Self::indirect_y_page_penalty_opcode(opcode) {
+            let zp = self.read(snapshot.pc.wrapping_add(1));
+            let base = self.read_u16_zp(zp);
+            let indexed = base.wrapping_add(snapshot.y as u16);
+            if page_crossed(base, indexed) {
+                cycles = cycles.saturating_add(1);
+            }
+        }
+
+        cycles
+    }
+
+    fn absolute_operand_base(&self, snapshot: TraceSnapshot) -> u16 {
+        let low = self.read(snapshot.pc.wrapping_add(1));
+        let high = self.read(snapshot.pc.wrapping_add(2));
+        u16::from_le_bytes([low, high])
+    }
+
+    fn branch_taken(&self, snapshot: TraceSnapshot, opcode: u8) -> bool {
+        const CARRY_BIT: u8 = 0x01;
+        const ZERO_BIT: u8 = 0x02;
+        const OVERFLOW_BIT: u8 = 0x40;
+        const NEGATIVE_BIT: u8 = 0x80;
+
+        match opcode {
+            0x10 => snapshot.p & NEGATIVE_BIT == 0, // BPL
+            0x30 => snapshot.p & NEGATIVE_BIT != 0, // BMI
+            0x50 => snapshot.p & OVERFLOW_BIT == 0, // BVC
+            0x70 => snapshot.p & OVERFLOW_BIT != 0, // BVS
+            0x90 => snapshot.p & CARRY_BIT == 0,    // BCC
+            0xB0 => snapshot.p & CARRY_BIT != 0,    // BCS
+            0xD0 => snapshot.p & ZERO_BIT == 0,     // BNE
+            0xF0 => snapshot.p & ZERO_BIT != 0,     // BEQ
+            _ => false,
+        }
+    }
+
+    fn is_branch_opcode(opcode: u8) -> bool {
+        matches!(
+            opcode,
+            0x10 | 0x30 | 0x50 | 0x70 | 0x90 | 0xB0 | 0xD0 | 0xF0
+        )
+    }
+
+    fn abs_x_page_penalty_opcode(opcode: u8) -> bool {
+        matches!(
+            opcode,
+            // Official absolute,X reads
+            0x1D | 0x3D | 0x5D | 0x7D | 0xBC | 0xBD | 0xDD | 0xFD
+                // Unofficial absolute,X read NOPs
+                | 0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC
+        )
+    }
+
+    fn abs_y_page_penalty_opcode(opcode: u8) -> bool {
+        matches!(
+            opcode,
+            // Official absolute,Y reads
+            0x19 | 0x39 | 0x59 | 0x79 | 0xB9 | 0xBE | 0xD9 | 0xF9
+                // Unofficial absolute,Y reads
+                | 0xBB | 0xBF
+        )
+    }
+
+    fn indirect_y_page_penalty_opcode(opcode: u8) -> bool {
+        matches!(
+            opcode,
+            // Official (indirect),Y reads
+            0x11 | 0x31 | 0x51 | 0x71 | 0xB1 | 0xD1 | 0xF1
+                // Unofficial (indirect),Y reads
+                | 0xB3
+        )
+    }
+
     pub fn take_writes(&mut self) -> Vec<CpuWrite> {
         core::mem::take(&mut self.writes)
     }
@@ -2301,6 +2438,11 @@ fn branch_target(next_pc: u16, offset: u8) -> u16 {
     } else {
         next_pc.wrapping_sub((-signed) as u16)
     }
+}
+
+#[must_use]
+fn page_crossed(base: u16, indexed: u16) -> bool {
+    (base & 0xFF00) != (indexed & 0xFF00)
 }
 
 fn format_trace(snapshot: TraceSnapshot, bytes: &[u8], mnemonic: &str) -> String {
