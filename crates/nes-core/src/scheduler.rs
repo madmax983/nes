@@ -13,10 +13,6 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    pub const FRAME_CPU_CYCLES: u64 = 29_780;
-    pub const SCANLINE_CPU_CYCLES: u64 = 113;
-    const PPU_PER_CPU: u64 = 3;
-
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -26,12 +22,16 @@ impl Scheduler {
         }
     }
 
-    pub fn step_cpu_cycles(&mut self, cycles: u64) {
-        self.cpu_cycles = self.cpu_cycles.saturating_add(cycles);
-        self.ppu_cycles = self
-            .ppu_cycles
-            .saturating_add(cycles.saturating_mul(Self::PPU_PER_CPU));
-        self.apu_cycles = self.apu_cycles.saturating_add(cycles);
+    pub fn step_cpu_cycle(&mut self) {
+        self.cpu_cycles = self.cpu_cycles.saturating_add(1);
+    }
+
+    pub fn step_ppu_cycle(&mut self) {
+        self.ppu_cycles = self.ppu_cycles.saturating_add(1);
+    }
+
+    pub fn step_apu_cycle(&mut self) {
+        self.apu_cycles = self.apu_cycles.saturating_add(1);
     }
 
     #[must_use]
