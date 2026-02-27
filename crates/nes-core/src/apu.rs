@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::api::AUDIO_SAMPLE_RATE;
 
 const CPU_CLOCK_HZ: u64 = 1_789_773;
-const MAX_SAMPLE_AMPLITUDE: i16 = 12_000;
+const MAX_SAMPLE_AMPLITUDE: f32 = 12_000.0;
 const MAX_QUEUED_SAMPLES: usize = AUDIO_SAMPLE_RATE as usize;
 
 const FRAME_STEP_1: u16 = 3_729;
@@ -12,7 +12,21 @@ const FRAME_STEP_3: u16 = 11_186;
 const FRAME_STEP_4: u16 = 14_916;
 const FRAME_STEP_5: u16 = 18_641;
 
-const DUTY_THRESHOLDS: [u32; 4] = [0x2000_0000, 0x4000_0000, 0x8000_0000, 0xC000_0000];
+const DUTY_TABLE: [[u8; 8]; 4] = [
+    [0, 1, 0, 0, 0, 0, 0, 0], // 12.5%
+    [0, 1, 1, 0, 0, 0, 0, 0], // 25%
+    [0, 1, 1, 1, 1, 0, 0, 0], // 50%
+    [1, 0, 0, 1, 1, 1, 1, 1], // 25% negated
+];
+
+const TRIANGLE_TABLE: [u8; 32] = [
+    15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+    13, 14, 15,
+];
+
+const NOISE_PERIOD_TABLE: [u16; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1_016, 2_034, 4_068,
+];
 
 const LENGTH_TABLE: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
@@ -20,20 +34,382 @@ const LENGTH_TABLE: [u8; 32] = [
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct PulseChannel {
+    enabled: bool,
+    control: u8,
+    timer_reload: u16,
+    timer_counter: u16,
+    duty_step: u8,
+    length_counter: u8,
+    envelope_start: bool,
+    envelope_divider: u8,
+    envelope_decay: u8,
+}
+
+impl PulseChannel {
+    fn new() -> Self {
+        Self {
+            enabled: false,
+            control: 0x30,
+            timer_reload: 0,
+            timer_counter: 0,
+            duty_step: 0,
+            length_counter: 0,
+            envelope_start: true,
+            envelope_divider: 0,
+            envelope_decay: 15,
+        }
+    }
+
+    fn boot_tone() -> Self {
+        let mut channel = Self::new();
+        channel.enabled = true;
+        channel.control = 0x9F; // duty=2, constant volume=15
+        channel.timer_reload = 0x80;
+        channel.timer_counter = channel.timer_reload;
+        channel.length_counter = LENGTH_TABLE[10];
+        channel.envelope_decay = 15;
+        channel
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.length_counter = 0;
+        }
+    }
+
+    fn write_control(&mut self, value: u8) {
+        self.control = value;
+        self.envelope_start = true;
+    }
+
+    fn write_timer_low(&mut self, value: u8) {
+        self.timer_reload = (self.timer_reload & 0x0700) | u16::from(value);
+    }
+
+    fn write_timer_high(&mut self, value: u8) {
+        self.timer_reload = (self.timer_reload & 0x00FF) | (u16::from(value & 0x07) << 8);
+        if self.enabled {
+            self.length_counter = LENGTH_TABLE[((value >> 3) & 0x1F) as usize];
+        }
+        self.duty_step = 0;
+        self.envelope_start = true;
+    }
+
+    fn clock_timer(&mut self) {
+        if self.timer_counter == 0 {
+            self.timer_counter = self.timer_reload;
+            self.duty_step = (self.duty_step + 1) & 0x07;
+        } else {
+            self.timer_counter = self.timer_counter.saturating_sub(1);
+        }
+    }
+
+    fn clock_quarter_frame(&mut self) {
+        if self.envelope_start {
+            self.envelope_start = false;
+            self.envelope_decay = 15;
+            self.envelope_divider = self.envelope_period();
+            return;
+        }
+
+        if self.envelope_divider == 0 {
+            self.envelope_divider = self.envelope_period();
+            if self.envelope_decay == 0 {
+                if self.length_halt() {
+                    self.envelope_decay = 15;
+                }
+            } else {
+                self.envelope_decay = self.envelope_decay.saturating_sub(1);
+            }
+            return;
+        }
+
+        self.envelope_divider = self.envelope_divider.saturating_sub(1);
+    }
+
+    fn clock_half_frame(&mut self) {
+        if !self.length_halt() && self.length_counter > 0 {
+            self.length_counter = self.length_counter.saturating_sub(1);
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if self.length_counter == 0 || self.timer_reload < 8 {
+            return 0;
+        }
+        let duty = usize::from((self.control >> 6) & 0x03);
+        let step = usize::from(self.duty_step);
+        if DUTY_TABLE[duty][step] == 0 {
+            0
+        } else {
+            self.volume()
+        }
+    }
+
+    fn length_counter(&self) -> u8 {
+        self.length_counter
+    }
+
+    fn length_halt(&self) -> bool {
+        self.control & 0x20 != 0
+    }
+
+    fn envelope_period(&self) -> u8 {
+        self.control & 0x0F
+    }
+
+    fn volume(&self) -> u8 {
+        if self.control & 0x10 != 0 {
+            self.control & 0x0F
+        } else {
+            self.envelope_decay
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TriangleChannel {
+    enabled: bool,
+    control: u8,
+    linear_reload_value: u8,
+    linear_counter: u8,
+    linear_reload_flag: bool,
+    timer_reload: u16,
+    timer_counter: u16,
+    sequence_step: u8,
+    length_counter: u8,
+}
+
+impl TriangleChannel {
+    fn new() -> Self {
+        Self {
+            enabled: false,
+            control: 0x80,
+            linear_reload_value: 0,
+            linear_counter: 0,
+            linear_reload_flag: false,
+            timer_reload: 0,
+            timer_counter: 0,
+            sequence_step: 0,
+            length_counter: 0,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.length_counter = 0;
+        }
+    }
+
+    fn write_linear_control(&mut self, value: u8) {
+        self.control = value;
+        self.linear_reload_value = value & 0x7F;
+    }
+
+    fn write_timer_low(&mut self, value: u8) {
+        self.timer_reload = (self.timer_reload & 0x0700) | u16::from(value);
+    }
+
+    fn write_timer_high(&mut self, value: u8) {
+        self.timer_reload = (self.timer_reload & 0x00FF) | (u16::from(value & 0x07) << 8);
+        if self.enabled {
+            self.length_counter = LENGTH_TABLE[((value >> 3) & 0x1F) as usize];
+        }
+        self.linear_reload_flag = true;
+    }
+
+    fn clock_timer(&mut self) {
+        if self.timer_counter == 0 {
+            self.timer_counter = self.timer_reload;
+            if self.length_counter > 0 && self.linear_counter > 0 && self.timer_reload >= 2 {
+                self.sequence_step = (self.sequence_step + 1) & 0x1F;
+            }
+        } else {
+            self.timer_counter = self.timer_counter.saturating_sub(1);
+        }
+    }
+
+    fn clock_quarter_frame(&mut self) {
+        if self.linear_reload_flag {
+            self.linear_counter = self.linear_reload_value;
+        } else if self.linear_counter > 0 {
+            self.linear_counter = self.linear_counter.saturating_sub(1);
+        }
+
+        if !self.length_halt() {
+            self.linear_reload_flag = false;
+        }
+    }
+
+    fn clock_half_frame(&mut self) {
+        if !self.length_halt() && self.length_counter > 0 {
+            self.length_counter = self.length_counter.saturating_sub(1);
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if self.length_counter == 0 || self.linear_counter == 0 || self.timer_reload < 2 {
+            0
+        } else {
+            TRIANGLE_TABLE[usize::from(self.sequence_step)]
+        }
+    }
+
+    fn length_counter(&self) -> u8 {
+        self.length_counter
+    }
+
+    fn length_halt(&self) -> bool {
+        self.control & 0x80 != 0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NoiseChannel {
+    enabled: bool,
+    control: u8,
+    mode: bool,
+    period_index: u8,
+    timer_reload: u16,
+    timer_counter: u16,
+    length_counter: u8,
+    shift_register: u16,
+    envelope_start: bool,
+    envelope_divider: u8,
+    envelope_decay: u8,
+}
+
+impl NoiseChannel {
+    fn new() -> Self {
+        Self {
+            enabled: false,
+            control: 0x30,
+            mode: false,
+            period_index: 0,
+            timer_reload: NOISE_PERIOD_TABLE[0],
+            timer_counter: NOISE_PERIOD_TABLE[0],
+            length_counter: 0,
+            shift_register: 1,
+            envelope_start: true,
+            envelope_divider: 0,
+            envelope_decay: 15,
+        }
+    }
+
+    fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !enabled {
+            self.length_counter = 0;
+        }
+    }
+
+    fn write_control(&mut self, value: u8) {
+        self.control = value;
+        self.envelope_start = true;
+    }
+
+    fn write_period(&mut self, value: u8) {
+        self.mode = value & 0x80 != 0;
+        self.period_index = value & 0x0F;
+        self.timer_reload = NOISE_PERIOD_TABLE[usize::from(self.period_index)];
+    }
+
+    fn write_length(&mut self, value: u8) {
+        if self.enabled {
+            self.length_counter = LENGTH_TABLE[((value >> 3) & 0x1F) as usize];
+        }
+        self.envelope_start = true;
+    }
+
+    fn clock_timer(&mut self) {
+        if self.timer_counter == 0 {
+            self.timer_counter = self.timer_reload;
+            let tap = if self.mode { 6 } else { 1 };
+            let feedback = (self.shift_register & 0x0001) ^ ((self.shift_register >> tap) & 0x0001);
+            self.shift_register >>= 1;
+            self.shift_register |= feedback << 14;
+        } else {
+            self.timer_counter = self.timer_counter.saturating_sub(1);
+        }
+    }
+
+    fn clock_quarter_frame(&mut self) {
+        if self.envelope_start {
+            self.envelope_start = false;
+            self.envelope_decay = 15;
+            self.envelope_divider = self.envelope_period();
+            return;
+        }
+
+        if self.envelope_divider == 0 {
+            self.envelope_divider = self.envelope_period();
+            if self.envelope_decay == 0 {
+                if self.length_halt() {
+                    self.envelope_decay = 15;
+                }
+            } else {
+                self.envelope_decay = self.envelope_decay.saturating_sub(1);
+            }
+            return;
+        }
+
+        self.envelope_divider = self.envelope_divider.saturating_sub(1);
+    }
+
+    fn clock_half_frame(&mut self) {
+        if !self.length_halt() && self.length_counter > 0 {
+            self.length_counter = self.length_counter.saturating_sub(1);
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if self.length_counter == 0 || self.shift_register & 0x0001 != 0 {
+            0
+        } else {
+            self.volume()
+        }
+    }
+
+    fn length_counter(&self) -> u8 {
+        self.length_counter
+    }
+
+    fn length_halt(&self) -> bool {
+        self.control & 0x20 != 0
+    }
+
+    fn envelope_period(&self) -> u8 {
+        self.control & 0x0F
+    }
+
+    fn volume(&self) -> u8 {
+        if self.control & 0x10 != 0 {
+            self.control & 0x0F
+        } else {
+            self.envelope_decay
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApuSnapshot {
-    pub cpu_cycles: u64,
-    pub frame_cycle: u16,
-    pub quarter_frame_ticks: u64,
-    pub half_frame_ticks: u64,
-    pub irq_pending: bool,
-    pub frame_irq_inhibit: bool,
-    pub frame_mode_5: bool,
-    pub pulse_timer: u16,
-    pub pulse_duty: u8,
-    pub length_counter: u8,
-    pub tone_phase: u32,
-    pub sample_accumulator: u64,
-    pub samples: Vec<i16>,
+    cpu_cycles: u64,
+    frame_cycle: u16,
+    quarter_frame_ticks: u64,
+    half_frame_ticks: u64,
+    irq_pending: bool,
+    frame_irq_inhibit: bool,
+    frame_mode_5: bool,
+    pulse1: PulseChannel,
+    pulse2: PulseChannel,
+    triangle: TriangleChannel,
+    noise: NoiseChannel,
+    sample_accumulator: u64,
+    last_sample: i16,
+    samples: Vec<i16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,14 +421,12 @@ pub struct Apu {
     irq_pending: bool,
     frame_irq_inhibit: bool,
     frame_mode_5: bool,
-    pulse_ctrl: u8,
-    pulse_timer_low: u8,
-    pulse_timer_high: u8,
-    pulse_timer: u16,
-    pulse_duty: u8,
-    length_counter: u8,
-    tone_phase: u32,
+    pulse1: PulseChannel,
+    pulse2: PulseChannel,
+    triangle: TriangleChannel,
+    noise: NoiseChannel,
     sample_accumulator: u64,
+    last_sample: i16,
     samples: VecDeque<i16>,
 }
 
@@ -67,14 +441,12 @@ impl Apu {
             irq_pending: false,
             frame_irq_inhibit: false,
             frame_mode_5: false,
-            pulse_ctrl: 0,
-            pulse_timer_low: 0,
-            pulse_timer_high: 0,
-            pulse_timer: 0,
-            pulse_duty: 2,
-            length_counter: LENGTH_TABLE[0],
-            tone_phase: 0,
+            pulse1: PulseChannel::boot_tone(),
+            pulse2: PulseChannel::new(),
+            triangle: TriangleChannel::new(),
+            noise: NoiseChannel::new(),
             sample_accumulator: 0,
+            last_sample: 0,
             samples: VecDeque::new(),
         }
     }
@@ -93,11 +465,12 @@ impl Apu {
             irq_pending: self.irq_pending,
             frame_irq_inhibit: self.frame_irq_inhibit,
             frame_mode_5: self.frame_mode_5,
-            pulse_timer: self.pulse_timer,
-            pulse_duty: self.pulse_duty,
-            length_counter: self.length_counter,
-            tone_phase: self.tone_phase,
+            pulse1: self.pulse1.clone(),
+            pulse2: self.pulse2.clone(),
+            triangle: self.triangle.clone(),
+            noise: self.noise.clone(),
             sample_accumulator: self.sample_accumulator,
+            last_sample: self.last_sample,
             samples: self.samples.iter().copied().collect(),
         }
     }
@@ -110,45 +483,31 @@ impl Apu {
         self.irq_pending = snapshot.irq_pending;
         self.frame_irq_inhibit = snapshot.frame_irq_inhibit;
         self.frame_mode_5 = snapshot.frame_mode_5;
-        self.pulse_timer = snapshot.pulse_timer;
-        self.pulse_duty = snapshot.pulse_duty.min(3);
-        self.length_counter = snapshot.length_counter;
-        self.tone_phase = snapshot.tone_phase;
+        self.pulse1 = snapshot.pulse1;
+        self.pulse2 = snapshot.pulse2;
+        self.triangle = snapshot.triangle;
+        self.noise = snapshot.noise;
         self.sample_accumulator = snapshot.sample_accumulator;
+        self.last_sample = snapshot.last_sample;
         self.samples = snapshot.samples.into_iter().collect();
     }
 
     pub fn write_register(&mut self, addr: u16, value: u8) {
         match addr {
-            0x4000 => {
-                self.pulse_ctrl = value;
-                self.pulse_duty = (value >> 6) & 0x03;
-            }
-            0x4002 => {
-                self.pulse_timer_low = value;
-                self.refresh_pulse_timer();
-            }
-            0x4003 => {
-                self.pulse_timer_high = value & 0x07;
-                self.refresh_pulse_timer();
-                let index = (value >> 3) as usize & 0x1F;
-                self.length_counter = LENGTH_TABLE[index];
-                self.tone_phase = 0;
-            }
-            0x4015 => {
-                self.irq_pending = false;
-                if value & 0x01 == 0 {
-                    self.length_counter = 0;
-                }
-            }
-            0x4017 => {
-                self.frame_mode_5 = value & 0x80 != 0;
-                self.frame_irq_inhibit = value & 0x40 != 0;
-                if self.frame_irq_inhibit {
-                    self.irq_pending = false;
-                }
-                self.frame_cycle = 0;
-            }
+            0x4000 => self.pulse1.write_control(value),
+            0x4002 => self.pulse1.write_timer_low(value),
+            0x4003 => self.pulse1.write_timer_high(value),
+            0x4004 => self.pulse2.write_control(value),
+            0x4006 => self.pulse2.write_timer_low(value),
+            0x4007 => self.pulse2.write_timer_high(value),
+            0x4008 => self.triangle.write_linear_control(value),
+            0x400A => self.triangle.write_timer_low(value),
+            0x400B => self.triangle.write_timer_high(value),
+            0x400C => self.noise.write_control(value),
+            0x400E => self.noise.write_period(value),
+            0x400F => self.noise.write_length(value),
+            0x4015 => self.write_status(value),
+            0x4017 => self.write_frame_counter(value),
             _ => {}
         }
     }
@@ -156,9 +515,12 @@ impl Apu {
     pub fn step_cpu_cycle(&mut self, controller_bits: u8, paused: bool, ppu_in_vblank: bool) {
         self.cpu_cycles = self.cpu_cycles.saturating_add(1);
         self.frame_cycle = self.frame_cycle.saturating_add(1);
-        self.clock_frame_sequencer();
 
-        let sample = self.mixed_sample(controller_bits, paused, ppu_in_vblank, CPU_CLOCK_HZ);
+        self.clock_frame_sequencer();
+        self.clock_timers();
+
+        let sample = self.mixed_sample(controller_bits, paused, ppu_in_vblank);
+        self.last_sample = sample;
         self.sample_accumulator = self
             .sample_accumulator
             .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
@@ -185,14 +547,37 @@ impl Apu {
                 drained.push(sample);
                 continue;
             }
-            drained.push(self.mixed_sample(
-                controller_bits,
-                paused,
-                ppu_in_vblank,
-                u64::from(AUDIO_SAMPLE_RATE),
-            ));
+            self.step_cpu_cycle(controller_bits, paused, ppu_in_vblank);
         }
         drained
+    }
+
+    #[must_use]
+    pub fn read_status(&mut self) -> u8 {
+        let status = self.peek_status();
+        self.irq_pending = false;
+        status
+    }
+
+    #[must_use]
+    pub fn peek_status(&self) -> u8 {
+        let mut status = 0_u8;
+        if self.pulse1.length_counter() > 0 {
+            status |= 0x01;
+        }
+        if self.pulse2.length_counter() > 0 {
+            status |= 0x02;
+        }
+        if self.triangle.length_counter() > 0 {
+            status |= 0x04;
+        }
+        if self.noise.length_counter() > 0 {
+            status |= 0x08;
+        }
+        if self.irq_pending {
+            status |= 0x40;
+        }
+        status
     }
 
     #[must_use]
@@ -213,6 +598,35 @@ impl Apu {
     #[must_use]
     pub fn irq_pending(&self) -> bool {
         self.irq_pending
+    }
+
+    fn write_status(&mut self, value: u8) {
+        self.pulse1.set_enabled(value & 0x01 != 0);
+        self.pulse2.set_enabled(value & 0x02 != 0);
+        self.triangle.set_enabled(value & 0x04 != 0);
+        self.noise.set_enabled(value & 0x08 != 0);
+    }
+
+    fn write_frame_counter(&mut self, value: u8) {
+        self.frame_mode_5 = value & 0x80 != 0;
+        self.frame_irq_inhibit = value & 0x40 != 0;
+        if self.frame_irq_inhibit {
+            self.irq_pending = false;
+        }
+        self.frame_cycle = 0;
+        if self.frame_mode_5 {
+            self.clock_quarter_frame();
+            self.clock_half_frame();
+        }
+    }
+
+    fn clock_timers(&mut self) {
+        self.triangle.clock_timer();
+        if self.cpu_cycles.is_multiple_of(2) {
+            self.pulse1.clock_timer();
+            self.pulse2.clock_timer();
+            self.noise.clock_timer();
+        }
     }
 
     fn clock_frame_sequencer(&mut self) {
@@ -251,58 +665,53 @@ impl Apu {
 
     fn clock_quarter_frame(&mut self) {
         self.quarter_frame_ticks = self.quarter_frame_ticks.saturating_add(1);
+        self.pulse1.clock_quarter_frame();
+        self.pulse2.clock_quarter_frame();
+        self.triangle.clock_quarter_frame();
+        self.noise.clock_quarter_frame();
     }
 
     fn clock_half_frame(&mut self) {
         self.half_frame_ticks = self.half_frame_ticks.saturating_add(1);
-        let length_halt = self.pulse_ctrl & 0x20 != 0;
-        if !length_halt && self.length_counter > 0 {
-            self.length_counter = self.length_counter.saturating_sub(1);
+        self.pulse1.clock_half_frame();
+        self.pulse2.clock_half_frame();
+        self.triangle.clock_half_frame();
+        self.noise.clock_half_frame();
+    }
+
+    fn mixed_sample(&self, controller_bits: u8, paused: bool, ppu_in_vblank: bool) -> i16 {
+        if paused {
+            return 0;
         }
-    }
 
-    fn refresh_pulse_timer(&mut self) {
-        self.pulse_timer =
-            (u16::from(self.pulse_timer_high) << 8) | u16::from(self.pulse_timer_low);
-    }
+        let p1 = f32::from(self.pulse1.output());
+        let p2 = f32::from(self.pulse2.output());
+        let tri = f32::from(self.triangle.output());
+        let noi = f32::from(self.noise.output());
 
-    fn mixed_sample(
-        &mut self,
-        controller_bits: u8,
-        paused: bool,
-        ppu_in_vblank: bool,
-        phase_clock_hz: u64,
-    ) -> i16 {
-        let freq_hz = self.effective_pulse_frequency(controller_bits);
-        let phase_step = ((u64::from(freq_hz) << 32) / phase_clock_hz) as u32;
-        self.tone_phase = self.tone_phase.wrapping_add(phase_step);
-
-        let duty_index = usize::from(self.pulse_duty.min(3));
-        let threshold = DUTY_THRESHOLDS[duty_index];
-        let high = self.tone_phase < threshold;
-
-        let mut amplitude = if paused || self.length_counter == 0 {
-            0
+        let pulse_sum = p1 + p2;
+        let pulse_out = if pulse_sum == 0.0 {
+            0.0
         } else {
-            MAX_SAMPLE_AMPLITUDE
+            95.88 / ((8128.0 / pulse_sum) + 100.0)
         };
+
+        let tnd_sum = (tri / 8227.0) + (noi / 12241.0);
+        let tnd_out = if tnd_sum == 0.0 {
+            0.0
+        } else {
+            159.79 / ((1.0 / tnd_sum) + 100.0)
+        };
+
+        let mut mixed = pulse_out + tnd_out;
+        let button_gain = 1.0 + (controller_bits.count_ones() as f32 * 0.01);
+        mixed *= button_gain;
         if ppu_in_vblank {
-            amplitude /= 2;
+            mixed *= 0.75;
         }
-        if controller_bits & 0b0000_0010 != 0 {
-            amplitude = amplitude.saturating_add(MAX_SAMPLE_AMPLITUDE / 4);
-        }
+        mixed = mixed.clamp(0.0, 1.0);
 
-        if high { amplitude } else { -amplitude }
-    }
-
-    fn effective_pulse_frequency(&self, controller_bits: u8) -> u32 {
-        let timer = self.pulse_timer.max(8);
-        let hw_freq = CPU_CLOCK_HZ / (16 * u64::from(timer.saturating_add(1)));
-        let mut freq = u32::try_from(hw_freq).unwrap_or(110);
-        freq = freq.clamp(55, 1_760);
-        let button_bias = controller_bits.count_ones().saturating_mul(17);
-        freq.saturating_add(button_bias).min(1_760)
+        (mixed * MAX_SAMPLE_AMPLITUDE) as i16
     }
 }
 

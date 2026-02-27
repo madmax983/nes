@@ -240,7 +240,16 @@ impl NesCore {
 
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
+        if addr == 0x4015 {
+            return self.apu.peek_status();
+        }
         self.cpu.read_byte(addr)
+    }
+
+    pub fn read_apu_status(&mut self) -> u8 {
+        let status = self.apu.read_status();
+        self.cpu.write_byte(0x4015, status);
+        status
     }
 
     pub fn write_cpu_bus(&mut self, addr: u16, value: u8) {
@@ -508,7 +517,7 @@ impl NesCore {
                 controller_bits: self.controller_bits,
             }),
             CoreQuery::Registers => QueryResult::Registers(self.cpu.snapshot()),
-            CoreQuery::Memory(addr) => QueryResult::Memory(self.cpu.read_byte(addr)),
+            CoreQuery::Memory(addr) => QueryResult::Memory(self.read_memory(addr)),
             CoreQuery::FpsMilli => QueryResult::FpsMilli(self.fps_milli()),
             CoreQuery::PpuFrameCounter => QueryResult::PpuFrameCounter(self.ppu.frame_counter()),
         }
