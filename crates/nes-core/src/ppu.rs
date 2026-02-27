@@ -13,6 +13,8 @@ pub struct PpuSnapshot {
     pub ctrl: u8,
     pub mask: u8,
     pub status: u8,
+    pub oam_addr: u8,
+    pub oam: [u8; 256],
     pub cycle_in_frame: u32,
     pub scanline: u16,
     pub dot: u16,
@@ -26,6 +28,8 @@ pub struct Ppu {
     ctrl: u8,
     mask: u8,
     status: u8,
+    oam_addr: u8,
+    oam: [u8; 256],
     scanline: u16,
     dot: u16,
     odd_frame: bool,
@@ -40,6 +44,8 @@ impl Ppu {
             ctrl: 0,
             mask: 0,
             status: 0,
+            oam_addr: 0,
+            oam: [0; 256],
             scanline: 0,
             dot: 0,
             odd_frame: false,
@@ -52,6 +58,8 @@ impl Ppu {
         self.ctrl = 0;
         self.mask = 0;
         self.status = 0;
+        self.oam_addr = 0;
+        self.oam = [0; 256];
         self.scanline = 0;
         self.dot = 0;
         self.odd_frame = false;
@@ -63,6 +71,8 @@ impl Ppu {
         self.ctrl = snapshot.ctrl;
         self.mask = snapshot.mask;
         self.status = snapshot.status;
+        self.oam_addr = snapshot.oam_addr;
+        self.oam = snapshot.oam;
         self.scanline = snapshot.scanline;
         self.dot = snapshot.dot;
         self.odd_frame = snapshot.odd_frame;
@@ -76,6 +86,8 @@ impl Ppu {
             ctrl: self.ctrl,
             mask: self.mask,
             status: self.status,
+            oam_addr: self.oam_addr,
+            oam: self.oam,
             cycle_in_frame: self.cycle_in_frame(),
             scanline: self.scanline,
             dot: self.dot,
@@ -136,10 +148,24 @@ impl Ppu {
             0x2001 => {
                 self.mask = value;
             }
+            0x2003 => {
+                self.oam_addr = value;
+            }
+            0x2004 => {
+                self.oam[self.oam_addr as usize] = value;
+                self.oam_addr = self.oam_addr.wrapping_add(1);
+            }
             0x2002 => {
                 self.status = value;
             }
             _ => {}
+        }
+    }
+
+    pub fn dma_oam(&mut self, page: &[u8; 256]) {
+        for byte in page {
+            self.oam[self.oam_addr as usize] = *byte;
+            self.oam_addr = self.oam_addr.wrapping_add(1);
         }
     }
 
@@ -176,6 +202,11 @@ impl Ppu {
     #[must_use]
     pub fn cycle_in_frame(&self) -> u32 {
         (u32::from(self.scanline) * u32::from(DOTS_PER_SCANLINE)) + u32::from(self.dot)
+    }
+
+    #[must_use]
+    pub fn oam_byte(&self, index: u8) -> u8 {
+        self.oam[index as usize]
     }
 
     #[must_use]

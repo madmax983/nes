@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::apu::{Apu, ApuSnapshot};
+use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{Mmc1, Nrom, Uxrom};
 use crate::ppu::{Ppu, PpuSnapshot};
@@ -97,6 +97,7 @@ pub struct CoreSnapshot {
     pub ppu: PpuSnapshot,
     pub apu: ApuSnapshot,
     pub cpu: CpuSnapshot,
+    pending_oam_dma_page: Option<u8>,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
 }
@@ -144,6 +145,7 @@ pub struct NesCore {
     reset_pc: u16,
     cpu: Cpu,
     apu: Apu,
+    pending_oam_dma_page: Option<u8>,
     last_cpu_trace: Option<String>,
 }
 
@@ -181,6 +183,7 @@ impl NesCore {
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
             apu: Apu::new(),
+            pending_oam_dma_page: None,
             last_cpu_trace: None,
         }
     }
@@ -299,6 +302,26 @@ impl NesCore {
     }
 
     #[must_use]
+    pub fn apu_dmc_irq_pending(&self) -> bool {
+        self.apu.dmc_irq_pending()
+    }
+
+    #[must_use]
+    pub fn apu_dmc_bytes_remaining(&self) -> u16 {
+        self.apu.dmc_bytes_remaining()
+    }
+
+    #[must_use]
+    pub fn apu_dmc_fetch_count(&self) -> u64 {
+        self.apu.dmc_fetch_count()
+    }
+
+    #[must_use]
+    pub fn ppu_oam_byte(&self, index: u8) -> u8 {
+        self.ppu.oam_byte(index)
+    }
+
+    #[must_use]
     pub fn fps_milli(&self) -> u32 {
         BASE_FPS_MILLI.saturating_mul(self.speed_permille as u32) / DEFAULT_SPEED_PERMILLE as u32
     }
@@ -401,6 +424,7 @@ impl NesCore {
             ppu: self.ppu.snapshot(),
             apu: self.apu.snapshot(),
             cpu: self.cpu.snapshot(),
+            pending_oam_dma_page: self.pending_oam_dma_page,
             mapper: self.mapper.clone(),
             reset_pc: self.reset_pc,
         }
@@ -414,6 +438,7 @@ impl NesCore {
         self.ppu.restore(snapshot.ppu);
         self.apu.restore(snapshot.apu.clone());
         self.cpu.restore(snapshot.cpu);
+        self.pending_oam_dma_page = snapshot.pending_oam_dma_page;
         self.mapper = snapshot.mapper.clone();
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
@@ -445,6 +470,7 @@ impl NesCore {
         self.ppu.reset();
         self.apu.reset();
         self.cpu.reset(reset_pc);
+        self.pending_oam_dma_page = None;
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
 
@@ -535,17 +561,11 @@ impl NesCore {
 
         let cpu_cycles = u64::from(cpu_cycles);
         for _ in 0..cpu_cycles {
-            self.scheduler.step_cpu_cycle();
-            self.scheduler.step_apu_cycle();
-            self.apu.step_cpu_cycle(
-                self.controller_bits,
-                self.paused,
-                self.ppu.status() & 0x80 != 0,
-            );
-            for _ in 0..3 {
-                self.scheduler.step_ppu_cycle();
-                self.ppu.step_dot();
-            }
+            self.step_hardware_cycle();
+        }
+
+        if let Some(page) = self.pending_oam_dma_page.take() {
+            self.run_oam_dma(page);
         }
         if self.ppu.take_nmi_pending() {
             self.cpu.service_nmi();
@@ -577,6 +597,7 @@ impl NesCore {
         self.ppu.reset();
         self.apu.reset();
         self.cpu.reset(self.reset_pc);
+        self.pending_oam_dma_page = None;
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
     }
@@ -658,6 +679,10 @@ impl NesCore {
 
         for write in writes {
             if (0x4000..=0x4017).contains(&write.addr) {
+                if write.addr == 0x4014 {
+                    self.pending_oam_dma_page = Some(write.value);
+                    continue;
+                }
                 self.apu.write_register(write.addr, write.value);
             }
         }
@@ -683,6 +708,63 @@ impl NesCore {
         self.cpu.write_byte(0x2000, self.ppu.ctrl());
         self.cpu.write_byte(0x2001, self.ppu.mask());
         self.cpu.write_byte(0x2002, self.ppu.status());
+    }
+
+    fn step_hardware_cycle(&mut self) {
+        self.scheduler.step_cpu_cycle();
+        self.scheduler.step_apu_cycle();
+        let dmc_request = self.apu.step_cpu_cycle(
+            self.controller_bits,
+            self.paused,
+            self.ppu.status() & 0x80 != 0,
+        );
+        for _ in 0..3 {
+            self.scheduler.step_ppu_cycle();
+            self.ppu.step_dot();
+        }
+        if let Some(request) = dmc_request {
+            self.apply_dmc_dma_request(request);
+        }
+    }
+
+    fn apply_dmc_dma_request(&mut self, request: DmcDmaRequest) {
+        let sample = self.cpu.read_byte(request.addr);
+        self.apu.load_dmc_sample(sample);
+        for _ in 0..request.stall_cycles {
+            self.scheduler.step_cpu_cycle();
+            self.scheduler.step_apu_cycle();
+            let dmc_request = self.apu.step_cpu_cycle(
+                self.controller_bits,
+                self.paused,
+                self.ppu.status() & 0x80 != 0,
+            );
+            for _ in 0..3 {
+                self.scheduler.step_ppu_cycle();
+                self.ppu.step_dot();
+            }
+            if let Some(chained) = dmc_request {
+                let byte = self.cpu.read_byte(chained.addr);
+                self.apu.load_dmc_sample(byte);
+            }
+        }
+    }
+
+    fn run_oam_dma(&mut self, page: u8) {
+        let mut bytes = [0_u8; 256];
+        let base = u16::from(page) << 8;
+        for (offset, slot) in bytes.iter_mut().enumerate() {
+            *slot = self.cpu.read_byte(base.wrapping_add(offset as u16));
+        }
+        self.ppu.dma_oam(&bytes);
+
+        let stall_cycles = if self.scheduler.cpu_cycles().is_multiple_of(2) {
+            514
+        } else {
+            513
+        };
+        for _ in 0..stall_cycles {
+            self.step_hardware_cycle();
+        }
     }
 }
 

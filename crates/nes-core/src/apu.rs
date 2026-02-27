@@ -28,10 +28,20 @@ const NOISE_PERIOD_TABLE: [u16; 16] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1_016, 2_034, 4_068,
 ];
 
+const DMC_RATE_TABLE: [u16; 16] = [
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 85, 72, 54,
+];
+
 const LENGTH_TABLE: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
     192, 24, 72, 26, 16, 28, 32, 30,
 ];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DmcDmaRequest {
+    pub addr: u16,
+    pub stall_cycles: u16,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PulseChannel {
@@ -395,20 +405,190 @@ impl NoiseChannel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct DmcChannel {
+    enabled: bool,
+    irq_enabled: bool,
+    loop_flag: bool,
+    rate_index: u8,
+    output_level: u8,
+    sample_addr_reg: u8,
+    sample_len_reg: u8,
+    current_addr: u16,
+    bytes_remaining: u16,
+    sample_buffer: Option<u8>,
+    shift_register: u8,
+    bits_remaining: u8,
+    silence: bool,
+    timer_counter: u16,
+    irq_pending: bool,
+    fetch_count: u64,
+}
+
+impl DmcChannel {
+    fn new() -> Self {
+        Self {
+            enabled: false,
+            irq_enabled: false,
+            loop_flag: false,
+            rate_index: 0,
+            output_level: 0,
+            sample_addr_reg: 0,
+            sample_len_reg: 0,
+            current_addr: 0xC000,
+            bytes_remaining: 0,
+            sample_buffer: None,
+            shift_register: 0,
+            bits_remaining: 8,
+            silence: true,
+            timer_counter: DMC_RATE_TABLE[0],
+            irq_pending: false,
+            fetch_count: 0,
+        }
+    }
+
+    fn write_control(&mut self, value: u8) {
+        self.irq_enabled = value & 0x80 != 0;
+        self.loop_flag = value & 0x40 != 0;
+        self.rate_index = value & 0x0F;
+        if !self.irq_enabled {
+            self.irq_pending = false;
+        }
+    }
+
+    fn write_direct_load(&mut self, value: u8) {
+        self.output_level = value & 0x7F;
+    }
+
+    fn write_sample_addr(&mut self, value: u8) {
+        self.sample_addr_reg = value;
+    }
+
+    fn write_sample_len(&mut self, value: u8) {
+        self.sample_len_reg = value;
+    }
+
+    fn write_status_enable(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        self.irq_pending = false;
+        if enabled {
+            if self.bytes_remaining == 0 {
+                self.restart_sample();
+            }
+        } else {
+            self.bytes_remaining = 0;
+        }
+    }
+
+    fn load_sample(&mut self, sample: u8) {
+        self.sample_buffer = Some(sample);
+    }
+
+    fn step_timer(&mut self) -> Option<DmcDmaRequest> {
+        if self.timer_counter == 0 {
+            self.timer_counter = self.rate_period();
+            self.clock_output();
+        } else {
+            self.timer_counter = self.timer_counter.saturating_sub(1);
+        }
+
+        if self.sample_buffer.is_none() && self.bytes_remaining > 0 {
+            let request = DmcDmaRequest {
+                addr: self.current_addr,
+                stall_cycles: 4,
+            };
+            self.fetch_count = self.fetch_count.saturating_add(1);
+            self.current_addr = if self.current_addr == 0xFFFF {
+                0x8000
+            } else {
+                self.current_addr.wrapping_add(1)
+            };
+            self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
+            if self.bytes_remaining == 0 {
+                if self.loop_flag {
+                    self.restart_sample();
+                } else if self.irq_enabled {
+                    self.irq_pending = true;
+                }
+            }
+            return Some(request);
+        }
+
+        None
+    }
+
+    fn clock_output(&mut self) {
+        if !self.silence {
+            if self.shift_register & 1 != 0 {
+                if self.output_level <= 125 {
+                    self.output_level = self.output_level.saturating_add(2);
+                }
+            } else if self.output_level >= 2 {
+                self.output_level = self.output_level.saturating_sub(2);
+            }
+        }
+
+        self.shift_register >>= 1;
+        self.bits_remaining = self.bits_remaining.saturating_sub(1);
+        if self.bits_remaining == 0 {
+            self.bits_remaining = 8;
+            if let Some(sample) = self.sample_buffer.take() {
+                self.shift_register = sample;
+                self.silence = false;
+            } else {
+                self.silence = true;
+            }
+        }
+    }
+
+    fn restart_sample(&mut self) {
+        self.current_addr = 0xC000 | (u16::from(self.sample_addr_reg) << 6);
+        self.bytes_remaining = (u16::from(self.sample_len_reg) << 4) | 1;
+    }
+
+    fn rate_period(&self) -> u16 {
+        DMC_RATE_TABLE[usize::from(self.rate_index)]
+    }
+
+    fn output(&self) -> u8 {
+        self.output_level
+    }
+
+    fn active(&self) -> bool {
+        self.bytes_remaining > 0
+    }
+
+    fn irq_pending(&self) -> bool {
+        self.irq_pending
+    }
+
+    fn clear_irq(&mut self) {
+        self.irq_pending = false;
+    }
+
+    fn bytes_remaining(&self) -> u16 {
+        self.bytes_remaining
+    }
+
+    fn fetch_count(&self) -> u64 {
+        self.fetch_count
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApuSnapshot {
     cpu_cycles: u64,
     frame_cycle: u16,
     quarter_frame_ticks: u64,
     half_frame_ticks: u64,
-    irq_pending: bool,
+    frame_irq_pending: bool,
     frame_irq_inhibit: bool,
     frame_mode_5: bool,
     pulse1: PulseChannel,
     pulse2: PulseChannel,
     triangle: TriangleChannel,
     noise: NoiseChannel,
+    dmc: DmcChannel,
     sample_accumulator: u64,
-    last_sample: i16,
     samples: Vec<i16>,
 }
 
@@ -418,15 +598,15 @@ pub struct Apu {
     frame_cycle: u16,
     quarter_frame_ticks: u64,
     half_frame_ticks: u64,
-    irq_pending: bool,
+    frame_irq_pending: bool,
     frame_irq_inhibit: bool,
     frame_mode_5: bool,
     pulse1: PulseChannel,
     pulse2: PulseChannel,
     triangle: TriangleChannel,
     noise: NoiseChannel,
+    dmc: DmcChannel,
     sample_accumulator: u64,
-    last_sample: i16,
     samples: VecDeque<i16>,
 }
 
@@ -438,15 +618,15 @@ impl Apu {
             frame_cycle: 0,
             quarter_frame_ticks: 0,
             half_frame_ticks: 0,
-            irq_pending: false,
+            frame_irq_pending: false,
             frame_irq_inhibit: false,
             frame_mode_5: false,
             pulse1: PulseChannel::boot_tone(),
             pulse2: PulseChannel::new(),
             triangle: TriangleChannel::new(),
             noise: NoiseChannel::new(),
+            dmc: DmcChannel::new(),
             sample_accumulator: 0,
-            last_sample: 0,
             samples: VecDeque::new(),
         }
     }
@@ -462,15 +642,15 @@ impl Apu {
             frame_cycle: self.frame_cycle,
             quarter_frame_ticks: self.quarter_frame_ticks,
             half_frame_ticks: self.half_frame_ticks,
-            irq_pending: self.irq_pending,
+            frame_irq_pending: self.frame_irq_pending,
             frame_irq_inhibit: self.frame_irq_inhibit,
             frame_mode_5: self.frame_mode_5,
             pulse1: self.pulse1.clone(),
             pulse2: self.pulse2.clone(),
             triangle: self.triangle.clone(),
             noise: self.noise.clone(),
+            dmc: self.dmc.clone(),
             sample_accumulator: self.sample_accumulator,
-            last_sample: self.last_sample,
             samples: self.samples.iter().copied().collect(),
         }
     }
@@ -480,15 +660,15 @@ impl Apu {
         self.frame_cycle = snapshot.frame_cycle;
         self.quarter_frame_ticks = snapshot.quarter_frame_ticks;
         self.half_frame_ticks = snapshot.half_frame_ticks;
-        self.irq_pending = snapshot.irq_pending;
+        self.frame_irq_pending = snapshot.frame_irq_pending;
         self.frame_irq_inhibit = snapshot.frame_irq_inhibit;
         self.frame_mode_5 = snapshot.frame_mode_5;
         self.pulse1 = snapshot.pulse1;
         self.pulse2 = snapshot.pulse2;
         self.triangle = snapshot.triangle;
         self.noise = snapshot.noise;
+        self.dmc = snapshot.dmc;
         self.sample_accumulator = snapshot.sample_accumulator;
-        self.last_sample = snapshot.last_sample;
         self.samples = snapshot.samples.into_iter().collect();
     }
 
@@ -506,21 +686,29 @@ impl Apu {
             0x400C => self.noise.write_control(value),
             0x400E => self.noise.write_period(value),
             0x400F => self.noise.write_length(value),
+            0x4010 => self.dmc.write_control(value),
+            0x4011 => self.dmc.write_direct_load(value),
+            0x4012 => self.dmc.write_sample_addr(value),
+            0x4013 => self.dmc.write_sample_len(value),
             0x4015 => self.write_status(value),
             0x4017 => self.write_frame_counter(value),
             _ => {}
         }
     }
 
-    pub fn step_cpu_cycle(&mut self, controller_bits: u8, paused: bool, ppu_in_vblank: bool) {
+    pub fn step_cpu_cycle(
+        &mut self,
+        controller_bits: u8,
+        paused: bool,
+        ppu_in_vblank: bool,
+    ) -> Option<DmcDmaRequest> {
         self.cpu_cycles = self.cpu_cycles.saturating_add(1);
         self.frame_cycle = self.frame_cycle.saturating_add(1);
 
         self.clock_frame_sequencer();
-        self.clock_timers();
+        let dmc_request = self.clock_timers();
 
         let sample = self.mixed_sample(controller_bits, paused, ppu_in_vblank);
-        self.last_sample = sample;
         self.sample_accumulator = self
             .sample_accumulator
             .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
@@ -531,6 +719,12 @@ impl Apu {
                 let _ = self.samples.pop_front();
             }
         }
+
+        dmc_request
+    }
+
+    pub fn load_dmc_sample(&mut self, sample: u8) {
+        self.dmc.load_sample(sample);
     }
 
     #[must_use]
@@ -547,7 +741,13 @@ impl Apu {
                 drained.push(sample);
                 continue;
             }
-            self.step_cpu_cycle(controller_bits, paused, ppu_in_vblank);
+            if self
+                .step_cpu_cycle(controller_bits, paused, ppu_in_vblank)
+                .is_some()
+            {
+                // No CPU bus callback when called from output fetch path.
+                self.dmc.load_sample(0);
+            }
         }
         drained
     }
@@ -555,7 +755,7 @@ impl Apu {
     #[must_use]
     pub fn read_status(&mut self) -> u8 {
         let status = self.peek_status();
-        self.irq_pending = false;
+        self.frame_irq_pending = false;
         status
     }
 
@@ -574,8 +774,14 @@ impl Apu {
         if self.noise.length_counter() > 0 {
             status |= 0x08;
         }
-        if self.irq_pending {
+        if self.dmc.active() {
+            status |= 0x10;
+        }
+        if self.frame_irq_pending {
             status |= 0x40;
+        }
+        if self.dmc.irq_pending() {
+            status |= 0x80;
         }
         status
     }
@@ -597,7 +803,22 @@ impl Apu {
 
     #[must_use]
     pub fn irq_pending(&self) -> bool {
-        self.irq_pending
+        self.frame_irq_pending || self.dmc.irq_pending()
+    }
+
+    #[must_use]
+    pub fn dmc_irq_pending(&self) -> bool {
+        self.dmc.irq_pending()
+    }
+
+    #[must_use]
+    pub fn dmc_bytes_remaining(&self) -> u16 {
+        self.dmc.bytes_remaining()
+    }
+
+    #[must_use]
+    pub fn dmc_fetch_count(&self) -> u64 {
+        self.dmc.fetch_count()
     }
 
     fn write_status(&mut self, value: u8) {
@@ -605,13 +826,15 @@ impl Apu {
         self.pulse2.set_enabled(value & 0x02 != 0);
         self.triangle.set_enabled(value & 0x04 != 0);
         self.noise.set_enabled(value & 0x08 != 0);
+        self.dmc.write_status_enable(value & 0x10 != 0);
+        self.dmc.clear_irq();
     }
 
     fn write_frame_counter(&mut self, value: u8) {
         self.frame_mode_5 = value & 0x80 != 0;
         self.frame_irq_inhibit = value & 0x40 != 0;
         if self.frame_irq_inhibit {
-            self.irq_pending = false;
+            self.frame_irq_pending = false;
         }
         self.frame_cycle = 0;
         if self.frame_mode_5 {
@@ -620,13 +843,14 @@ impl Apu {
         }
     }
 
-    fn clock_timers(&mut self) {
+    fn clock_timers(&mut self) -> Option<DmcDmaRequest> {
         self.triangle.clock_timer();
         if self.cpu_cycles.is_multiple_of(2) {
             self.pulse1.clock_timer();
             self.pulse2.clock_timer();
             self.noise.clock_timer();
         }
+        self.dmc.step_timer()
     }
 
     fn clock_frame_sequencer(&mut self) {
@@ -655,7 +879,7 @@ impl Apu {
                 self.clock_quarter_frame();
                 self.clock_half_frame();
                 if !self.frame_irq_inhibit {
-                    self.irq_pending = true;
+                    self.frame_irq_pending = true;
                 }
                 self.frame_cycle = 0;
             }
@@ -688,6 +912,7 @@ impl Apu {
         let p2 = f32::from(self.pulse2.output());
         let tri = f32::from(self.triangle.output());
         let noi = f32::from(self.noise.output());
+        let dmc = f32::from(self.dmc.output());
 
         let pulse_sum = p1 + p2;
         let pulse_out = if pulse_sum == 0.0 {
@@ -696,7 +921,7 @@ impl Apu {
             95.88 / ((8128.0 / pulse_sum) + 100.0)
         };
 
-        let tnd_sum = (tri / 8227.0) + (noi / 12241.0);
+        let tnd_sum = (tri / 8227.0) + (noi / 12241.0) + (dmc / 22638.0);
         let tnd_out = if tnd_sum == 0.0 {
             0.0
         } else {
@@ -704,8 +929,7 @@ impl Apu {
         };
 
         let mut mixed = pulse_out + tnd_out;
-        let button_gain = 1.0 + (controller_bits.count_ones() as f32 * 0.01);
-        mixed *= button_gain;
+        mixed *= 1.0 + (controller_bits.count_ones() as f32 * 0.01);
         if ppu_in_vblank {
             mixed *= 0.75;
         }
