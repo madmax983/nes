@@ -69,6 +69,10 @@ pub enum DispatchOutput {
         prg_rom_bytes: usize,
         reset_pc: u16,
     },
+    MacroExecuted {
+        frames_elapsed: u64,
+        final_controller_bits: u8,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -273,6 +277,20 @@ pub fn dispatch_tool(
                 mapper_id: info.mapper_id,
                 prg_rom_bytes: info.prg_rom_bytes,
                 reset_pc: info.reset_pc,
+            })
+        }
+        "run_macro" => {
+            let Some(script) = params.get("script") else {
+                return Err(DispatchError::InvalidParams(
+                    "script must be provided".to_owned(),
+                ));
+            };
+            let frames_elapsed =
+                crate::experimental::macro_engine::execute_macro_script(core, script)
+                    .map_err(DispatchError::InvalidParams)?;
+            Ok(DispatchOutput::MacroExecuted {
+                frames_elapsed,
+                final_controller_bits: core.controller_bits(),
             })
         }
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
