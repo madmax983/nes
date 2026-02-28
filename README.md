@@ -89,3 +89,23 @@ Force overwrite existing golden files:
 ```powershell
 cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config .\nes.toml --force
 ```
+
+## Homebrew ROM
+
+Build the in-repo custom ROM (no external assembler required):
+
+```powershell
+cargo run -p nes-test-harness --bin build_homebrew_rom
+```
+
+Run it:
+
+```powershell
+cargo run -p nes-desktop --release -- .\roms\homebrew\homebrew.nes
+```
+
+Or build and run in one command:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_homebrew.ps1
+```
