@@ -1,3 +1,31 @@
+//! CPU status register (P) abstraction.
+//!
+//! The 6502 CPU has a processor status register that holds condition flags
+//! updated by various operations. This module provides a safe interface
+//! for manipulating these flags without manual bitwise logic.
+
+/// Represents the CPU status flags.
+///
+/// Handles setting, clearing, and testing the various bits used by the 6502
+/// (Carry, Zero, Interrupt Disable, Decimal, Overflow, Negative). It also
+/// correctly manages the somewhat complicated "Break" and "Unused" flag
+/// behavior when pushing/pulling to/from the stack.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::cpu::status::Status;
+///
+/// let mut status = Status::default();
+/// assert!(!status.carry());
+///
+/// status.set_carry(true);
+/// assert!(status.carry());
+///
+/// status.update_zn(0x00); // Setting value to 0 updates Zero and Negative flags
+/// assert!(status.zero());
+/// assert!(!status.negative());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Status {
     bits: u8,

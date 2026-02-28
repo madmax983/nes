@@ -1,3 +1,9 @@
+//! The core emulator API surface.
+//!
+//! This module provides the primary interface for controlling the NES emulator,
+//! injecting inputs, and querying its state. The [`NesCore`] struct is the
+//! main entry point for host applications.
+
 use core::fmt;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
@@ -21,6 +27,7 @@ pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
 pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
 pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
 
+/// Represents a standard NES controller button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
     A,
@@ -49,6 +56,8 @@ impl Button {
     }
 }
 
+/// Commands that can be executed by the [`NesCore`] to change its state
+/// or advance the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Pause,
@@ -64,6 +73,8 @@ pub enum Command {
     SetSpeed(u16),
 }
 
+/// Queries that can be sent to the [`NesCore`] to inspect its current state
+/// without advancing the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreQuery {
     EmulatorState,
@@ -80,6 +91,7 @@ pub struct EmulatorState {
     pub controller_bits: u8,
 }
 
+/// The result of executing a [`CoreQuery`] on the [`NesCore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryResult {
     EmulatorState(EmulatorState),
@@ -137,6 +149,35 @@ impl LoadedMapper {
     }
 }
 
+/// The central NES emulator state machine.
+///
+/// `NesCore` manages the execution of the CPU, PPU, and APU, synchronizing
+/// their clocks and handling memory access between them. Host applications
+/// use this struct to load ROMs, advance emulation frames, and extract
+/// video/audio outputs.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, Command, Button};
+///
+/// let mut core = NesCore::new();
+/// // Load a minimal dummy ROM (normally you'd load a real .nes file)
+/// let dummy_rom = vec![
+///     0x4E, 0x45, 0x53, 0x1A, // "NES\x1A"
+///     0x01, 0x01, 0x00, 0x00, // 16KB PRG, 8KB CHR, NROM
+///     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Padding
+/// ];
+/// core.load_ines_rom(&dummy_rom).unwrap_err(); // Fails because it's incomplete, but shows usage.
+///
+/// // Execute commands to drive the core
+/// core.execute(Command::StepFrame).unwrap();
+/// core.execute(Command::PressButton(Button::A)).unwrap();
+///
+/// // Extract framebuffer for rendering
+/// let frame = core.framebuffer_rgba();
+/// assert_eq!(frame.len(), 256 * 240 * 4);
+/// ```
 #[derive(Debug, Clone)]
 pub struct NesCore {
     paused: bool,
@@ -155,6 +196,7 @@ pub struct NesCore {
     last_cpu_bus_trace: Vec<CpuBusAccess>,
 }
 
+/// Errors that can occur when interacting with the [`NesCore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
     UnsupportedCommand,
