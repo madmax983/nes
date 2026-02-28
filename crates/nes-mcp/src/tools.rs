@@ -4,7 +4,7 @@ pub struct ToolDefinition {
     pub description: &'static str,
 }
 
-const TOOL_CATALOG: [ToolDefinition; 24] = [
+const TOOL_CATALOG: [ToolDefinition; 25] = [
     ToolDefinition {
         name: "load_rom",
         description: "Load an iNES ROM into the emulator core",
@@ -44,6 +44,10 @@ const TOOL_CATALOG: [ToolDefinition; 24] = [
     ToolDefinition {
         name: "get_frame",
         description: "Get the latest video frame payload",
+    },
+    ToolDefinition {
+        name: "capture_frame",
+        description: "Capture the latest video frame to a PPM or BMP file path",
     },
     ToolDefinition {
         name: "get_audio_chunk",

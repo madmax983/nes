@@ -64,3 +64,43 @@ fn pulse2_triangle_noise_writes_change_mixed_output() {
 
     assert_ne!(baseline, mixed, "channel writes should alter mixed output");
 }
+
+#[test]
+fn pulse_sweep_updates_timer_reload_on_half_frame_tick() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &LOOP_STREAM);
+    core.write_cpu_bus(0x4015, 0x01); // enable pulse1
+    core.write_cpu_bus(0x4002, 0x00);
+    core.write_cpu_bus(0x4003, 0x02); // timer=0x200
+    core.write_cpu_bus(0x4001, 0x81); // enable, period=0, negate=0, shift=1
+
+    while core.apu_half_frame_ticks() < 1 {
+        core.execute(Command::StepCpu).unwrap();
+    }
+
+    let (p1, _) = core.apu_pulse_timer_reloads();
+    assert_eq!(p1, 0x300, "positive sweep should increase pulse1 period");
+}
+
+#[test]
+fn pulse1_negate_sweep_uses_extra_subtract_step() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &LOOP_STREAM);
+    core.write_cpu_bus(0x4015, 0x03); // enable pulse1 + pulse2
+
+    core.write_cpu_bus(0x4002, 0x00);
+    core.write_cpu_bus(0x4003, 0x03); // pulse1 timer=0x300
+    core.write_cpu_bus(0x4006, 0x00);
+    core.write_cpu_bus(0x4007, 0x03); // pulse2 timer=0x300
+
+    core.write_cpu_bus(0x4001, 0x89); // pulse1: enable, negate, shift=1
+    core.write_cpu_bus(0x4005, 0x89); // pulse2: enable, negate, shift=1
+
+    while core.apu_half_frame_ticks() < 1 {
+        core.execute(Command::StepCpu).unwrap();
+    }
+
+    let (p1, p2) = core.apu_pulse_timer_reloads();
+    assert_eq!(p1, 0x17F);
+    assert_eq!(p2, 0x180);
+}

@@ -1,4 +1,5 @@
 use core::fmt;
+use std::cell::RefCell;
 
 use crate::cpu::status::Status;
 
@@ -64,6 +65,20 @@ pub struct CpuPrgWrite {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpuBusAccessKind {
+    Read,
+    Write,
+    DummyRead,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CpuBusAccess {
+    pub addr: u16,
+    pub value: u8,
+    pub kind: CpuBusAccessKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TraceSnapshot {
     pc: u16,
     a: u8,
@@ -84,6 +99,7 @@ pub struct Cpu {
     memory: [u8; 0x1_0000],
     writes: Vec<CpuWrite>,
     prg_writes: Vec<CpuPrgWrite>,
+    bus_trace: RefCell<Vec<CpuBusAccess>>,
 }
 
 impl Cpu {
@@ -99,6 +115,7 @@ impl Cpu {
             memory: [0; 0x1_0000],
             writes: Vec::new(),
             prg_writes: Vec::new(),
+            bus_trace: RefCell::new(Vec::new()),
         }
     }
 
@@ -157,6 +174,7 @@ impl Cpu {
         self.status = Status::with_bits(snapshot.status);
         self.writes.clear();
         self.prg_writes.clear();
+        self.bus_trace.borrow_mut().clear();
     }
 
     pub fn reset(&mut self, start_pc: u16) {
@@ -168,6 +186,7 @@ impl Cpu {
         self.status = Status::with_bits(0x24);
         self.writes.clear();
         self.prg_writes.clear();
+        self.bus_trace.borrow_mut().clear();
     }
 
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {
@@ -186,6 +205,20 @@ impl Cpu {
         self.pc = self.read_u16(0xFFFA);
     }
 
+    pub fn service_irq(&mut self) -> bool {
+        if self.status.interrupt_disable() {
+            return false;
+        }
+
+        let pc = self.pc;
+        self.push((pc >> 8) as u8);
+        self.push(pc as u8);
+        self.push(self.status.bits_for_stack_push());
+        self.status.set_interrupt_disable(true);
+        self.pc = self.read_u16(0xFFFE);
+        true
+    }
+
     pub fn step_with_trace(&mut self) -> Result<String, CpuError> {
         self.step_with_trace_and_cycles().map(|(trace, _)| trace)
     }
@@ -193,6 +226,7 @@ impl Cpu {
     pub fn step_with_trace_and_cycles(&mut self) -> Result<(String, u8), CpuError> {
         self.writes.clear();
         self.prg_writes.clear();
+        self.bus_trace.borrow_mut().clear();
 
         let snapshot = TraceSnapshot {
             pc: self.pc,
@@ -2213,10 +2247,19 @@ impl Cpu {
             _ => Err(CpuError::UnknownOpcode(opcode)),
         };
 
-        step.map(|trace| (trace, cycles))
+        step.map(|trace| {
+            self.pad_microphase_to_cycle_count(snapshot.pc, cycles);
+            (trace, cycles)
+        })
     }
 
     fn read(&self, addr: u16) -> u8 {
+        let value = self.memory[addr as usize];
+        self.record_bus_access(addr, value, CpuBusAccessKind::Read);
+        value
+    }
+
+    fn peek(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
@@ -2232,8 +2275,15 @@ impl Cpu {
         u16::from_le_bytes([low, high])
     }
 
+    fn peek_u16_zp(&self, addr: u8) -> u16 {
+        let low = self.peek(addr as u16);
+        let high = self.peek(addr.wrapping_add(1) as u16);
+        u16::from_le_bytes([low, high])
+    }
+
     fn write_and_track(&mut self, addr: u16, value: u8) {
         self.write_byte(addr, value);
+        self.record_bus_access(addr, value, CpuBusAccessKind::Write);
         self.writes.push(CpuWrite { addr, value });
         if addr >= 0x8000 {
             self.prg_writes.push(CpuPrgWrite { addr, value });
@@ -2307,7 +2357,7 @@ impl Cpu {
         if Self::is_branch_opcode(opcode) {
             if self.branch_taken(snapshot, opcode) {
                 cycles = cycles.saturating_add(1);
-                let offset = self.read(snapshot.pc.wrapping_add(1));
+                let offset = self.peek(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
                 if page_crossed(next_pc, target) {
@@ -2336,8 +2386,8 @@ impl Cpu {
         }
 
         if Self::indirect_y_page_penalty_opcode(opcode) {
-            let zp = self.read(snapshot.pc.wrapping_add(1));
-            let base = self.read_u16_zp(zp);
+            let zp = self.peek(snapshot.pc.wrapping_add(1));
+            let base = self.peek_u16_zp(zp);
             let indexed = base.wrapping_add(snapshot.y as u16);
             if page_crossed(base, indexed) {
                 cycles = cycles.saturating_add(1);
@@ -2348,8 +2398,8 @@ impl Cpu {
     }
 
     fn absolute_operand_base(&self, snapshot: TraceSnapshot) -> u16 {
-        let low = self.read(snapshot.pc.wrapping_add(1));
-        let high = self.read(snapshot.pc.wrapping_add(2));
+        let low = self.peek(snapshot.pc.wrapping_add(1));
+        let high = self.peek(snapshot.pc.wrapping_add(2));
         u16::from_le_bytes([low, high])
     }
 
@@ -2417,16 +2467,40 @@ impl Cpu {
         core::mem::take(&mut self.prg_writes)
     }
 
+    pub fn take_bus_trace(&mut self) -> Vec<CpuBusAccess> {
+        core::mem::take(&mut *self.bus_trace.borrow_mut())
+    }
+
     fn push(&mut self, value: u8) {
         let addr = STACK_BASE.wrapping_add(self.sp as u16);
         self.memory[addr as usize] = value;
+        self.record_bus_access(addr, value, CpuBusAccessKind::Write);
         self.sp = self.sp.wrapping_sub(1);
     }
 
     fn pull(&mut self) -> u8 {
         self.sp = self.sp.wrapping_add(1);
         let addr = STACK_BASE.wrapping_add(self.sp as u16);
-        self.memory[addr as usize]
+        self.read(addr)
+    }
+
+    fn record_bus_access(&self, addr: u16, value: u8, kind: CpuBusAccessKind) {
+        self.bus_trace
+            .borrow_mut()
+            .push(CpuBusAccess { addr, value, kind });
+    }
+
+    fn pad_microphase_to_cycle_count(&self, pc: u16, cycles: u8) {
+        let target = usize::from(cycles);
+        let value = self.peek(pc);
+        let mut trace = self.bus_trace.borrow_mut();
+        while trace.len() < target {
+            trace.push(CpuBusAccess {
+                addr: pc,
+                value,
+                kind: CpuBusAccessKind::DummyRead,
+            });
+        }
     }
 }
 

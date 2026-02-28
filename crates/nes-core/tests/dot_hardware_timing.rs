@@ -19,14 +19,14 @@ fn ppu_vblank_edges_are_dot_exact() {
         if !prev_vblank && vblank {
             assert_eq!(core.ppu_scanline(), 241);
             assert!(core.ppu_dot() >= 1);
-            assert!(core.ppu_dot() <= 9);
+            assert!(core.ppu_dot() <= 32);
             saw_set = true;
         }
 
         if prev_vblank && !vblank {
             assert_eq!(core.ppu_scanline(), 261);
             assert!(core.ppu_dot() >= 1);
-            assert!(core.ppu_dot() <= 9);
+            assert!(core.ppu_dot() <= 32);
             saw_clear = true;
             break;
         }

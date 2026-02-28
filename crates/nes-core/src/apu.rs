@@ -3,8 +3,13 @@ use std::collections::VecDeque;
 use crate::api::AUDIO_SAMPLE_RATE;
 
 const CPU_CLOCK_HZ: u64 = 1_789_773;
-const MAX_SAMPLE_AMPLITUDE: f32 = 12_000.0;
+const MAX_SAMPLE_AMPLITUDE: f32 = 11_500.0;
 const MAX_QUEUED_SAMPLES: usize = AUDIO_SAMPLE_RATE as usize;
+const HPF_90_R_Q16: i64 = 64_701;
+const HPF_440_R_Q16: i64 = 61_554;
+const LPF_14K_A_Q16: i64 = 56_619;
+const SOFT_CLIP_KNEE: i64 = 28_000;
+const SOFT_CLIP_RATIO_SHIFT: u32 = 2;
 
 const FRAME_STEP_1: u16 = 3_729;
 const FRAME_STEP_2: u16 = 7_457;
@@ -45,8 +50,15 @@ pub struct DmcDmaRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PulseChannel {
+    is_pulse1: bool,
     enabled: bool,
     control: u8,
+    sweep_enabled: bool,
+    sweep_period: u8,
+    sweep_negate: bool,
+    sweep_shift: u8,
+    sweep_divider: u8,
+    sweep_reload: bool,
     timer_reload: u16,
     timer_counter: u16,
     duty_step: u8,
@@ -57,10 +69,17 @@ struct PulseChannel {
 }
 
 impl PulseChannel {
-    fn new() -> Self {
+    fn new(is_pulse1: bool) -> Self {
         Self {
+            is_pulse1,
             enabled: false,
             control: 0x30,
+            sweep_enabled: false,
+            sweep_period: 0,
+            sweep_negate: false,
+            sweep_shift: 0,
+            sweep_divider: 0,
+            sweep_reload: false,
             timer_reload: 0,
             timer_counter: 0,
             duty_step: 0,
@@ -72,7 +91,7 @@ impl PulseChannel {
     }
 
     fn boot_tone() -> Self {
-        let mut channel = Self::new();
+        let mut channel = Self::new(true);
         channel.enabled = true;
         channel.control = 0x9F; // duty=2, constant volume=15
         channel.timer_reload = 0x80;
@@ -92,6 +111,14 @@ impl PulseChannel {
     fn write_control(&mut self, value: u8) {
         self.control = value;
         self.envelope_start = true;
+    }
+
+    fn write_sweep(&mut self, value: u8) {
+        self.sweep_enabled = value & 0x80 != 0;
+        self.sweep_period = (value >> 4) & 0x07;
+        self.sweep_negate = value & 0x08 != 0;
+        self.sweep_shift = value & 0x07;
+        self.sweep_reload = true;
     }
 
     fn write_timer_low(&mut self, value: u8) {
@@ -143,10 +170,11 @@ impl PulseChannel {
         if !self.length_halt() && self.length_counter > 0 {
             self.length_counter = self.length_counter.saturating_sub(1);
         }
+        self.clock_sweep();
     }
 
     fn output(&self) -> u8 {
-        if self.length_counter == 0 || self.timer_reload < 8 {
+        if self.length_counter == 0 || self.sweep_muted() {
             return 0;
         }
         let duty = usize::from((self.control >> 6) & 0x03);
@@ -176,6 +204,43 @@ impl PulseChannel {
         } else {
             self.envelope_decay
         }
+    }
+
+    fn clock_sweep(&mut self) {
+        let target = self.sweep_target_period();
+        let mute = self.sweep_mute_for_target(target);
+
+        if self.sweep_divider == 0 {
+            if self.sweep_enabled && self.sweep_shift > 0 && !mute {
+                self.timer_reload = target as u16;
+            }
+            self.sweep_divider = self.sweep_period;
+        } else {
+            self.sweep_divider = self.sweep_divider.saturating_sub(1);
+        }
+
+        if self.sweep_reload {
+            self.sweep_divider = self.sweep_period;
+            self.sweep_reload = false;
+        }
+    }
+
+    fn sweep_target_period(&self) -> i32 {
+        let period = i32::from(self.timer_reload);
+        let delta = period >> self.sweep_shift;
+        if self.sweep_negate {
+            period - delta - if self.is_pulse1 { 1 } else { 0 }
+        } else {
+            period + delta
+        }
+    }
+
+    fn sweep_muted(&self) -> bool {
+        self.sweep_mute_for_target(self.sweep_target_period())
+    }
+
+    fn sweep_mute_for_target(&self, target: i32) -> bool {
+        self.timer_reload < 8 || !(0..=0x7FF).contains(&target)
     }
 }
 
@@ -589,6 +654,11 @@ pub struct ApuSnapshot {
     noise: NoiseChannel,
     dmc: DmcChannel,
     sample_accumulator: u64,
+    hp90_prev_out_q16: i64,
+    hp90_prev_in_q16: i64,
+    hp440_prev_out_q16: i64,
+    hp440_prev_in_q16: i64,
+    lp14k_prev_out_q16: i64,
     samples: Vec<i16>,
 }
 
@@ -607,6 +677,11 @@ pub struct Apu {
     noise: NoiseChannel,
     dmc: DmcChannel,
     sample_accumulator: u64,
+    hp90_prev_out_q16: i64,
+    hp90_prev_in_q16: i64,
+    hp440_prev_out_q16: i64,
+    hp440_prev_in_q16: i64,
+    lp14k_prev_out_q16: i64,
     samples: VecDeque<i16>,
 }
 
@@ -622,11 +697,16 @@ impl Apu {
             frame_irq_inhibit: false,
             frame_mode_5: false,
             pulse1: PulseChannel::boot_tone(),
-            pulse2: PulseChannel::new(),
+            pulse2: PulseChannel::new(false),
             triangle: TriangleChannel::new(),
             noise: NoiseChannel::new(),
             dmc: DmcChannel::new(),
             sample_accumulator: 0,
+            hp90_prev_out_q16: 0,
+            hp90_prev_in_q16: 0,
+            hp440_prev_out_q16: 0,
+            hp440_prev_in_q16: 0,
+            lp14k_prev_out_q16: 0,
             samples: VecDeque::new(),
         }
     }
@@ -651,6 +731,11 @@ impl Apu {
             noise: self.noise.clone(),
             dmc: self.dmc.clone(),
             sample_accumulator: self.sample_accumulator,
+            hp90_prev_out_q16: self.hp90_prev_out_q16,
+            hp90_prev_in_q16: self.hp90_prev_in_q16,
+            hp440_prev_out_q16: self.hp440_prev_out_q16,
+            hp440_prev_in_q16: self.hp440_prev_in_q16,
+            lp14k_prev_out_q16: self.lp14k_prev_out_q16,
             samples: self.samples.iter().copied().collect(),
         }
     }
@@ -669,15 +754,22 @@ impl Apu {
         self.noise = snapshot.noise;
         self.dmc = snapshot.dmc;
         self.sample_accumulator = snapshot.sample_accumulator;
+        self.hp90_prev_out_q16 = snapshot.hp90_prev_out_q16;
+        self.hp90_prev_in_q16 = snapshot.hp90_prev_in_q16;
+        self.hp440_prev_out_q16 = snapshot.hp440_prev_out_q16;
+        self.hp440_prev_in_q16 = snapshot.hp440_prev_in_q16;
+        self.lp14k_prev_out_q16 = snapshot.lp14k_prev_out_q16;
         self.samples = snapshot.samples.into_iter().collect();
     }
 
     pub fn write_register(&mut self, addr: u16, value: u8) {
         match addr {
             0x4000 => self.pulse1.write_control(value),
+            0x4001 => self.pulse1.write_sweep(value),
             0x4002 => self.pulse1.write_timer_low(value),
             0x4003 => self.pulse1.write_timer_high(value),
             0x4004 => self.pulse2.write_control(value),
+            0x4005 => self.pulse2.write_sweep(value),
             0x4006 => self.pulse2.write_timer_low(value),
             0x4007 => self.pulse2.write_timer_high(value),
             0x4008 => self.triangle.write_linear_control(value),
@@ -696,25 +788,21 @@ impl Apu {
         }
     }
 
-    pub fn step_cpu_cycle(
-        &mut self,
-        controller_bits: u8,
-        paused: bool,
-        ppu_in_vblank: bool,
-    ) -> Option<DmcDmaRequest> {
+    pub fn step_cpu_cycle(&mut self, paused: bool) -> Option<DmcDmaRequest> {
         self.cpu_cycles = self.cpu_cycles.saturating_add(1);
         self.frame_cycle = self.frame_cycle.saturating_add(1);
 
         self.clock_frame_sequencer();
         let dmc_request = self.clock_timers();
 
-        let sample = self.mixed_sample(controller_bits, paused, ppu_in_vblank);
+        let raw_sample = self.raw_mixed_sample(paused);
         self.sample_accumulator = self
             .sample_accumulator
             .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
         while self.sample_accumulator >= CPU_CLOCK_HZ {
             self.sample_accumulator -= CPU_CLOCK_HZ;
-            self.samples.push_back(sample);
+            let filtered_sample = self.apply_output_filters(raw_sample);
+            self.samples.push_back(filtered_sample);
             if self.samples.len() > MAX_QUEUED_SAMPLES {
                 let _ = self.samples.pop_front();
             }
@@ -728,23 +816,14 @@ impl Apu {
     }
 
     #[must_use]
-    pub fn drain_samples(
-        &mut self,
-        count: usize,
-        controller_bits: u8,
-        paused: bool,
-        ppu_in_vblank: bool,
-    ) -> Vec<i16> {
+    pub fn drain_samples(&mut self, count: usize, paused: bool) -> Vec<i16> {
         let mut drained = Vec::with_capacity(count);
         while drained.len() < count {
             if let Some(sample) = self.samples.pop_front() {
                 drained.push(sample);
                 continue;
             }
-            if self
-                .step_cpu_cycle(controller_bits, paused, ppu_in_vblank)
-                .is_some()
-            {
+            if self.step_cpu_cycle(paused).is_some() {
                 // No CPU bus callback when called from output fetch path.
                 self.dmc.load_sample(0);
             }
@@ -819,6 +898,11 @@ impl Apu {
     #[must_use]
     pub fn dmc_fetch_count(&self) -> u64 {
         self.dmc.fetch_count()
+    }
+
+    #[must_use]
+    pub fn pulse_timer_reloads(&self) -> (u16, u16) {
+        (self.pulse1.timer_reload, self.pulse2.timer_reload)
     }
 
     fn write_status(&mut self, value: u8) {
@@ -903,11 +987,7 @@ impl Apu {
         self.noise.clock_half_frame();
     }
 
-    fn mixed_sample(&self, controller_bits: u8, paused: bool, ppu_in_vblank: bool) -> i16 {
-        if paused {
-            return 0;
-        }
-
+    fn raw_mixed_sample(&self, paused: bool) -> i16 {
         let p1 = f32::from(self.pulse1.output());
         let p2 = f32::from(self.pulse2.output());
         let tri = f32::from(self.triangle.output());
@@ -929,13 +1009,59 @@ impl Apu {
         };
 
         let mut mixed = pulse_out + tnd_out;
-        mixed *= 1.0 + (controller_bits.count_ones() as f32 * 0.01);
-        if ppu_in_vblank {
-            mixed *= 0.75;
-        }
         mixed = mixed.clamp(0.0, 1.0);
 
-        (mixed * MAX_SAMPLE_AMPLITUDE) as i16
+        if paused {
+            0
+        } else {
+            (mixed * MAX_SAMPLE_AMPLITUDE) as i16
+        }
+    }
+
+    fn apply_output_filters(&mut self, raw_sample: i16) -> i16 {
+        // NES hardware output path: high-pass 90 Hz, high-pass 440 Hz, then low-pass 14 kHz.
+        let x_q16 = i64::from(raw_sample) << 16;
+
+        let hp90 = (HPF_90_R_Q16
+            * (self
+                .hp90_prev_out_q16
+                .saturating_add(x_q16)
+                .saturating_sub(self.hp90_prev_in_q16)))
+            >> 16;
+        self.hp90_prev_in_q16 = x_q16;
+        self.hp90_prev_out_q16 = hp90;
+
+        let hp440 = (HPF_440_R_Q16
+            * (self
+                .hp440_prev_out_q16
+                .saturating_add(hp90)
+                .saturating_sub(self.hp440_prev_in_q16)))
+            >> 16;
+        self.hp440_prev_in_q16 = hp90;
+        self.hp440_prev_out_q16 = hp440;
+
+        let lp14k = self
+            .lp14k_prev_out_q16
+            .saturating_add((LPF_14K_A_Q16 * hp440.saturating_sub(self.lp14k_prev_out_q16)) >> 16);
+        self.lp14k_prev_out_q16 = lp14k;
+
+        let sample = lp14k >> 16;
+        let sample = soft_limit_sample(sample);
+        sample.clamp(i64::from(i16::MIN), i64::from(i16::MAX)) as i16
+    }
+}
+
+fn soft_limit_sample(sample: i64) -> i64 {
+    let abs = sample.unsigned_abs() as i64;
+    if abs <= SOFT_CLIP_KNEE {
+        return sample;
+    }
+    let excess = abs - SOFT_CLIP_KNEE;
+    let compressed = SOFT_CLIP_KNEE + (excess >> SOFT_CLIP_RATIO_SHIFT);
+    if sample.is_negative() {
+        -compressed
+    } else {
+        compressed
     }
 }
 

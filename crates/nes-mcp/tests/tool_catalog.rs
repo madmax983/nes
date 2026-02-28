@@ -14,6 +14,7 @@ fn catalog_contains_required_user_facing_tools() {
         "resume",
         "set_speed",
         "get_frame",
+        "capture_frame",
         "get_audio_chunk",
         "get_fps",
         "get_ppu_frame_counter",

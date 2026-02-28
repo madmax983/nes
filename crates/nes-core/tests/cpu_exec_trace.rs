@@ -1,4 +1,4 @@
-use nes_core::cpu::{Cpu, CpuError, CpuPrgWrite};
+use nes_core::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuPrgWrite};
 
 #[test]
 fn cpu_executes_lda_tax_inx_sequence() {
@@ -267,4 +267,105 @@ fn sta_absolute_x_writes_indexed_target() {
             value: 0x77
         }]
     );
+}
+
+#[test]
+fn bus_microphase_for_lda_immediate_matches_cycle_reads() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x42]);
+
+    cpu.step_with_trace().unwrap();
+    let bus = cpu.take_bus_trace();
+
+    assert_eq!(
+        bus,
+        vec![
+            CpuBusAccess {
+                addr: 0xC000,
+                value: 0xA9,
+                kind: CpuBusAccessKind::Read
+            },
+            CpuBusAccess {
+                addr: 0xC001,
+                value: 0x42,
+                kind: CpuBusAccessKind::Read
+            },
+        ]
+    );
+}
+
+#[test]
+fn bus_microphase_for_sta_absolute_matches_fetch_fetch_fetch_write() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0xA9, 0x77, 0x8D, 0x00, 0x80]);
+    cpu.step_with_trace().unwrap();
+
+    cpu.step_with_trace().unwrap();
+    let bus = cpu.take_bus_trace();
+
+    assert_eq!(
+        bus,
+        vec![
+            CpuBusAccess {
+                addr: 0xC002,
+                value: 0x8D,
+                kind: CpuBusAccessKind::Read
+            },
+            CpuBusAccess {
+                addr: 0xC003,
+                value: 0x00,
+                kind: CpuBusAccessKind::Read
+            },
+            CpuBusAccess {
+                addr: 0xC004,
+                value: 0x80,
+                kind: CpuBusAccessKind::Read
+            },
+            CpuBusAccess {
+                addr: 0x8000,
+                value: 0x77,
+                kind: CpuBusAccessKind::Write
+            },
+        ]
+    );
+}
+
+#[test]
+fn irq_service_vectors_when_interrupts_enabled() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xC000, &[0x58]); // CLI
+    cpu.load_bytes(0xFFFE, &[0x34, 0x12]);
+
+    cpu.step_with_trace().unwrap();
+    let _ = cpu.take_bus_trace();
+
+    assert!(cpu.service_irq());
+    assert_eq!(cpu.pc(), 0x1234);
+    assert_eq!(cpu.sp(), 0xFA);
+    assert_eq!(cpu.read_byte(0x01FD), 0xC0);
+    assert_eq!(cpu.read_byte(0x01FC), 0xC001_u16 as u8);
+
+    let bus = cpu.take_bus_trace();
+    assert_eq!(bus.len(), 5);
+    assert_eq!(bus[0].addr, 0x01FD);
+    assert_eq!(bus[0].kind, CpuBusAccessKind::Write);
+    assert_eq!(bus[1].addr, 0x01FC);
+    assert_eq!(bus[1].kind, CpuBusAccessKind::Write);
+    assert_eq!(bus[2].addr, 0x01FB);
+    assert_eq!(bus[2].kind, CpuBusAccessKind::Write);
+    assert_eq!(bus[3].addr, 0xFFFE);
+    assert_eq!(bus[3].kind, CpuBusAccessKind::Read);
+    assert_eq!(bus[4].addr, 0xFFFF);
+    assert_eq!(bus[4].kind, CpuBusAccessKind::Read);
+}
+
+#[test]
+fn irq_service_is_masked_when_interrupt_disable_is_set() {
+    let mut cpu = Cpu::new(0xC000);
+    cpu.load_bytes(0xFFFE, &[0x34, 0x12]);
+
+    assert!(!cpu.service_irq());
+    assert_eq!(cpu.pc(), 0xC000);
+    assert_eq!(cpu.sp(), 0xFD);
+    assert!(cpu.take_bus_trace().is_empty());
 }
