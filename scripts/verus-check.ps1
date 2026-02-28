@@ -5,6 +5,13 @@ if (-not (Test-Path $verus)) {
     $verus = "verus"
 }
 
+try {
+    Get-Command $verus -ErrorAction Stop > $null
+} catch {
+    Write-Host "Verus not found, skipping checks."
+    exit 0
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $proofFiles = @(
     (Join-Path $repoRoot "crates/nes-proof/src/cpu_model.rs"),
