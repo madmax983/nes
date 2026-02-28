@@ -156,6 +156,13 @@ impl LoadedMapper {
 /// use this struct to load ROMs, advance emulation frames, and extract
 /// video/audio outputs.
 ///
+/// ## Panics
+///
+/// The example below uses [`Result::unwrap`] for brevity. In a real application,
+/// errors from [`NesCore::load_ines_rom`] and [`NesCore::execute`] should be
+/// handled properly. Unwrapping a [`CoreError::RomLoadFailed`] or
+/// [`CoreError::InvalidSpeed`] will cause a panic.
+///
 /// ## Examples
 ///
 /// ```
@@ -163,12 +170,14 @@ impl LoadedMapper {
 ///
 /// let mut core = NesCore::new();
 /// // Load a minimal dummy ROM (normally you'd load a real .nes file)
-/// let dummy_rom = vec![
+/// let mut dummy_rom = vec![
 ///     0x4E, 0x45, 0x53, 0x1A, // "NES\x1A"
 ///     0x01, 0x01, 0x00, 0x00, // 16KB PRG, 8KB CHR, NROM
 ///     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Padding
 /// ];
-/// core.load_ines_rom(&dummy_rom).unwrap_err(); // Fails because it's incomplete, but shows usage.
+/// // Append 16KB PRG ROM and 8KB CHR ROM to make it a valid cartridge
+/// dummy_rom.extend(vec![0x00; 16 * 1024 + 8 * 1024]);
+/// core.load_ines_rom(&dummy_rom).unwrap();
 ///
 /// // Execute commands to drive the core
 /// core.execute(Command::StepFrame).unwrap();

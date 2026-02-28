@@ -29,6 +29,10 @@ impl BusRegion {
 
 /// Maps a 16-bit CPU address to its corresponding [`BusRegion`].
 ///
+/// ## Panics
+///
+/// This function does not panic.
+///
 /// ## Examples
 ///
 /// ```
