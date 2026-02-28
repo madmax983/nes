@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NES Web Demo</title>
+  <link data-trunk rel="rust" href="../crates/nes-web/Cargo.toml" data-target-name="nes_web">
+  <link data-trunk rel="copy-file" href="app.js">
+  <link data-trunk rel="copy-file" href="audio-worklet.js">
+  <link data-trunk rel="copy-file" href="../roms/homebrew/homebrew.nes">
   <style>
     :root {
       color-scheme: dark;
@@ -117,7 +121,7 @@
     <section class="screen-panel">
       <h1 class="title">NES Web Demo</h1>
       <div class="screen-host">
-        <canvas id="screen" width="256" height="240"></canvas>
+        <canvas id="screen" width="256" height="240" tabindex="0"></canvas>
       </div>
     </section>
 
@@ -130,6 +134,8 @@
         <button id="step-frame" type="button">Step Frame</button>
         <button id="reset" type="button">Reset</button>
         <button id="audio" type="button">Enable Audio</button>
+        <button id="hold-right" type="button" aria-pressed="false">Hold Right: Off</button>
+        <button id="capture" type="button">Capture Frame</button>
       </div>
       <pre id="status" class="status">Booting wasm runtime...</pre>
     </aside>

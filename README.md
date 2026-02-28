@@ -47,7 +47,7 @@ WebAssembly build:
 cargo build -p nes-web --target wasm32-unknown-unknown
 ```
 
-Web demo build + local serve (wasm-pack + Python, Node fallback):
+Web demo build + local serve (Trunk):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser

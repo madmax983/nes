@@ -8,16 +8,12 @@
 cargo build -p nes-web --target wasm32-unknown-unknown
 ```
 
-With wasm-pack (recommended):
+Bundle with Trunk:
 
 ```powershell
-wasm-pack build .\crates\nes-web --target web --out-dir ..\..\web\pkg
-```
-
-With wasm-bindgen CLI:
-
-```powershell
-wasm-bindgen --target web --out-dir .\web-dist .\target\wasm32-unknown-unknown\debug\nes_web.wasm
+Push-Location .\crates\nes-web
+trunk build --config .\Trunk.toml
+Pop-Location
 ```
 
 The exported class is `NesWebEmulator`.
@@ -28,4 +24,4 @@ For a local browser demo, use:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
 ```
 
-The script prefers Python (`py`/`python`) for static hosting and falls back to Node.
+The script uses `trunk serve` for the browser dev server.
