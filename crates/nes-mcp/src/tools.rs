@@ -4,7 +4,7 @@ pub struct ToolDefinition {
     pub description: &'static str,
 }
 
-const TOOL_CATALOG: [ToolDefinition; 25] = [
+const TOOL_CATALOG: [ToolDefinition; 26] = [
     ToolDefinition {
         name: "load_rom",
         description: "Load an iNES ROM into the emulator core",
@@ -104,6 +104,10 @@ const TOOL_CATALOG: [ToolDefinition; 25] = [
     ToolDefinition {
         name: "load_state",
         description: "Load serialized emulator state",
+    },
+    ToolDefinition {
+        name: "run_macro",
+        description: "Execute a macro script to control the emulator",
     },
 ];
 

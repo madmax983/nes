@@ -351,6 +351,16 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "reset_pc": reset_pc
             })
         }
+        DispatchOutput::MacroExecuted {
+            frames_elapsed,
+            final_controller_bits,
+        } => {
+            json!({
+                "kind": "macro_executed",
+                "frames_elapsed": frames_elapsed,
+                "final_controller_bits": final_controller_bits,
+            })
+        }
     }
 }
 
