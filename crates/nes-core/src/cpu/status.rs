@@ -11,6 +11,10 @@
 /// correctly manages the somewhat complicated "Break" and "Unused" flag
 /// behavior when pushing/pulling to/from the stack.
 ///
+/// ## Panics
+///
+/// The methods on this struct do not panic.
+///
 /// ## Examples
 ///
 /// ```
