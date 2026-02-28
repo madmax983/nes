@@ -1,6 +1,7 @@
 /target
 .worktrees/
 nes.toml
+/web/pkg/
 crates/nes-test-harness/fuzz/target
 crates/nes-test-harness/fuzz/corpus
 crates/nes-test-harness/fuzz/artifacts

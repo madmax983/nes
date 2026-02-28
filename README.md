@@ -41,6 +41,18 @@ cargo run -p nes-desktop --release -- --config .\nes.toml
 cargo run -p nes-tui -- --config .\nes.toml
 ```
 
+WebAssembly build:
+
+```powershell
+cargo build -p nes-web --target wasm32-unknown-unknown
+```
+
+Web demo build + local serve (wasm-pack + Python, Node fallback):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
+```
+
 Desktop can optionally host MCP on the same live `NesCore` instance:
 
 ```powershell
