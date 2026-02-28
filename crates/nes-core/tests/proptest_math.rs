@@ -1,5 +1,5 @@
+use nes_core::{Command, NesCore};
 use proptest::prelude::*;
-use nes_core::{NesCore, Command};
 
 proptest! {
     #[test]
