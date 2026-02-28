@@ -8,6 +8,7 @@ default = []
 mcp-host = ["dep:nes-mcp", "dep:serde", "dep:serde_json"]
 
 [dependencies]
+gilrs = "0.10"
 nes-config = { path = "../nes-config" }
 nes-core = { path = "../nes-core" }
 nes-mcp = { path = "../nes-mcp", optional = true }

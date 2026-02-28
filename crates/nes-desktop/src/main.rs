@@ -6,11 +6,14 @@ use std::time::{Duration, Instant};
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 
+use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
 };
-use nes_core::{AUDIO_SAMPLE_RATE, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
+use nes_core::{
+    AUDIO_SAMPLE_RATE, Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore,
+};
 use nes_desktop::app::map_key_event_to_command;
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
@@ -31,6 +34,17 @@ const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
+const CONTROLLER_BUTTONS: [Button; 8] = [
+    Button::A,
+    Button::B,
+    Button::Select,
+    Button::Start,
+    Button::Up,
+    Button::Down,
+    Button::Left,
+    Button::Right,
+];
 
 struct RuntimeConfig {
     rom_path: String,
@@ -266,7 +280,8 @@ fn run() -> Result<(), String> {
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
         println!("Config: {}", config_path.display());
     }
-    println!("Controls: Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit");
+    println!("Controls: keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit");
+    println!("Gamepad: face buttons=A/B, Start/Select, D-pad or left stick");
     match step_mode {
         StepMode::Frame => println!("Step mode: frame"),
         StepMode::CpuBudget(steps) => println!("Step mode: cpu ({steps} instructions/frame)"),
@@ -312,6 +327,29 @@ fn run() -> Result<(), String> {
         core.ppu_frame_counter(),
     );
     let trace_every_frames = runtime.trace_every_frames;
+    let mut gilrs = match Gilrs::new() {
+        Ok(mut state) => {
+            while state.next_event().is_some() {}
+            Some(state)
+        }
+        Err(err) => {
+            eprintln!("Gamepad support unavailable: {err}");
+            None
+        }
+    };
+    let mut active_gamepad = None::<GamepadId>;
+    if let Some(gilrs_state) = gilrs.as_ref() {
+        active_gamepad = first_connected_gamepad_id(gilrs_state);
+        if let Some(gamepad_id) = active_gamepad {
+            println!(
+                "Gamepad connected: {}",
+                gilrs_state.gamepad(gamepad_id).name()
+            );
+        } else {
+            println!("Gamepad connected: none (hot-plug supported)");
+        }
+    }
+    let mut gamepad_bits = 0_u8;
 
     let audio_output = if runtime.audio_enabled {
         match AudioOutput::try_new() {
@@ -370,6 +408,31 @@ fn run() -> Result<(), String> {
             #[cfg(feature = "mcp-host")]
             if let Some(host) = mcp_host.as_ref() {
                 host.drain(&mut core);
+            }
+
+            if let Some(gilrs_state) = gilrs.as_mut() {
+                while gilrs_state.next_event().is_some() {}
+                let next_active = select_active_gamepad_id(gilrs_state, active_gamepad);
+                if next_active != active_gamepad {
+                    if let Some(gamepad_id) = next_active {
+                        println!("Gamepad active: {}", gilrs_state.gamepad(gamepad_id).name());
+                    } else if active_gamepad.is_some() {
+                        println!("Gamepad disconnected: waiting for controller");
+                    }
+                    active_gamepad = next_active;
+                }
+
+                let next_gamepad_bits = active_gamepad
+                    .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
+                    .unwrap_or_default();
+                for command in controller_state_delta(gamepad_bits, next_gamepad_bits) {
+                    if let Err(err) = core.execute(command) {
+                        eprintln!("Gamepad command failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
+                }
+                gamepad_bits = next_gamepad_bits;
             }
 
             let now = Instant::now();
@@ -563,6 +626,73 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
     }
 }
 
+fn first_connected_gamepad_id(gilrs: &Gilrs) -> Option<GamepadId> {
+    gilrs
+        .gamepads()
+        .find_map(|(id, gamepad)| gamepad.is_connected().then_some(id))
+}
+
+fn select_active_gamepad_id(gilrs: &Gilrs, current: Option<GamepadId>) -> Option<GamepadId> {
+    if let Some(gamepad_id) = current
+        && gilrs.gamepad(gamepad_id).is_connected()
+    {
+        return Some(gamepad_id);
+    }
+    first_connected_gamepad_id(gilrs)
+}
+
+fn sample_gamepad_bits(gilrs: &Gilrs, gamepad_id: GamepadId) -> u8 {
+    let gamepad = gilrs.gamepad(gamepad_id);
+    if !gamepad.is_connected() {
+        return 0;
+    }
+
+    let mut bits = 0_u8;
+    // Keep both common face layouts usable across Xbox/Switch-style controllers.
+    if gamepad.is_pressed(GamepadButton::South) || gamepad.is_pressed(GamepadButton::East) {
+        bits |= Button::A.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::West) || gamepad.is_pressed(GamepadButton::North) {
+        bits |= Button::B.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::Select) {
+        bits |= Button::Select.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::Start) {
+        bits |= Button::Start.bit_mask();
+    }
+
+    let left_x = gamepad.value(GamepadAxis::LeftStickX);
+    let left_y = gamepad.value(GamepadAxis::LeftStickY);
+    if gamepad.is_pressed(GamepadButton::DPadUp) || left_y <= -GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Up.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::DPadDown) || left_y >= GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Down.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::DPadLeft) || left_x <= -GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Left.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::DPadRight) || left_x >= GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Right.bit_mask();
+    }
+
+    bits
+}
+
+fn controller_state_delta(previous: u8, current: u8) -> Vec<Command> {
+    let mut commands = Vec::with_capacity(CONTROLLER_BUTTONS.len());
+    for button in CONTROLLER_BUTTONS {
+        let mask = button.bit_mask();
+        match (previous & mask != 0, current & mask != 0) {
+            (false, true) => commands.push(Command::PressButton(button)),
+            (true, false) => commands.push(Command::ReleaseButton(button)),
+            _ => {}
+        }
+    }
+    commands
+}
+
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {
     match step_mode {
         StepMode::Frame => core
@@ -686,7 +816,8 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_MCP_BIND_ADDR, parse_runtime_args};
+    use super::{DEFAULT_MCP_BIND_ADDR, controller_state_delta, parse_runtime_args};
+    use nes_core::{Button, Command};
 
     #[test]
     fn parse_runtime_args_accepts_mcp_host_and_bind_flags() {
@@ -725,5 +856,23 @@ mod tests {
         let args = vec!["--bogus".to_owned()];
         let err = parse_runtime_args(&args).expect_err("unknown flag should fail");
         assert!(err.contains("unknown flag"));
+    }
+
+    #[test]
+    fn controller_state_delta_emits_press_and_release() {
+        let press = controller_state_delta(0, Button::A.bit_mask() | Button::Right.bit_mask());
+        assert_eq!(
+            press,
+            vec![
+                Command::PressButton(Button::A),
+                Command::PressButton(Button::Right)
+            ]
+        );
+
+        let release = controller_state_delta(
+            Button::A.bit_mask() | Button::B.bit_mask(),
+            Button::B.bit_mask(),
+        );
+        assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
     }
 }

@@ -18,17 +18,7 @@ impl BridgeCommand {
 
 #[must_use]
 pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
-    let button = match key_code {
-        "KeyZ" => Button::A,
-        "KeyX" => Button::B,
-        "Enter" => Button::Start,
-        "ShiftRight" => Button::Select,
-        "ArrowUp" => Button::Up,
-        "ArrowDown" => Button::Down,
-        "ArrowLeft" => Button::Left,
-        "ArrowRight" => Button::Right,
-        _ => return None,
-    };
+    let button = map_key_event_to_button(key_code)?;
 
     let core = if pressed {
         Command::PressButton(button)
@@ -37,4 +27,49 @@ pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeC
     };
 
     Some(BridgeCommand { core })
+}
+
+#[must_use]
+pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
+    match key_code {
+        "KeyZ" => Some(Button::A),
+        "KeyX" => Some(Button::B),
+        "Enter" => Some(Button::Start),
+        "ShiftLeft" | "ShiftRight" => Some(Button::Select),
+        "ArrowUp" => Some(Button::Up),
+        "ArrowDown" => Some(Button::Down),
+        "ArrowLeft" => Some(Button::Left),
+        "ArrowRight" => Some(Button::Right),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
+    map_key_event_to_button(key_code).map(Button::bit_mask)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{map_key_event_to_button, map_key_event_to_button_bit};
+    use nes_core::Button;
+
+    #[test]
+    fn key_mapping_supports_both_shift_keys_for_select() {
+        assert_eq!(map_key_event_to_button("ShiftLeft"), Some(Button::Select));
+        assert_eq!(map_key_event_to_button("ShiftRight"), Some(Button::Select));
+    }
+
+    #[test]
+    fn key_bit_mapping_returns_expected_mask() {
+        assert_eq!(
+            map_key_event_to_button_bit("KeyZ"),
+            Some(Button::A.bit_mask())
+        );
+        assert_eq!(
+            map_key_event_to_button_bit("ArrowRight"),
+            Some(Button::Right.bit_mask())
+        );
+        assert_eq!(map_key_event_to_button_bit("Unknown"), None);
+    }
 }
