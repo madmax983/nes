@@ -1,6 +1,10 @@
 use super::Mapper;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Mapper 1 (MMC1) PRG banking subset used by the core.
+///
+/// This implementation focuses on the 5-bit serial shift register protocol
+/// and PRG banking behavior needed for current compatibility targets.
 pub struct Mmc1 {
     prg_bank_count: u8,
     _chr_bank_count: u8,
@@ -15,6 +19,7 @@ impl Mmc1 {
     const SHIFT_RESET: u8 = 0x10;
     const CONTROL_RESET: u8 = 0x0C;
 
+    /// Creates a synthetic MMC1 instance for tests.
     #[must_use]
     pub fn new(prg_bank_count: u8, chr_bank_count: u8) -> Self {
         let effective_prg_banks = prg_bank_count.max(1);
@@ -31,6 +36,7 @@ impl Mmc1 {
         }
     }
 
+    /// Builds MMC1 from PRG ROM bytes and CHR bank metadata.
     #[must_use]
     pub fn from_prg_rom(prg_rom: Vec<u8>, chr_bank_count: u8) -> Self {
         let prg_bank_count = (prg_rom.len() / (16 * 1024)) as u8;
@@ -45,21 +51,25 @@ impl Mmc1 {
         }
     }
 
+    /// Returns whether the serial shift register is in reset state.
     #[must_use]
     pub fn shift_is_reset(&self) -> bool {
         self.shift_register == Self::SHIFT_RESET && self.shift_count == 0
     }
 
+    /// Returns selected PRG bank register value.
     #[must_use]
     pub fn selected_prg_bank(&self) -> u8 {
         self.selected_prg_bank
     }
 
+    /// Reads PRG through current MMC1 bank mode.
     #[must_use]
     pub fn read_prg(&self, addr: u16) -> u8 {
         <Self as Mapper>::read_prg(self, addr)
     }
 
+    /// Writes serial control bits into MMC1 mapper registers.
     pub fn write_prg(&mut self, addr: u16, value: u8) {
         <Self as Mapper>::write_prg(self, addr, value);
     }

@@ -1,3 +1,9 @@
+//! 6502 CPU execution engine.
+//!
+//! The CPU model owns a 64K memory image, executes one instruction at a time,
+//! records bus activity, and tracks write side-effects for MMIO application in
+//! the outer core.
+
 use core::fmt;
 use std::cell::RefCell;
 
@@ -28,7 +34,9 @@ const CPU_BASE_CYCLES: [u8; 256] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// CPU instruction execution errors.
 pub enum CpuError {
+    /// Opcode is not implemented.
     UnknownOpcode(u8),
 }
 
@@ -43,38 +51,59 @@ impl fmt::Display for CpuError {
 impl std::error::Error for CpuError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Serializable register snapshot.
 pub struct CpuSnapshot {
+    /// Program counter.
     pub pc: u16,
+    /// Accumulator register.
     pub a: u8,
+    /// X index register.
     pub x: u8,
+    /// Y index register.
     pub y: u8,
+    /// Stack pointer.
     pub sp: u8,
+    /// Raw status flags.
     pub status: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One observed CPU write on the CPU bus.
 pub struct CpuWrite {
+    /// Target address.
     pub addr: u16,
+    /// Written value.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// CPU write that targeted PRG space (`>= 0x8000`).
 pub struct CpuPrgWrite {
+    /// Target address.
     pub addr: u16,
+    /// Written value.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Bus access classification used in instruction traces.
 pub enum CpuBusAccessKind {
+    /// Read transaction.
     Read,
+    /// Write transaction.
     Write,
+    /// Dummy read used for timing-accurate microphases.
     DummyRead,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One observed CPU bus transaction.
 pub struct CpuBusAccess {
+    /// Access address.
     pub addr: u16,
+    /// Data value seen on the access.
     pub value: u8,
+    /// Access kind.
     pub kind: CpuBusAccessKind,
 }
 
@@ -89,6 +118,7 @@ struct TraceSnapshot {
 }
 
 #[derive(Debug, Clone)]
+/// 6502 CPU state and execution engine.
 pub struct Cpu {
     pc: u16,
     a: u8,
@@ -103,6 +133,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    /// Creates a CPU with canonical power-on register defaults.
     #[must_use]
     pub fn new(start_pc: u16) -> Self {
         Self {
@@ -119,40 +150,48 @@ impl Cpu {
         }
     }
 
+    /// Returns program counter.
     #[must_use]
     pub const fn pc(&self) -> u16 {
         self.pc
     }
 
+    /// Returns accumulator.
     #[must_use]
     pub const fn a(&self) -> u8 {
         self.a
     }
 
+    /// Returns X register.
     #[must_use]
     pub const fn x(&self) -> u8 {
         self.x
     }
 
+    /// Returns Y register.
     #[must_use]
     pub const fn y(&self) -> u8 {
         self.y
     }
 
+    /// Returns stack pointer.
     #[must_use]
     pub const fn sp(&self) -> u8 {
         self.sp
     }
 
+    /// Reads a byte from CPU memory image.
     #[must_use]
     pub fn read_byte(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
+    /// Writes a byte into CPU memory image.
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         self.memory[addr as usize] = value;
     }
 
+    /// Captures register snapshot.
     #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
         CpuSnapshot {
@@ -165,6 +204,7 @@ impl Cpu {
         }
     }
 
+    /// Restores CPU registers and clears transient trace buffers.
     pub fn restore(&mut self, snapshot: CpuSnapshot) {
         self.pc = snapshot.pc;
         self.a = snapshot.a;
@@ -177,6 +217,7 @@ impl Cpu {
         self.bus_trace.borrow_mut().clear();
     }
 
+    /// Resets CPU registers and clears transient trace buffers.
     pub fn reset(&mut self, start_pc: u16) {
         self.pc = start_pc;
         self.a = 0;
@@ -189,6 +230,7 @@ impl Cpu {
         self.bus_trace.borrow_mut().clear();
     }
 
+    /// Copies raw bytes into CPU memory image at `start`.
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {
         let start = start as usize;
         let end = start.saturating_add(bytes.len()).min(self.memory.len());
@@ -196,6 +238,7 @@ impl Cpu {
         self.memory[start..end].copy_from_slice(&bytes[..len]);
     }
 
+    /// Services an NMI interrupt.
     pub fn service_nmi(&mut self) {
         let pc = self.pc;
         self.push((pc >> 8) as u8);
@@ -205,6 +248,9 @@ impl Cpu {
         self.pc = self.read_u16(0xFFFA);
     }
 
+    /// Services an IRQ interrupt if not masked.
+    ///
+    /// Returns `true` when the IRQ was taken.
     pub fn service_irq(&mut self) -> bool {
         if self.status.interrupt_disable() {
             return false;
@@ -219,10 +265,20 @@ impl Cpu {
         true
     }
 
+    /// Executes one instruction and returns formatted trace text.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CpuError`] when opcode decoding/execution fails.
     pub fn step_with_trace(&mut self) -> Result<String, CpuError> {
         self.step_with_trace_and_cycles().map(|(trace, _)| trace)
     }
 
+    /// Executes one instruction and returns trace text + cycle count.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CpuError`] when opcode decoding/execution fails.
     pub fn step_with_trace_and_cycles(&mut self) -> Result<(String, u8), CpuError> {
         self.writes.clear();
         self.prg_writes.clear();
@@ -2459,14 +2515,17 @@ impl Cpu {
         )
     }
 
+    /// Drains collected non-PRG writes since last step.
     pub fn take_writes(&mut self) -> Vec<CpuWrite> {
         core::mem::take(&mut self.writes)
     }
 
+    /// Drains collected PRG-space writes since last step.
     pub fn take_prg_writes(&mut self) -> Vec<CpuPrgWrite> {
         core::mem::take(&mut self.prg_writes)
     }
 
+    /// Drains bus trace records since last step.
     pub fn take_bus_trace(&mut self) -> Vec<CpuBusAccess> {
         core::mem::take(&mut *self.bus_trace.borrow_mut())
     }

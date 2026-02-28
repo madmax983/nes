@@ -21,26 +21,40 @@ const PRG_16K_BYTES: usize = 16 * 1024;
 const PRG_32K_BYTES: usize = 32 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
+/// NES visible frame width in pixels.
 pub const FRAME_WIDTH: usize = 256;
+/// NES visible frame height in pixels.
 pub const FRAME_HEIGHT: usize = 240;
+/// Framebuffer byte count for `RGBA8` format.
 pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
+/// Default host audio sample rate.
 pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
+/// Samples produced/consumed per 60Hz host frame.
 pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
 
 /// Represents a standard NES controller button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
+    /// A button.
     A,
+    /// B button.
     B,
+    /// Select button.
     Select,
+    /// Start button.
     Start,
+    /// Up direction.
     Up,
+    /// Down direction.
     Down,
+    /// Left direction.
     Left,
+    /// Right direction.
     Right,
 }
 
 impl Button {
+    /// Returns this button's bit in controller bitfields.
     #[must_use]
     pub fn bit_mask(self) -> u8 {
         match self {
@@ -60,16 +74,27 @@ impl Button {
 /// or advance the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
+    /// Pause emulation stepping.
     Pause,
+    /// Resume emulation stepping.
     Resume,
+    /// Reset runtime state while preserving speed setting.
     Reset,
+    /// Reset runtime state and restore default speed.
     PowerCycle,
+    /// Execute one CPU instruction.
     StepCpu,
+    /// Execute until next scanline boundary.
     StepScanline,
+    /// Execute until next frame boundary.
     StepFrame,
+    /// Replace full controller bitfield.
     SetControllerState(u8),
+    /// Press a single controller button.
     PressButton(Button),
+    /// Release a single controller button.
     ReleaseButton(Button),
+    /// Set speed multiplier in permille (`1000 == 1.0x`).
     SetSpeed(u16),
 }
 
@@ -77,38 +102,60 @@ pub enum Command {
 /// without advancing the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreQuery {
+    /// Returns paused/speed/controller state.
     EmulatorState,
+    /// Returns current CPU registers.
     Registers,
+    /// Returns memory-mapped read value for one address.
     Memory(u16),
+    /// Returns current target FPS in milli-Hz.
     FpsMilli,
+    /// Returns PPU frame counter.
     PpuFrameCounter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lightweight machine status query response.
 pub struct EmulatorState {
+    /// Pause state.
     pub paused: bool,
+    /// Speed multiplier in permille.
     pub speed_permille: u16,
+    /// Latched controller bits.
     pub controller_bits: u8,
 }
 
 /// The result of executing a [`CoreQuery`] on the [`NesCore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryResult {
+    /// [`CoreQuery::EmulatorState`] response.
     EmulatorState(EmulatorState),
+    /// [`CoreQuery::Registers`] response.
     Registers(CpuSnapshot),
+    /// [`CoreQuery::Memory`] response.
     Memory(u8),
+    /// [`CoreQuery::FpsMilli`] response.
     FpsMilli(u32),
+    /// [`CoreQuery::PpuFrameCounter`] response.
     PpuFrameCounter(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Complete serializable machine snapshot for save-state support.
 pub struct CoreSnapshot {
+    /// Pause state.
     pub paused: bool,
+    /// Speed multiplier.
     pub speed_permille: u16,
+    /// Controller bits.
     pub controller_bits: u8,
+    /// Scheduler counters.
     pub scheduler: SchedulerSnapshot,
+    /// PPU state.
     pub ppu: PpuSnapshot,
+    /// APU state.
     pub apu: ApuSnapshot,
+    /// CPU state.
     pub cpu: CpuSnapshot,
     controller_strobe: bool,
     controller_shift: u8,
@@ -118,9 +165,13 @@ pub struct CoreSnapshot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Metadata returned after successfully loading a ROM.
 pub struct RomLoadInfo {
+    /// Mapper ID from iNES header.
     pub mapper_id: u8,
+    /// PRG ROM payload size in bytes.
     pub prg_rom_bytes: usize,
+    /// Effective reset vector used by the core.
     pub reset_pc: u16,
 }
 
@@ -208,9 +259,13 @@ pub struct NesCore {
 /// Errors that can occur when interacting with the [`NesCore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
+    /// Command is not currently supported by the runtime mode.
     UnsupportedCommand,
+    /// Speed value was zero.
     InvalidSpeed(u16),
+    /// ROM parse/load failed.
     RomLoadFailed(RomError),
+    /// CPU stepping failed.
     CpuStepFailed(CpuError),
 }
 
@@ -228,6 +283,7 @@ impl fmt::Display for CoreError {
 impl std::error::Error for CoreError {}
 
 impl NesCore {
+    /// Creates a new core with power-on defaults and no loaded mapper.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -248,26 +304,34 @@ impl NesCore {
         }
     }
 
+    /// Returns whether stepping is currently paused.
     #[must_use]
     pub fn is_paused(&self) -> bool {
         self.paused
     }
 
+    /// Returns current speed multiplier in permille (`1000 == 1.0x`).
     #[must_use]
     pub const fn speed_permille(&self) -> u16 {
         self.speed_permille
     }
 
+    /// Returns total CPU cycles observed by the scheduler.
     #[must_use]
     pub fn total_cycles(&self) -> u64 {
         self.scheduler.total_cycles()
     }
 
+    /// Returns current controller bitfield.
     #[must_use]
     pub fn controller_bits(&self) -> u8 {
         self.controller_bits
     }
 
+    /// Loads raw bytes into CPU memory image.
+    ///
+    /// When writing into PRG space (`>= 0x8000`), active mapper state is
+    /// cleared so raw memory execution semantics remain explicit.
     pub fn load_cpu_bytes(&mut self, start: u16, bytes: &[u8]) {
         if start >= 0x8000 {
             self.mapper = None;
@@ -276,36 +340,43 @@ impl NesCore {
         self.cpu.load_bytes(start, bytes);
     }
 
+    /// Returns CPU program counter.
     #[must_use]
     pub fn cpu_pc(&self) -> u16 {
         self.cpu.pc()
     }
 
+    /// Returns CPU accumulator.
     #[must_use]
     pub fn cpu_a(&self) -> u8 {
         self.cpu.a()
     }
 
+    /// Returns CPU X register.
     #[must_use]
     pub fn cpu_x(&self) -> u8 {
         self.cpu.x()
     }
 
+    /// Returns last executed instruction trace string, if any.
     #[must_use]
     pub fn last_cpu_trace(&self) -> Option<&str> {
         self.last_cpu_trace.as_deref()
     }
 
+    /// Returns CPU register snapshot.
     #[must_use]
     pub fn cpu_snapshot(&self) -> CpuSnapshot {
         self.cpu.snapshot()
     }
 
+    /// Returns last instruction's bus access trace entries.
     #[must_use]
     pub fn last_cpu_bus_trace(&self) -> &[CpuBusAccess] {
         &self.last_cpu_bus_trace
     }
 
+    /// Reads CPU-visible memory with MMIO-aware behavior.
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
         match addr {
@@ -318,88 +389,105 @@ impl NesCore {
         }
     }
 
+    /// Reads `$4015` APU status and mirrors the result into CPU memory.
     pub fn read_apu_status(&mut self) -> u8 {
         let status = self.apu.read_status();
         self.cpu.write_byte(0x4015, status);
         status
     }
 
+    /// Writes to CPU bus then applies mapped side-effects immediately.
     pub fn write_cpu_bus(&mut self, addr: u16, value: u8) {
         self.cpu.write_byte(addr, value);
         self.apply_cpu_writes(&[CpuWrite { addr, value }]);
         self.sync_ppu_register_image();
     }
 
+    /// Returns PPU frame counter.
     #[must_use]
     pub fn ppu_frame_counter(&self) -> u64 {
         self.ppu.frame_counter()
     }
 
+    /// Returns current PPU scanline.
     #[must_use]
     pub fn ppu_scanline(&self) -> u16 {
         self.ppu.scanline()
     }
 
+    /// Returns current PPU dot.
     #[must_use]
     pub fn ppu_dot(&self) -> u16 {
         self.ppu.dot()
     }
 
+    /// Returns total PPU cycles from scheduler.
     #[must_use]
     pub fn ppu_total_cycles(&self) -> u64 {
         self.scheduler.ppu_cycles()
     }
 
+    /// Returns total APU cycles from scheduler.
     #[must_use]
     pub fn apu_total_cycles(&self) -> u64 {
         self.scheduler.apu_cycles()
     }
 
+    /// Returns APU quarter-frame tick counter.
     #[must_use]
     pub fn apu_quarter_frame_ticks(&self) -> u64 {
         self.apu.quarter_frame_ticks()
     }
 
+    /// Returns APU half-frame tick counter.
     #[must_use]
     pub fn apu_half_frame_ticks(&self) -> u64 {
         self.apu.half_frame_ticks()
     }
 
+    /// Returns whether any APU IRQ source is pending.
     #[must_use]
     pub fn apu_irq_pending(&self) -> bool {
         self.apu.irq_pending()
     }
 
+    /// Returns whether DMC IRQ is pending.
     #[must_use]
     pub fn apu_dmc_irq_pending(&self) -> bool {
         self.apu.dmc_irq_pending()
     }
 
+    /// Returns remaining DMC sample bytes.
     #[must_use]
     pub fn apu_dmc_bytes_remaining(&self) -> u16 {
         self.apu.dmc_bytes_remaining()
     }
 
+    /// Returns DMC memory fetch count.
     #[must_use]
     pub fn apu_dmc_fetch_count(&self) -> u64 {
         self.apu.dmc_fetch_count()
     }
 
+    /// Returns pulse timer reloads for debug/metrics inspection.
     #[must_use]
     pub fn apu_pulse_timer_reloads(&self) -> (u16, u16) {
         self.apu.pulse_timer_reloads()
     }
 
+    /// Reads one OAM byte by index.
     #[must_use]
     pub fn ppu_oam_byte(&self, index: u8) -> u8 {
         self.ppu.oam_byte(index)
     }
 
+    /// Returns target frames-per-second as milli-Hz.
     #[must_use]
     pub fn fps_milli(&self) -> u32 {
         BASE_FPS_MILLI.saturating_mul(self.speed_permille as u32) / DEFAULT_SPEED_PERMILLE as u32
     }
 
+    /// Returns a freshly allocated RGBA framebuffer snapshot.
     #[must_use]
     pub fn framebuffer_rgba(&self) -> Vec<u8> {
         let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
@@ -407,20 +495,24 @@ impl NesCore {
         frame
     }
 
+    /// Writes current RGBA framebuffer into caller-provided buffer.
     pub fn fill_framebuffer_rgba(&self, frame: &mut [u8]) {
         self.ppu.render_rgba(frame);
     }
 
+    /// Drains one host-frame-sized audio chunk (`AUDIO_CHUNK_SAMPLES`).
     #[must_use]
     pub fn audio_chunk_i16(&mut self) -> Vec<i16> {
         self.apu.drain_samples(AUDIO_CHUNK_SAMPLES, self.paused)
     }
 
+    /// Fills caller-provided audio buffer with drained APU samples.
     pub fn fill_audio_chunk_i16(&mut self, samples: &mut [i16]) {
         let drained = self.apu.drain_samples(samples.len(), self.paused);
         samples.copy_from_slice(&drained);
     }
 
+    /// Returns a compact hash of emulation state for regression checks.
     #[must_use]
     pub fn state_hash(&self) -> u64 {
         let paused = if self.paused { 1_u64 } else { 0_u64 };
@@ -447,6 +539,7 @@ impl NesCore {
             ^ self.mapper_hash_component().rotate_left(53)
     }
 
+    /// Captures full core save-state snapshot.
     #[must_use]
     pub fn save_state(&self) -> CoreSnapshot {
         CoreSnapshot {
@@ -465,6 +558,7 @@ impl NesCore {
         }
     }
 
+    /// Restores full core save-state snapshot.
     pub fn load_state(&mut self, snapshot: &CoreSnapshot) {
         self.paused = snapshot.paused;
         self.speed_permille = snapshot.speed_permille;
@@ -484,10 +578,20 @@ impl NesCore {
         self.last_cpu_bus_trace.clear();
     }
 
+    /// Replays a command stream on this core.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the first command execution failure.
     pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
         replay_commands(self, commands)
     }
 
+    /// Loads an iNES ROM into mapper + PPU/CPU state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::RomLoadFailed`] when parsing or mapper validation fails.
     pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
         let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
         let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom)?;
@@ -523,6 +627,11 @@ impl NesCore {
         })
     }
 
+    /// Executes one host command against the emulator.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CoreError`] when command preconditions fail or stepping fails.
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
         match command {
             Command::Pause => {
@@ -579,6 +688,7 @@ impl NesCore {
         }
     }
 
+    /// Executes a readonly query against current state.
     #[must_use]
     pub fn query(&self, query: CoreQuery) -> QueryResult {
         match query {
