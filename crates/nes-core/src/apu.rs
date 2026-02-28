@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::OnceLock;
 
 use crate::api::AUDIO_SAMPLE_RATE;
 
@@ -988,34 +989,28 @@ impl Apu {
     }
 
     fn raw_mixed_sample(&self, paused: bool) -> i16 {
-        let p1 = f32::from(self.pulse1.output());
-        let p2 = f32::from(self.pulse2.output());
-        let tri = f32::from(self.triangle.output());
-        let noi = f32::from(self.noise.output());
-        let dmc = f32::from(self.dmc.output());
+        if paused {
+            return 0;
+        }
+
+        let p1 = usize::from(self.pulse1.output());
+        let p2 = usize::from(self.pulse2.output());
+        let tri = usize::from(self.triangle.output());
+        let noi = usize::from(self.noise.output());
+        let dmc = usize::from(self.dmc.output());
+
+        let (pulse_table, tnd_table) = get_mixer_tables();
 
         let pulse_sum = p1 + p2;
-        let pulse_out = if pulse_sum == 0.0 {
-            0.0
-        } else {
-            95.88 / ((8128.0 / pulse_sum) + 100.0)
-        };
+        let pulse_out = pulse_table[pulse_sum];
 
-        let tnd_sum = (tri / 8227.0) + (noi / 12241.0) + (dmc / 22638.0);
-        let tnd_out = if tnd_sum == 0.0 {
-            0.0
-        } else {
-            159.79 / ((1.0 / tnd_sum) + 100.0)
-        };
+        let tnd_idx = (tri * 16 * 128) + (noi * 128) + dmc;
+        let tnd_out = tnd_table[tnd_idx];
 
         let mut mixed = pulse_out + tnd_out;
         mixed = mixed.clamp(0.0, 1.0);
 
-        if paused {
-            0
-        } else {
-            (mixed * MAX_SAMPLE_AMPLITUDE) as i16
-        }
+        (mixed * MAX_SAMPLE_AMPLITUDE) as i16
     }
 
     fn apply_output_filters(&mut self, raw_sample: i16) -> i16 {
@@ -1069,4 +1064,46 @@ impl Default for Apu {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Pre-computed APU mixer tables.
+///
+/// **Why this optimization matters:**
+/// The original `raw_mixed_sample` method executed multiple floating-point divisions
+/// and additions for every generated sample. Since the APU runs on every CPU cycle
+/// (~1.78M times per second), eliminating f32 math and branches on the hot path
+/// and replacing them with array lookups reduces a massive overhead and significantly
+/// improves emulator performance.
+static MIXER_TABLES: OnceLock<(Vec<f32>, Vec<f32>)> = OnceLock::new();
+
+fn get_mixer_tables() -> &'static (Vec<f32>, Vec<f32>) {
+    MIXER_TABLES.get_or_init(|| {
+        let mut pulse = vec![0.0; 31];
+        for (i, slot) in pulse.iter_mut().enumerate() {
+            let pulse_sum = i as f32;
+            *slot = if pulse_sum == 0.0 {
+                0.0
+            } else {
+                95.88 / ((8128.0 / pulse_sum) + 100.0)
+            };
+        }
+
+        let mut tnd = vec![0.0; 32768];
+        for tri in 0..16 {
+            for noi in 0..16 {
+                for dmc in 0..128 {
+                    let tnd_sum =
+                        (tri as f32 / 8227.0) + (noi as f32 / 12241.0) + (dmc as f32 / 22638.0);
+                    let tnd_out = if tnd_sum == 0.0 {
+                        0.0
+                    } else {
+                        159.79 / ((1.0 / tnd_sum) + 100.0)
+                    };
+                    let idx = (tri * 16 * 128) + (noi * 128) + dmc;
+                    tnd[idx] = tnd_out;
+                }
+            }
+        }
+        (pulse, tnd)
+    })
 }

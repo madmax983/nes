@@ -334,7 +334,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
-    matches!(mapper_id, 0 | 1 | 2)
+    matches!(mapper_id, 0..=2)
 }
 
 #[cfg(test)]
