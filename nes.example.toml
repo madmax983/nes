@@ -1,0 +1,18 @@
+[desktop]
+rom_path = "C:\\path\\to\\roms\\Super Mario Bros. (World).nes"
+window_scale = 3
+step_mode = "frame"
+cpu_steps_per_frame = 10000
+audio_enabled = true
+trace_every_frames = 0
+metrics_enabled = false
+metrics_every_frames = 60
+capture_path_template = ""
+capture_every_frames = 1
+
+[roms]
+smb = "C:\\path\\to\\roms\\Super Mario Bros. (World).nes"
+nestest = "C:\\path\\to\\roms\\nestest.nes"
+blargg_cpu = "C:\\path\\to\\roms\\cpu.nes"
+bbbradsmith_audio_suite_dir = "C:\\path\\to\\roms\\nes-audio-tests\\build"
+bbbradsmith_audio_golden_dir = "C:\\path\\to\\roms\\nes-audio-tests\\golden"
