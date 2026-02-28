@@ -146,3 +146,57 @@ impl Mapper for Mmc1 {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mmc1_reset_shift_clears_count_and_sets_bit4() {
+        let mut m = Mmc1::new(16, 8);
+        m.write_prg(0x8000, 0x01); // shift bit
+        assert!(!m.shift_is_reset());
+        m.write_prg(0x8000, 0x80); // reset
+        assert!(m.shift_is_reset());
+    }
+
+    #[test]
+    fn mmc1_shift_register_accumulates_bits_and_commits_on_fifth_write() {
+        let mut m = Mmc1::new(16, 8);
+        m.write_prg(0x8000, 0x01); // 1
+        m.write_prg(0x8000, 0x00); // 0
+        m.write_prg(0x8000, 0x01); // 1
+        m.write_prg(0x8000, 0x00); // 0
+        m.write_prg(0x8000, 0x01); // 1, now commit to 0x8000 (control)
+        // Shift bits enter at MSB (bit 4) and shift right.
+        // Sequence: 1, 0, 1, 0, 1 -> 10101 binary -> 0x15
+        assert_eq!(m.control, 0x15);
+        assert!(m.shift_is_reset());
+    }
+
+    #[test]
+    fn mmc1_commit_to_prg_bank_updates_selected_bank() {
+        let mut m = Mmc1::new(16, 8);
+        // We will commit a value to E000-FFFF. Let's write binary 01010 (0x0A)
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x00);
+        // LSB is written first.
+        // bit0=0, bit1=1, bit2=0, bit3=1, bit4=0 -> 0x0A
+        assert_eq!(m.selected_prg_bank(), 0x0A);
+    }
+
+    #[test]
+    fn mmc1_commit_to_unhandled_range_does_not_panic() {
+        let mut m = Mmc1::new(16, 8);
+        // Address 0xA000 is CHR bank 0, unhandled in our current simplified mmc1
+        m.write_prg(0xA000, 0x01);
+        m.write_prg(0xA000, 0x01);
+        m.write_prg(0xA000, 0x01);
+        m.write_prg(0xA000, 0x01);
+        m.write_prg(0xA000, 0x01);
+        assert!(m.shift_is_reset());
+    }
+}
