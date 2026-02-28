@@ -13,13 +13,69 @@ fn framebuffer_geometry_matches_nes_resolution() {
 }
 
 #[test]
-fn framebuffer_changes_after_frame_step() {
+fn framebuffer_reflects_ppu_background_pattern_data() {
     let mut core = NesCore::new();
-    let before = core.framebuffer_rgba();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
+    core.write_cpu_bus(0x2001, 0x0A); // enable background rendering + leftmost 8px
+
+    write_ppu_data(&mut core, 0x3F00, &[0x0F, 0x30, 0x00, 0x00]); // universal + palette 0 color 1
+
+    // Tile 1 pattern data: plane 0 set, plane 1 clear => color index 1 for all pixels.
+    write_ppu_data(&mut core, 0x0010, &[0xFF; 8]);
+    write_ppu_data(&mut core, 0x0018, &[0x00; 8]);
+    write_ppu_data(&mut core, 0x2000, &[0x01]); // top-left nametable tile uses pattern 1
 
     core.execute(Command::StepFrame).unwrap();
-    core.execute(Command::StepFrame).unwrap();
-    let after = core.framebuffer_rgba();
+    let frame = core.framebuffer_rgba();
+    let top_left = &frame[0..4];
+    assert_eq!(top_left[3], 0xFF);
+    assert_ne!(top_left[0], 0);
+    assert_ne!(top_left[1], 0);
+    assert_ne!(top_left[2], 0);
+}
 
-    assert_ne!(before, after);
+#[test]
+fn mid_frame_scroll_write_changes_later_scanline_pixels_only() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
+    core.write_cpu_bus(0x2001, 0x0A); // enable background rendering + leftmost 8px
+
+    // Palette 0: color1 and color2 are distinct.
+    write_ppu_data(&mut core, 0x3F00, &[0x0F, 0x16, 0x2A, 0x00]);
+
+    // Tile 1 -> color index 1 for all pixels.
+    write_ppu_data(&mut core, 0x0010, &[0xFF; 8]);
+    write_ppu_data(&mut core, 0x0018, &[0x00; 8]);
+    // Tile 2 -> color index 2 for all pixels.
+    write_ppu_data(&mut core, 0x0020, &[0x00; 8]);
+    write_ppu_data(&mut core, 0x0028, &[0xFF; 8]);
+
+    // Row 0 starts with tile 1, row 1 starts with tile 2.
+    write_ppu_data(&mut core, 0x2000, &[0x01]);
+    write_ppu_data(&mut core, 0x2020, &[0x02]);
+
+    core.execute(Command::StepScanline).unwrap(); // render y=0
+    core.write_cpu_bus(0x2005, 0x00); // scroll X
+    core.write_cpu_bus(0x2005, 0x08); // scroll Y
+    core.execute(Command::StepScanline).unwrap(); // finish scanline 1
+    core.execute(Command::StepScanline).unwrap(); // render scanline 2 with new scroll
+
+    let frame = core.framebuffer_rgba();
+    let row0 = pixel_rgb(&frame, 0, 0);
+    let row2 = pixel_rgb(&frame, 0, 2);
+
+    assert_ne!(row0, row2, "later scanline should see new scroll value");
+}
+
+fn write_ppu_data(core: &mut NesCore, addr: u16, data: &[u8]) {
+    core.write_cpu_bus(0x2006, (addr >> 8) as u8);
+    core.write_cpu_bus(0x2006, addr as u8);
+    for &byte in data {
+        core.write_cpu_bus(0x2007, byte);
+    }
+}
+
+fn pixel_rgb(frame: &[u8], x: usize, y: usize) -> [u8; 3] {
+    let idx = (y * FRAME_WIDTH + x) * 4;
+    [frame[idx], frame[idx + 1], frame[idx + 2]]
 }

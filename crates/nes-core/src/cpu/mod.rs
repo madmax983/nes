@@ -1,4 +1,6 @@
 mod engine;
 pub mod status;
 
-pub use engine::{Cpu, CpuError, CpuPrgWrite, CpuSnapshot, CpuWrite};
+pub use engine::{
+    Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuPrgWrite, CpuSnapshot, CpuWrite,
+};

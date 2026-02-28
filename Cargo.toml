@@ -2,9 +2,14 @@
 resolver = "2"
 members = [
     "crates/nes-core",
+    "crates/nes-config",
     "crates/nes-mcp",
     "crates/nes-desktop",
+    "crates/nes-tui",
     "crates/nes-web",
     "crates/nes-proof",
     "crates/nes-test-harness",
 ]
+
+[profile.dev.package.nes-core]
+opt-level = 2

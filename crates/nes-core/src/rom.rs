@@ -8,14 +8,23 @@ const CHR_BANK_BYTES: usize = 8 * 1024;
 const INES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NametableMirroring {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InesRom<'a> {
     pub mapper_id: u8,
     pub prg_rom: &'a [u8],
+    pub chr_rom: &'a [u8],
+    pub mirroring: NametableMirroring,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RomError {
     InvalidMagic,
+    UnsupportedFourScreenMirroring,
     UnsupportedNes2SizeEncoding,
     UnsupportedNes2ExtendedMapper(u16),
     MissingPrgRom,
@@ -28,6 +37,9 @@ impl fmt::Display for RomError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidMagic => f.write_str("invalid iNES magic header"),
+            Self::UnsupportedFourScreenMirroring => {
+                f.write_str("four-screen nametable mirroring is not supported")
+            }
             Self::UnsupportedNes2SizeEncoding => {
                 f.write_str("NES 2.0 exponent/multiplier size encoding is not supported")
             }
@@ -65,6 +77,14 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
     let flags6 = bytes[6];
     let flags7 = bytes[7];
     let is_nes2 = (flags7 & 0b0000_1100) == 0b0000_1000;
+    if flags6 & 0b0000_1000 != 0 {
+        return Err(RomError::UnsupportedFourScreenMirroring);
+    }
+    let mirroring = if flags6 & 0b0000_0001 != 0 {
+        NametableMirroring::Vertical
+    } else {
+        NametableMirroring::Horizontal
+    };
 
     let (mapper_id, prg_banks, chr_banks) = if is_nes2 {
         let mapper_low = (flags6 >> 4) | (flags7 & 0xF0);
@@ -116,8 +136,11 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
     }
 
     let prg_end = prg_start + prg_rom_len;
+    let chr_end = prg_end + chr_rom_len;
     Ok(InesRom {
         mapper_id,
         prg_rom: &bytes[prg_start..prg_end],
+        chr_rom: &bytes[prg_end..chr_end],
+        mirroring,
     })
 }

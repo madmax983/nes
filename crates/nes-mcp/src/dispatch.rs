@@ -53,6 +53,10 @@ pub enum DispatchOutput {
         seq: u64,
         bytes: usize,
     },
+    FrameCaptured {
+        path: String,
+        bytes: usize,
+    },
     Audio {
         seq: u64,
         samples: usize,
@@ -213,6 +217,19 @@ pub fn dispatch_tool(
                 bytes: chunk.rgba.len(),
             })
         }
+        "capture_frame" => {
+            let Some(path) = params.get("path").cloned() else {
+                return Err(DispatchError::InvalidParams(
+                    "path must be provided".to_owned(),
+                ));
+            };
+            let rgba = core.framebuffer_rgba();
+            write_frame_image(&path, FRAME_WIDTH, FRAME_HEIGHT, &rgba)?;
+            Ok(DispatchOutput::FrameCaptured {
+                path,
+                bytes: rgba.len(),
+            })
+        }
         "get_audio_chunk" => {
             sync_audio_output(core);
             let default_seq = latest_output_metadata().audio_seq.saturating_add(1);
@@ -280,6 +297,97 @@ fn sync_frame_output(core: &NesCore) {
 
 fn sync_audio_output(core: &mut NesCore) {
     publish_audio(core.audio_chunk_i16());
+}
+
+fn write_frame_image(
+    path: &str,
+    width: usize,
+    height: usize,
+    rgba: &[u8],
+) -> Result<(), DispatchError> {
+    let expected = width
+        .checked_mul(height)
+        .and_then(|px| px.checked_mul(4))
+        .ok_or_else(|| DispatchError::Internal("frame size overflow".to_owned()))?;
+    if rgba.len() != expected {
+        return Err(DispatchError::Internal(
+            "frame rgba length does not match dimensions".to_owned(),
+        ));
+    }
+
+    let image = if path.to_ascii_lowercase().ends_with(".bmp") {
+        encode_bmp(width, height, rgba)?
+    } else {
+        encode_ppm(width, height, rgba)
+    };
+    fs::write(path, image)
+        .map_err(|err| DispatchError::InvalidParams(format!("unable to write '{path}': {err}")))
+}
+
+fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
+    let mut ppm = Vec::with_capacity(32 + width * height * 3);
+    ppm.extend_from_slice(format!("P6\n{width} {height}\n255\n").as_bytes());
+    for px in rgba.chunks_exact(4) {
+        ppm.extend_from_slice(&px[..3]);
+    }
+    ppm
+}
+
+fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, DispatchError> {
+    let row_bytes = width
+        .checked_mul(3)
+        .ok_or_else(|| DispatchError::Internal("bmp row size overflow".to_owned()))?;
+    let row_padding = (4 - (row_bytes % 4)) % 4;
+    let stride = row_bytes
+        .checked_add(row_padding)
+        .ok_or_else(|| DispatchError::Internal("bmp stride overflow".to_owned()))?;
+    let pixel_data_size = stride
+        .checked_mul(height)
+        .ok_or_else(|| DispatchError::Internal("bmp pixel data size overflow".to_owned()))?;
+    let file_size = 54usize
+        .checked_add(pixel_data_size)
+        .ok_or_else(|| DispatchError::Internal("bmp file size overflow".to_owned()))?;
+
+    let width_i32 = i32::try_from(width)
+        .map_err(|_| DispatchError::Internal("bmp width out of range".to_owned()))?;
+    let height_i32 = i32::try_from(height)
+        .map_err(|_| DispatchError::Internal("bmp height out of range".to_owned()))?;
+    let file_size_u32 = u32::try_from(file_size)
+        .map_err(|_| DispatchError::Internal("bmp file size out of range".to_owned()))?;
+    let pixel_data_size_u32 = u32::try_from(pixel_data_size)
+        .map_err(|_| DispatchError::Internal("bmp pixel data size out of range".to_owned()))?;
+
+    let mut bmp = Vec::with_capacity(file_size);
+    bmp.extend_from_slice(b"BM");
+    bmp.extend_from_slice(&file_size_u32.to_le_bytes());
+    bmp.extend_from_slice(&0u16.to_le_bytes());
+    bmp.extend_from_slice(&0u16.to_le_bytes());
+    bmp.extend_from_slice(&54u32.to_le_bytes());
+
+    bmp.extend_from_slice(&40u32.to_le_bytes());
+    bmp.extend_from_slice(&width_i32.to_le_bytes());
+    bmp.extend_from_slice(&height_i32.to_le_bytes());
+    bmp.extend_from_slice(&1u16.to_le_bytes());
+    bmp.extend_from_slice(&24u16.to_le_bytes());
+    bmp.extend_from_slice(&0u32.to_le_bytes());
+    bmp.extend_from_slice(&pixel_data_size_u32.to_le_bytes());
+    bmp.extend_from_slice(&2_835u32.to_le_bytes());
+    bmp.extend_from_slice(&2_835u32.to_le_bytes());
+    bmp.extend_from_slice(&0u32.to_le_bytes());
+    bmp.extend_from_slice(&0u32.to_le_bytes());
+
+    for y in (0..height).rev() {
+        let row_start = y * width * 4;
+        for x in 0..width {
+            let idx = row_start + x * 4;
+            bmp.push(rgba[idx + 2]);
+            bmp.push(rgba[idx + 1]);
+            bmp.push(rgba[idx]);
+        }
+        bmp.extend(std::iter::repeat_n(0, row_padding));
+    }
+
+    Ok(bmp)
 }
 
 fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {

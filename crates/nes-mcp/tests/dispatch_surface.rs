@@ -1,4 +1,4 @@
-use nes_core::{AUDIO_CHUNK_SAMPLES, Button, Command, NesCore};
+use nes_core::{AUDIO_CHUNK_SAMPLES, Button, Command, CoreSnapshot, NesCore};
 use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 
 fn params(pairs: &[(&str, &str)]) -> ToolParams {
@@ -158,6 +158,64 @@ fn get_frame_reports_full_rgba_payload_size() {
 }
 
 #[test]
+fn capture_frame_writes_ppm_file() {
+    let mut core = NesCore::new();
+    let path = std::env::temp_dir().join("nes_mcp_capture_frame_test.ppm");
+    let path_str = path.to_string_lossy().to_string();
+
+    let output = dispatch_tool(
+        &mut core,
+        "capture_frame",
+        &params(&[("path", path_str.as_str())]),
+    )
+    .unwrap();
+    match output {
+        DispatchOutput::FrameCaptured {
+            path: out_path,
+            bytes,
+        } => {
+            assert_eq!(out_path, path_str);
+            assert_eq!(bytes, 256 * 240 * 4);
+        }
+        other => panic!("unexpected capture_frame output: {other:?}"),
+    }
+
+    let ppm = std::fs::read(&path).expect("capture_frame should write output file");
+    assert!(ppm.starts_with(b"P6\n256 240\n255\n"));
+    assert!(ppm.len() > 16);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn capture_frame_writes_bmp_file() {
+    let mut core = NesCore::new();
+    let path = std::env::temp_dir().join("nes_mcp_capture_frame_test.bmp");
+    let path_str = path.to_string_lossy().to_string();
+
+    let output = dispatch_tool(
+        &mut core,
+        "capture_frame",
+        &params(&[("path", path_str.as_str())]),
+    )
+    .unwrap();
+    match output {
+        DispatchOutput::FrameCaptured {
+            path: out_path,
+            bytes,
+        } => {
+            assert_eq!(out_path, path_str);
+            assert_eq!(bytes, 256 * 240 * 4);
+        }
+        other => panic!("unexpected capture_frame output: {other:?}"),
+    }
+
+    let bmp = std::fs::read(&path).expect("capture_frame should write output file");
+    assert!(bmp.starts_with(b"BM"));
+    assert!(bmp.len() > 64);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn get_audio_chunk_reports_expected_sample_count() {
     let mut core = NesCore::new();
     let output = dispatch_tool(&mut core, "get_audio_chunk", &ToolParams::new()).unwrap();
@@ -180,6 +238,19 @@ fn save_and_load_state_round_trip_restores_state_hash() {
 
     dispatch_tool(&mut core, "load_state", &params(&[("slot", "slot0")])).unwrap();
     assert_eq!(saved_hash, core.state_hash());
+}
+
+#[test]
+fn core_snapshot_size_stays_bounded_for_dispatch_stack_safety() {
+    // Guard against accidental large inline buffers in saved state objects.
+    // Regressions here can overflow stack frames in desktop/tests on Windows.
+    const MAX_SNAPSHOT_BYTES: usize = 128 * 1024;
+    assert!(
+        std::mem::size_of::<CoreSnapshot>() <= MAX_SNAPSHOT_BYTES,
+        "CoreSnapshot grew to {} bytes (limit {} bytes)",
+        std::mem::size_of::<CoreSnapshot>(),
+        MAX_SNAPSHOT_BYTES
+    );
 }
 
 #[test]

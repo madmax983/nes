@@ -1,26 +1,13 @@
-use std::env;
 use std::fs;
-use std::path::Path;
 
 use nes_core::{Command, NesCore};
 
-const DEFAULT_NESTEST_ROM: &str = r"C:\Users\markm\roms\nestest.nes";
-
-fn resolve_nestest_rom_path() -> String {
-    match env::var("NESTEST_ROM_PATH") {
-        Ok(path) if !path.trim().is_empty() => path,
-        _ => DEFAULT_NESTEST_ROM.to_owned(),
-    }
-}
+mod support;
 
 #[test]
-#[ignore = "requires NESTEST_ROM_PATH or default local ROM path"]
+#[ignore = "requires roms.nestest in nes.toml"]
 fn nestest_boot_sequence_matches_expected_prefix() {
-    let rom_path = resolve_nestest_rom_path();
-    assert!(
-        Path::new(&rom_path).exists(),
-        "NESTEST ROM path does not exist: {rom_path}"
-    );
+    let rom_path = support::nestest_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read nestest ROM");
     let mut core = NesCore::new();
@@ -63,13 +50,9 @@ fn nestest_boot_sequence_matches_expected_prefix() {
 }
 
 #[test]
-#[ignore = "requires NESTEST_ROM_PATH or default local ROM path"]
+#[ignore = "requires roms.nestest in nes.toml"]
 fn nestest_runs_instruction_window_without_unknown_opcode() {
-    let rom_path = resolve_nestest_rom_path();
-    assert!(
-        Path::new(&rom_path).exists(),
-        "NESTEST ROM path does not exist: {rom_path}"
-    );
+    let rom_path = support::nestest_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read nestest ROM");
     let mut core = NesCore::new();

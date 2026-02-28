@@ -1,12 +1,29 @@
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+use std::time::Duration;
 
 use nes_core::NesCore;
-use nes_mcp::{DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
+use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 const JSONRPC_VERSION: &str = "2.0";
 const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
+const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub struct McpHost {
+    requests: Receiver<ToolRequest>,
+    _thread: thread::JoinHandle<()>,
+    bind_addr: String,
+}
+
+struct ToolRequest {
+    name: String,
+    params: ToolParams,
+    respond_to: Sender<Result<DispatchOutput, DispatchError>>,
+}
 
 #[derive(Debug, Deserialize)]
 struct RpcRequest {
@@ -22,7 +39,6 @@ struct RpcRequest {
 struct RpcError {
     code: i64,
     message: String,
-    data: Option<Value>,
 }
 
 impl RpcError {
@@ -30,7 +46,6 @@ impl RpcError {
         Self {
             code: -32700,
             message: message.into(),
-            data: None,
         }
     }
 
@@ -38,7 +53,6 @@ impl RpcError {
         Self {
             code: -32600,
             message: message.into(),
-            data: None,
         }
     }
 
@@ -46,7 +60,6 @@ impl RpcError {
         Self {
             code: -32601,
             message: message.into(),
-            data: None,
         }
     }
 
@@ -54,71 +67,94 @@ impl RpcError {
         Self {
             code: -32602,
             message: message.into(),
-            data: None,
         }
     }
 
-    fn to_json(&self) -> Value {
-        let mut value = json!({
-            "code": self.code,
-            "message": self.message,
-        });
-        if let Some(data) = self.data.clone()
-            && let Some(obj) = value.as_object_mut()
-        {
-            obj.insert("data".to_owned(), data);
-        }
-        value
-    }
-}
-
-#[derive(Default)]
-struct ServerState {
-    core: NesCore,
-    protocol_version: String,
-    initialized: bool,
-}
-
-impl ServerState {
-    fn new() -> Self {
+    fn internal_error(message: impl Into<String>) -> Self {
         Self {
-            core: NesCore::new(),
-            protocol_version: DEFAULT_PROTOCOL_VERSION.to_owned(),
-            initialized: false,
+            code: -32603,
+            message: message.into(),
+        }
+    }
+
+    fn as_json(&self) -> Value {
+        json!({
+            "code": self.code,
+            "message": self.message
+        })
+    }
+}
+
+impl McpHost {
+    pub fn start(bind_addr: &str) -> Result<Self, String> {
+        let listener = TcpListener::bind(bind_addr)
+            .map_err(|err| format!("Failed to bind MCP host at '{bind_addr}': {err}"))?;
+        let local_addr = listener
+            .local_addr()
+            .map_err(|err| format!("Failed to read MCP host local addr: {err}"))?
+            .to_string();
+
+        let (tx, rx) = mpsc::channel::<ToolRequest>();
+        let thread_tx = tx.clone();
+        let thread_bind_addr = local_addr.clone();
+        let handle = thread::spawn(move || run_listener(listener, thread_tx, &thread_bind_addr));
+
+        Ok(Self {
+            requests: rx,
+            _thread: handle,
+            bind_addr: local_addr,
+        })
+    }
+
+    pub fn bind_addr(&self) -> &str {
+        &self.bind_addr
+    }
+
+    pub fn drain(&self, core: &mut NesCore) {
+        while let Ok(request) = self.requests.try_recv() {
+            let result = dispatch_tool(core, &request.name, &request.params);
+            let _ = request.respond_to.send(result);
         }
     }
 }
 
-fn main() {
-    if let Err(err) = run() {
-        let _ = writeln!(io::stderr(), "nes-mcpd fatal error: {err}");
+fn run_listener(listener: TcpListener, request_tx: Sender<ToolRequest>, bind_addr: &str) {
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                if let Err(err) = handle_client(stream, &request_tx) {
+                    eprintln!("[mcp-host {bind_addr}] client error: {err}");
+                }
+            }
+            Err(err) => eprintln!("[mcp-host {bind_addr}] accept failed: {err}"),
+        }
     }
 }
 
-fn run() -> Result<(), String> {
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let mut reader = BufReader::new(stdin.lock());
-    let mut writer = stdout.lock();
-    let mut state = ServerState::new();
+fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Result<(), String> {
+    let mut reader = BufReader::new(
+        stream
+            .try_clone()
+            .map_err(|err| format!("failed to clone client socket: {err}"))?,
+    );
 
     loop {
-        let Some(payload) = read_stdio_message(&mut reader)? else {
+        let Some(payload) = read_framed_message(&mut reader)? else {
             break;
         };
-        let Some(response) = handle_message(&mut state, &payload) else {
+        let Some(response) = handle_message(&payload, request_tx) else {
             continue;
         };
-        write_stdio_message(&mut writer, &response)?;
+        write_framed_message(&mut stream, &response)?;
     }
     Ok(())
 }
 
-fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
+fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Value> {
     let request: RpcRequest = match serde_json::from_slice(payload) {
-        Ok(req) => req,
+        Ok(request) => request,
         Err(err) => {
-            return Some(jsonrpc_error_response(
+            return Some(jsonrpc_error(
                 Value::Null,
                 RpcError::parse_error(format!("invalid JSON payload: {err}")),
             ));
@@ -133,21 +169,18 @@ fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
         if is_notification {
             return None;
         }
-        return Some(jsonrpc_error_response(
+        return Some(jsonrpc_error(
             response_id,
             RpcError::invalid_request("jsonrpc must be '2.0'"),
         ));
     }
 
     let method_result = match request.method.as_str() {
-        "initialize" => handle_initialize(state, request.params.as_ref()),
-        "notifications/initialized" => {
-            state.initialized = true;
-            Ok(None)
-        }
+        "initialize" => handle_initialize(request.params.as_ref()),
+        "notifications/initialized" => Ok(None),
         "ping" => Ok(Some(json!({}))),
         "tools/list" => Ok(Some(handle_tools_list())),
-        "tools/call" => handle_tools_call(state, request.params.as_ref()),
+        "tools/call" => handle_tools_call(request.params.as_ref(), request_tx),
         "resources/list" => Ok(Some(json!({ "resources": [] }))),
         "prompts/list" => Ok(Some(json!({ "prompts": [] }))),
         "logging/setLevel" => Ok(Some(json!({}))),
@@ -162,16 +195,13 @@ fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
     }
 
     match method_result {
-        Ok(Some(result)) => Some(jsonrpc_result_response(response_id, result)),
-        Ok(None) => Some(jsonrpc_result_response(response_id, json!({}))),
-        Err(err) => Some(jsonrpc_error_response(response_id, err)),
+        Ok(Some(result)) => Some(jsonrpc_result(response_id, result)),
+        Ok(None) => Some(jsonrpc_result(response_id, json!({}))),
+        Err(err) => Some(jsonrpc_error(response_id, err)),
     }
 }
 
-fn handle_initialize(
-    state: &mut ServerState,
-    params: Option<&Value>,
-) -> Result<Option<Value>, RpcError> {
+fn handle_initialize(params: Option<&Value>) -> Result<Option<Value>, RpcError> {
     let params_obj = params
         .and_then(Value::as_object)
         .ok_or_else(|| RpcError::invalid_params("initialize params must be an object"))?;
@@ -179,9 +209,7 @@ fn handle_initialize(
     let requested_protocol = params_obj
         .get("protocolVersion")
         .and_then(Value::as_str)
-        .unwrap_or(DEFAULT_PROTOCOL_VERSION)
-        .to_owned();
-    state.protocol_version = requested_protocol.clone();
+        .unwrap_or(DEFAULT_PROTOCOL_VERSION);
 
     Ok(Some(json!({
         "protocolVersion": requested_protocol,
@@ -191,10 +219,10 @@ fn handle_initialize(
             }
         },
         "serverInfo": {
-            "name": "nes-mcpd",
+            "name": "nes-desktop-mcp-host",
             "version": env!("CARGO_PKG_VERSION")
         },
-        "instructions": "Use tools to load ROM bytes/path and drive the emulator core deterministically."
+        "instructions": "Embedded MCP host for the live desktop emulator core."
     })))
 }
 
@@ -213,8 +241,8 @@ fn handle_tools_list() -> Value {
 }
 
 fn handle_tools_call(
-    state: &mut ServerState,
     params: Option<&Value>,
+    request_tx: &Sender<ToolRequest>,
 ) -> Result<Option<Value>, RpcError> {
     let params_obj = params
         .and_then(Value::as_object)
@@ -223,15 +251,26 @@ fn handle_tools_call(
         .get("name")
         .and_then(Value::as_str)
         .ok_or_else(|| RpcError::invalid_params("tools/call requires string field 'name'"))?;
-
     let args = params_obj
         .get("arguments")
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    let tool_params = map_tool_arguments(&args);
 
-    let call_result = match dispatch_tool(&mut state.core, tool_name, &tool_params) {
+    let (reply_tx, reply_rx) = mpsc::channel();
+    request_tx
+        .send(ToolRequest {
+            name: tool_name.to_owned(),
+            params: map_tool_arguments(&args),
+            respond_to: reply_tx,
+        })
+        .map_err(|_| RpcError::internal_error("desktop core request channel closed"))?;
+
+    let call_result = reply_rx
+        .recv_timeout(TOOL_CALL_TIMEOUT)
+        .map_err(|_| RpcError::internal_error("tool call timed out waiting for desktop core"))?;
+
+    let response = match call_result {
         Ok(output) => {
             let structured = dispatch_output_value(output);
             json!({
@@ -257,7 +296,8 @@ fn handle_tools_call(
             })
         }
     };
-    Ok(Some(call_result))
+
+    Ok(Some(response))
 }
 
 fn map_tool_arguments(arguments: &Map<String, Value>) -> ToolParams {
@@ -433,7 +473,7 @@ fn tool_input_schema(tool_name: &str) -> Value {
     }
 }
 
-fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
     loop {
         let mut line = String::new();
@@ -457,6 +497,7 @@ fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, Stri
             content_length = Some(len);
         }
     }
+
     let len = content_length.ok_or_else(|| "missing Content-Length header".to_owned())?;
     let mut payload = vec![0_u8; len];
     reader
@@ -465,17 +506,17 @@ fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, Stri
     Ok(Some(payload))
 }
 
-fn write_stdio_message(writer: &mut impl Write, value: &Value) -> Result<(), String> {
+fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), String> {
     let payload = serde_json::to_vec(value)
         .map_err(|err| format!("failed serializing JSON response: {err}"))?;
     writer
         .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
         .and_then(|_| writer.write_all(&payload))
         .and_then(|_| writer.flush())
-        .map_err(|err| format!("failed writing stdio response: {err}"))
+        .map_err(|err| format!("failed writing framed response: {err}"))
 }
 
-fn jsonrpc_result_response(id: Value, result: Value) -> Value {
+fn jsonrpc_result(id: Value, result: Value) -> Value {
     json!({
         "jsonrpc": JSONRPC_VERSION,
         "id": id,
@@ -483,109 +524,10 @@ fn jsonrpc_result_response(id: Value, result: Value) -> Value {
     })
 }
 
-fn jsonrpc_error_response(id: Value, err: RpcError) -> Value {
+fn jsonrpc_error(id: Value, err: RpcError) -> Value {
     json!({
         "jsonrpc": JSONRPC_VERSION,
         "id": id,
-        "error": err.to_json()
+        "error": err.as_json()
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn request(method: &str, id: Value, params: Value) -> Value {
-        json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params
-        })
-    }
-
-    fn call(state: &mut ServerState, request: Value) -> Value {
-        let payload = serde_json::to_vec(&request).expect("request serializes");
-        handle_message(state, &payload).expect("request produces response")
-    }
-
-    #[test]
-    fn initialize_returns_server_capabilities() {
-        let mut state = ServerState::new();
-        let response = call(
-            &mut state,
-            request(
-                "initialize",
-                json!(1),
-                json!({
-                    "protocolVersion": DEFAULT_PROTOCOL_VERSION,
-                    "capabilities": {}
-                }),
-            ),
-        );
-
-        assert_eq!(response["jsonrpc"], json!("2.0"));
-        assert_eq!(response["id"], json!(1));
-        assert_eq!(response["result"]["serverInfo"]["name"], json!("nes-mcpd"));
-        assert_eq!(
-            response["result"]["capabilities"]["tools"]["listChanged"],
-            json!(false)
-        );
-        assert_eq!(state.protocol_version, DEFAULT_PROTOCOL_VERSION);
-    }
-
-    #[test]
-    fn tools_list_includes_load_rom_with_schema() {
-        let mut state = ServerState::new();
-        let response = call(&mut state, request("tools/list", json!(2), json!({})));
-        let tools = response["result"]["tools"]
-            .as_array()
-            .expect("tools array exists");
-        let load_rom = tools
-            .iter()
-            .find(|tool| tool["name"] == json!("load_rom"))
-            .expect("load_rom tool exists");
-        assert_eq!(
-            load_rom["description"],
-            json!("Load an iNES ROM into the emulator core")
-        );
-        assert_eq!(load_rom["inputSchema"]["type"], json!("object"));
-        assert!(load_rom["inputSchema"]["oneOf"].is_array());
-    }
-
-    #[test]
-    fn tools_call_reports_dispatch_errors_as_tool_errors() {
-        let mut state = ServerState::new();
-        let response = call(
-            &mut state,
-            request(
-                "tools/call",
-                json!(3),
-                json!({
-                    "name": "load_rom",
-                    "arguments": {}
-                }),
-            ),
-        );
-
-        assert_eq!(response["result"]["isError"], json!(true));
-        let text = response["result"]["content"][0]["text"]
-            .as_str()
-            .expect("error text present");
-        assert!(text.contains("provide rom_hex or rom_path"));
-    }
-
-    #[test]
-    fn initialized_notification_does_not_emit_response() {
-        let mut state = ServerState::new();
-        let payload = serde_json::to_vec(&json!({
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized",
-            "params": {}
-        }))
-        .expect("notification serializes");
-        let response = handle_message(&mut state, &payload);
-        assert!(response.is_none());
-        assert!(state.initialized);
-    }
 }

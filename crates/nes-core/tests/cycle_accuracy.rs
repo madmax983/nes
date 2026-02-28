@@ -40,13 +40,19 @@ fn absolute_x_page_cross_adds_cycle_for_reads() {
 }
 
 #[test]
-fn step_frame_uses_instruction_cycles_budget() {
+fn step_frame_advances_to_next_ppu_frame() {
     let mut core = NesCore::new();
-    let before = core.total_cycles();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
 
+    let before_cpu = core.total_cycles();
+    let before_ppu = core.ppu_total_cycles();
+    let before_frame = core.ppu_frame_counter();
     core.execute(Command::StepFrame).unwrap();
 
-    let consumed = core.total_cycles() - before;
-    assert!(consumed >= 29_780);
-    assert!(consumed <= 29_787);
+    let consumed_cpu = core.total_cycles() - before_cpu;
+    let consumed_ppu = core.ppu_total_cycles() - before_ppu;
+    assert_eq!(core.ppu_frame_counter(), before_frame + 1);
+    assert!(consumed_cpu > 0);
+    assert!(consumed_ppu >= 341 * 262);
+    assert!(consumed_ppu <= 341 * 262 + 9);
 }

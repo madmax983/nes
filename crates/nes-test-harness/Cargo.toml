@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 nes-core = { path = "../nes-core" }
+nes-config = { path = "../nes-config" }
+
+[dev-dependencies]

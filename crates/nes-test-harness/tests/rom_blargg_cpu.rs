@@ -1,22 +1,14 @@
 use std::collections::VecDeque;
-use std::env;
 use std::fs;
-use std::path::Path;
 
 use nes_core::{Command, NesCore};
 
-const DEFAULT_BLARGG_CPU_ROM: &str = r"C:\Users\markm\roms\cpu.nes";
+mod support;
+
 const BLARGG_STATUS_ADDR: u16 = 0x6000;
 const BLARGG_MESSAGE_ADDR: u16 = 0x6004;
 const BLARGG_MAX_STEPS: u32 = 5_000_000;
 const BLARGG_MIN_COMPLETION_STEP: u32 = 250_000;
-
-fn resolve_blargg_rom_path() -> String {
-    match env::var("BLARGG_CPU_ROM_PATH") {
-        Ok(path) if !path.trim().is_empty() => path,
-        _ => DEFAULT_BLARGG_CPU_ROM.to_owned(),
-    }
-}
 
 fn read_blargg_message(core: &NesCore) -> String {
     let mut bytes = Vec::new();
@@ -31,13 +23,9 @@ fn read_blargg_message(core: &NesCore) -> String {
 }
 
 #[test]
-#[ignore = "requires BLARGG_CPU_ROM_PATH or default local ROM path"]
+#[ignore = "requires roms.blargg_cpu in nes.toml"]
 fn blargg_cpu_rom_reports_pass() {
-    let rom_path = resolve_blargg_rom_path();
-    assert!(
-        Path::new(&rom_path).exists(),
-        "BLARGG CPU ROM path does not exist: {rom_path}"
-    );
+    let rom_path = support::blargg_cpu_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read blargg cpu ROM");
     let mut core = NesCore::new();
