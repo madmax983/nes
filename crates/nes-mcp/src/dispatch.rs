@@ -6,6 +6,7 @@ use std::sync::{Mutex, OnceLock};
 use nes_core::{
     Button, Command, CoreQuery, CoreSnapshot, FRAME_HEIGHT, FRAME_WIDTH, NesCore, QueryResult,
 };
+use nes_dsl::{Mirroring, RomBuildOptions};
 
 use crate::output::{
     audio_chunk, frame_chunk, latest_output_metadata, publish_audio, publish_frame,
@@ -72,6 +73,31 @@ pub enum DispatchOutput {
     MacroExecuted {
         frames_elapsed: u64,
         final_controller_bits: u8,
+    },
+    DslAssembled {
+        bytes_written: usize,
+        label_count: usize,
+        nmi_vector: u16,
+        reset_vector: u16,
+        irq_vector: u16,
+    },
+    DslRomLoaded {
+        mapper_id: u8,
+        prg_rom_bytes: usize,
+        reset_pc: u16,
+        rom_bytes: usize,
+    },
+    DslRomExported {
+        path: String,
+        bytes: usize,
+        mapper_id: u8,
+        prg_rom_bytes: usize,
+    },
+    DslRomExportedBase64 {
+        rom_base64: String,
+        bytes: usize,
+        mapper_id: u8,
+        prg_rom_bytes: usize,
     },
 }
 
@@ -291,6 +317,77 @@ pub fn dispatch_tool(
             Ok(DispatchOutput::MacroExecuted {
                 frames_elapsed,
                 final_controller_bits: core.controller_bits(),
+            })
+        }
+        "assemble_6502_dsl" => {
+            let source = parse_dsl_source(params)?;
+            let assembled = nes_dsl::assemble(source).map_err(|err| {
+                DispatchError::InvalidParams(format!("dsl assembly failed: {err}"))
+            })?;
+            Ok(DispatchOutput::DslAssembled {
+                bytes_written: assembled.bytes.len(),
+                label_count: assembled.labels.len(),
+                nmi_vector: assembled.nmi_vector,
+                reset_vector: assembled.reset_vector,
+                irq_vector: assembled.irq_vector,
+            })
+        }
+        "load_6502_dsl" => {
+            let source = parse_dsl_source(params)?;
+            let options = parse_dsl_rom_options(params)?;
+            let rom = nes_dsl::build_ines_nrom_rom(source, &options).map_err(|err| {
+                DispatchError::InvalidParams(format!("dsl rom build failed: {err}"))
+            })?;
+            let info = core
+                .load_ines_rom(&rom)
+                .map_err(|err| DispatchError::Core(err.to_string()))?;
+            Ok(DispatchOutput::DslRomLoaded {
+                mapper_id: info.mapper_id,
+                prg_rom_bytes: info.prg_rom_bytes,
+                reset_pc: info.reset_pc,
+                rom_bytes: rom.len(),
+            })
+        }
+        "export_6502_dsl_rom" => {
+            let source = parse_dsl_source(params)?;
+            let options = parse_dsl_rom_options(params)?;
+            let output_path = parse_required_string(params, "output_path")?;
+            let rom = nes_dsl::build_ines_nrom_rom(source, &options).map_err(|err| {
+                DispatchError::InvalidParams(format!("dsl rom build failed: {err}"))
+            })?;
+            fs::write(&output_path, &rom).map_err(|err| {
+                DispatchError::InvalidParams(format!(
+                    "unable to write output_path '{}': {err}",
+                    output_path
+                ))
+            })?;
+
+            let prg_rom_bytes = rom
+                .get(4)
+                .map(|banks| usize::from(*banks) * 16 * 1024)
+                .unwrap_or(0);
+            Ok(DispatchOutput::DslRomExported {
+                path: output_path,
+                bytes: rom.len(),
+                mapper_id: 0,
+                prg_rom_bytes,
+            })
+        }
+        "export_6502_dsl_rom_base64" => {
+            let source = parse_dsl_source(params)?;
+            let options = parse_dsl_rom_options(params)?;
+            let rom = nes_dsl::build_ines_nrom_rom(source, &options).map_err(|err| {
+                DispatchError::InvalidParams(format!("dsl rom build failed: {err}"))
+            })?;
+            let prg_rom_bytes = rom
+                .get(4)
+                .map(|banks| usize::from(*banks) * 16 * 1024)
+                .unwrap_or(0);
+            Ok(DispatchOutput::DslRomExportedBase64 {
+                rom_base64: encode_base64(rom.as_slice()),
+                bytes: rom.len(),
+                mapper_id: 0,
+                prg_rom_bytes,
             })
         }
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
@@ -514,6 +611,91 @@ fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
         ));
     };
     parse_hex_bytes(hex)
+}
+
+fn parse_dsl_source(params: &ToolParams) -> Result<&str, DispatchError> {
+    let Some(source) = params.get("source").map(String::as_str) else {
+        return Err(DispatchError::InvalidParams(
+            "source must be provided".to_owned(),
+        ));
+    };
+    if source.trim().is_empty() {
+        return Err(DispatchError::InvalidParams(
+            "source must not be empty".to_owned(),
+        ));
+    }
+    Ok(source)
+}
+
+fn parse_dsl_rom_options(params: &ToolParams) -> Result<RomBuildOptions, DispatchError> {
+    let mut options = RomBuildOptions::default();
+
+    if let Some(raw) = params.get("mirroring") {
+        options.mirroring = match raw.to_ascii_lowercase().as_str() {
+            "horizontal" => Mirroring::Horizontal,
+            "vertical" => Mirroring::Vertical,
+            _ => {
+                return Err(DispatchError::InvalidParams(
+                    "mirroring must be 'horizontal' or 'vertical'".to_owned(),
+                ));
+            }
+        };
+    }
+
+    if let Some(chr_hex) = params.get("chr_hex") {
+        options.chr_rom = parse_hex_bytes(chr_hex)?;
+    }
+
+    Ok(options)
+}
+
+fn parse_required_string(params: &ToolParams, key: &str) -> Result<String, DispatchError> {
+    let Some(value) = params.get(key).cloned() else {
+        return Err(DispatchError::InvalidParams(format!(
+            "{key} must be provided"
+        )));
+    };
+    if value.trim().is_empty() {
+        return Err(DispatchError::InvalidParams(format!(
+            "{key} must not be empty"
+        )));
+    }
+    Ok(value)
+}
+
+fn encode_base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    let mut i = 0usize;
+    while i + 3 <= bytes.len() {
+        let b0 = bytes[i];
+        let b1 = bytes[i + 1];
+        let b2 = bytes[i + 2];
+        i += 3;
+
+        out.push(ALPHABET[usize::from(b0 >> 2)] as char);
+        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))] as char);
+        out.push(ALPHABET[usize::from(((b1 & 0x0F) << 2) | (b2 >> 6))] as char);
+        out.push(ALPHABET[usize::from(b2 & 0x3F)] as char);
+    }
+
+    let rem = bytes.len() - i;
+    if rem == 1 {
+        let b0 = bytes[i];
+        out.push(ALPHABET[usize::from(b0 >> 2)] as char);
+        out.push(ALPHABET[usize::from((b0 & 0x03) << 4)] as char);
+        out.push('=');
+        out.push('=');
+    } else if rem == 2 {
+        let b0 = bytes[i];
+        let b1 = bytes[i + 1];
+        out.push(ALPHABET[usize::from(b0 >> 2)] as char);
+        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))] as char);
+        out.push(ALPHABET[usize::from((b1 & 0x0F) << 2)] as char);
+        out.push('=');
+    }
+
+    out
 }
 
 fn parse_hex_bytes(raw: &str) -> Result<Vec<u8>, DispatchError> {

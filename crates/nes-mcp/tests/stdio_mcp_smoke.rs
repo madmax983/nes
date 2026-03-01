@@ -119,6 +119,24 @@ fn daemon_stdio_round_trip_supports_initialize_and_tools() {
         tools.iter().any(|tool| tool["name"] == json!("load_rom")),
         "load_rom tool missing from catalog"
     );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == json!("load_6502_dsl")),
+        "load_6502_dsl tool missing from catalog"
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == json!("export_6502_dsl_rom")),
+        "export_6502_dsl_rom tool missing from catalog"
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool["name"] == json!("export_6502_dsl_rom_base64")),
+        "export_6502_dsl_rom_base64 tool missing from catalog"
+    );
 
     assert_eq!(responses[2]["id"], json!(3));
     assert_eq!(responses[2]["result"]["isError"], json!(false));
