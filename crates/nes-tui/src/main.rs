@@ -8,18 +8,65 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use image::{DynamicImage, RgbaImage};
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig, parse_config_path_arg};
-use nes_core::{Command, FRAME_RGBA_BYTES, NesCore};
+use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_tui::app::map_key_event_to_command;
 use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
+use ratatui::Frame;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui_image::picker::{Picker, ProtocolType};
+use ratatui_image::{Resize, StatefulImage};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
+const NES_CELL_HEIGHT: u32 = (FRAME_HEIGHT / 2) as u32;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TuiCliOptions {
+    show_hud: bool,
+}
+
+impl Default for TuiCliOptions {
+    fn default() -> Self {
+        Self { show_hud: false }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct VideoViewport {
+    area: Rect,
+    integer_scale: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VideoBackendKind {
+    Halfblocks,
+    ProtocolImage,
+}
+
+enum VideoBackend {
+    Halfblocks,
+    ProtocolImage {
+        protocol_type: ProtocolType,
+        picker: Picker,
+    },
+}
+
+impl VideoBackend {
+    fn label(&self) -> String {
+        match self {
+            Self::Halfblocks => "filtered half-block renderer".to_owned(),
+            Self::ProtocolImage { protocol_type, .. } => {
+                format!("ratatui-image ({protocol_type:?})")
+            }
+        }
+    }
+}
 
 struct TuiRuntime {
     core: NesCore,
@@ -30,6 +77,8 @@ struct TuiRuntime {
     paused: bool,
     frames_rendered: u64,
     started_at: Instant,
+    show_hud: bool,
+    video_backend: VideoBackend,
 }
 
 fn main() {
@@ -39,7 +88,7 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let (rom_path, loaded_config_path) = resolve_rom_path()?;
+    let (rom_path, loaded_config_path, cli_options) = resolve_rom_path()?;
     let rom_bytes =
         fs::read(&rom_path).map_err(|err| format!("Failed to read ROM at '{rom_path}': {err}"))?;
 
@@ -61,6 +110,8 @@ fn run() -> Result<(), String> {
         paused: false,
         frames_rendered: 0,
         started_at: Instant::now(),
+        show_hud: cli_options.show_hud,
+        video_backend: VideoBackend::Halfblocks,
     };
     if let Some(config_path) = loaded_config_path.as_ref() {
         eprintln!("Config: {}", config_path.display());
@@ -76,6 +127,9 @@ fn run() -> Result<(), String> {
     terminal
         .clear()
         .map_err(|err| format!("Failed to clear terminal: {err}"))?;
+
+    runtime.video_backend = detect_video_backend();
+    eprintln!("Video backend: {}", runtime.video_backend.label());
 
     let loop_result = event_loop(&mut terminal, &mut runtime);
 
@@ -118,6 +172,10 @@ fn event_loop(
                         .core
                         .execute(Command::Reset)
                         .map_err(|err| format!("Reset failed: {err}"))?;
+                } else if key_is_pressed(key.kind)
+                    && matches!(key.code, KeyCode::Char('i') | KeyCode::Char('I'))
+                {
+                    runtime.show_hud = !runtime.show_hud;
                 }
 
                 if let Some(pressed) = key_pressed_state(key.kind)
@@ -155,10 +213,27 @@ fn event_loop(
 
 fn draw_frame(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    runtime: &TuiRuntime,
+    runtime: &mut TuiRuntime,
 ) -> Result<(), String> {
     terminal
         .draw(|f| {
+            let status = if runtime.paused { "paused" } else { "running" };
+            let elapsed = runtime.started_at.elapsed().as_secs_f64().max(1e-6);
+            let wall_fps = runtime.frames_rendered as f64 / elapsed;
+            let backend_label = runtime.video_backend.label();
+            if !runtime.show_hud {
+                let full_area = f.area();
+                let Some(video_viewport) = fit_nes_viewport(full_area) else {
+                    return;
+                };
+
+                let matte = Block::default().style(Style::default().bg(Color::Black));
+                f.render_widget(matte, full_area);
+                render_video_region(f, runtime, video_viewport.area);
+
+                return;
+            }
+
             let root = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -168,23 +243,16 @@ fn draw_frame(
                     Constraint::Length(1),
                 ])
                 .split(f.area());
-
             let regs = runtime.core.cpu_snapshot();
-            let status = if runtime.paused { "paused" } else { "running" };
-            let elapsed = runtime.started_at.elapsed().as_secs_f64().max(1e-6);
-            let wall_fps = runtime.frames_rendered as f64 / elapsed;
             let header = Paragraph::new(vec![
                 Line::styled(
-                    "NES-TUI | truecolor half-block renderer",
+                    format!("NES-TUI | {backend_label}"),
                     Style::default().fg(Color::Cyan),
                 ),
                 Line::styled(
                     format!(
                         "{} | mapper {} | frame {} | wall_fps {:.1} | {status}",
-                        runtime.rom_name,
-                        runtime.mapper_id,
-                        runtime.frames_rendered,
-                        wall_fps,
+                        runtime.rom_name, runtime.mapper_id, runtime.frames_rendered, wall_fps,
                     ),
                     Style::default().fg(Color::White),
                 ),
@@ -193,6 +261,7 @@ fn draw_frame(
 
             let video_area = root[1];
             let panel_area = root[2];
+            let footer_area = root[3];
 
             let video_block = Block::default()
                 .title(Span::styled(" Screen ", Style::default().fg(Color::Green)))
@@ -201,13 +270,12 @@ fn draw_frame(
             let video_inner = video_block.inner(video_area);
             f.render_widget(video_block, video_area);
 
-            if video_inner.width == 0 || video_inner.height == 0 {
+            let Some(video_viewport) = fit_nes_viewport(video_inner) else {
                 return;
-            }
-
-            let video_lines =
-                frame_lines_half_blocks(&runtime.frame_rgba, video_inner.width, video_inner.height);
-            f.render_widget(Paragraph::new(video_lines), video_inner);
+            };
+            let matte = Block::default().style(Style::default().bg(Color::Black));
+            f.render_widget(matte, video_inner);
+            render_video_region(f, runtime, video_viewport.area);
 
             let panels = Layout::default()
                 .direction(Direction::Horizontal)
@@ -269,10 +337,7 @@ fn draw_frame(
             f.render_widget(stats_widget, panels[0]);
 
             let controls = vec![
-                Line::styled(
-                    "Arrows=DPAD  Z=A  X=B",
-                    Style::default().fg(Color::Gray),
-                ),
+                Line::styled("Arrows=DPAD  Z=A  X=B", Style::default().fg(Color::Gray)),
                 Line::styled(
                     "Enter=Start  Tab/C=Select",
                     Style::default().fg(Color::Gray),
@@ -281,6 +346,7 @@ fn draw_frame(
                     "P=Pause  R=Reset  Q/Esc=Quit",
                     Style::default().fg(Color::Gray),
                 ),
+                Line::styled("I=Toggle HUD", Style::default().fg(Color::Gray)),
             ];
             let controls_widget = Paragraph::new(controls).block(
                 Block::default()
@@ -291,30 +357,160 @@ fn draw_frame(
             f.render_widget(controls_widget, panels[1]);
 
             let footer = Paragraph::new(Line::styled(
-                "Tip: maximize terminal for denser image; this renderer uses upper-half blocks for 2x vertical detail.",
+                "Tip: press I to hide HUD and reclaim rows for higher-res video (aspect-locked).",
                 Style::default().fg(Color::DarkGray),
             ));
-            f.render_widget(footer, root[2]);
+            f.render_widget(footer, footer_area);
         })
         .map(|_| ())
         .map_err(|err| format!("Render failed: {err}"))
 }
 
-fn resolve_rom_path() -> Result<(String, Option<PathBuf>), String> {
-    let raw_args: Vec<String> = std::env::args().skip(1).collect();
-    let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
+fn detect_video_backend() -> VideoBackend {
+    let Ok(picker) = Picker::from_query_stdio() else {
+        return VideoBackend::Halfblocks;
+    };
+    let protocol_type = picker.protocol_type();
+    match select_video_backend_kind(Some(protocol_type)) {
+        VideoBackendKind::Halfblocks => VideoBackend::Halfblocks,
+        VideoBackendKind::ProtocolImage => VideoBackend::ProtocolImage {
+            protocol_type,
+            picker,
+        },
+    }
+}
 
-    let mut rom_path_arg = None::<String>;
-    for arg in pass_through {
-        if arg == "--help" || arg == "-h" {
-            return Err(format!(
-                "Usage: nes-tui [--config <path>] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
-            ));
+fn select_video_backend_kind(protocol_type: Option<ProtocolType>) -> VideoBackendKind {
+    match protocol_type {
+        Some(ProtocolType::Halfblocks) | None => VideoBackendKind::Halfblocks,
+        Some(_) => VideoBackendKind::ProtocolImage,
+    }
+}
+
+fn frame_rgba_to_rgba_image(frame_rgba: &[u8]) -> Option<RgbaImage> {
+    if frame_rgba.len() != FRAME_RGBA_BYTES {
+        return None;
+    }
+    RgbaImage::from_raw(FRAME_WIDTH as u32, FRAME_HEIGHT as u32, frame_rgba.to_vec())
+}
+
+fn render_video_region(frame: &mut Frame<'_>, runtime: &mut TuiRuntime, area: Rect) {
+    let mut fallback_to_halfblocks = false;
+
+    match &mut runtime.video_backend {
+        VideoBackend::Halfblocks => render_halfblock_region(frame, &runtime.frame_rgba, area),
+        VideoBackend::ProtocolImage { picker, .. } => {
+            let Some(rgba_image) = frame_rgba_to_rgba_image(&runtime.frame_rgba) else {
+                render_halfblock_region(frame, &runtime.frame_rgba, area);
+                return;
+            };
+            let mut state = picker.new_resize_protocol(DynamicImage::ImageRgba8(rgba_image));
+            frame.render_stateful_widget(protocol_image_widget(), area, &mut state);
+            if let Some(result) = state.last_encoding_result() {
+                if result.is_err() {
+                    fallback_to_halfblocks = true;
+                }
+            }
         }
+    }
+
+    if fallback_to_halfblocks {
+        runtime.video_backend = VideoBackend::Halfblocks;
+        render_halfblock_region(frame, &runtime.frame_rgba, area);
+    }
+}
+
+fn render_halfblock_region(frame: &mut Frame<'_>, frame_rgba: &[u8], area: Rect) {
+    let video_lines = frame_lines_half_blocks(frame_rgba, area.width, area.height);
+    frame.render_widget(Paragraph::new(video_lines), area);
+}
+
+fn protocol_image_widget() -> StatefulImage<ratatui_image::protocol::StatefulProtocol> {
+    StatefulImage::default().resize(protocol_image_resize())
+}
+
+fn protocol_image_resize() -> Resize {
+    Resize::Scale(None)
+}
+
+fn fit_nes_viewport(area: Rect) -> Option<VideoViewport> {
+    if area.width == 0 || area.height == 0 {
+        return None;
+    }
+
+    let avail_w = u32::from(area.width);
+    let avail_h = u32::from(area.height);
+    let source_w = FRAME_WIDTH as u32;
+    let source_h = NES_CELL_HEIGHT;
+
+    let (target_w, target_h, integer_scale) = if avail_w >= source_w && avail_h >= source_h {
+        let scale = (avail_w / source_w).min(avail_h / source_h);
+        let scale = scale.max(1);
+        (
+            source_w.saturating_mul(scale),
+            source_h.saturating_mul(scale),
+            Some(scale),
+        )
+    } else if avail_w.saturating_mul(source_h) <= avail_h.saturating_mul(source_w) {
+        (
+            avail_w,
+            (avail_w.saturating_mul(source_h) / source_w).max(1),
+            None,
+        )
+    } else {
+        (
+            (avail_h.saturating_mul(source_w) / source_h).max(1),
+            avail_h,
+            None,
+        )
+    };
+
+    let fitted_w = target_w.min(avail_w) as u16;
+    let fitted_h = target_h.min(avail_h) as u16;
+    let x = area
+        .x
+        .saturating_add((area.width.saturating_sub(fitted_w)) / 2);
+    let y = area
+        .y
+        .saturating_add((area.height.saturating_sub(fitted_h)) / 2);
+
+    Some(VideoViewport {
+        area: Rect::new(x, y, fitted_w, fitted_h),
+        integer_scale,
+    })
+}
+
+fn usage_line() -> &'static str {
+    "Usage: nes-tui [--config <path>] [--hud|--high-res] [rom_path]"
+}
+
+fn usage_message() -> String {
+    format!(
+        "{usage}\nDefault config path: {DEFAULT_CONFIG_PATH}",
+        usage = usage_line()
+    )
+}
+
+fn parse_tui_args(pass_through: Vec<String>) -> Result<(Option<String>, TuiCliOptions), String> {
+    let mut options = TuiCliOptions::default();
+    let mut rom_path_arg = None::<String>;
+
+    for arg in pass_through {
+        match arg.as_str() {
+            "--help" | "-h" => return Err(usage_message()),
+            "--hud" => {
+                options.show_hud = true;
+                continue;
+            }
+            "--high-res" => {
+                options.show_hud = false;
+                continue;
+            }
+            _ => {}
+        }
+
         if arg.starts_with("--") {
-            return Err(format!(
-                "unknown flag '{arg}'. Usage: nes-tui [--config <path>] [rom_path]"
-            ));
+            return Err(format!("unknown flag '{arg}'. {}", usage_line()));
         }
         if rom_path_arg.is_some() {
             return Err(
@@ -323,6 +519,14 @@ fn resolve_rom_path() -> Result<(String, Option<PathBuf>), String> {
         }
         rom_path_arg = Some(arg);
     }
+
+    Ok((rom_path_arg, options))
+}
+
+fn resolve_rom_path() -> Result<(String, Option<PathBuf>, TuiCliOptions), String> {
+    let raw_args: Vec<String> = std::env::args().skip(1).collect();
+    let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
+    let (rom_path_arg, cli_options) = parse_tui_args(pass_through)?;
 
     let loaded_config_path = config_path.clone().or_else(|| {
         let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
@@ -341,7 +545,7 @@ fn resolve_rom_path() -> Result<(String, Option<PathBuf>), String> {
                 "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
             )
         })?;
-    Ok((rom_path, loaded_config_path))
+    Ok((rom_path, loaded_config_path, cli_options))
 }
 
 fn should_quit(key: KeyEvent) -> bool {
@@ -357,4 +561,92 @@ fn key_pressed_state(kind: KeyEventKind) -> Option<bool> {
 
 fn key_is_pressed(kind: KeyEventKind) -> bool {
     matches!(kind, KeyEventKind::Press | KeyEventKind::Repeat)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        VideoBackendKind, fit_nes_viewport, frame_rgba_to_rgba_image, parse_tui_args,
+        protocol_image_resize, select_video_backend_kind,
+    };
+    use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
+    use ratatui::layout::Rect;
+    use ratatui_image::{Resize, picker::ProtocolType};
+
+    #[test]
+    fn parse_tui_args_defaults_to_high_res_mode() {
+        let (rom_path, options) =
+            parse_tui_args(vec!["rom.nes".to_owned()]).expect("parse should succeed");
+        assert_eq!(rom_path.as_deref(), Some("rom.nes"));
+        assert!(!options.show_hud);
+    }
+
+    #[test]
+    fn parse_tui_args_allows_hud_opt_in() {
+        let (rom_path, options) = parse_tui_args(vec!["--hud".to_owned(), "rom.nes".to_owned()])
+            .expect("parse should succeed");
+        assert_eq!(rom_path.as_deref(), Some("rom.nes"));
+        assert!(options.show_hud);
+    }
+
+    #[test]
+    fn parse_tui_args_rejects_unknown_flag() {
+        let err = parse_tui_args(vec!["--bogus".to_owned()]).expect_err("parse should fail");
+        assert!(err.contains("unknown flag '--bogus'"));
+    }
+
+    #[test]
+    fn fit_nes_viewport_uses_integer_scale_when_room_allows() {
+        let area = Rect::new(0, 0, 800, 300);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(144, 30, 512, 240));
+        assert_eq!(viewport.integer_scale, Some(2));
+    }
+
+    #[test]
+    fn fit_nes_viewport_aspect_fits_when_too_small_for_integer_scale() {
+        let area = Rect::new(10, 5, 100, 50);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(10, 7, 100, 46));
+        assert_eq!(viewport.integer_scale, None);
+    }
+
+    #[test]
+    fn video_backend_selection_falls_back_for_halfblocks() {
+        assert_eq!(
+            select_video_backend_kind(Some(ProtocolType::Halfblocks)),
+            VideoBackendKind::Halfblocks
+        );
+        assert_eq!(
+            select_video_backend_kind(None),
+            VideoBackendKind::Halfblocks
+        );
+    }
+
+    #[test]
+    fn video_backend_selection_uses_protocol_for_non_halfblock() {
+        assert_eq!(
+            select_video_backend_kind(Some(ProtocolType::Sixel)),
+            VideoBackendKind::ProtocolImage
+        );
+    }
+
+    #[test]
+    fn frame_rgba_to_image_preserves_dimensions_and_first_pixel() {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        frame[0] = 10;
+        frame[1] = 20;
+        frame[2] = 30;
+        frame[3] = 255;
+        let image = frame_rgba_to_rgba_image(&frame).expect("frame should convert");
+        assert_eq!(image.width(), FRAME_WIDTH as u32);
+        assert_eq!(image.height(), FRAME_HEIGHT as u32);
+        let p = image.get_pixel(0, 0);
+        assert_eq!([p[0], p[1], p[2], p[3]], [10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn protocol_image_widget_uses_scale_mode() {
+        assert!(matches!(protocol_image_resize(), Resize::Scale(None)));
+    }
 }
