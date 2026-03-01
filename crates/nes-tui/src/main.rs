@@ -21,10 +21,13 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui_image::picker::{Picker, ProtocolType};
+use ratatui_image::protocol::{ImageSource, StatefulProtocol};
 use ratatui_image::{Resize, StatefulImage};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
 const NES_CELL_HEIGHT: u32 = (FRAME_HEIGHT / 2) as u32;
+const PROTOCOL_TARGET_FPS: u32 = 30;
+const PROTOCOL_FRAME_INTERVAL: Duration = Duration::from_millis(1000 / PROTOCOL_TARGET_FPS as u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TuiCliOptions {
@@ -54,6 +57,8 @@ enum VideoBackend {
     ProtocolImage {
         protocol_type: ProtocolType,
         picker: Picker,
+        state: Option<ratatui_image::protocol::StatefulProtocol>,
+        last_frame_update: Option<Instant>,
     },
 }
 
@@ -62,7 +67,7 @@ impl VideoBackend {
         match self {
             Self::Halfblocks => "filtered half-block renderer".to_owned(),
             Self::ProtocolImage { protocol_type, .. } => {
-                format!("ratatui-image ({protocol_type:?})")
+                format!("ratatui-image ({protocol_type:?}, {PROTOCOL_TARGET_FPS}fps cap)")
             }
         }
     }
@@ -76,6 +81,9 @@ struct TuiRuntime {
     frame_rgba: Vec<u8>,
     paused: bool,
     frames_rendered: u64,
+    frames_since_fps_sample: u64,
+    instant_fps: f64,
+    last_fps_sample_at: Instant,
     started_at: Instant,
     show_hud: bool,
     video_backend: VideoBackend,
@@ -109,6 +117,9 @@ fn run() -> Result<(), String> {
         frame_rgba: vec![0_u8; FRAME_RGBA_BYTES],
         paused: false,
         frames_rendered: 0,
+        frames_since_fps_sample: 0,
+        instant_fps: 0.0,
+        last_fps_sample_at: Instant::now(),
         started_at: Instant::now(),
         show_hud: cli_options.show_hud,
         video_backend: VideoBackend::Halfblocks,
@@ -204,6 +215,15 @@ fn event_loop(
                 )
             })?;
             runtime.frames_rendered = runtime.frames_rendered.saturating_add(1);
+            runtime.frames_since_fps_sample = runtime.frames_since_fps_sample.saturating_add(1);
+        }
+
+        let sample_elapsed = now.duration_since(runtime.last_fps_sample_at);
+        if sample_elapsed >= Duration::from_millis(250) {
+            runtime.instant_fps =
+                runtime.frames_since_fps_sample as f64 / sample_elapsed.as_secs_f64();
+            runtime.frames_since_fps_sample = 0;
+            runtime.last_fps_sample_at = now;
         }
 
         runtime.core.fill_framebuffer_rgba(&mut runtime.frame_rgba);
@@ -219,7 +239,7 @@ fn draw_frame(
         .draw(|f| {
             let status = if runtime.paused { "paused" } else { "running" };
             let elapsed = runtime.started_at.elapsed().as_secs_f64().max(1e-6);
-            let wall_fps = runtime.frames_rendered as f64 / elapsed;
+            let average_fps = runtime.frames_rendered as f64 / elapsed;
             let backend_label = runtime.video_backend.label();
             if !runtime.show_hud {
                 let full_area = f.area();
@@ -251,8 +271,12 @@ fn draw_frame(
                 ),
                 Line::styled(
                     format!(
-                        "{} | mapper {} | frame {} | wall_fps {:.1} | {status}",
-                        runtime.rom_name, runtime.mapper_id, runtime.frames_rendered, wall_fps,
+                        "{} | mapper {} | frame {} | fps {:.1} | avg {:.1} | {status}",
+                        runtime.rom_name,
+                        runtime.mapper_id,
+                        runtime.frames_rendered,
+                        runtime.instant_fps,
+                        average_fps,
                     ),
                     Style::default().fg(Color::White),
                 ),
@@ -376,6 +400,8 @@ fn detect_video_backend() -> VideoBackend {
         VideoBackendKind::ProtocolImage => VideoBackend::ProtocolImage {
             protocol_type,
             picker,
+            state: None,
+            last_frame_update: None,
         },
     }
 }
@@ -394,19 +420,73 @@ fn frame_rgba_to_rgba_image(frame_rgba: &[u8]) -> Option<RgbaImage> {
     RgbaImage::from_raw(FRAME_WIDTH as u32, FRAME_HEIGHT as u32, frame_rgba.to_vec())
 }
 
+fn should_refresh_protocol_frame(
+    last_frame_update: Option<Instant>,
+    now: Instant,
+    interval: Duration,
+) -> bool {
+    match last_frame_update {
+        None => true,
+        Some(last) => now.duration_since(last) >= interval,
+    }
+}
+
+fn make_protocol_state(
+    picker: &Picker,
+    frame_rgba: &[u8],
+    prior_state: Option<&StatefulProtocol>,
+) -> Option<StatefulProtocol> {
+    let rgba_image = frame_rgba_to_rgba_image(frame_rgba)?;
+    let image = DynamicImage::ImageRgba8(rgba_image);
+
+    match prior_state {
+        Some(previous) => {
+            let source = ImageSource::new(image, picker.font_size(), previous.background_color());
+            Some(StatefulProtocol::new(
+                source,
+                picker.font_size(),
+                previous.protocol_type().clone(),
+            ))
+        }
+        None => Some(picker.new_resize_protocol(image)),
+    }
+}
+
 fn render_video_region(frame: &mut Frame<'_>, runtime: &mut TuiRuntime, area: Rect) {
     let mut fallback_to_halfblocks = false;
 
     match &mut runtime.video_backend {
         VideoBackend::Halfblocks => render_halfblock_region(frame, &runtime.frame_rgba, area),
-        VideoBackend::ProtocolImage { picker, .. } => {
-            let Some(rgba_image) = frame_rgba_to_rgba_image(&runtime.frame_rgba) else {
+        VideoBackend::ProtocolImage {
+            picker,
+            state,
+            last_frame_update,
+            ..
+        } => {
+            let now = Instant::now();
+            let should_refresh = state.is_none()
+                || (!runtime.paused
+                    && should_refresh_protocol_frame(
+                        *last_frame_update,
+                        now,
+                        PROTOCOL_FRAME_INTERVAL,
+                    ));
+            if should_refresh {
+                let Some(next_state) =
+                    make_protocol_state(picker, &runtime.frame_rgba, state.as_ref())
+                else {
+                    render_halfblock_region(frame, &runtime.frame_rgba, area);
+                    return;
+                };
+                *state = Some(next_state);
+                *last_frame_update = Some(now);
+            }
+            let Some(protocol_state) = state.as_mut() else {
                 render_halfblock_region(frame, &runtime.frame_rgba, area);
                 return;
             };
-            let mut state = picker.new_resize_protocol(DynamicImage::ImageRgba8(rgba_image));
-            frame.render_stateful_widget(protocol_image_widget(), area, &mut state);
-            if let Some(result) = state.last_encoding_result() {
+            frame.render_stateful_widget(protocol_image_widget(), area, protocol_state);
+            if let Some(result) = protocol_state.last_encoding_result() {
                 if result.is_err() {
                     fallback_to_halfblocks = true;
                 }
@@ -566,12 +646,17 @@ fn key_is_pressed(kind: KeyEventKind) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        VideoBackendKind, fit_nes_viewport, frame_rgba_to_rgba_image, parse_tui_args,
-        protocol_image_resize, select_video_backend_kind,
+        VideoBackendKind, fit_nes_viewport, frame_rgba_to_rgba_image, make_protocol_state,
+        parse_tui_args, protocol_image_resize, select_video_backend_kind,
+        should_refresh_protocol_frame,
     };
     use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
     use ratatui::layout::Rect;
-    use ratatui_image::{Resize, picker::ProtocolType};
+    use ratatui_image::{
+        Resize,
+        picker::{Picker, ProtocolType},
+    };
+    use std::time::{Duration, Instant};
 
     #[test]
     fn parse_tui_args_defaults_to_high_res_mode() {
@@ -648,5 +733,48 @@ mod tests {
     #[test]
     fn protocol_image_widget_uses_scale_mode() {
         assert!(matches!(protocol_image_resize(), Resize::Scale(None)));
+    }
+
+    #[test]
+    fn protocol_frame_refreshes_when_no_prior_timestamp() {
+        assert!(should_refresh_protocol_frame(
+            None,
+            Instant::now(),
+            Duration::from_millis(33)
+        ));
+    }
+
+    #[test]
+    fn protocol_frame_does_not_refresh_before_interval_elapsed() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(33);
+        let recent = now - Duration::from_millis(20);
+        assert!(!should_refresh_protocol_frame(Some(recent), now, interval));
+    }
+
+    #[test]
+    fn protocol_frame_refreshes_once_interval_elapsed() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(33);
+        let old = now - interval;
+        assert!(should_refresh_protocol_frame(Some(old), now, interval));
+    }
+
+    #[test]
+    fn make_protocol_state_reuses_protocol_variant_from_previous_state() {
+        let mut picker = Picker::from_fontsize((8, 16));
+        picker.set_protocol_type(ProtocolType::Halfblocks);
+        let frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let first = make_protocol_state(&picker, &frame, None).expect("state should build");
+        let second =
+            make_protocol_state(&picker, &frame, Some(&first)).expect("state should build");
+        assert!(matches!(
+            first.protocol_type(),
+            ratatui_image::protocol::StatefulProtocolType::Halfblocks(_)
+        ));
+        assert!(matches!(
+            second.protocol_type(),
+            ratatui_image::protocol::StatefulProtocolType::Halfblocks(_)
+        ));
     }
 }
