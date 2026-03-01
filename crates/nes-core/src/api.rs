@@ -56,6 +56,14 @@ pub enum Button {
 
 impl Button {
     /// Returns this button's bit in controller bitfields.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::Button;
+    /// assert_eq!(Button::A.bit_mask(), 0b0000_0001);
+    /// assert_eq!(Button::Start.bit_mask(), 0b0000_1000);
+    /// ```
     #[must_use]
     pub fn bit_mask(self) -> u8 {
         match self {
@@ -329,6 +337,14 @@ impl std::error::Error for CoreError {}
 
 impl NesCore {
     /// Creates a new core with power-on defaults and no loaded mapper.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert!(!core.is_paused());
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -597,6 +613,15 @@ impl NesCore {
     }
 
     /// Captures full core save-state snapshot.
+    /// Creates a complete snapshot of the emulation state for save states or rollback.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// let snap = core.save_state();
+    /// ```
     #[must_use]
     pub fn save_state(&self) -> CoreSnapshot {
         CoreSnapshot {
@@ -618,6 +643,16 @@ impl NesCore {
     }
 
     /// Restores full core save-state snapshot.
+    /// Restores the emulator from a previously created [`CoreSnapshot`].
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let mut core = NesCore::new();
+    /// let snap = core.save_state();
+    /// core.load_state(&snap);
+    /// ```
     pub fn load_state(&mut self, snapshot: &CoreSnapshot) {
         self.paused = snapshot.paused;
         self.speed_permille = snapshot.speed_permille;
@@ -642,11 +677,23 @@ impl NesCore {
         self.scratch_writes.clear();
     }
 
-    /// Replays a command stream on this core.
+    /// Replays a command stream identically on this core.
+    ///
+    /// Useful for recording and reproducing macros or input sequences.
     ///
     /// # Errors
     ///
     /// Propagates the first command execution failure.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command};
+    /// let mut core = NesCore::new();
+    /// // Normally, you'd load a ROM first:
+    /// // core.load_ines_rom(&rom_bytes).unwrap();
+    /// // core.replay(&[Command::StepFrame, Command::StepFrame]).unwrap();
+    /// ```
     pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
         for command in commands {
             self.execute(*command)?;
@@ -654,7 +701,10 @@ impl NesCore {
         Ok(())
     }
 
-    /// Loads an iNES ROM into mapper + PPU/CPU state.
+    /// Parses and loads an iNES format ROM from bytes.
+    ///
+    /// This sets up the internal mapper and memory mappings, preparing the
+    /// emulator to execute code.
     ///
     /// # Errors
     ///
@@ -699,11 +749,23 @@ impl NesCore {
         })
     }
 
-    /// Executes one host command against the emulator.
+    /// Executes a single control or input command.
+    ///
+    /// This is the primary way to step the emulator forward, reset it,
+    /// or pass inputs. See [`Command`] for available actions.
     ///
     /// # Errors
     ///
     /// Returns a [`CoreError`] when command preconditions fail or stepping fails.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command, Button};
+    /// let mut core = NesCore::new();
+    /// // Normally you load a ROM first before stepping, but we can safely press buttons
+    /// core.execute(Command::PressButton(Button::A)).unwrap();
+    /// ```
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
         match command {
             Command::Pause => {
@@ -776,6 +838,10 @@ impl NesCore {
     }
 
     /// Executes a readonly query against current state.
+    /// Performs a non-mutating query against the emulator state.
+    ///
+    /// Useful for extracting out-of-band information, like [`EmulatorState`]
+    /// or reading mapped memory addresses without modifying cycles.
     #[must_use]
     pub fn query(&self, query: CoreQuery) -> QueryResult {
         match query {
