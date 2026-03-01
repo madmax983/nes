@@ -8,10 +8,10 @@ use core::fmt;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
-use crate::mapper::{Mmc1, Nrom, Uxrom};
+use crate::mapper::{Mmc1, Mmc3, Nrom, Uxrom};
 use crate::ppu::{Ppu, PpuSnapshot};
 use crate::replay::replay_commands;
-use crate::rom::{RomError, parse_ines};
+use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
 const DEFAULT_START_PC: u16 = 0xC000;
@@ -19,7 +19,9 @@ const DEFAULT_SPEED_PERMILLE: u16 = 1_000;
 const BASE_FPS_MILLI: u32 = 60_000;
 const PRG_16K_BYTES: usize = 16 * 1024;
 const PRG_32K_BYTES: usize = 32 * 1024;
+const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
+const CHR_8K_BYTES: usize = 8 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
 /// NES visible frame width in pixels.
 pub const FRAME_WIDTH: usize = 256;
@@ -191,6 +193,7 @@ enum LoadedMapper {
     Nrom(Nrom),
     Uxrom(Uxrom),
     Mmc1(Mmc1),
+    Mmc3(Mmc3),
 }
 
 impl LoadedMapper {
@@ -199,6 +202,7 @@ impl LoadedMapper {
             Self::Nrom(mapper) => mapper.read_prg(addr),
             Self::Uxrom(mapper) => mapper.read_prg(addr),
             Self::Mmc1(mapper) => mapper.read_prg(addr),
+            Self::Mmc3(mapper) => mapper.read_prg(addr),
         }
     }
 
@@ -207,6 +211,34 @@ impl LoadedMapper {
             Self::Nrom(mapper) => mapper.write_prg(addr, value),
             Self::Uxrom(mapper) => mapper.write_prg(addr, value),
             Self::Mmc1(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc3(mapper) => mapper.write_prg(addr, value),
+        }
+    }
+
+    fn chr_window(&self) -> Option<([u8; CHR_8K_BYTES], bool)> {
+        match self {
+            Self::Mmc3(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            _ => None,
+        }
+    }
+
+    fn mirroring_override(&self) -> Option<NametableMirroring> {
+        match self {
+            Self::Mmc3(mapper) => Some(mapper.mirroring()),
+            _ => None,
+        }
+    }
+
+    fn irq_pending(&self) -> bool {
+        match self {
+            Self::Mmc3(mapper) => mapper.irq_pending(),
+            _ => false,
+        }
+    }
+
+    fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool) {
+        if let Self::Mmc3(mapper) = self {
+            mapper.on_ppu_dot(scanline, dot, rendering_enabled);
         }
     }
 }
@@ -601,6 +633,8 @@ impl NesCore {
         self.mapper = snapshot.mapper.clone();
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
+        self.sync_mapper_chr_window();
+        self.sync_mapper_mirroring();
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
@@ -622,10 +656,12 @@ impl NesCore {
     /// Returns [`CoreError::RomLoadFailed`] when parsing or mapper validation fails.
     pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
         let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
-        let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom)?;
+        let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom, rom.chr_rom, rom.mirroring)?;
         self.mapper = Some(mapper);
         self.ppu.load_cartridge(rom.chr_rom, rom.mirroring);
         self.sync_mapper_prg_window();
+        self.sync_mapper_chr_window();
+        self.sync_mapper_mirroring();
 
         let reset_pc = {
             let lo = self.cpu.read_byte(0xFFFC);
@@ -776,7 +812,7 @@ impl NesCore {
             for _ in 0..7 {
                 self.step_hardware_cycle();
             }
-        } else if self.apu.irq_pending() && self.cpu.service_irq() {
+        } else if (self.apu.irq_pending() || self.mapper_irq_pending()) && self.cpu.service_irq() {
             for _ in 0..7 {
                 self.step_hardware_cycle();
             }
@@ -818,11 +854,18 @@ impl NesCore {
         self.last_cpu_bus_trace.clear();
     }
 
-    fn build_mapper(&self, mapper_id: u8, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+    fn build_mapper(
+        &self,
+        mapper_id: u8,
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+        mirroring: NametableMirroring,
+    ) -> Result<LoadedMapper, CoreError> {
         match mapper_id {
             0 => self.build_nrom(prg_rom),
             1 => self.build_mmc1(prg_rom),
             2 => self.build_uxrom(prg_rom),
+            4 => self.build_mmc3(prg_rom, chr_rom, mirroring),
             _ => Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
                 mapper_id,
             ))),
@@ -858,12 +901,51 @@ impl NesCore {
         Ok(LoadedMapper::Mmc1(Mmc1::from_prg_rom(prg_rom.to_vec(), 1)))
     }
 
+    fn build_mmc3(
+        &self,
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+        mirroring: NametableMirroring,
+    ) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc3(Mmc3::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+            mirroring,
+        )))
+    }
+
     fn sync_mapper_prg_window(&mut self) {
         if let Some(mapper) = self.mapper.as_ref() {
             for addr in 0x8000..=0xFFFF {
                 let value = mapper.read_prg(addr);
                 self.cpu.write_byte(addr, value);
             }
+        }
+    }
+
+    fn sync_mapper_chr_window(&mut self) {
+        if let Some(mapper) = self.mapper.as_ref()
+            && let Some((chr_window, writable)) = mapper.chr_window()
+        {
+            self.ppu.set_chr_window(&chr_window, writable);
+        }
+    }
+
+    fn sync_mapper_mirroring(&mut self) {
+        if let Some(mapper) = self.mapper.as_ref()
+            && let Some(mirroring) = mapper.mirroring_override()
+        {
+            self.ppu.set_mirroring(mirroring);
         }
     }
 
@@ -909,6 +991,8 @@ impl NesCore {
 
         if remap_needed {
             self.sync_mapper_prg_window();
+            self.sync_mapper_chr_window();
+            self.sync_mapper_mirroring();
         }
         if ppu_changed {
             self.sync_ppu_register_image();
@@ -921,6 +1005,10 @@ impl NesCore {
             Some(LoadedMapper::Nrom(_)) => 0x10,
             Some(LoadedMapper::Uxrom(mapper)) => 0x20 ^ mapper.selected_bank() as u64,
             Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
+            Some(LoadedMapper::Mmc3(mapper)) => {
+                0x40 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+            }
         }
     }
 
@@ -1032,6 +1120,10 @@ impl NesCore {
         }
     }
 
+    fn mapper_irq_pending(&self) -> bool {
+        self.mapper.as_ref().is_some_and(LoadedMapper::irq_pending)
+    }
+
     fn step_hardware_cycle(&mut self) {
         self.scheduler.step_cpu_cycle();
         self.scheduler.step_apu_cycle();
@@ -1039,6 +1131,13 @@ impl NesCore {
         for _ in 0..3 {
             self.scheduler.step_ppu_cycle();
             self.ppu.step_dot();
+            if let Some(mapper) = self.mapper.as_mut() {
+                mapper.on_ppu_dot(
+                    self.ppu.scanline(),
+                    self.ppu.dot(),
+                    self.ppu.rendering_enabled_for_mapper_irq(),
+                );
+            }
         }
         if let Some(request) = dmc_request {
             self.apply_dmc_dma_request(request);
@@ -1055,6 +1154,13 @@ impl NesCore {
             for _ in 0..3 {
                 self.scheduler.step_ppu_cycle();
                 self.ppu.step_dot();
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.on_ppu_dot(
+                        self.ppu.scanline(),
+                        self.ppu.dot(),
+                        self.ppu.rendering_enabled_for_mapper_irq(),
+                    );
+                }
             }
             if let Some(chained) = dmc_request {
                 let byte = self.cpu.read_byte(chained.addr);

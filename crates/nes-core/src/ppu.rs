@@ -220,6 +220,19 @@ impl Ppu {
         self.framebuffer = blank_framebuffer();
     }
 
+    /// Updates mapped CHR window without resetting runtime PPU state.
+    pub fn set_chr_window(&mut self, chr_window: &[u8], writable: bool) {
+        self.chr = [0; CHR_BYTES];
+        let copy_len = chr_window.len().min(CHR_BYTES);
+        self.chr[..copy_len].copy_from_slice(&chr_window[..copy_len]);
+        self.chr_writable = writable;
+    }
+
+    /// Updates current nametable mirroring mode.
+    pub fn set_mirroring(&mut self, mirroring: NametableMirroring) {
+        self.mirroring = mirroring;
+    }
+
     /// Resets runtime state while retaining cartridge CHR mapping mode.
     pub fn reset(&mut self) {
         self.ctrl = 0;
@@ -518,6 +531,12 @@ impl Ppu {
     #[must_use]
     fn rendering_enabled(&self) -> bool {
         self.mask & RENDER_MASK_BITS != 0
+    }
+
+    /// Returns whether background or sprite rendering is currently enabled.
+    #[must_use]
+    pub fn rendering_enabled_for_mapper_irq(&self) -> bool {
+        self.rendering_enabled()
     }
 
     fn render_pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
