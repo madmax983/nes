@@ -78,6 +78,12 @@ impl NetplayClient {
             .map_err(|err| format!("failed to queue netplay hash: {err}"))
     }
 
+    pub fn send_ping(&self, nonce: u64) -> Result<(), String> {
+        self.tx
+            .send(ClientMessage::Ping { nonce })
+            .map_err(|err| format!("failed to queue netplay ping: {err}"))
+    }
+
     pub fn try_recv(&self) -> Result<Option<ServerMessage>, String> {
         if let Some(err) = self.take_error() {
             return Err(err);

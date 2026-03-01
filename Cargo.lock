@@ -1407,6 +1407,9 @@ version = "0.1.0"
 dependencies = [
  "nes-config",
  "nes-core",
+ "nes-netplay",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
