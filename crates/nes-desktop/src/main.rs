@@ -337,19 +337,23 @@ fn run() -> Result<(), String> {
             None
         }
     };
-    let mut active_gamepad = None::<GamepadId>;
+    let mut active_gamepads = [None::<GamepadId>; 2];
     if let Some(gilrs_state) = gilrs.as_ref() {
-        active_gamepad = first_connected_gamepad_id(gilrs_state);
-        if let Some(gamepad_id) = active_gamepad {
-            println!(
-                "Gamepad connected: {}",
-                gilrs_state.gamepad(gamepad_id).name()
-            );
-        } else {
-            println!("Gamepad connected: none (hot-plug supported)");
+        let connected = connected_gamepad_ids(gilrs_state);
+        for (player, slot) in active_gamepads.iter_mut().enumerate() {
+            *slot = connected.get(player).copied();
+            if let Some(gamepad_id) = *slot {
+                println!(
+                    "Gamepad P{} connected: {}",
+                    player + 1,
+                    gilrs_state.gamepad(gamepad_id).name()
+                );
+            } else {
+                println!("Gamepad P{} connected: none", player + 1);
+            }
         }
     }
-    let mut gamepad_bits = 0_u8;
+    let mut gamepad_bits = [0_u8; 2];
 
     let audio_output = if runtime.audio_enabled {
         match AudioOutput::try_new() {
@@ -412,27 +416,41 @@ fn run() -> Result<(), String> {
 
             if let Some(gilrs_state) = gilrs.as_mut() {
                 while gilrs_state.next_event().is_some() {}
-                let next_active = select_active_gamepad_id(gilrs_state, active_gamepad);
-                if next_active != active_gamepad {
-                    if let Some(gamepad_id) = next_active {
-                        println!("Gamepad active: {}", gilrs_state.gamepad(gamepad_id).name());
-                    } else if active_gamepad.is_some() {
-                        println!("Gamepad disconnected: waiting for controller");
+                let next_active = select_active_gamepad_ids(gilrs_state, active_gamepads);
+                if next_active != active_gamepads {
+                    for player in 0..active_gamepads.len() {
+                        if next_active[player] != active_gamepads[player] {
+                            if let Some(gamepad_id) = next_active[player] {
+                                println!(
+                                    "Gamepad P{} active: {}",
+                                    player + 1,
+                                    gilrs_state.gamepad(gamepad_id).name()
+                                );
+                            } else if active_gamepads[player].is_some() {
+                                println!("Gamepad P{} disconnected", player + 1);
+                            }
+                        }
                     }
-                    active_gamepad = next_active;
+                    active_gamepads = next_active;
                 }
 
-                let next_gamepad_bits = active_gamepad
-                    .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
-                    .unwrap_or_default();
-                for command in controller_state_delta(gamepad_bits, next_gamepad_bits) {
-                    if let Err(err) = core.execute(command) {
-                        eprintln!("Gamepad command failed: {err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
+                for player in 0..gamepad_bits.len() {
+                    let next_gamepad_bits = active_gamepads[player]
+                        .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
+                        .unwrap_or_default();
+                    for command in controller_state_delta_for_player(
+                        gamepad_bits[player],
+                        next_gamepad_bits,
+                        player == 1,
+                    ) {
+                        if let Err(err) = core.execute(command) {
+                            eprintln!("Gamepad command failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
                     }
+                    gamepad_bits[player] = next_gamepad_bits;
                 }
-                gamepad_bits = next_gamepad_bits;
             }
 
             let now = Instant::now();
@@ -456,14 +474,15 @@ fn run() -> Result<(), String> {
             if trace_every_frames > 0 && frame_index.is_multiple_of(trace_every_frames) {
                 let regs = core.cpu_snapshot();
                 println!(
-                    "frame={} ppu_frame={} pc=${:04X} a={:02X} x={:02X} y={:02X} ctrl={:02X}",
+                    "frame={} ppu_frame={} pc=${:04X} a={:02X} x={:02X} y={:02X} ctrl1={:02X} ctrl2={:02X}",
                     frame_index,
                     core.ppu_frame_counter(),
                     regs.pc,
                     regs.a,
                     regs.x,
                     regs.y,
-                    core.controller_bits()
+                    core.controller_bits(),
+                    core.controller2_bits()
                 );
             }
 
@@ -626,19 +645,38 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
     }
 }
 
-fn first_connected_gamepad_id(gilrs: &Gilrs) -> Option<GamepadId> {
+fn connected_gamepad_ids(gilrs: &Gilrs) -> Vec<GamepadId> {
     gilrs
         .gamepads()
-        .find_map(|(id, gamepad)| gamepad.is_connected().then_some(id))
+        .filter_map(|(id, gamepad)| gamepad.is_connected().then_some(id))
+        .collect()
 }
 
-fn select_active_gamepad_id(gilrs: &Gilrs, current: Option<GamepadId>) -> Option<GamepadId> {
-    if let Some(gamepad_id) = current
-        && gilrs.gamepad(gamepad_id).is_connected()
-    {
-        return Some(gamepad_id);
+fn select_active_gamepad_ids(
+    gilrs: &Gilrs,
+    current: [Option<GamepadId>; 2],
+) -> [Option<GamepadId>; 2] {
+    let connected = connected_gamepad_ids(gilrs);
+    let mut next = [None::<GamepadId>; 2];
+
+    for player in 0..next.len() {
+        if let Some(gamepad_id) = current[player]
+            && connected.contains(&gamepad_id)
+            && !next.contains(&Some(gamepad_id))
+        {
+            next[player] = Some(gamepad_id);
+        }
     }
-    first_connected_gamepad_id(gilrs)
+
+    for gamepad_id in connected {
+        if next.iter().all(|slot| *slot != Some(gamepad_id))
+            && let Some(slot) = next.iter_mut().find(|slot| slot.is_none())
+        {
+            *slot = Some(gamepad_id);
+        }
+    }
+
+    next
 }
 
 fn sample_gamepad_bits(gilrs: &Gilrs, gamepad_id: GamepadId) -> u8 {
@@ -680,13 +718,25 @@ fn sample_gamepad_bits(gilrs: &Gilrs, gamepad_id: GamepadId) -> u8 {
     bits
 }
 
-fn controller_state_delta(previous: u8, current: u8) -> Vec<Command> {
+fn controller_state_delta_for_player(previous: u8, current: u8, player2: bool) -> Vec<Command> {
     let mut commands = Vec::with_capacity(CONTROLLER_BUTTONS.len());
     for button in CONTROLLER_BUTTONS {
         let mask = button.bit_mask();
         match (previous & mask != 0, current & mask != 0) {
-            (false, true) => commands.push(Command::PressButton(button)),
-            (true, false) => commands.push(Command::ReleaseButton(button)),
+            (false, true) => {
+                commands.push(if player2 {
+                    Command::PressButton2(button)
+                } else {
+                    Command::PressButton(button)
+                });
+            }
+            (true, false) => {
+                commands.push(if player2 {
+                    Command::ReleaseButton2(button)
+                } else {
+                    Command::ReleaseButton(button)
+                });
+            }
             _ => {}
         }
     }
@@ -816,7 +866,7 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_MCP_BIND_ADDR, controller_state_delta, parse_runtime_args};
+    use super::{DEFAULT_MCP_BIND_ADDR, controller_state_delta_for_player, parse_runtime_args};
     use nes_core::{Button, Command};
 
     #[test]
@@ -860,7 +910,11 @@ mod tests {
 
     #[test]
     fn controller_state_delta_emits_press_and_release() {
-        let press = controller_state_delta(0, Button::A.bit_mask() | Button::Right.bit_mask());
+        let press = controller_state_delta_for_player(
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            false,
+        );
         assert_eq!(
             press,
             vec![
@@ -869,10 +923,20 @@ mod tests {
             ]
         );
 
-        let release = controller_state_delta(
+        let release = controller_state_delta_for_player(
             Button::A.bit_mask() | Button::B.bit_mask(),
             Button::B.bit_mask(),
+            false,
         );
         assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
+    }
+
+    #[test]
+    fn controller_state_delta_for_player2_uses_player2_commands() {
+        let press = controller_state_delta_for_player(0, Button::A.bit_mask(), true);
+        assert_eq!(press, vec![Command::PressButton2(Button::A)]);
+
+        let release = controller_state_delta_for_player(Button::Start.bit_mask(), 0, true);
+        assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
     }
 }

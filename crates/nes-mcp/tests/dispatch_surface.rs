@@ -170,6 +170,42 @@ fn press_and_release_button_tools_match_direct_commands() {
 }
 
 #[test]
+fn controller_tools_support_player2_argument() {
+    let mut core = NesCore::new();
+    let output = dispatch_tool(
+        &mut core,
+        "set_controller_state",
+        &params(&[("bits", "0xA5"), ("player", "2")]),
+    )
+    .unwrap();
+    match output {
+        DispatchOutput::ControllerState { controller_bits } => assert_eq!(controller_bits, 0xA5),
+        other => panic!("unexpected set_controller_state output: {other:?}"),
+    }
+    assert_eq!(core.controller_bits(), 0x00);
+    assert_eq!(core.controller2_bits(), 0xA5);
+
+    dispatch_tool(
+        &mut core,
+        "press_button",
+        &params(&[("button", "A"), ("player", "2")]),
+    )
+    .unwrap();
+    assert_eq!(
+        core.controller2_bits() & Button::A.bit_mask(),
+        Button::A.bit_mask()
+    );
+
+    dispatch_tool(
+        &mut core,
+        "release_button",
+        &params(&[("button", "A"), ("player", "2")]),
+    )
+    .unwrap();
+    assert_eq!(core.controller2_bits() & Button::A.bit_mask(), 0);
+}
+
+#[test]
 fn read_registers_and_memory_tools_reflect_core_state() {
     let mut core = NesCore::new();
     core.load_cpu_bytes(0xC000, &[0xA9, 0x7F]);

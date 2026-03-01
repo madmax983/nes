@@ -427,7 +427,8 @@ fn tool_input_schema(tool_name: &str) -> Value {
         "set_controller_state" => json!({
             "type": "object",
             "properties": {
-                "bits": { "type": "integer", "minimum": 0, "maximum": 255 }
+                "bits": { "type": "integer", "minimum": 0, "maximum": 255 },
+                "player": { "type": "integer", "enum": [1, 2] }
             },
             "required": ["bits"],
             "additionalProperties": false
@@ -438,7 +439,8 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "button": {
                     "type": "string",
                     "enum": ["A", "B", "Select", "Start", "Up", "Down", "Left", "Right"]
-                }
+                },
+                "player": { "type": "integer", "enum": [1, 2] }
             },
             "required": ["button"],
             "additionalProperties": false
