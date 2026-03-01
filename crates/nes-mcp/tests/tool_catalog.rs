@@ -29,6 +29,10 @@ fn catalog_contains_required_user_facing_tools() {
         "clear_breakpoint",
         "save_state",
         "load_state",
+        "assemble_6502_dsl",
+        "load_6502_dsl",
+        "export_6502_dsl_rom",
+        "export_6502_dsl_rom_base64",
     ] {
         assert!(tools.iter().any(|t| t.name == name), "missing {name}");
     }

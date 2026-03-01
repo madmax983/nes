@@ -4,7 +4,7 @@ pub struct ToolDefinition {
     pub description: &'static str,
 }
 
-const TOOL_CATALOG: [ToolDefinition; 26] = [
+const TOOL_CATALOG: [ToolDefinition; 30] = [
     ToolDefinition {
         name: "load_rom",
         description: "Load an iNES ROM into the emulator core",
@@ -108,6 +108,22 @@ const TOOL_CATALOG: [ToolDefinition; 26] = [
     ToolDefinition {
         name: "run_macro",
         description: "Execute a macro script to control the emulator",
+    },
+    ToolDefinition {
+        name: "assemble_6502_dsl",
+        description: "Assemble 6502 DSL source and report metadata",
+    },
+    ToolDefinition {
+        name: "load_6502_dsl",
+        description: "Build and load an iNES NROM ROM from 6502 DSL source",
+    },
+    ToolDefinition {
+        name: "export_6502_dsl_rom",
+        description: "Build and export an iNES NROM ROM from 6502 DSL source",
+    },
+    ToolDefinition {
+        name: "export_6502_dsl_rom_base64",
+        description: "Build an iNES NROM ROM from 6502 DSL source and return base64",
     },
 ];
 
