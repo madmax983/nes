@@ -9,11 +9,16 @@ use nes_core::{Button, Command, NesCore};
 /// - `RESET`: Resets the emulator.
 ///
 /// Empty lines and lines starting with `#` or `//` are ignored.
-pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, String> {
+pub fn execute_macro_script(
+    core: &mut NesCore,
+    script: &str,
+    mut on_progress: impl FnMut(usize, &str),
+) -> Result<u64, String> {
     let mut frames_elapsed = 0;
 
     for (line_num, line) in script.lines().enumerate() {
         let line = line.trim();
+        on_progress(line_num + 1, line);
         if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
             continue;
         }
@@ -104,7 +109,7 @@ mod tests {
         let initial_frames = core.ppu_frame_counter();
 
         let script = "WAIT 5";
-        let elapsed = execute_macro_script(&mut core, script).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, |_, _| {}).unwrap();
 
         assert_eq!(elapsed, 5);
         assert_eq!(core.ppu_frame_counter(), initial_frames + 5);
@@ -119,7 +124,7 @@ mod tests {
             PRESS A
             PRESS Start
         ";
-        let elapsed = execute_macro_script(&mut core, script).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, |_, _| {}).unwrap();
         assert_eq!(elapsed, 0); // PRESS doesn't wait
         assert_eq!(
             core.controller_bits(),
@@ -127,7 +132,7 @@ mod tests {
         );
 
         let script2 = "RELEASE A";
-        let elapsed2 = execute_macro_script(&mut core, script2).unwrap();
+        let elapsed2 = execute_macro_script(&mut core, script2, |_, _| {}).unwrap();
         assert_eq!(elapsed2, 0);
         assert_eq!(core.controller_bits(), Button::Start.bit_mask());
     }
@@ -143,7 +148,7 @@ mod tests {
             WAIT 1
             RELEASE B
         ";
-        let elapsed = execute_macro_script(&mut core, script).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, |_, _| {}).unwrap();
         assert_eq!(elapsed, 1);
         assert_eq!(core.controller_bits(), 0);
     }
@@ -152,7 +157,7 @@ mod tests {
     fn test_execute_macro_script_invalid_command() {
         let mut core = NesCore::new();
         let script = "JUMP 10";
-        let res = execute_macro_script(&mut core, script);
+        let res = execute_macro_script(&mut core, script, |_, _| {});
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("Unknown command 'JUMP'"));
     }
@@ -160,11 +165,11 @@ mod tests {
     #[test]
     fn test_execute_macro_script_invalid_args() {
         let mut core = NesCore::new();
-        let res = execute_macro_script(&mut core, "WAIT X");
+        let res = execute_macro_script(&mut core, "WAIT X", |_, _| {});
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("Invalid frame count 'X'"));
 
-        let res2 = execute_macro_script(&mut core, "PRESS MAGIC_BUTTON");
+        let res2 = execute_macro_script(&mut core, "PRESS MAGIC_BUTTON", |_, _| {});
         assert!(res2.is_err());
         assert!(res2.unwrap_err().contains("Invalid button 'MAGIC_BUTTON'"));
     }

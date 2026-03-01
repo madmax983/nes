@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io::{self, Write};
 use std::path::Path;
 
 use comfy_table::{Cell, Color as TableColor, Table};
@@ -41,8 +42,18 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
 
     println!("{}", "Executing Macro Script...".with(Color::Cyan).bold());
 
-    let frames_elapsed = execute_macro_script(&mut core, &script_content)
-        .map_err(|err| format!("Macro execution failed: {}", err))?;
+    let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let mut spinner_idx = 0;
+
+    let frames_elapsed = execute_macro_script(&mut core, &script_content, |line_num, line| {
+        let frame = spinner[spinner_idx % spinner.len()];
+        spinner_idx += 1;
+        print!("\r{} {} [Line {}]: {}", frame.with(Color::Cyan), "Running".with(Color::White).bold(), line_num, line);
+        let _ = io::stdout().flush();
+    })
+    .map_err(|err| format!("Macro execution failed: {}", err))?;
+
+    println!("\r{}", "✅ Macro execution complete!                      ".with(Color::Green).bold());
 
     let rom_name = Path::new(rom_path)
         .file_name()

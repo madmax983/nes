@@ -348,7 +348,7 @@ pub fn dispatch_tool(
                 ));
             };
             let frames_elapsed =
-                crate::experimental::macro_engine::execute_macro_script(core, script)
+                crate::experimental::macro_engine::execute_macro_script(core, script, |_, _| {})
                     .map_err(DispatchError::InvalidParams)?;
             Ok(DispatchOutput::MacroExecuted {
                 frames_elapsed,
