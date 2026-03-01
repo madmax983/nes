@@ -149,6 +149,27 @@ impl RollbackEngine {
         self.config.local_player
     }
 
+    #[must_use]
+    pub fn input_delay_frames(&self) -> u32 {
+        self.config.input_delay_frames
+    }
+
+    #[must_use]
+    pub fn max_rollback_frames(&self) -> u32 {
+        self.config.max_rollback_frames
+    }
+
+    pub fn set_input_delay_frames(&mut self, input_delay_frames: u32) -> Result<(), RollbackError> {
+        if input_delay_frames > self.config.max_rollback_frames {
+            return Err(RollbackError::InvalidRollbackConfig {
+                input_delay_frames,
+                max_rollback_frames: self.config.max_rollback_frames,
+            });
+        }
+        self.config.input_delay_frames = input_delay_frames;
+        Ok(())
+    }
+
     pub fn schedule_local_input(&mut self, bits: u8) -> ScheduledInput {
         let target_frame = self.next_frame + u64::from(self.config.input_delay_frames);
         self.local_inputs.insert(target_frame, bits);
@@ -407,5 +428,29 @@ mod tests {
         assert_eq!(core.controller2_bits(), 0x80);
 
         core.execute(Command::StepFrame).expect("core still valid");
+    }
+
+    #[test]
+    fn rollback_engine_can_update_input_delay_within_window() {
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 2,
+            max_rollback_frames: 30,
+        })
+        .expect("valid config");
+        assert_eq!(engine.input_delay_frames(), 2);
+
+        engine
+            .set_input_delay_frames(6)
+            .expect("delay within rollback window");
+        assert_eq!(engine.input_delay_frames(), 6);
+
+        let err = engine
+            .set_input_delay_frames(31)
+            .expect_err("delay larger than rollback window should fail");
+        assert!(matches!(
+            err,
+            super::RollbackError::InvalidRollbackConfig { .. }
+        ));
     }
 }

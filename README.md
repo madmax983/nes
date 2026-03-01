@@ -57,6 +57,14 @@ cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:454
 cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 "C:\Users\markm\roms\River City Ransom (USA).nes"
 ```
 
+Relay can inject controlled network faults for rollback testing:
+
+```powershell
+cargo run -p nes-relay --release -- --bind 0.0.0.0:4545 --latency-ms 45 --jitter-ms 12 --loss-pct 0 --reorder-pct 25
+```
+
+Desktop netplay metrics now include `net_rtt_ms`, `net_jitter_ms`, `net_rollbacks`, `net_max_rb`, `net_desyncs`, and adaptive `net_delay_frames`.
+
 WebAssembly build:
 
 ```powershell
@@ -98,6 +106,12 @@ Run ROM credibility tests (including ignored ROM suites) with:
 
 ```powershell
 cargo test -p nes-test-harness -- --ignored
+```
+
+Run rollback reliability soak gate (deterministic 2-peer fault simulation):
+
+```powershell
+cargo test -p nes-test-harness --test netplay_rollback -- --nocapture
 ```
 
 Run only the bbbradsmith audio checks:

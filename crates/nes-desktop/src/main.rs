@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -38,6 +39,9 @@ const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
 const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
+const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
+const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
+const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 const CONTROLLER_BUTTONS: [Button; 8] = [
     Button::A,
     Button::B,
@@ -94,6 +98,57 @@ struct AudioOutput {
     _stream: OutputStream,
 }
 
+struct NetplayRuntimeStats {
+    latest_rtt_ms: Option<f64>,
+    jitter_ms: f64,
+    rollback_count: u64,
+    max_rollback_distance: u64,
+    desync_count: u64,
+    input_delay_frames: u32,
+}
+
+impl NetplayRuntimeStats {
+    fn new(input_delay_frames: u32) -> Self {
+        Self {
+            latest_rtt_ms: None,
+            jitter_ms: 0.0,
+            rollback_count: 0,
+            max_rollback_distance: 0,
+            desync_count: 0,
+            input_delay_frames,
+        }
+    }
+
+    fn observe_rtt_ms(&mut self, rtt_ms: f64) {
+        if let Some(previous) = self.latest_rtt_ms {
+            let delta = (rtt_ms - previous).abs();
+            if self.jitter_ms <= f64::EPSILON {
+                self.jitter_ms = delta;
+            } else {
+                // RFC3550-style EWMA jitter estimator.
+                self.jitter_ms += (delta - self.jitter_ms) * 0.125;
+            }
+        }
+        self.latest_rtt_ms = Some(rtt_ms);
+    }
+
+    fn observe_rollback(&mut self, distance: u64) {
+        if distance == 0 {
+            return;
+        }
+        self.rollback_count = self.rollback_count.saturating_add(1);
+        self.max_rollback_distance = self.max_rollback_distance.max(distance);
+    }
+
+    fn observe_desync(&mut self) {
+        self.desync_count = self.desync_count.saturating_add(1);
+    }
+
+    fn latest_rtt_ms_or_zero(&self) -> f64 {
+        self.latest_rtt_ms.unwrap_or(0.0)
+    }
+}
+
 struct PerfMetrics {
     enabled: bool,
     every_n_frames: u64,
@@ -110,6 +165,12 @@ struct PerfMetrics {
     warned_stall: bool,
     audio_queue_peak: usize,
     audio_queue_drops: u64,
+    netplay_rtt_ms: f64,
+    netplay_jitter_ms: f64,
+    netplay_rollbacks: u64,
+    netplay_max_rollback_distance: u64,
+    netplay_desyncs: u64,
+    netplay_input_delay_frames: u32,
 }
 
 impl PerfMetrics {
@@ -130,6 +191,12 @@ impl PerfMetrics {
             warned_stall: false,
             audio_queue_peak: 0,
             audio_queue_drops: 0,
+            netplay_rtt_ms: 0.0,
+            netplay_jitter_ms: 0.0,
+            netplay_rollbacks: 0,
+            netplay_max_rollback_distance: 0,
+            netplay_desyncs: 0,
+            netplay_input_delay_frames: 0,
         }
     }
 
@@ -198,12 +265,18 @@ impl PerfMetrics {
         let avg_render_ms = self.render_work.as_secs_f64() * 1_000.0 / self.report_frames as f64;
 
         println!(
-            "[metrics] wall_fps={wall_fps:.1} emu_fps={emu_fps:.1} avg_step_ms={avg_step_ms:.2} avg_render_ms={avg_render_ms:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={}",
+            "[metrics] wall_fps={wall_fps:.1} emu_fps={emu_fps:.1} avg_step_ms={avg_step_ms:.2} avg_render_ms={avg_render_ms:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
             self.late_frames,
             self.pc_stall_frames,
             self.unchanged_frame_count,
             self.audio_queue_peak,
-            self.audio_queue_drops
+            self.audio_queue_drops,
+            self.netplay_rtt_ms,
+            self.netplay_jitter_ms,
+            self.netplay_rollbacks,
+            self.netplay_max_rollback_distance,
+            self.netplay_desyncs,
+            self.netplay_input_delay_frames
         );
 
         self.report_start = Instant::now();
@@ -214,6 +287,9 @@ impl PerfMetrics {
         self.late_frames = 0;
         self.audio_queue_peak = 0;
         self.audio_queue_drops = 0;
+        self.netplay_rollbacks = 0;
+        self.netplay_max_rollback_distance = 0;
+        self.netplay_desyncs = 0;
     }
 
     fn on_audio_queue(&mut self, queue_depth: usize, dropped: bool) {
@@ -224,6 +300,18 @@ impl PerfMetrics {
         if dropped {
             self.audio_queue_drops = self.audio_queue_drops.saturating_add(1);
         }
+    }
+
+    fn on_netplay_stats(&mut self, stats: &NetplayRuntimeStats) {
+        if !self.enabled {
+            return;
+        }
+        self.netplay_rtt_ms = stats.latest_rtt_ms_or_zero();
+        self.netplay_jitter_ms = stats.jitter_ms;
+        self.netplay_rollbacks = stats.rollback_count;
+        self.netplay_max_rollback_distance = stats.max_rollback_distance;
+        self.netplay_desyncs = stats.desync_count;
+        self.netplay_input_delay_frames = stats.input_delay_frames;
     }
 }
 
@@ -352,6 +440,13 @@ fn run() -> Result<(), String> {
         .as_ref()
         .map_or(0, |netplay| netplay.hash_check_every_frames);
     let netplay_local_player = runtime.netplay.as_ref().map_or(1, |netplay| netplay.player);
+    let mut netplay_stats = runtime
+        .netplay
+        .as_ref()
+        .map(|netplay| NetplayRuntimeStats::new(netplay.input_delay_frames));
+    let mut netplay_next_ping_at = Instant::now();
+    let mut netplay_ping_nonce = 1_u64;
+    let mut netplay_pending_pings = BTreeMap::<u64, Instant>::new();
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -541,6 +636,26 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 if let Some(client) = netplay_client.as_ref() {
+                    if now >= netplay_next_ping_at {
+                        let nonce = netplay_ping_nonce;
+                        netplay_ping_nonce = netplay_ping_nonce.wrapping_add(1);
+                        netplay_pending_pings.insert(nonce, now);
+                        // Bound growth in case a peer vanishes without replying.
+                        while netplay_pending_pings.len() > 128 {
+                            if let Some(oldest_nonce) =
+                                netplay_pending_pings.keys().next().copied()
+                            {
+                                netplay_pending_pings.remove(&oldest_nonce);
+                            }
+                        }
+                        if let Err(err) = client.send_ping(nonce) {
+                            eprintln!("Netplay send ping failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                        netplay_next_ping_at = now + NETPLAY_PING_INTERVAL;
+                    }
+
                     loop {
                         let message = match client.try_recv() {
                             Ok(next) => next,
@@ -579,6 +694,9 @@ fn run() -> Result<(), String> {
                                                 frame,
                                                 state_hash
                                             );
+                                            if let Some(stats) = netplay_stats.as_mut() {
+                                                stats.observe_desync();
+                                            }
                                         }
                                         HashComparison::PendingLocalFrame => {}
                                     }
@@ -605,7 +723,14 @@ fn run() -> Result<(), String> {
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
-                            ServerMessage::Pong { .. } => {}
+                            ServerMessage::Pong { nonce } => {
+                                if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
+                                    let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
+                                    if let Some(stats) = netplay_stats.as_mut() {
+                                        stats.observe_rtt_ms(rtt_ms);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -617,7 +742,47 @@ fn run() -> Result<(), String> {
                                 "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
                                 step.rollback_distance, step.frame, step.local_bits, step.remote_bits
                             );
+                            if let Some(stats) = netplay_stats.as_mut() {
+                                stats.observe_rollback(step.rollback_distance);
+                            }
                         }
+
+                        let current_delay = rollback_engine.input_delay_frames();
+                        let max_auto_delay = rollback_engine.max_rollback_frames().clamp(
+                            NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                            NETPLAY_AUTO_DELAY_MAX_FRAMES,
+                        );
+                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
+                            recommended_input_delay_frames(
+                                stats.latest_rtt_ms,
+                                stats.jitter_ms,
+                                NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                                max_auto_delay,
+                                current_delay,
+                            )
+                        } else {
+                            current_delay
+                        };
+                        if target_delay != current_delay {
+                            if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
+                                eprintln!("Netplay adaptive delay update failed: {err}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                            if let Some(stats) = netplay_stats.as_mut() {
+                                stats.input_delay_frames = target_delay;
+                                eprintln!(
+                                    "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                                    current_delay,
+                                    target_delay,
+                                    stats.latest_rtt_ms_or_zero(),
+                                    stats.jitter_ms
+                                );
+                            }
+                        } else if let Some(stats) = netplay_stats.as_mut() {
+                            stats.input_delay_frames = current_delay;
+                        }
+
                         if netplay_hash_check_every > 0
                             && step.frame.is_multiple_of(netplay_hash_check_every)
                             && let Some(client) = netplay_client.as_ref()
@@ -643,6 +808,9 @@ fn run() -> Result<(), String> {
             let step_elapsed = step_start.elapsed();
             frame_index = frame_index.saturating_add(1);
             metrics.on_step(&core, step_elapsed, missed_deadline);
+            if let Some(stats) = netplay_stats.as_ref() {
+                metrics.on_netplay_stats(stats);
+            }
             if trace_every_frames > 0 && frame_index.is_multiple_of(trace_every_frames) {
                 let regs = core.cpu_snapshot();
                 println!(
@@ -976,6 +1144,34 @@ fn parse_u64_arg(value: &str, flag: &str) -> Result<u64, String> {
         .map_err(|_| format!("{flag} must be a non-negative integer"))
 }
 
+fn recommended_input_delay_frames(
+    rtt_ms: Option<f64>,
+    jitter_ms: f64,
+    min_delay_frames: u32,
+    max_delay_frames: u32,
+    current_delay_frames: u32,
+) -> u32 {
+    if min_delay_frames >= max_delay_frames {
+        return min_delay_frames;
+    }
+    let Some(rtt_ms) = rtt_ms else {
+        return current_delay_frames;
+    };
+
+    let frame_time_ms = 1_000.0 / 60.0;
+    let estimated_one_way_ms = (rtt_ms * 0.5) + (jitter_ms * 1.5);
+    let raw_target = (estimated_one_way_ms / frame_time_ms).ceil() as u32 + 1;
+    let target = raw_target.clamp(min_delay_frames, max_delay_frames);
+
+    if target > current_delay_frames {
+        target
+    } else if target + 1 < current_delay_frames {
+        current_delay_frames - 1
+    } else {
+        current_delay_frames
+    }
+}
+
 fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
     match key {
         VirtualKeyCode::Z => Some("KeyZ"),
@@ -1213,6 +1409,7 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 mod tests {
     use super::{
         DEFAULT_MCP_BIND_ADDR, RuntimeArgs, controller_state_delta_for_player, parse_runtime_args,
+        recommended_input_delay_frames,
     };
     use nes_core::{Button, Command};
 
@@ -1284,6 +1481,27 @@ mod tests {
             netplay_hash_check_every_frames: Some(90),
         };
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn adaptive_delay_reacts_to_rtt_and_jitter() {
+        let increased = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+        assert!(
+            increased >= 4,
+            "expected higher delay for higher RTT+jitter"
+        );
+
+        let unchanged = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, increased);
+        assert!(
+            unchanged == increased || unchanged + 1 == increased,
+            "hysteresis should avoid abrupt downshifts"
+        );
+    }
+
+    #[test]
+    fn adaptive_delay_uses_current_when_no_rtt_sample() {
+        let delay = recommended_input_delay_frames(None, 0.0, 1, 12, 3);
+        assert_eq!(delay, 3);
     }
 
     #[test]
