@@ -24,7 +24,7 @@ fn generated_homebrew_rom_boots_and_moves_sprite() {
 
     let x_after = core.ppu_oam_byte(3);
     assert!(
-        x_after > x_before,
-        "expected sprite X position to increase with Right held (before={x_before}, after={x_after})"
+        x_after.saturating_sub(x_before) >= 40,
+        "expected sprite X position to increase by at least 40 with Right held for 20 frames (before={x_before}, after={x_after})"
     );
 }
