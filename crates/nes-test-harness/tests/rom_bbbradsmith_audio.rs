@@ -64,7 +64,7 @@ fn bbbradsmith_audio_suite_write_trace_is_deterministic_per_rom() {
     }
     assert!(
         tested_roms > 0,
-        "no bbbradsmith ROMs with supported mappers were found (supported: 0/1/2). skipped: {skipped:?}"
+        "no bbbradsmith ROMs with supported mappers were found (supported: 0/1/2/4). skipped: {skipped:?}"
     );
 }
 
@@ -120,7 +120,7 @@ fn bbbradsmith_audio_suite_audio_windows_are_deterministic_and_well_formed() {
 
     assert!(
         tested_roms > 0,
-        "no bbbradsmith ROMs with supported mappers were found (supported: 0/1/2). skipped: {skipped:?}"
+        "no bbbradsmith ROMs with supported mappers were found (supported: 0/1/2/4). skipped: {skipped:?}"
     );
     assert!(
         audible_roms > 0,

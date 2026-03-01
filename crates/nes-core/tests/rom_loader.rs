@@ -223,6 +223,102 @@ fn mmc1_bank_switch_via_prg_writes_changes_lower_window() {
 }
 
 #[test]
+fn load_mmc3_maps_switchable_and_fixed_prg_windows_for_boot() {
+    let mut rom = sample_ines(4, 4); // 64KB PRG => eight 8KB banks.
+    let prg_start = 16;
+    let bank_8k = 8 * 1024;
+
+    // Fill each 8KB bank with a marker instruction sequence: LDA #bank ; RTS.
+    for bank in 0..8 {
+        let start = prg_start + bank * bank_8k;
+        rom[start] = 0xA9;
+        rom[start + 1] = bank as u8;
+        rom[start + 2] = 0x60;
+    }
+
+    // Reset vector lives in the last fixed 8KB bank ($E000-$FFFF).
+    let last_bank = prg_start + 7 * bank_8k;
+    rom[last_bank + 0x1FFC] = 0x00;
+    rom[last_bank + 0x1FFD] = 0xE0;
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(info.mapper_id, 4);
+    assert_eq!(core.cpu_pc(), 0xE000);
+
+    // Default MMC3 PRG mode maps bank 0 at $8000 and bank 1 at $A000.
+    assert_eq!(core.read_memory(0x8000), 0xA9);
+    assert_eq!(core.read_memory(0x8001), 0x00);
+    assert_eq!(core.read_memory(0xA001), 0x01);
+    // The high windows should be fixed to the last two banks.
+    assert_eq!(core.read_memory(0xC001), 0x06);
+    assert_eq!(core.read_memory(0xE001), 0x07);
+
+    core.execute(Command::StepCpu).unwrap();
+    assert_eq!(core.cpu_a(), 0x07);
+}
+
+#[test]
+fn mmc3_bank_switch_via_prg_writes_changes_lower_8k_window() {
+    let mut rom = sample_ines(4, 4); // 64KB PRG => eight 8KB banks.
+    let prg_start = 16;
+    let bank_8k = 8 * 1024;
+
+    // Bank 0 callable function at $8000: LDA #$10 ; RTS.
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x10;
+    rom[prg_start + 2] = 0x60;
+
+    // Bank 3 callable function at $8000: LDA #$33 ; RTS.
+    let bank3 = prg_start + 3 * bank_8k;
+    rom[bank3] = 0xA9;
+    rom[bank3 + 1] = 0x33;
+    rom[bank3 + 2] = 0x60;
+
+    // Last fixed bank program:
+    // LDA #$06 ; STA $8000 (select bank register 6)
+    // LDA #$03 ; STA $8001 (select PRG bank 3 into $8000 slot)
+    // JSR $8000
+    let last_bank = prg_start + 7 * bank_8k;
+    rom[last_bank] = 0xA9;
+    rom[last_bank + 1] = 0x06;
+    rom[last_bank + 2] = 0x8D;
+    rom[last_bank + 3] = 0x00;
+    rom[last_bank + 4] = 0x80;
+    rom[last_bank + 5] = 0xA9;
+    rom[last_bank + 6] = 0x03;
+    rom[last_bank + 7] = 0x8D;
+    rom[last_bank + 8] = 0x01;
+    rom[last_bank + 9] = 0x80;
+    rom[last_bank + 10] = 0x20;
+    rom[last_bank + 11] = 0x00;
+    rom[last_bank + 12] = 0x80;
+
+    // Reset vector -> $E000.
+    rom[last_bank + 0x1FFC] = 0x00;
+    rom[last_bank + 0x1FFD] = 0xE0;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(core.read_memory(0x8001), 0x10);
+
+    core.execute(Command::StepCpu).unwrap(); // LDA #$06
+    core.execute(Command::StepCpu).unwrap(); // STA $8000 (select register 6)
+    core.execute(Command::StepCpu).unwrap(); // LDA #$03
+    core.execute(Command::StepCpu).unwrap(); // STA $8001 (bank 3 into slot 0)
+
+    assert_eq!(core.read_memory(0x8001), 0x33);
+
+    core.execute(Command::StepCpu).unwrap(); // JSR $8000
+    core.execute(Command::StepCpu).unwrap(); // LDA #$33
+    core.execute(Command::StepCpu).unwrap(); // RTS
+
+    assert_eq!(core.cpu_a(), 0x33);
+}
+
+#[test]
 fn invalid_ines_magic_is_rejected() {
     let mut core = NesCore::new();
     let err = core.load_ines_rom(&[0_u8; 16]).unwrap_err();
@@ -235,7 +331,7 @@ fn invalid_ines_magic_is_rejected() {
 
 #[test]
 fn unsupported_mapper_is_rejected() {
-    let rom = sample_ines(4, 2);
+    let rom = sample_ines(69, 2);
     let mut core = NesCore::new();
     let err = core.load_ines_rom(&rom).unwrap_err();
 
