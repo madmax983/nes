@@ -6,7 +6,7 @@ mod homebrew;
 
 pub use homebrew::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
 
-use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
+use nes_core::{Command, CoreError, CpuBusAccessKind, NesCore};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {

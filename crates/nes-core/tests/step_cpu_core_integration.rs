@@ -1,4 +1,4 @@
-use nes_core::cpu::CpuError;
+use nes_core::CpuError;
 use nes_core::{Command, CoreError, NesCore};
 
 #[test]

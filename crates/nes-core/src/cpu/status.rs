@@ -18,7 +18,7 @@
 /// ## Examples
 ///
 /// ```
-/// use nes_core::cpu::status::Status;
+/// use nes_core::Status;
 ///
 /// let mut status = Status::default();
 /// assert!(!status.carry());

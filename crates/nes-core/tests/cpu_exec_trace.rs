@@ -1,4 +1,4 @@
-use nes_core::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuPrgWrite};
+use nes_core::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuPrgWrite};
 
 #[test]
 fn cpu_executes_lda_tax_inx_sequence() {

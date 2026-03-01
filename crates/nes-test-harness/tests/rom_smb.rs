@@ -381,7 +381,7 @@ fn collect_controller_reads(core: &mut NesCore, steps: u32) -> Vec<u8> {
     for _ in 0..steps {
         core.execute(Command::StepCpu).unwrap();
         for access in core.last_cpu_bus_trace() {
-            if access.addr == 0x4016 && access.kind == nes_core::cpu::CpuBusAccessKind::Read {
+            if access.addr == 0x4016 && access.kind == nes_core::CpuBusAccessKind::Read {
                 reads.push(access.value);
             }
         }

@@ -1,4 +1,4 @@
-use nes_core::cpu::status::Status;
+use nes_core::Status;
 
 #[test]
 fn zero_and_negative_flags_follow_value_written() {

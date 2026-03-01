@@ -7,7 +7,8 @@
 use core::fmt;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
-use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
+pub use crate::cpu::{Cpu, CpuError, CpuPrgWrite, CpuSnapshot, CpuWrite, Status};
+pub use crate::cpu::{CpuBusAccess, CpuBusAccessKind};
 use crate::mapper::{Mmc1, Mmc3, Nrom, Uxrom};
 use crate::ppu::{Ppu, PpuSnapshot};
 use crate::replay::replay_commands;
