@@ -299,6 +299,7 @@ pub struct NesCore {
     pending_oam_dma_page: Option<u8>,
     last_cpu_trace: Option<String>,
     last_cpu_bus_trace: Vec<CpuBusAccess>,
+    scratch_writes: Vec<CpuWrite>,
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
@@ -348,6 +349,7 @@ impl NesCore {
             pending_oam_dma_page: None,
             last_cpu_trace: None,
             last_cpu_bus_trace: Vec::new(),
+            scratch_writes: Vec::new(),
         }
     }
 
@@ -638,6 +640,7 @@ impl NesCore {
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
+        self.scratch_writes.clear();
     }
 
     /// Replays a command stream on this core.
@@ -685,6 +688,7 @@ impl NesCore {
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
+        self.scratch_writes.clear();
 
         Ok(RomLoadInfo {
             mapper_id: rom.mapper_id,
@@ -793,10 +797,15 @@ impl NesCore {
             .step_with_trace_and_cycles()
             .map_err(CoreError::CpuStepFailed)?;
         self.last_cpu_trace = Some(trace);
-        self.last_cpu_bus_trace = self.cpu.take_bus_trace();
+        self.last_cpu_bus_trace.clear();
+        self.cpu.swap_bus_trace(&mut self.last_cpu_bus_trace);
 
-        let writes = self.cpu.take_writes();
+        let mut writes = core::mem::take(&mut self.scratch_writes);
+        writes.clear();
+        self.cpu.swap_writes(&mut writes);
         self.apply_cpu_writes(&writes);
+        self.scratch_writes = writes;
+
         self.apply_cpu_reads();
 
         let cpu_cycles = u64::from(cpu_cycles);
@@ -852,6 +861,7 @@ impl NesCore {
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
+        self.scratch_writes.clear();
     }
 
     fn build_mapper(

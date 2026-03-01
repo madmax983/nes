@@ -2515,19 +2515,28 @@ impl Cpu {
         )
     }
 
-    /// Drains collected non-PRG writes since last step.
-    pub fn take_writes(&mut self) -> Vec<CpuWrite> {
-        core::mem::take(&mut self.writes)
+    /// Swaps the collected non-PRG writes into the provided vector.
+    ///
+    /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
+    /// eliminating continuous heap allocations on the hot path during instruction steps.
+    pub fn swap_writes(&mut self, dest: &mut Vec<CpuWrite>) {
+        std::mem::swap(&mut self.writes, dest);
     }
 
-    /// Drains collected PRG-space writes since last step.
-    pub fn take_prg_writes(&mut self) -> Vec<CpuPrgWrite> {
-        core::mem::take(&mut self.prg_writes)
+    /// Swaps the collected PRG-space writes into the provided vector.
+    ///
+    /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
+    /// eliminating continuous heap allocations on the hot path during instruction steps.
+    pub fn swap_prg_writes(&mut self, dest: &mut Vec<CpuPrgWrite>) {
+        std::mem::swap(&mut self.prg_writes, dest);
     }
 
-    /// Drains bus trace records since last step.
-    pub fn take_bus_trace(&mut self) -> Vec<CpuBusAccess> {
-        core::mem::take(&mut *self.bus_trace.borrow_mut())
+    /// Swaps the bus trace records into the provided vector.
+    ///
+    /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
+    /// eliminating continuous heap allocations on the hot path during instruction steps.
+    pub fn swap_bus_trace(&self, dest: &mut Vec<CpuBusAccess>) {
+        std::mem::swap(&mut *self.bus_trace.borrow_mut(), dest);
     }
 
     fn push(&mut self, value: u8) {
