@@ -11,6 +11,8 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 - `crates/nes-web`: browser input bridge and runtime adapter.
 - `crates/nes-proof`: Verus proof specs and lemmas.
 - `crates/nes-test-harness`: replay + ROM gate tests.
+- `crates/nes-netplay`: rollback netcode engine + relay protocol types.
+- `crates/nes-relay`: room relay server for internet netplay sessions.
 
 ## v0 Quality Gates
 
@@ -32,6 +34,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verus-check.ps1
 ## Runtime And ROM Config
 
 Runtime and ROM paths are configured through `nes.toml` at the workspace root.
+Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
 Desktop/TUI launch commands:
 
@@ -39,6 +42,19 @@ Desktop/TUI launch commands:
 cargo run -p nes-desktop --release -- "C:\Users\markm\roms\Super Mario Bros. (World).nes"
 cargo run -p nes-desktop --release -- --config .\nes.toml
 cargo run -p nes-tui -- --config .\nes.toml
+```
+
+Rollback netplay (across-town) flow:
+
+```powershell
+# Terminal 1: relay server
+cargo run -p nes-relay -- --bind 0.0.0.0:4545
+
+# Terminal 2: player 1
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 1 "C:\Users\markm\roms\River City Ransom (USA).nes"
+
+# Terminal 3: player 2
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 "C:\Users\markm\roms\River City Ransom (USA).nes"
 ```
 
 WebAssembly build:
@@ -90,7 +106,7 @@ Run only the bbbradsmith audio checks:
 cargo test -p nes-test-harness --test rom_bbbradsmith_audio -- --ignored --nocapture
 ```
 
-Generate/update golden PCM captures for supported mapper ROMs (0/1/2):
+Generate/update golden PCM captures for supported mapper ROMs (0/1/2/4):
 
 ```powershell
 cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config .\nes.toml

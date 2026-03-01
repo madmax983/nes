@@ -1352,6 +1352,7 @@ dependencies = [
  "nes-config",
  "nes-core",
  "nes-mcp",
+ "nes-netplay",
  "pixels",
  "rodio",
  "serde",
@@ -1380,8 +1381,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "nes-netplay"
+version = "0.1.0"
+dependencies = [
+ "nes-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nes-proof"
 version = "0.1.0"
+
+[[package]]
+name = "nes-relay"
+version = "0.1.0"
+dependencies = [
+ "nes-netplay",
+ "serde_json",
+]
 
 [[package]]
 name = "nes-test-harness"

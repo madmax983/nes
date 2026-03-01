@@ -10,6 +10,8 @@ members = [
     "crates/nes-web",
     "crates/nes-proof",
     "crates/nes-test-harness",
+    "crates/nes-netplay",
+    "crates/nes-relay",
 ]
 
 [profile.dev.package.nes-core]
