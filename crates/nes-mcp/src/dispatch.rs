@@ -162,23 +162,59 @@ pub fn dispatch_tool(
         }
         "set_controller_state" => {
             let bits = parse_u8(params, "bits")?;
-            execute_command(core, Command::SetControllerState(bits))?;
+            let player2 = parse_player2(params)?;
+            execute_command(
+                core,
+                if player2 {
+                    Command::SetController2State(bits)
+                } else {
+                    Command::SetControllerState(bits)
+                },
+            )?;
             Ok(DispatchOutput::ControllerState {
-                controller_bits: core.controller_bits(),
+                controller_bits: if player2 {
+                    core.controller2_bits()
+                } else {
+                    core.controller_bits()
+                },
             })
         }
         "press_button" => {
             let button = parse_button(params)?;
-            execute_command(core, Command::PressButton(button))?;
+            let player2 = parse_player2(params)?;
+            execute_command(
+                core,
+                if player2 {
+                    Command::PressButton2(button)
+                } else {
+                    Command::PressButton(button)
+                },
+            )?;
             Ok(DispatchOutput::ControllerState {
-                controller_bits: core.controller_bits(),
+                controller_bits: if player2 {
+                    core.controller2_bits()
+                } else {
+                    core.controller_bits()
+                },
             })
         }
         "release_button" => {
             let button = parse_button(params)?;
-            execute_command(core, Command::ReleaseButton(button))?;
+            let player2 = parse_player2(params)?;
+            execute_command(
+                core,
+                if player2 {
+                    Command::ReleaseButton2(button)
+                } else {
+                    Command::ReleaseButton(button)
+                },
+            )?;
             Ok(DispatchOutput::ControllerState {
-                controller_bits: core.controller_bits(),
+                controller_bits: if player2 {
+                    core.controller2_bits()
+                } else {
+                    core.controller_bits()
+                },
             })
         }
         "set_speed" => {
@@ -579,6 +615,20 @@ fn parse_speed_permille(params: &ToolParams) -> Result<u16, DispatchError> {
     }
 
     Ok(permille as u16)
+}
+
+fn parse_player2(params: &ToolParams) -> Result<bool, DispatchError> {
+    let Some(raw) = params.get("player") else {
+        return Ok(false);
+    };
+    let value = parse_integer(raw)?;
+    match value {
+        1 => Ok(false),
+        2 => Ok(true),
+        _ => Err(DispatchError::InvalidParams(
+            "player must be 1 or 2".to_owned(),
+        )),
+    }
 }
 
 fn parse_slot(params: &ToolParams) -> String {

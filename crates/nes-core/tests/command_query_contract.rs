@@ -20,11 +20,13 @@ fn pause_and_resume_are_core_commands() {
 fn controller_state_and_speed_are_queryable() {
     let mut core = NesCore::new();
     core.execute(Command::SetControllerState(0xA5)).unwrap();
+    core.execute(Command::SetController2State(0x3C)).unwrap();
     core.execute(Command::SetSpeed(1_500)).unwrap();
 
     match core.query(CoreQuery::EmulatorState) {
         QueryResult::EmulatorState(state) => {
             assert_eq!(state.controller_bits, 0xA5);
+            assert_eq!(state.controller2_bits, 0x3C);
             assert_eq!(state.speed_permille, 1_500);
         }
         other => panic!("unexpected query result: {other:?}"),

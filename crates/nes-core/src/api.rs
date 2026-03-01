@@ -90,10 +90,16 @@ pub enum Command {
     StepFrame,
     /// Replace full controller bitfield.
     SetControllerState(u8),
+    /// Replace full controller bitfield for player 2.
+    SetController2State(u8),
     /// Press a single controller button.
     PressButton(Button),
+    /// Press a single controller button for player 2.
+    PressButton2(Button),
     /// Release a single controller button.
     ReleaseButton(Button),
+    /// Release a single controller button for player 2.
+    ReleaseButton2(Button),
     /// Set speed multiplier in permille (`1000 == 1.0x`).
     SetSpeed(u16),
 }
@@ -123,6 +129,8 @@ pub struct EmulatorState {
     pub speed_permille: u16,
     /// Latched controller bits.
     pub controller_bits: u8,
+    /// Latched controller bits for player 2.
+    pub controller2_bits: u8,
 }
 
 /// The result of executing a [`CoreQuery`] on the [`NesCore`].
@@ -149,6 +157,8 @@ pub struct CoreSnapshot {
     pub speed_permille: u16,
     /// Controller bits.
     pub controller_bits: u8,
+    /// Controller bits for player 2.
+    pub controller2_bits: u8,
     /// Scheduler counters.
     pub scheduler: SchedulerSnapshot,
     /// PPU state.
@@ -159,6 +169,7 @@ pub struct CoreSnapshot {
     pub cpu: CpuSnapshot,
     controller_strobe: bool,
     controller_shift: u8,
+    controller2_shift: u8,
     pending_oam_dma_page: Option<u8>,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
@@ -245,8 +256,10 @@ pub struct NesCore {
     scheduler: Scheduler,
     ppu: Ppu,
     controller_bits: u8,
+    controller2_bits: u8,
     controller_strobe: bool,
     controller_shift: u8,
+    controller2_shift: u8,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
     cpu: Cpu,
@@ -292,8 +305,10 @@ impl NesCore {
             scheduler: Scheduler::new(),
             ppu: Ppu::new(),
             controller_bits: 0,
+            controller2_bits: 0,
             controller_strobe: false,
             controller_shift: 0,
+            controller2_shift: 0,
             mapper: None,
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
@@ -326,6 +341,12 @@ impl NesCore {
     #[must_use]
     pub fn controller_bits(&self) -> u8 {
         self.controller_bits
+    }
+
+    /// Returns current controller bitfield for player 2.
+    #[must_use]
+    pub fn controller2_bits(&self) -> u8 {
+        self.controller2_bits
     }
 
     /// Loads raw bytes into CPU memory image.
@@ -384,7 +405,8 @@ impl NesCore {
             0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
             0x2007 => self.ppu.peek_data_for_cpu_read(),
             0x4015 => self.apu.peek_status(),
-            0x4016 => self.controller_port_sample(),
+            0x4016 => self.controller_port_sample(false),
+            0x4017 => self.controller_port_sample(true),
             _ => self.cpu.read_byte(addr),
         }
     }
@@ -523,8 +545,10 @@ impl NesCore {
             ^ self.scheduler.apu_cycles().rotate_left(47)
             ^ (self.speed_permille as u64).rotate_left(3)
             ^ (self.controller_bits as u64).rotate_left(7)
+            ^ (self.controller2_bits as u64).rotate_left(27)
             ^ ((if self.controller_strobe { 1_u64 } else { 0_u64 }).rotate_left(15))
             ^ (self.controller_shift as u64).rotate_left(21)
+            ^ (self.controller2_shift as u64).rotate_left(33)
             ^ (cpu.pc as u64).rotate_left(19)
             ^ (cpu.a as u64).rotate_left(23)
             ^ (cpu.x as u64).rotate_left(31)
@@ -546,12 +570,14 @@ impl NesCore {
             paused: self.paused,
             speed_permille: self.speed_permille,
             controller_bits: self.controller_bits,
+            controller2_bits: self.controller2_bits,
             scheduler: self.scheduler.snapshot(),
             ppu: self.ppu.snapshot(),
             apu: self.apu.snapshot(),
             cpu: self.cpu.snapshot(),
             controller_strobe: self.controller_strobe,
             controller_shift: self.controller_shift,
+            controller2_shift: self.controller2_shift,
             pending_oam_dma_page: self.pending_oam_dma_page,
             mapper: self.mapper.clone(),
             reset_pc: self.reset_pc,
@@ -563,12 +589,14 @@ impl NesCore {
         self.paused = snapshot.paused;
         self.speed_permille = snapshot.speed_permille;
         self.controller_bits = snapshot.controller_bits;
+        self.controller2_bits = snapshot.controller2_bits;
         self.scheduler.restore(snapshot.scheduler);
         self.ppu.restore(snapshot.ppu);
         self.apu.restore(snapshot.apu.clone());
         self.cpu.restore(snapshot.cpu);
         self.controller_strobe = snapshot.controller_strobe;
         self.controller_shift = snapshot.controller_shift;
+        self.controller2_shift = snapshot.controller2_shift;
         self.pending_oam_dma_page = snapshot.pending_oam_dma_page;
         self.mapper = snapshot.mapper.clone();
         self.reset_pc = snapshot.reset_pc;
@@ -609,8 +637,10 @@ impl NesCore {
 
         self.paused = false;
         self.controller_bits = 0;
+        self.controller2_bits = 0;
         self.controller_strobe = false;
         self.controller_shift = 0;
+        self.controller2_shift = 0;
         self.scheduler.reset();
         self.ppu.reset();
         self.apu.reset();
@@ -664,17 +694,32 @@ impl NesCore {
                 Ok(())
             }
             Command::SetControllerState(bits) => {
-                self.set_controller_bits(bits);
+                self.set_controller_bits(bits, false);
+                self.sync_ppu_register_image();
+                Ok(())
+            }
+            Command::SetController2State(bits) => {
+                self.set_controller_bits(bits, true);
                 self.sync_ppu_register_image();
                 Ok(())
             }
             Command::PressButton(button) => {
-                self.set_controller_bits(self.controller_bits | button.bit_mask());
+                self.set_controller_bits(self.controller_bits | button.bit_mask(), false);
+                self.sync_ppu_register_image();
+                Ok(())
+            }
+            Command::PressButton2(button) => {
+                self.set_controller_bits(self.controller2_bits | button.bit_mask(), true);
                 self.sync_ppu_register_image();
                 Ok(())
             }
             Command::ReleaseButton(button) => {
-                self.set_controller_bits(self.controller_bits & !button.bit_mask());
+                self.set_controller_bits(self.controller_bits & !button.bit_mask(), false);
+                self.sync_ppu_register_image();
+                Ok(())
+            }
+            Command::ReleaseButton2(button) => {
+                self.set_controller_bits(self.controller2_bits & !button.bit_mask(), true);
                 self.sync_ppu_register_image();
                 Ok(())
             }
@@ -696,6 +741,7 @@ impl NesCore {
                 paused: self.paused,
                 speed_permille: self.speed_permille,
                 controller_bits: self.controller_bits,
+                controller2_bits: self.controller2_bits,
             }),
             CoreQuery::Registers => QueryResult::Registers(self.cpu.snapshot()),
             CoreQuery::Memory(addr) => QueryResult::Memory(self.read_memory(addr)),
@@ -758,8 +804,10 @@ impl NesCore {
     fn reset_runtime(&mut self) {
         self.paused = false;
         self.controller_bits = 0;
+        self.controller2_bits = 0;
         self.controller_strobe = false;
         self.controller_shift = 0;
+        self.controller2_shift = 0;
         self.scheduler.reset();
         self.ppu.reset();
         self.apu.reset();
@@ -885,14 +933,18 @@ impl NesCore {
         self.cpu
             .write_byte(0x2007, self.ppu.peek_data_for_cpu_read());
         self.cpu.write_byte(0x4015, self.apu.peek_status());
-        self.cpu.write_byte(0x4016, self.controller_port_sample());
+        self.cpu
+            .write_byte(0x4016, self.controller_port_sample(false));
+        self.cpu
+            .write_byte(0x4017, self.controller_port_sample(true));
     }
 
     fn apply_cpu_reads(&mut self) {
         let mut saw_ppu_status_read = false;
         let mut ppu_data_reads = 0_u8;
         let mut apu_status_reads = 0_u8;
-        let mut controller_reads = 0_u8;
+        let mut controller1_reads = 0_u8;
+        let mut controller2_reads = 0_u8;
 
         for access in &self.last_cpu_bus_trace {
             if access.kind != CpuBusAccessKind::Read {
@@ -902,7 +954,8 @@ impl NesCore {
                 0x2002 => saw_ppu_status_read = true,
                 0x2007 => ppu_data_reads = ppu_data_reads.saturating_add(1),
                 0x4015 => apu_status_reads = apu_status_reads.saturating_add(1),
-                0x4016 => controller_reads = controller_reads.saturating_add(1),
+                0x4016 => controller1_reads = controller1_reads.saturating_add(1),
+                0x4017 => controller2_reads = controller2_reads.saturating_add(1),
                 _ => {}
             }
         }
@@ -916,15 +969,26 @@ impl NesCore {
         for _ in 0..apu_status_reads {
             let _ = self.apu.read_status();
         }
-        for _ in 0..controller_reads {
-            self.consume_controller_read();
+        for _ in 0..controller1_reads {
+            self.consume_controller_read(false);
+        }
+        for _ in 0..controller2_reads {
+            self.consume_controller_read(true);
         }
     }
 
-    fn set_controller_bits(&mut self, bits: u8) {
-        self.controller_bits = bits;
+    fn set_controller_bits(&mut self, bits: u8, player2: bool) {
+        if player2 {
+            self.controller2_bits = bits;
+        } else {
+            self.controller_bits = bits;
+        }
         if self.controller_strobe {
-            self.controller_shift = bits;
+            if player2 {
+                self.controller2_shift = bits;
+            } else {
+                self.controller_shift = bits;
+            }
         }
     }
 
@@ -933,27 +997,38 @@ impl NesCore {
         if next_strobe {
             self.controller_strobe = true;
             self.controller_shift = self.controller_bits;
+            self.controller2_shift = self.controller2_bits;
             return;
         }
 
         if self.controller_strobe {
             self.controller_shift = self.controller_bits;
+            self.controller2_shift = self.controller2_bits;
         }
         self.controller_strobe = false;
     }
 
-    fn controller_port_sample(&self) -> u8 {
-        let bit = if self.controller_strobe {
-            self.controller_bits & 1
+    fn controller_port_sample(&self, player2: bool) -> u8 {
+        let (bits, shift) = if player2 {
+            (self.controller2_bits, self.controller2_shift)
         } else {
-            self.controller_shift & 1
+            (self.controller_bits, self.controller_shift)
+        };
+        let bit = if self.controller_strobe {
+            bits & 1
+        } else {
+            shift & 1
         };
         bit | CONTROLLER_OPEN_BUS_MASK
     }
 
-    fn consume_controller_read(&mut self) {
+    fn consume_controller_read(&mut self, player2: bool) {
         if !self.controller_strobe {
-            self.controller_shift = (self.controller_shift >> 1) | 0x80;
+            if player2 {
+                self.controller2_shift = (self.controller2_shift >> 1) | 0x80;
+            } else {
+                self.controller_shift = (self.controller_shift >> 1) | 0x80;
+            }
         }
     }
 

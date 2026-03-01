@@ -88,6 +88,32 @@ fn controller_port_reads_shift_bits_when_strobe_low() {
 }
 
 #[test]
+fn controller2_port_reads_shift_bits_from_4017() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(
+        0xC000,
+        &[
+            0xA9, 0x01, // LDA #$01
+            0x8D, 0x16, 0x40, // STA $4016 (strobe high)
+            0xA9, 0x00, // LDA #$00
+            0x8D, 0x16, 0x40, // STA $4016 (strobe low, latch both)
+            0xAD, 0x17, 0x40, // LDA $4017
+            0x8D, 0x22, 0x00, // STA $0022
+            0xAD, 0x17, 0x40, // LDA $4017
+            0x8D, 0x23, 0x00, // STA $0023
+        ],
+    );
+    core.execute(Command::SetController2State(0x02)).unwrap(); // B only
+
+    for _ in 0..8 {
+        core.execute(Command::StepCpu).unwrap();
+    }
+
+    assert_eq!(core.read_memory(0x0022) & 1, 0, "A bit should read first");
+    assert_eq!(core.read_memory(0x0023) & 1, 1, "B bit should read second");
+}
+
+#[test]
 fn ppustatus_write_is_ignored() {
     let mut core = NesCore::new();
     core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
