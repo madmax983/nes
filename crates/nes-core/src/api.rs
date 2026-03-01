@@ -10,7 +10,6 @@ use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{Mmc1, Mmc3, Nrom, Uxrom};
 use crate::ppu::{Ppu, PpuSnapshot};
-use crate::replay::replay_commands;
 use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
@@ -646,7 +645,10 @@ impl NesCore {
     ///
     /// Propagates the first command execution failure.
     pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
-        replay_commands(self, commands)
+        for command in commands {
+            self.execute(*command)?;
+        }
+        Ok(())
     }
 
     /// Loads an iNES ROM into mapper + PPU/CPU state.

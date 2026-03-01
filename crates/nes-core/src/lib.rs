@@ -9,7 +9,6 @@ pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
 pub mod mapper;
 mod ppu;
-mod replay;
 mod rom;
 mod scheduler;
 
