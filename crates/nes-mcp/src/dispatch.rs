@@ -347,9 +347,8 @@ pub fn dispatch_tool(
                     "script must be provided".to_owned(),
                 ));
             };
-            let frames_elapsed =
-                crate::experimental::macro_engine::execute_macro_script(core, script)
-                    .map_err(DispatchError::InvalidParams)?;
+            let frames_elapsed = crate::macro_engine::execute_macro_script(core, script)
+                .map_err(DispatchError::InvalidParams)?;
             Ok(DispatchOutput::MacroExecuted {
                 frames_elapsed,
                 final_controller_bits: core.controller_bits(),

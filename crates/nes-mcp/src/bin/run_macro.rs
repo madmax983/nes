@@ -5,7 +5,7 @@ use std::path::Path;
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use nes_core::NesCore;
-use nes_mcp::experimental::macro_engine::execute_macro_script;
+use nes_mcp::macro_engine::execute_macro_script;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
