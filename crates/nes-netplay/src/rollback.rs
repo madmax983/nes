@@ -355,7 +355,7 @@ mod tests {
     use super::{HashComparison, RollbackConfig, RollbackEngine};
     use nes_core::{Command, NesCore};
 
-    fn make_core_for_rollback() -> NesCore {
+    pub fn make_core_for_rollback() -> NesCore {
         let mut core = NesCore::new();
         core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
         core
@@ -452,5 +452,58 @@ mod tests {
             err,
             super::RollbackError::InvalidRollbackConfig { .. }
         ));
+    }
+}
+
+
+
+
+
+
+
+
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use nes_core::NesCore;
+    use proptest::prelude::*;
+    use crate::rollback::tests::make_core_for_rollback;
+
+    proptest! {
+        #[test]
+        fn fuzz_rollback_engine(
+            local_inputs in proptest::collection::vec(0..255u8, 10..50),
+            remote_inputs in proptest::collection::vec(0..255u8, 10..50),
+            delay_frames in 0..10u32,
+            max_rollback in 1..20u32,
+            random_seed in 0..100u32,
+        ) {
+            let mut core = make_core_for_rollback();
+            let config = RollbackConfig {
+                local_player: 1,
+                input_delay_frames: delay_frames.min(max_rollback),
+                max_rollback_frames: max_rollback,
+            };
+            let mut engine = RollbackEngine::new(config).unwrap();
+
+            let mut frame = 0;
+            for (local, remote) in local_inputs.iter().zip(remote_inputs.iter()) {
+                engine.schedule_local_input(*local);
+
+                // Add noise to the inputs to fuzz remote inputs behavior
+                if random_seed % 3 == 0 {
+                    engine.ingest_remote_input(frame, *remote);
+                } else if random_seed % 3 == 1 {
+                    engine.ingest_remote_input(frame.saturating_add(1), *remote);
+                } else {
+                    engine.ingest_remote_input(frame.saturating_sub(1), *remote);
+                }
+
+                // Call advance frame and ignore potential errors because we intentionally throw bad inputs
+                let _ = engine.advance_frame(&mut core);
+                frame += 1;
+            }
+        }
     }
 }

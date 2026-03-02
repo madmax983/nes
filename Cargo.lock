@@ -1759,6 +1759,7 @@ name = "nes-netplay"
 version = "0.1.0"
 dependencies = [
  "nes-core",
+ "proptest",
  "serde",
  "serde_json",
 ]
