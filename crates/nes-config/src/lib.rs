@@ -96,12 +96,33 @@ impl Default for NetplayConfig {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct TimeMachineConfig {
+    pub enabled: bool,
+    pub max_history_seconds: u32,
+    pub keyframe_base_interval: u64,
+    pub delta_spike_threshold: u32,
+}
+
+impl Default for TimeMachineConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_history_seconds: 30,
+            keyframe_base_interval: 60,
+            delta_spike_threshold: 2048,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct NesConfig {
     pub desktop: DesktopConfig,
     pub roms: RomPathsConfig,
     pub netplay: NetplayConfig,
+    pub time_machine: TimeMachineConfig,
 }
 
 impl NesConfig {
@@ -186,6 +207,15 @@ mod tests {
         if path.exists() {
             fs::remove_file(path).expect("should remove temp file");
         }
+    }
+
+    #[test]
+    fn time_machine_config_has_sane_defaults() {
+        let config = NesConfig::default();
+        assert!(config.time_machine.enabled);
+        assert_eq!(config.time_machine.max_history_seconds, 30);
+        assert_eq!(config.time_machine.keyframe_base_interval, 60);
+        assert_eq!(config.time_machine.delta_spike_threshold, 2048);
     }
 
     #[test]
