@@ -586,13 +586,14 @@ impl NesCore {
     /// Drains one host-frame-sized audio chunk (`AUDIO_CHUNK_SAMPLES`).
     #[must_use]
     pub fn audio_chunk_i16(&mut self) -> Vec<i16> {
-        self.apu.drain_samples(AUDIO_CHUNK_SAMPLES, self.paused)
+        let mut buffer = vec![0; AUDIO_CHUNK_SAMPLES];
+        self.fill_audio_chunk_i16(&mut buffer);
+        buffer
     }
 
     /// Fills caller-provided audio buffer with drained APU samples.
     pub fn fill_audio_chunk_i16(&mut self, samples: &mut [i16]) {
-        let drained = self.apu.drain_samples(samples.len(), self.paused);
-        samples.copy_from_slice(&drained);
+        self.apu.fill_samples(samples, self.paused);
     }
 
     /// Returns a compact hash of emulation state for regression checks.
