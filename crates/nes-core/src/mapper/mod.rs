@@ -2,6 +2,7 @@
 
 mod axrom;
 mod cnrom;
+mod gxrom;
 mod mmc1;
 mod mmc3;
 mod nrom;
@@ -9,6 +10,7 @@ mod uxrom;
 
 pub use axrom::Axrom;
 pub use cnrom::Cnrom;
+pub use gxrom::Gxrom;
 pub use mmc1::Mmc1;
 pub use mmc3::Mmc3;
 pub use nrom::Nrom;
