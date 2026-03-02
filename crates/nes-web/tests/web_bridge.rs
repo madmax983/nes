@@ -1,5 +1,5 @@
-use nes_web::bridge::map_dom_key_to_command;
-use nes_web::runtime::WebRuntime;
+use nes_web::WebRuntime;
+use nes_web::map_dom_key_to_command;
 
 #[test]
 fn dom_key_maps_to_press_button_command() {

@@ -1,5 +1,5 @@
 use crossterm::event::KeyCode;
-use nes_tui::app::map_key_event_to_command;
+use nes_tui::map_key_event_to_command;
 
 #[test]
 fn keyboard_press_maps_to_controller_command() {

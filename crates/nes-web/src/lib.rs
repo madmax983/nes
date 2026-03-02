@@ -1,6 +1,7 @@
-pub mod bridge;
-pub mod runtime;
+mod bridge;
+mod runtime;
 
+pub use bridge::{BridgeCommand, map_dom_key_to_command};
 pub use runtime::WebRuntime;
 
 use wasm_bindgen::prelude::*;

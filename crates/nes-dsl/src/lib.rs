@@ -726,6 +726,10 @@ impl Assembler {
 
     fn write_resolved_byte(&mut self, addr: u16, byte: u8) -> Result<(), DslError> {
         if let Some(existing) = self.bytes.get(&addr) {
+            if *existing == 0 {
+                self.bytes.insert(addr, byte);
+                return Ok(());
+            }
             if *existing != byte {
                 return Err(DslError::DuplicateAddress {
                     addr,

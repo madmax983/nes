@@ -12,8 +12,8 @@ use crossterm::terminal::{
 use image::{DynamicImage, Rgba, RgbaImage};
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig, parse_config_path_arg};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
-use nes_tui::app::map_key_event_to_command;
-use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
+use nes_tui::map_key_event_to_command;
+use nes_tui::{frame_lines_half_blocks, mini_palette_spans};
 use ratatui::Frame;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
