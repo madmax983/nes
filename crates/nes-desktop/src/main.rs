@@ -578,6 +578,12 @@ fn run() -> Result<(), String> {
                     rewind_held = pressed;
                     if !pressed {
                         time_machine.resume();
+                        // The restored snapshot's controller_bits may reflect buttons
+                        // held at that historical frame. Release all buttons so the
+                        // core's latch matches the actual key state going forward.
+                        for &button in &CONTROLLER_BUTTONS {
+                            let _ = core.execute(Command::ReleaseButton(button));
+                        }
                     }
                     return;
                 }

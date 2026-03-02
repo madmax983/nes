@@ -79,6 +79,29 @@ pub struct PpuTimingDelta {
     pub odd_frame: bool,
 }
 
+/// PPU address/scroll registers (the "Loopy" registers).
+///
+/// SMB writes these every frame for smooth side-scrolling. Without tracking
+/// them in deltas, delta-reconstructed frames have stale scroll state from
+/// the nearest keyframe, producing background glitches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PpuScrollDelta {
+    /// Current VRAM address (v register).
+    pub vram_addr: u16,
+    /// Temporary VRAM address (t register).
+    pub temp_addr: u16,
+    /// Fine X scroll (3 bits).
+    pub fine_x: u8,
+    /// Write toggle for PPUSCROLL/PPUADDR.
+    pub write_toggle: bool,
+    /// Coarse X scroll approximation.
+    pub scroll_x: u8,
+    /// Coarse Y scroll approximation.
+    pub scroll_y: u8,
+    /// Buffered value for $2007 reads.
+    pub read_buffer: u8,
+}
+
 /// Scalar-field delta between two [`CoreSnapshot`]s.
 ///
 /// Each `Option` field is `None` when unchanged, `Some(new_value)` when changed.
@@ -90,6 +113,8 @@ pub struct FieldDelta {
     pub ppu_ctrl: Option<[u8; 4]>,
     /// PPU timing fields if any changed.
     pub ppu_timing: Option<PpuTimingDelta>,
+    /// PPU address/scroll (Loopy) registers if any changed.
+    pub ppu_scroll: Option<PpuScrollDelta>,
     // TODO: mapper delta tracking -- keyframes capture full state for now.
 }
 
@@ -132,10 +157,34 @@ impl FieldDelta {
             }
         };
 
+        let ppu_scroll = {
+            let changed = before.ppu.vram_addr != after.ppu.vram_addr
+                || before.ppu.temp_addr != after.ppu.temp_addr
+                || before.ppu.fine_x != after.ppu.fine_x
+                || before.ppu.write_toggle != after.ppu.write_toggle
+                || before.ppu.scroll_x != after.ppu.scroll_x
+                || before.ppu.scroll_y != after.ppu.scroll_y
+                || before.ppu.read_buffer != after.ppu.read_buffer;
+            if changed {
+                Some(PpuScrollDelta {
+                    vram_addr: after.ppu.vram_addr,
+                    temp_addr: after.ppu.temp_addr,
+                    fine_x: after.ppu.fine_x,
+                    write_toggle: after.ppu.write_toggle,
+                    scroll_x: after.ppu.scroll_x,
+                    scroll_y: after.ppu.scroll_y,
+                    read_buffer: after.ppu.read_buffer,
+                })
+            } else {
+                None
+            }
+        };
+
         Self {
             cpu_regs,
             ppu_ctrl,
             ppu_timing,
+            ppu_scroll,
         }
     }
 
@@ -155,6 +204,15 @@ impl FieldDelta {
             target.ppu.dot = timing.dot;
             target.ppu.frame_counter = timing.frame_counter;
             target.ppu.odd_frame = timing.odd_frame;
+        }
+        if let Some(scroll) = &self.ppu_scroll {
+            target.ppu.vram_addr = scroll.vram_addr;
+            target.ppu.temp_addr = scroll.temp_addr;
+            target.ppu.fine_x = scroll.fine_x;
+            target.ppu.write_toggle = scroll.write_toggle;
+            target.ppu.scroll_x = scroll.scroll_x;
+            target.ppu.scroll_y = scroll.scroll_y;
+            target.ppu.read_buffer = scroll.read_buffer;
         }
     }
 }
@@ -176,6 +234,8 @@ pub struct FrameDelta {
     pub nametable_deltas: Vec<ArrayDelta>,
     /// Changed runs in OAM (256B).
     pub oam_deltas: Vec<ArrayDelta>,
+    /// Changed runs in palette RAM (32B).
+    pub palette_deltas: Vec<ArrayDelta>,
     /// Scalar field changes.
     pub fields: FieldDelta,
     /// Approximate compressed byte size of this delta (sum of all data runs).
@@ -190,17 +250,24 @@ impl FrameDelta {
         let chr_deltas = diff_array(&before.ppu.chr, &after.ppu.chr);
         let nametable_deltas = diff_array(&before.ppu.nametable_ram, &after.ppu.nametable_ram);
         let oam_deltas = diff_array(&before.ppu.oam, &after.ppu.oam);
+        let palette_deltas = diff_array(&before.ppu.palette_ram, &after.ppu.palette_ram);
         let fields = FieldDelta::compute(before, after);
 
-        let compressed_size = [&ram_deltas, &chr_deltas, &nametable_deltas, &oam_deltas]
-            .iter()
-            .flat_map(|ds| ds.iter())
-            .map(|d| {
-                #[allow(clippy::cast_possible_truncation)]
-                let size = d.data.len() as u32;
-                size
-            })
-            .sum();
+        let compressed_size = [
+            &ram_deltas,
+            &chr_deltas,
+            &nametable_deltas,
+            &oam_deltas,
+            &palette_deltas,
+        ]
+        .iter()
+        .flat_map(|ds| ds.iter())
+        .map(|d| {
+            #[allow(clippy::cast_possible_truncation)]
+            let size = d.data.len() as u32;
+            size
+        })
+        .sum();
 
         Self {
             frame_id: after.ppu.frame_counter,
@@ -208,6 +275,7 @@ impl FrameDelta {
             chr_deltas,
             nametable_deltas,
             oam_deltas,
+            palette_deltas,
             fields,
             compressed_size,
         }
@@ -225,6 +293,7 @@ impl FrameDelta {
         apply_deltas(&mut target.ppu.chr, &self.chr_deltas);
         apply_deltas(&mut target.ppu.nametable_ram, &self.nametable_deltas);
         apply_deltas(&mut target.ppu.oam, &self.oam_deltas);
+        apply_deltas(&mut target.ppu.palette_ram, &self.palette_deltas);
         self.fields.apply(target);
     }
 }
@@ -332,6 +401,48 @@ mod tests {
         assert!(fd.cpu_regs.is_none());
         assert!(fd.ppu_ctrl.is_none());
         assert!(fd.ppu_timing.is_none());
+        assert!(fd.ppu_scroll.is_none());
+    }
+
+    #[test]
+    fn ppu_scroll_change_detected() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.vram_addr = 0x1234;
+        after.ppu.fine_x = 5;
+        after.ppu.scroll_x = 80;
+
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+        let scroll = fd.ppu_scroll.unwrap();
+        assert_eq!(scroll.vram_addr, 0x1234);
+        assert_eq!(scroll.fine_x, 5);
+        assert_eq!(scroll.scroll_x, 80);
+    }
+
+    #[test]
+    fn ppu_scroll_delta_apply_restores_scroll() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.vram_addr = 0x2000;
+        after.ppu.temp_addr = 0x3FFF;
+        after.ppu.fine_x = 7;
+        after.ppu.write_toggle = true;
+        after.ppu.scroll_x = 120;
+        after.ppu.scroll_y = 30;
+        after.ppu.read_buffer = 0xAB;
+
+        let fd = FieldDelta::compute(&before, &after);
+        let mut target = before.clone();
+        fd.apply(&mut target);
+
+        assert_eq!(target.ppu.vram_addr, 0x2000);
+        assert_eq!(target.ppu.temp_addr, 0x3FFF);
+        assert_eq!(target.ppu.fine_x, 7);
+        assert_eq!(target.ppu.write_toggle, true);
+        assert_eq!(target.ppu.scroll_x, 120);
+        assert_eq!(target.ppu.scroll_y, 30);
+        assert_eq!(target.ppu.read_buffer, 0xAB);
     }
 
     #[test]
@@ -402,6 +513,32 @@ mod tests {
     }
 
     #[test]
+    fn palette_change_tracked_in_frame_delta() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.palette_ram[0] = 0x0F; // black background
+        after.ppu.palette_ram[1] = 0x16; // red
+
+        let fd = FrameDelta::compute(&before, &after);
+        assert!(!fd.palette_deltas.is_empty());
+    }
+
+    #[test]
+    fn palette_delta_roundtrip() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.palette_ram[0] = 0x0F;
+        after.ppu.palette_ram[16] = 0x30; // white sprite palette
+
+        let fd = FrameDelta::compute(&before, &after);
+        let mut target = before.clone();
+        fd.apply(&mut target);
+
+        assert_eq!(target.ppu.palette_ram[0], 0x0F);
+        assert_eq!(target.ppu.palette_ram[16], 0x30);
+    }
+
+    #[test]
     fn frame_delta_roundtrip() {
         let before = make_snapshot();
         let mut after = before.clone();
@@ -412,6 +549,9 @@ mod tests {
         after.ppu.oam[10] = 0xCC;
         after.ppu.chr[500] = 0xDD;
         after.ppu.nametable_ram[100] = 0xEE;
+        after.ppu.palette_ram[4] = 0x16;
+        after.ppu.vram_addr = 0x1234;
+        after.ppu.scroll_x = 100;
         after.cpu.a = 0x42;
         after.ppu.frame_counter = 100;
 
@@ -426,6 +566,9 @@ mod tests {
         assert_eq!(target.ppu.oam[10], 0xCC);
         assert_eq!(target.ppu.chr[500], 0xDD);
         assert_eq!(target.ppu.nametable_ram[100], 0xEE);
+        assert_eq!(target.ppu.palette_ram[4], 0x16);
+        assert_eq!(target.ppu.vram_addr, 0x1234);
+        assert_eq!(target.ppu.scroll_x, 100);
         assert_eq!(target.cpu.a, 0x42);
         assert_eq!(target.ppu.frame_counter, 100);
     }
