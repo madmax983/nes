@@ -1,4 +1,4 @@
-use nes_core::{Command, CoreError, NesCore};
+use nes_core::{Command, CoreError, FRAME_WIDTH, NesCore};
 
 fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
     let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
@@ -11,6 +11,19 @@ fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
     rom[6] = (mapper_id & 0x0F) << 4;
     rom[7] = mapper_id & 0xF0;
 
+    rom
+}
+
+fn sample_ines_with_chr(mapper_id: u8, prg_banks: u8, chr_banks: u8) -> Vec<u8> {
+    let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024 + chr_banks as usize * 8 * 1024];
+    rom[0] = 0x4E; // N
+    rom[1] = 0x45; // E
+    rom[2] = 0x53; // S
+    rom[3] = 0x1A;
+    rom[4] = prg_banks;
+    rom[5] = chr_banks;
+    rom[6] = (mapper_id & 0x0F) << 4;
+    rom[7] = mapper_id & 0xF0;
     rom
 }
 
@@ -319,6 +332,60 @@ fn mmc3_bank_switch_via_prg_writes_changes_lower_8k_window() {
 }
 
 #[test]
+fn cnrom_chr_bank_switch_via_prg_write_changes_background_pixels() {
+    let mut rom = sample_ines_with_chr(3, 2, 2);
+    let prg_start = 16;
+    let prg_len = 2 * 16 * 1024;
+    let second_bank = prg_start + 16 * 1024;
+
+    // Stable loop at $C000 so stepping frames is deterministic.
+    rom[second_bank] = 0xEA; // NOP
+    rom[second_bank + 1] = 0x4C; // JMP $C000
+    rom[second_bank + 2] = 0x00;
+    rom[second_bank + 3] = 0xC0;
+
+    // Reset vector -> $C000.
+    let reset_vec = prg_start + prg_len - 4;
+    rom[reset_vec] = 0x00;
+    rom[reset_vec + 1] = 0xC0;
+
+    let chr_start = prg_start + prg_len;
+    let bank0 = chr_start;
+    let bank1 = chr_start + 8 * 1024;
+
+    // CHR bank 0 tile 1: plane0=1, plane1=0 => palette color 1.
+    rom[bank0 + 0x10..bank0 + 0x18].fill(0xFF);
+    rom[bank0 + 0x18..bank0 + 0x20].fill(0x00);
+
+    // CHR bank 1 tile 1: plane0=0, plane1=1 => palette color 2.
+    rom[bank1 + 0x10..bank1 + 0x18].fill(0x00);
+    rom[bank1 + 0x18..bank1 + 0x20].fill(0xFF);
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+    assert_eq!(info.mapper_id, 3);
+    assert_eq!(core.cpu_pc(), 0xC000);
+
+    core.write_cpu_bus(0x2001, 0x0A); // enable background rendering + leftmost 8px
+    write_ppu_data(&mut core, 0x3F00, &[0x0F, 0x16, 0x2A, 0x00]);
+    write_ppu_data(&mut core, 0x2000, &[0x01]); // top-left tile uses pattern 1
+
+    core.execute(Command::StepFrame).unwrap();
+    let frame_before = core.framebuffer_rgba();
+    let before = pixel_rgb(&frame_before, 0, 0);
+
+    core.write_cpu_bus(0x8000, 1); // switch to CHR bank 1
+    core.execute(Command::StepFrame).unwrap();
+    let frame_after = core.framebuffer_rgba();
+    let after = pixel_rgb(&frame_after, 0, 0);
+
+    assert_ne!(
+        before, after,
+        "switching CNROM CHR bank should alter background pixel output"
+    );
+}
+
+#[test]
 fn invalid_ines_magic_is_rejected() {
     let mut core = NesCore::new();
     let err = core.load_ines_rom(&[0_u8; 16]).unwrap_err();
@@ -339,4 +406,17 @@ fn unsupported_mapper_is_rejected() {
         CoreError::RomLoadFailed(_) => {}
         other => panic!("unexpected error: {other:?}"),
     }
+}
+
+fn write_ppu_data(core: &mut NesCore, addr: u16, data: &[u8]) {
+    core.write_cpu_bus(0x2006, (addr >> 8) as u8);
+    core.write_cpu_bus(0x2006, addr as u8);
+    for &byte in data {
+        core.write_cpu_bus(0x2007, byte);
+    }
+}
+
+fn pixel_rgb(frame: &[u8], x: usize, y: usize) -> [u8; 3] {
+    let idx = (y * FRAME_WIDTH + x) * 4;
+    [frame[idx], frame[idx + 1], frame[idx + 2]]
 }
