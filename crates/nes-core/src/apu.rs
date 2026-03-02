@@ -835,16 +835,17 @@ impl Apu {
         self.dmc.load_sample(sample);
     }
 
-    /// Drains exactly `count` PCM samples from the output queue.
+    /// Fills exactly `buffer.len()` PCM samples into the provided buffer.
     ///
     /// If insufficient samples are queued, the APU will keep stepping until
     /// enough samples are generated.
-    #[must_use]
-    pub fn drain_samples(&mut self, count: usize, paused: bool) -> Vec<i16> {
-        let mut drained = Vec::with_capacity(count);
-        while drained.len() < count {
+    pub fn fill_samples(&mut self, buffer: &mut [i16], paused: bool) {
+        let mut idx = 0;
+        let count = buffer.len();
+        while idx < count {
             if let Some(sample) = self.samples.pop_front() {
-                drained.push(sample);
+                buffer[idx] = sample;
+                idx += 1;
                 continue;
             }
             if self.step_cpu_cycle(paused).is_some() {
@@ -852,7 +853,6 @@ impl Apu {
                 self.dmc.load_sample(0);
             }
         }
-        drained
     }
 
     /// Reads status register with side-effects (clears frame IRQ latch).
