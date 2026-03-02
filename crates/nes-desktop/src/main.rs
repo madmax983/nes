@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 mod mcp_host;
 mod netplay;
 
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
@@ -20,8 +22,6 @@ use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
-use comfy_table::{Cell, Color as TableColor, Table};
-use crossterm::style::{Color, Stylize};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -392,7 +392,10 @@ fn run() -> Result<(), String> {
     ]);
     table.add_row(vec![
         Cell::new("ROM Info"),
-        Cell::new(format!("Mapper {}, PRG {} bytes, reset vector ${:04X}", info.mapper_id, info.prg_rom_bytes, info.reset_pc)),
+        Cell::new(format!(
+            "Mapper {}, PRG {} bytes, reset vector ${:04X}",
+            info.mapper_id, info.prg_rom_bytes, info.reset_pc
+        )),
     ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
         table.add_row(vec![
@@ -410,10 +413,7 @@ fn run() -> Result<(), String> {
     ]);
     match step_mode {
         StepMode::Frame => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new("frame"),
-            ]);
+            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
         }
         StepMode::CpuBudget(steps) => {
             table.add_row(vec![
@@ -425,7 +425,8 @@ fn run() -> Result<(), String> {
     if let Some(netplay) = runtime.netplay.as_ref() {
         table.add_row(vec![
             Cell::new("Netplay"),
-            Cell::new(format!("relay={} room='{}' player={} delay={} rollback={} hash_every={}",
+            Cell::new(format!(
+                "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
                 netplay.relay_addr,
                 netplay.room,
                 netplay.player,
