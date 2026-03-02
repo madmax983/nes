@@ -39,7 +39,7 @@ Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 Desktop/TUI launch commands:
 
 ```powershell
-cargo run -p nes-desktop --release -- "C:\Users\markm\roms\Super Mario Bros. (World).nes"
+cargo run -p nes-desktop --release -- .\roms\homebrew\homebrew.nes
 cargo run -p nes-desktop --release -- --config .\nes.toml
 cargo run -p nes-tui -- --config .\nes.toml
 ```
@@ -51,10 +51,10 @@ Rollback netplay (across-town) flow:
 cargo run -p nes-relay -- --bind 0.0.0.0:4545
 
 # Terminal 2: player 1
-cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 1 "C:\Users\markm\roms\River City Ransom (USA).nes"
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 1 .\roms\homebrew\homebrew.nes
 
 # Terminal 3: player 2
-cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 "C:\Users\markm\roms\River City Ransom (USA).nes"
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 .\roms\homebrew\homebrew.nes
 ```
 
 Relay can inject controlled network faults for rollback testing:
