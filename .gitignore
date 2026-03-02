@@ -1,3 +1,5 @@
 /target
 .worktrees/
 nes.toml
+mutants.out/
+mutants.out.old/
