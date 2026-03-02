@@ -1,0 +1,11 @@
+[package]
+name = "nes-rewind"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nes-core = { path = "../nes-core" }
+smallvec = { version = "1.13", features = ["const_generics"] }
+
+[dev-dependencies]
+proptest = "1.0.0"
