@@ -7,7 +7,7 @@
 - 6502-compatible CPU execution, including common unofficial opcodes used by commercial games.
 - Dot-stepped PPU with framebuffer output (`256x240 RGBA`).
 - APU channel simulation (pulse/triangle/noise/DMC) with mixed PCM output.
-- Mapper-backed PRG/CHR banking (currently NROM, MMC1, UxROM, CNROM, MMC3).
+- Mapper-backed PRG/CHR banking (currently NROM, MMC1, UxROM, CNROM, MMC3, AxROM, GxROM).
 - Save/load state snapshots and command replay.
 
 ## Host Model
@@ -40,7 +40,7 @@ This preserves deterministic progression for replay, testing, and state hashing.
 ## ROM Support
 
 - iNES and NES 2.0 headers are parsed.
-- Supported mapper IDs: `0` (NROM), `1` (MMC1 subset), `2` (UxROM), `3` (CNROM), `4` (MMC3 subset).
+- Supported mapper IDs: `0` (NROM), `1` (MMC1 subset), `2` (UxROM), `3` (CNROM), `4` (MMC3 subset), `7` (AxROM), `66` (GxROM).
 - Unsupported configurations return structured `RomError` values.
 
 ## Determinism and Tooling
