@@ -44,3 +44,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -
 ```
 
 The script uses `trunk serve` for the browser dev server.
+
+## Local ROM Persistence
+
+The web host now supports local ROM persistence through IndexedDB:
+
+- Selecting a ROM file stores it locally on the current device.
+- Loading the homebrew ROM stores it locally as well.
+- On next launch, the last saved ROM is restored automatically.
+- Use the `Forget Saved ROM` button to delete local ROM bytes.
+
+This keeps ROM distribution out of the deployed web assets while still enabling repeat play on mobile.

@@ -77,6 +77,11 @@ Web demo build + local serve (Trunk):
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
 ```
 
+Web host ROM persistence:
+- Uploaded ROMs are stored locally via IndexedDB for next launch.
+- The last saved ROM auto-restores on startup.
+- `Forget Saved ROM` clears the locally stored ROM bytes.
+
 WASM path (web host -> core):
 
 1. `web/index.html` declares the Rust artifact input (`../crates/nes-web/Cargo.toml`) for Trunk.

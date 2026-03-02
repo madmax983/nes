@@ -6,6 +6,7 @@
   <title>NES Web Demo</title>
   <link data-trunk rel="rust" href="../crates/nes-web/Cargo.toml" data-target-name="nes_web">
   <link data-trunk rel="copy-file" href="app.js">
+  <link data-trunk rel="copy-file" href="rom-storage.mjs">
   <link data-trunk rel="copy-file" href="audio-worklet.js">
   <link data-trunk rel="copy-file" href="../roms/homebrew/homebrew.nes">
   <style>
@@ -130,6 +131,7 @@
       <div class="controls">
         <input id="rom-file" type="file" accept=".nes,application/octet-stream">
         <button id="load-homebrew" type="button">Load Homebrew ROM</button>
+        <button id="forget-saved-rom" type="button">Forget Saved ROM</button>
         <button id="toggle-run" type="button" aria-pressed="false">Start</button>
         <button id="step-frame" type="button">Step Frame</button>
         <button id="reset" type="button">Reset</button>
