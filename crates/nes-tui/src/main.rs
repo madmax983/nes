@@ -31,15 +31,9 @@ const NES_CELL_HEIGHT: u32 = (FRAME_HEIGHT / 2) as u32;
 const PROTOCOL_TARGET_FPS: u32 = 30;
 const PROTOCOL_FRAME_INTERVAL: Duration = Duration::from_millis(1000 / PROTOCOL_TARGET_FPS as u64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct TuiCliOptions {
     show_hud: bool,
-}
-
-impl Default for TuiCliOptions {
-    fn default() -> Self {
-        Self { show_hud: false }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,7 +53,7 @@ enum VideoBackend {
     ProtocolImage {
         protocol_type: ProtocolType,
         picker: Picker,
-        renderer: ProtocolRenderer,
+        renderer: Box<ProtocolRenderer>,
         last_frame_update: Option<Instant>,
     },
 }
@@ -441,7 +435,7 @@ fn detect_video_backend() -> VideoBackend {
         VideoBackendKind::ProtocolImage => VideoBackend::ProtocolImage {
             protocol_type,
             picker,
-            renderer: ProtocolRenderer::new(None),
+            renderer: Box::new(ProtocolRenderer::new(None)),
             last_frame_update: None,
         },
     }
