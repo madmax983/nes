@@ -8,7 +8,7 @@ use loom::thread;
 #[cfg(not(loom))]
 use std::thread;
 
-use nes_netplay::{RollbackEngine, RollbackConfig};
+use nes_netplay::{RollbackConfig, RollbackEngine};
 
 #[test]
 fn test_rollback_concurrency() {

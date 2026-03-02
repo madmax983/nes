@@ -1,0 +1,943 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.690991184,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.352736175,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:11:9: replace BridgeCommand::tool_name -> &'static str with \"\"",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "BridgeCommand::tool_name",
+            "return_type": "-> &'static str",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 5
+              },
+              "end": {
+                "line": 16,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 9
+            },
+            "end": {
+              "line": 15,
+              "column": 10
+            }
+          },
+          "replacement": "\"\"",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_11_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_11_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603632163,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302690251,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:11:9: replace BridgeCommand::tool_name -> &'static str with \"xyzzy\"",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "BridgeCommand::tool_name",
+            "return_type": "-> &'static str",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 5
+              },
+              "end": {
+                "line": 16,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 9
+            },
+            "end": {
+              "line": 15,
+              "column": 10
+            }
+          },
+          "replacement": "\"xyzzy\"",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_11_col_9_001.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_11_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603799597,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302597751,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:12:13: delete match arm Command::PressButton(_) in BridgeCommand::tool_name",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "BridgeCommand::tool_name",
+            "return_type": "-> &'static str",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 5
+              },
+              "end": {
+                "line": 16,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 13
+            },
+            "end": {
+              "line": 12,
+              "column": 55
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_12_col_13.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_12_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603230734,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.2522961,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:13:13: delete match arm Command::ReleaseButton(_) in BridgeCommand::tool_name",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "BridgeCommand::tool_name",
+            "return_type": "-> &'static str",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 5
+              },
+              "end": {
+                "line": 16,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 13,
+              "column": 13
+            },
+            "end": {
+              "line": 13,
+              "column": 59
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_13_col_13.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_13_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603947115,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302799085,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:21:5: replace map_dom_key_to_command -> Option<BridgeCommand> with None",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 21,
+              "column": 5
+            },
+            "end": {
+              "line": 39,
+              "column": 33
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_21_col_5.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_21_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603613143,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302633517,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:21:5: replace map_dom_key_to_command -> Option<BridgeCommand> with Some(Default::default())",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 21,
+              "column": 5
+            },
+            "end": {
+              "line": 39,
+              "column": 33
+            }
+          },
+          "replacement": "Some(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_21_col_5_001.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_21_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.30434191,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:22:9: delete match arm \"KeyZ\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 22,
+              "column": 9
+            },
+            "end": {
+              "line": 22,
+              "column": 29
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_22_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_22_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603315398,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302648473,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:23:9: delete match arm \"KeyX\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 23,
+              "column": 9
+            },
+            "end": {
+              "line": 23,
+              "column": 29
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_23_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_23_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.604165509,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.252288854,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:24:9: delete match arm \"Enter\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 24,
+              "column": 9
+            },
+            "end": {
+              "line": 24,
+              "column": 34
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_24_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_24_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603425569,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302693571,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:25:9: delete match arm \"ShiftRight\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 25,
+              "column": 9
+            },
+            "end": {
+              "line": 25,
+              "column": 40
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_25_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_25_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.653978993,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302894668,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:26:9: delete match arm \"ArrowUp\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 26,
+              "column": 9
+            },
+            "end": {
+              "line": 26,
+              "column": 33
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_26_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_26_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603621869,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302625112,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:27:9: delete match arm \"ArrowDown\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 27,
+              "column": 9
+            },
+            "end": {
+              "line": 27,
+              "column": 37
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_27_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_27_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.603618842,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302570126,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:28:9: delete match arm \"ArrowLeft\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 28,
+              "column": 9
+            },
+            "end": {
+              "line": 28,
+              "column": 37
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_28_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_28_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.60386724,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302560152,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/nes-web/src/bridge.rs:29:9: delete match arm \"ArrowRight\" in map_dom_key_to_command",
+          "package": "nes-web",
+          "file": "crates/nes-web/src/bridge.rs",
+          "function": {
+            "function_name": "map_dom_key_to_command",
+            "return_type": "-> Option<BridgeCommand>",
+            "span": {
+              "start": {
+                "line": 19,
+                "column": 1
+              },
+              "end": {
+                "line": 40,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 29,
+              "column": 9
+            },
+            "end": {
+              "line": 29,
+              "column": 39
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__nes-web__src__bridge.rs_line_29_col_9.log",
+      "diff_path": "diff/crates__nes-web__src__bridge.rs_line_29_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.604591823,
+          "process_status": "Success",
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.302722745,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=nes-web@0.1.0"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 14,
+  "missed": 0,
+  "caught": 13,
+  "timeout": 0,
+  "unviable": 1,
+  "success": 0,
+  "start_time": "2026-03-02T09:03:30.942533193Z",
+  "end_time": "2026-03-02T09:03:56.145874725Z",
+  "cargo_mutants_version": "26.2.0"
+}

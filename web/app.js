@@ -1,9 +1,16 @@
 import init, { NesWebEmulator } from "./nes-web.js";
+import {
+  clearSavedRom,
+  loadSavedRom,
+  saveRomForOfflineUse,
+  supportsRomStorage,
+} from "./rom-storage.mjs";
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById("screen"));
 const statusEl = /** @type {HTMLPreElement} */ (document.getElementById("status"));
 const romFileInput = /** @type {HTMLInputElement} */ (document.getElementById("rom-file"));
 const loadHomebrewBtn = /** @type {HTMLButtonElement} */ (document.getElementById("load-homebrew"));
+const forgetSavedRomBtn = /** @type {HTMLButtonElement} */ (document.getElementById("forget-saved-rom"));
 const toggleRunBtn = /** @type {HTMLButtonElement} */ (document.getElementById("toggle-run"));
 const stepFrameBtn = /** @type {HTMLButtonElement} */ (document.getElementById("step-frame"));
 const resetBtn = /** @type {HTMLButtonElement} */ (document.getElementById("reset"));
@@ -81,6 +88,7 @@ let audioWorkletNode = null;
 let audioWorkletReady = false;
 let audioQueuedSamples = 0;
 let audioQueueMs = 0;
+let hasSavedRom = false;
 
 const AUDIO_MAX_QUEUE_MS = 35;
 const AUDIO_TARGET_QUEUE_MS = 16;
@@ -102,7 +110,11 @@ async function bootstrap() {
   const now = performance.now();
   wallFpsWindowStartMs = now;
   emuFpsWindowStartMs = now;
-  setStatus("WASM ready.\nLoad a .nes ROM or click 'Load Homebrew ROM'.");
+  const restored = await tryRestoreSavedRom();
+  if (!restored) {
+    setStatus("WASM ready.\nLoad a .nes ROM or click 'Load Homebrew ROM'.");
+  }
+  syncForgetSavedRomButton();
   canvas.focus();
   requestTick();
 }
@@ -114,7 +126,12 @@ romFileInput.addEventListener("change", async () => {
   }
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    loadRomBytes(bytes, `Loaded ROM from file: ${file.name}`);
+    await loadRomBytesWithPersistence(
+      bytes,
+      file.name,
+      "file",
+      `Loaded ROM from file: ${file.name}`,
+    );
   } catch (err) {
     setStatus(`ROM file load failed:\n${stringifyError(err)}`);
   }
@@ -132,13 +149,38 @@ loadHomebrewBtn.addEventListener("click", async () => {
       throw new Error(`HTTP ${response.status} while fetching homebrew ROM`);
     }
     const bytes = new Uint8Array(await response.arrayBuffer());
-    loadRomBytes(bytes, "Loaded homebrew ROM");
+    await loadRomBytesWithPersistence(
+      bytes,
+      "homebrew.nes",
+      "homebrew",
+      "Loaded homebrew ROM",
+    );
   } catch (err) {
     setStatus(
       `Homebrew ROM fetch failed:\n${stringifyError(err)}\n` +
         "Build ROM first: cargo run -p nes-test-harness --bin build_homebrew_rom"
     );
   }
+});
+
+forgetSavedRomBtn.addEventListener("click", async () => {
+  if (!supportsRomStorage()) {
+    setStatus("This browser does not support IndexedDB ROM storage.");
+    return;
+  }
+  try {
+    await clearSavedRom();
+    hasSavedRom = false;
+    syncForgetSavedRomButton();
+    if (romLoaded) {
+      updateHud("Cleared saved ROM from this device.");
+    } else {
+      setStatus("Cleared saved ROM from this device.");
+    }
+  } catch (err) {
+    setStatus(`Failed to clear saved ROM:\n${stringifyError(err)}`);
+  }
+  canvas.focus();
 });
 
 toggleRunBtn.addEventListener("click", () => {
@@ -395,9 +437,86 @@ function loadRomBytes(bytes, message) {
   canvas.focus();
 }
 
+async function loadRomBytesWithPersistence(bytes, romName, romSource, loadMessage) {
+  loadRomBytes(bytes, loadMessage);
+  const saveMessage = await persistRomForOfflineUse(bytes, romName, romSource);
+  updateHud(`${loadMessage}\n${saveMessage}`);
+}
+
+async function persistRomForOfflineUse(bytes, romName, romSource) {
+  if (!supportsRomStorage()) {
+    hasSavedRom = false;
+    syncForgetSavedRomButton();
+    return "ROM storage unavailable in this browser.";
+  }
+  try {
+    const saved = await saveRomForOfflineUse(bytes, romName, romSource);
+    hasSavedRom = saved;
+    syncForgetSavedRomButton();
+    return saved
+      ? "Saved ROM locally for next launch."
+      : "ROM not saved locally.";
+  } catch (err) {
+    hasSavedRom = false;
+    syncForgetSavedRomButton();
+    return `ROM loaded, but local save failed: ${stringifyError(err)}`;
+  }
+}
+
+async function tryRestoreSavedRom() {
+  if (!supportsRomStorage()) {
+    hasSavedRom = false;
+    return false;
+  }
+  let savedRom = null;
+  try {
+    savedRom = await loadSavedRom();
+  } catch (err) {
+    hasSavedRom = false;
+    setStatus(`WASM ready.\nSaved ROM lookup failed:\n${stringifyError(err)}`);
+    return false;
+  }
+  if (!savedRom) {
+    hasSavedRom = false;
+    return false;
+  }
+
+  hasSavedRom = true;
+  try {
+    const savedAt = new Date(savedRom.savedAtMs).toLocaleString();
+    loadRomBytes(savedRom.bytes, `Restored saved ROM: ${savedRom.name}`);
+    updateHud(`Restored saved ROM: ${savedRom.name}\nSaved locally: ${savedAt}`);
+    return true;
+  } catch (err) {
+    try {
+      await clearSavedRom();
+    } catch (_) {
+      // Ignore secondary cleanup failure.
+    }
+    hasSavedRom = false;
+    setStatus(
+      "WASM ready.\nSaved ROM was invalid and has been removed.\n" +
+      `Restore error: ${stringifyError(err)}`,
+    );
+    return false;
+  }
+}
+
 function syncRunButton() {
   toggleRunBtn.textContent = running ? "Pause" : "Start";
   toggleRunBtn.setAttribute("aria-pressed", running ? "true" : "false");
+}
+
+function syncForgetSavedRomButton() {
+  const storageSupported = supportsRomStorage();
+  forgetSavedRomBtn.disabled = !(storageSupported && hasSavedRom);
+  if (!storageSupported) {
+    forgetSavedRomBtn.title = "IndexedDB not available in this browser.";
+    return;
+  }
+  forgetSavedRomBtn.title = hasSavedRom
+    ? "Delete locally stored ROM bytes from this device."
+    : "No locally saved ROM found.";
 }
 
 function syncHoldRightButton() {

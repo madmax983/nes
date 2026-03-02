@@ -455,26 +455,17 @@ mod tests {
     }
 }
 
-
-
-
-
-
-
-
-
 #[cfg(test)]
 mod proptests {
     use super::*;
-    use nes_core::NesCore;
-    use proptest::prelude::*;
     use crate::rollback::tests::make_core_for_rollback;
+    use proptest::prelude::*;
 
     proptest! {
         #[test]
         fn fuzz_rollback_engine(
-            local_inputs in proptest::collection::vec(0..255u8, 10..50),
-            remote_inputs in proptest::collection::vec(0..255u8, 10..50),
+            local_inputs in proptest::collection::vec(0..255u8, 1..50),
+            remote_inputs in proptest::collection::vec(0..255u8, 1..50),
             delay_frames in 0..10u32,
             max_rollback in 1..20u32,
             random_seed in 0..100u32,
@@ -487,8 +478,8 @@ mod proptests {
             };
             let mut engine = RollbackEngine::new(config).unwrap();
 
-            let mut frame = 0;
-            for (local, remote) in local_inputs.iter().zip(remote_inputs.iter()) {
+            for (frame_idx, (local, remote)) in local_inputs.iter().zip(remote_inputs.iter()).enumerate() {
+                let frame = frame_idx as u64;
                 engine.schedule_local_input(*local);
 
                 // Add noise to the inputs to fuzz remote inputs behavior
@@ -502,7 +493,64 @@ mod proptests {
 
                 // Call advance frame and ignore potential errors because we intentionally throw bad inputs
                 let _ = engine.advance_frame(&mut core);
-                frame += 1;
+            }
+        }
+
+        #[test]
+        fn test_rollback_exceeds_window(
+            remote_delay_frames in 10u32..20u32,
+        ) {
+            let mut core = make_core_for_rollback();
+            let config = RollbackConfig {
+                local_player: 1,
+                input_delay_frames: 0,
+                max_rollback_frames: 2,
+            };
+            let mut engine = RollbackEngine::new(config).unwrap();
+
+            // Advance many frames without remote input
+            for _ in 0..remote_delay_frames {
+                engine.schedule_local_input(0);
+                engine.advance_frame(&mut core).unwrap();
+            }
+
+            // Ingest a remote input that is way too old
+            engine.ingest_remote_input(0, 1);
+
+            // The next advance_frame should attempt to rollback and fail
+            engine.schedule_local_input(0);
+            let res = engine.advance_frame(&mut core);
+
+            let is_err = matches!(res, Err(RollbackError::RollbackWindowExceeded { .. }));
+            prop_assert!(is_err);
+        }
+
+        #[test]
+        fn fuzz_rollback_bounds(
+            input_delay in 0..u32::MAX,
+            max_rollback in 0..u32::MAX,
+            local_player in 0..255u8,
+        ) {
+            let config = RollbackConfig {
+                local_player,
+                input_delay_frames: input_delay,
+                max_rollback_frames: max_rollback,
+            };
+
+            let engine = RollbackEngine::new(config);
+            let mut is_err_expected = false;
+            let mut is_err_config = false;
+            if local_player != 1 && local_player != 2 {
+                is_err_expected = matches!(engine, Err(RollbackError::InvalidLocalPlayer(_)));
+            } else if max_rollback == 0 || input_delay > max_rollback {
+                is_err_config = matches!(engine, Err(RollbackError::InvalidRollbackConfig { .. }));
+            }
+            if local_player != 1 && local_player != 2 {
+                prop_assert!(is_err_expected);
+            } else if max_rollback == 0 || input_delay > max_rollback {
+                prop_assert!(is_err_config);
+            } else {
+                prop_assert!(engine.is_ok());
             }
         }
     }

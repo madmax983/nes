@@ -1,0 +1,20 @@
+--- crates/nes-web/src/bridge.rs
++++ delete match arm "Enter" in map_dom_key_to_command
+@@ -16,17 +16,17 @@
+     }
+ }
+
+ #[must_use]
+ pub fn map_dom_key_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+     let button = match key_code {
+         "KeyZ" => Button::A,
+         "KeyX" => Button::B,
+-        "Enter" => Button::Start,
++         /* ~ changed by cargo-mutants ~ */
+         "ShiftRight" => Button::Select,
+         "ArrowUp" => Button::Up,
+         "ArrowDown" => Button::Down,
+         "ArrowLeft" => Button::Left,
+         "ArrowRight" => Button::Right,
+         _ => return None,
+     };

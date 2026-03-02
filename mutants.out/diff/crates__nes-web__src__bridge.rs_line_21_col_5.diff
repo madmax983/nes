@@ -1,0 +1,32 @@
+--- crates/nes-web/src/bridge.rs
++++ replace map_dom_key_to_command -> Option<BridgeCommand> with None
+@@ -13,28 +13,10 @@
+             Command::ReleaseButton(_) => "release_button",
+             _ => "unsupported",
+         }
+     }
+ }
+
+ #[must_use]
+ pub fn map_dom_key_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+-    let button = match key_code {
+-        "KeyZ" => Button::A,
+-        "KeyX" => Button::B,
+-        "Enter" => Button::Start,
+-        "ShiftRight" => Button::Select,
+-        "ArrowUp" => Button::Up,
+-        "ArrowDown" => Button::Down,
+-        "ArrowLeft" => Button::Left,
+-        "ArrowRight" => Button::Right,
+-        _ => return None,
+-    };
+-
+-    let core = if pressed {
+-        Command::PressButton(button)
+-    } else {
+-        Command::ReleaseButton(button)
+-    };
+-
+-    Some(BridgeCommand { core })
++    None /* ~ changed by cargo-mutants ~ */
+ }
