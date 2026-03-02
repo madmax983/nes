@@ -100,6 +100,10 @@ pub struct PpuScrollDelta {
     pub scroll_y: u8,
     /// Buffered value for $2007 reads.
     pub read_buffer: u8,
+    /// X scroll captured at VBlank start (before NMI handler overwrites it).
+    pub render_scroll_x: u8,
+    /// PPUCTRL captured at VBlank start.
+    pub render_ctrl: u8,
 }
 
 /// Scalar-field delta between two [`CoreSnapshot`]s.
@@ -164,7 +168,9 @@ impl FieldDelta {
                 || before.ppu.write_toggle != after.ppu.write_toggle
                 || before.ppu.scroll_x != after.ppu.scroll_x
                 || before.ppu.scroll_y != after.ppu.scroll_y
-                || before.ppu.read_buffer != after.ppu.read_buffer;
+                || before.ppu.read_buffer != after.ppu.read_buffer
+                || before.ppu.render_scroll_x != after.ppu.render_scroll_x
+                || before.ppu.render_ctrl != after.ppu.render_ctrl;
             if changed {
                 Some(PpuScrollDelta {
                     vram_addr: after.ppu.vram_addr,
@@ -174,6 +180,8 @@ impl FieldDelta {
                     scroll_x: after.ppu.scroll_x,
                     scroll_y: after.ppu.scroll_y,
                     read_buffer: after.ppu.read_buffer,
+                    render_scroll_x: after.ppu.render_scroll_x,
+                    render_ctrl: after.ppu.render_ctrl,
                 })
             } else {
                 None
@@ -213,6 +221,8 @@ impl FieldDelta {
             target.ppu.scroll_x = scroll.scroll_x;
             target.ppu.scroll_y = scroll.scroll_y;
             target.ppu.read_buffer = scroll.read_buffer;
+            target.ppu.render_scroll_x = scroll.render_scroll_x;
+            target.ppu.render_ctrl = scroll.render_ctrl;
         }
     }
 }

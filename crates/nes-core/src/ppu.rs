@@ -149,6 +149,11 @@ pub struct PpuSnapshot {
     pub scroll_y: u8,
     /// Buffered read value for `$2007`.
     pub read_buffer: u8,
+    /// X scroll captured at VBlank start (before NMI handler overwrites it).
+    /// Used by `render_full_framebuffer()` so restored frames show the correct game-area scroll.
+    pub render_scroll_x: u8,
+    /// PPUCTRL captured at VBlank start (before NMI handler can change nametable bits).
+    pub render_ctrl: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,6 +181,8 @@ pub struct Ppu {
     scroll_x: u8,
     scroll_y: u8,
     read_buffer: u8,
+    render_scroll_x: u8,
+    render_ctrl: u8,
     framebuffer: Vec<u8>,
 }
 
@@ -206,6 +213,8 @@ impl Ppu {
             scroll_x: 0,
             scroll_y: 0,
             read_buffer: 0,
+            render_scroll_x: 0,
+            render_ctrl: 0,
             framebuffer: blank_framebuffer(),
         }
     }
@@ -254,6 +263,8 @@ impl Ppu {
         self.scroll_x = 0;
         self.scroll_y = 0;
         self.read_buffer = 0;
+        self.render_scroll_x = 0;
+        self.render_ctrl = 0;
         self.framebuffer = blank_framebuffer();
     }
 
@@ -281,6 +292,8 @@ impl Ppu {
         self.scroll_x = snapshot.scroll_x;
         self.scroll_y = snapshot.scroll_y;
         self.read_buffer = snapshot.read_buffer;
+        self.render_scroll_x = snapshot.render_scroll_x;
+        self.render_ctrl = snapshot.render_ctrl;
         self.framebuffer = blank_framebuffer();
         self.render_full_framebuffer();
     }
@@ -312,6 +325,8 @@ impl Ppu {
             scroll_x: self.scroll_x,
             scroll_y: self.scroll_y,
             read_buffer: self.read_buffer,
+            render_scroll_x: self.render_scroll_x,
+            render_ctrl: self.render_ctrl,
         }
     }
 
@@ -343,6 +358,11 @@ impl Ppu {
         }
 
         if self.scanline == VBLANK_SCANLINE && self.dot == VBLANK_EDGE_DOT {
+            // Capture scroll/ctrl before the NMI handler gets a chance to overwrite them.
+            // SMB writes scroll_x=0 (status bar) in its NMI handler; capturing here preserves
+            // the game-area scroll so render_full_framebuffer() restores frames correctly.
+            self.render_scroll_x = self.scroll_x;
+            self.render_ctrl = self.ctrl;
             self.status |= STATUS_VBLANK;
             if self.ctrl & CTRL_NMI_ENABLE != 0 {
                 self.nmi_pending = true;
@@ -763,6 +783,14 @@ impl Ppu {
     }
 
     fn render_full_framebuffer(&mut self) {
+        // Use the scroll/ctrl captured at VBlank start rather than the post-NMI values.
+        // During live play each dot picks up scroll changes dynamically (sprite-0-hit trick),
+        // but a static re-render must use a single consistent scroll value for the whole frame.
+        // render_scroll_x/render_ctrl hold the game-area scroll before the NMI handler reset it.
+        let saved_scroll_x = self.scroll_x;
+        let saved_ctrl = self.ctrl;
+        self.scroll_x = self.render_scroll_x;
+        self.ctrl = self.render_ctrl;
         for y in 0..FRAME_HEIGHT {
             for x in 0..FRAME_WIDTH {
                 let (r, g, b) = self.render_pixel(x, y);
@@ -773,6 +801,8 @@ impl Ppu {
                 self.framebuffer[idx + 3] = 0xFF;
             }
         }
+        self.scroll_x = saved_scroll_x;
+        self.ctrl = saved_ctrl;
     }
 
     #[must_use]
