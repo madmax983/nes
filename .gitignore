@@ -1,6 +1,8 @@
 /target
 .worktrees/
 nes.toml
+mutants.out/
+mutants.out.old/
 /web/dist/
 /.trunk/
 crates/nes-web/.trunk/
