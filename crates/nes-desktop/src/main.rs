@@ -20,6 +20,8 @@ use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -378,31 +380,64 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
     let step_mode = runtime.step_mode;
 
-    println!("Loaded ROM: {rom_path}");
-    println!(
-        "Mapper {}, PRG {} bytes, reset vector ${:04X}",
-        info.mapper_id, info.prg_rom_bytes, info.reset_pc
-    );
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("ROM Path"),
+        Cell::new(&rom_path).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("ROM Info"),
+        Cell::new(format!("Mapper {}, PRG {} bytes, reset vector ${:04X}", info.mapper_id, info.prg_rom_bytes, info.reset_pc)),
+    ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
-        println!("Config: {}", config_path.display());
+        table.add_row(vec![
+            Cell::new("Config"),
+            Cell::new(config_path.display().to_string()),
+        ]);
     }
-    println!("Controls: keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit");
-    println!("Gamepad: face buttons=A/B, Start/Select, D-pad or left stick");
+    table.add_row(vec![
+        Cell::new("Controls"),
+        Cell::new("keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit"),
+    ]);
+    table.add_row(vec![
+        Cell::new("Gamepad"),
+        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
+    ]);
     match step_mode {
-        StepMode::Frame => println!("Step mode: frame"),
-        StepMode::CpuBudget(steps) => println!("Step mode: cpu ({steps} instructions/frame)"),
+        StepMode::Frame => {
+            table.add_row(vec![
+                Cell::new("Step Mode"),
+                Cell::new("frame"),
+            ]);
+        }
+        StepMode::CpuBudget(steps) => {
+            table.add_row(vec![
+                Cell::new("Step Mode"),
+                Cell::new(format!("cpu ({steps} instructions/frame)")),
+            ]);
+        }
     }
     if let Some(netplay) = runtime.netplay.as_ref() {
-        println!(
-            "Netplay: relay={} room='{}' player={} delay={} rollback={} hash_every={}",
-            netplay.relay_addr,
-            netplay.room,
-            netplay.player,
-            netplay.input_delay_frames,
-            netplay.max_rollback_frames,
-            netplay.hash_check_every_frames
-        );
+        table.add_row(vec![
+            Cell::new("Netplay"),
+            Cell::new(format!("relay={} room='{}' player={} delay={} rollback={} hash_every={}",
+                netplay.relay_addr,
+                netplay.room,
+                netplay.player,
+                netplay.input_delay_frames,
+                netplay.max_rollback_frames,
+                netplay.hash_check_every_frames
+            )),
+        ]);
     }
+
+    println!("{}", "nes-desktop".with(Color::Cyan).bold());
+    println!("{table}\n");
     if cfg!(debug_assertions) {
         eprintln!(
             "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
