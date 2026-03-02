@@ -784,3 +784,144 @@ fn decode_hex_nibble(ch: u8, index: usize) -> Result<u8, DispatchError> {
         ))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use nes_core::{FRAME_HEIGHT, FRAME_WIDTH, NesCore};
+
+    use super::{
+        Button, DispatchError, Mirroring, ToolParams, encode_bmp, parse_button,
+        parse_dsl_rom_options, parse_player2, parse_slot, parse_speed_permille, parse_u64,
+        sync_audio_output, sync_frame_output,
+    };
+    use crate::output::latest_output_metadata;
+
+    fn params(pairs: &[(&str, &str)]) -> ToolParams {
+        let mut map = ToolParams::new();
+        for (key, value) in pairs {
+            map.insert((*key).to_owned(), (*value).to_owned());
+        }
+        map
+    }
+
+    #[test]
+    fn parse_button_supports_all_button_names() {
+        for (name, expected) in [
+            ("A", Button::A),
+            ("B", Button::B),
+            ("Select", Button::Select),
+            ("Start", Button::Start),
+            ("Up", Button::Up),
+            ("Down", Button::Down),
+            ("Left", Button::Left),
+            ("Right", Button::Right),
+        ] {
+            let button = parse_button(&params(&[("button", name)])).expect("valid button");
+            assert_eq!(button, expected);
+        }
+    }
+
+    #[test]
+    fn parse_u64_handles_decimal_hex_missing_and_invalid_values() {
+        assert_eq!(parse_u64(&ToolParams::new(), "frame"), None);
+        assert_eq!(parse_u64(&params(&[("frame", "42")]), "frame"), Some(42));
+        assert_eq!(parse_u64(&params(&[("frame", "0x2A")]), "frame"), Some(42));
+        assert_eq!(parse_u64(&params(&[("frame", "not-a-number")]), "frame"), None);
+    }
+
+    #[test]
+    fn parse_speed_permille_validates_and_converts_multiplier() {
+        assert_eq!(
+            parse_speed_permille(&params(&[("multiplier", "1.5")])).expect("valid multiplier"),
+            1500
+        );
+
+        let bad_number =
+            parse_speed_permille(&params(&[("multiplier", "abc")])).expect_err("invalid number");
+        assert!(matches!(bad_number, DispatchError::InvalidParams(_)));
+
+        let not_positive =
+            parse_speed_permille(&params(&[("multiplier", "0")])).expect_err("non-positive");
+        assert!(matches!(not_positive, DispatchError::InvalidParams(_)));
+
+        let not_finite =
+            parse_speed_permille(&params(&[("multiplier", "NaN")])).expect_err("not finite");
+        assert!(matches!(not_finite, DispatchError::InvalidParams(_)));
+
+        let out_of_range =
+            parse_speed_permille(&params(&[("multiplier", "1000")])).expect_err("out of range");
+        assert!(matches!(out_of_range, DispatchError::InvalidParams(_)));
+    }
+
+    #[test]
+    fn parse_player2_maps_player_slot_values() {
+        assert!(!parse_player2(&ToolParams::new()).expect("default player"));
+        assert!(!parse_player2(&params(&[("player", "1")])).expect("player one"));
+        assert!(parse_player2(&params(&[("player", "2")])).expect("player two"));
+
+        let err = parse_player2(&params(&[("player", "3")])).expect_err("invalid player");
+        assert!(matches!(err, DispatchError::InvalidParams(_)));
+    }
+
+    #[test]
+    fn parse_slot_uses_default_when_omitted() {
+        assert_eq!(parse_slot(&ToolParams::new()), "default");
+        assert_eq!(parse_slot(&params(&[("slot", "quicksave")])), "quicksave");
+    }
+
+    #[test]
+    fn parse_dsl_rom_options_supports_mirroring_and_chr_hex() {
+        let defaults = parse_dsl_rom_options(&ToolParams::new()).expect("default options");
+        assert_eq!(defaults.mirroring, Mirroring::Horizontal);
+        assert_eq!(defaults.chr_rom.len(), 8 * 1024);
+
+        let vertical = parse_dsl_rom_options(&params(&[
+            ("mirroring", "vertical"),
+            ("chr_hex", "AA 55"),
+        ]))
+        .expect("vertical options");
+        assert_eq!(vertical.mirroring, Mirroring::Vertical);
+        assert_eq!(vertical.chr_rom, vec![0xAA, 0x55]);
+
+        let err = parse_dsl_rom_options(&params(&[("mirroring", "diagonal")]))
+            .expect_err("invalid mirroring");
+        assert!(matches!(err, DispatchError::InvalidParams(_)));
+    }
+
+    #[test]
+    fn encode_bmp_produces_expected_headers_and_pixel_order() {
+        let rgba = vec![
+            255, 0, 0, 255, 0, 255, 0, 255, // top row: red, green
+            0, 0, 255, 255, 255, 255, 255, 255, // bottom row: blue, white
+        ];
+        let bmp = encode_bmp(2, 2, &rgba).expect("encode bmp");
+        assert_eq!(&bmp[0..2], b"BM");
+        assert_eq!(bmp.len(), 70);
+        assert_eq!(u32::from_le_bytes([bmp[2], bmp[3], bmp[4], bmp[5]]), 70);
+        assert_eq!(u32::from_le_bytes([bmp[10], bmp[11], bmp[12], bmp[13]]), 54);
+        assert_eq!(u32::from_le_bytes([bmp[34], bmp[35], bmp[36], bmp[37]]), 16);
+        assert_eq!(
+            &bmp[54..],
+            &[
+                255, 0, 0, 255, 255, 255, 0, 0, // bottom row (BGR + padding)
+                0, 0, 255, 0, 255, 0, 0, 0, // top row (BGR + padding)
+            ]
+        );
+    }
+
+    #[test]
+    fn sync_outputs_publish_frame_and_audio_sequences() {
+        let mut core = NesCore::new();
+        let before = latest_output_metadata();
+
+        sync_frame_output(&core);
+        let after_frame = latest_output_metadata();
+        assert!(after_frame.frame_seq > before.frame_seq);
+        assert_eq!(after_frame.width, FRAME_WIDTH as u32);
+        assert_eq!(after_frame.height, FRAME_HEIGHT as u32);
+
+        sync_audio_output(&mut core);
+        let after_audio = latest_output_metadata();
+        assert!(after_audio.audio_seq > before.audio_seq);
+    }
+}

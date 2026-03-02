@@ -88,3 +88,15 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::run;
+
+    #[test]
+    fn run_reports_missing_rom_file_errors() {
+        let err = run("__missing_rom__.nes", "__missing_script__.txt")
+            .expect_err("missing files should fail");
+        assert!(err.contains("Failed to read ROM file"));
+    }
+}
