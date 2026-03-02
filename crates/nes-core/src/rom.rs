@@ -20,6 +20,10 @@ pub enum NametableMirroring {
     Horizontal,
     /// Vertical arrangement (`[A B][A B]`).
     Vertical,
+    /// One-screen mirroring to first nametable page.
+    OneScreenLower,
+    /// One-screen mirroring to second nametable page.
+    OneScreenUpper,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

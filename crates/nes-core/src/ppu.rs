@@ -898,6 +898,8 @@ impl Ppu {
                 0 | 1 => 0,
                 _ => 1,
             },
+            NametableMirroring::OneScreenLower => 0,
+            NametableMirroring::OneScreenUpper => 1,
         };
         physical_table * 0x0400 + offset
     }
@@ -996,5 +998,37 @@ mod tests {
         ppu.write_register(0x2006, 0x00);
         ppu.write_register(0x2007, 0x22);
         assert_ne!(ppu.read_ppu_data(0x2000), ppu.read_ppu_data(0x2800));
+    }
+
+    #[test]
+    fn one_screen_lower_mirroring_maps_all_tables_to_first_page() {
+        let mut ppu = Ppu::new();
+        ppu.load_cartridge(&[], NametableMirroring::OneScreenLower);
+
+        ppu.write_ppu_data(0x2000, 0x11);
+        ppu.write_ppu_data(0x2400, 0x22);
+        ppu.write_ppu_data(0x2800, 0x33);
+        ppu.write_ppu_data(0x2C00, 0x44);
+
+        assert_eq!(ppu.read_ppu_data(0x2000), 0x44);
+        assert_eq!(ppu.read_ppu_data(0x2400), 0x44);
+        assert_eq!(ppu.read_ppu_data(0x2800), 0x44);
+        assert_eq!(ppu.read_ppu_data(0x2C00), 0x44);
+    }
+
+    #[test]
+    fn one_screen_upper_mirroring_maps_all_tables_to_second_page() {
+        let mut ppu = Ppu::new();
+        ppu.load_cartridge(&[], NametableMirroring::OneScreenUpper);
+
+        ppu.write_ppu_data(0x2000, 0x91);
+        ppu.write_ppu_data(0x2400, 0x92);
+        ppu.write_ppu_data(0x2800, 0x93);
+        ppu.write_ppu_data(0x2C00, 0x94);
+
+        assert_eq!(ppu.read_ppu_data(0x2000), 0x94);
+        assert_eq!(ppu.read_ppu_data(0x2400), 0x94);
+        assert_eq!(ppu.read_ppu_data(0x2800), 0x94);
+        assert_eq!(ppu.read_ppu_data(0x2C00), 0x94);
     }
 }

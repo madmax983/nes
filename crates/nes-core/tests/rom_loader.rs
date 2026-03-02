@@ -332,6 +332,65 @@ fn mmc3_bank_switch_via_prg_writes_changes_lower_8k_window() {
 }
 
 #[test]
+fn load_axrom_maps_initial_32k_bank_for_boot() {
+    let mut rom = sample_ines(7, 4); // 64KB PRG => two 32KB banks.
+    let prg_start = 16;
+    let bank_32k = 32 * 1024;
+
+    // Bank 0 ($8000): LDA #$11.
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x11;
+
+    // Bank 1 ($8000): LDA #$77.
+    let bank1 = prg_start + bank_32k;
+    rom[bank1] = 0xA9;
+    rom[bank1 + 1] = 0x77;
+
+    // Reset vector in bank 0 -> $8000.
+    rom[prg_start + bank_32k - 4] = 0x00;
+    rom[prg_start + bank_32k - 3] = 0x80;
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(info.mapper_id, 7);
+    assert_eq!(core.cpu_pc(), 0x8000);
+    assert_eq!(core.read_memory(0x8001), 0x11);
+
+    core.execute(Command::StepCpu).unwrap();
+    assert_eq!(core.cpu_a(), 0x11);
+}
+
+#[test]
+fn axrom_bank_switch_via_cpu_prg_write_changes_entire_prg_window() {
+    let mut rom = sample_ines(7, 4); // 64KB PRG => two 32KB banks.
+    let prg_start = 16;
+    let bank_32k = 32 * 1024;
+
+    rom[prg_start + 0x0101] = 0x10;
+    rom[prg_start + 0x4101] = 0x11;
+
+    let bank1 = prg_start + bank_32k;
+    rom[bank1 + 0x0101] = 0x42;
+    rom[bank1 + 0x4101] = 0x43;
+
+    // Reset vector in bank 0 -> $8000.
+    rom[prg_start + bank_32k - 4] = 0x00;
+    rom[prg_start + bank_32k - 3] = 0x80;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(core.read_memory(0x8101), 0x10);
+    assert_eq!(core.read_memory(0xC101), 0x11);
+
+    core.write_cpu_bus(0x8000, 0x01);
+
+    assert_eq!(core.read_memory(0x8101), 0x42);
+    assert_eq!(core.read_memory(0xC101), 0x43);
+}
+
+#[test]
 fn cnrom_chr_bank_switch_via_prg_write_changes_background_pixels() {
     let mut rom = sample_ines_with_chr(3, 2, 2);
     let prg_start = 16;
