@@ -851,10 +851,10 @@ pub fn emit_ines_nrom_rom(
     rom.push(0_u8);
     rom.extend_from_slice(&[0_u8; 8]);
     rom.extend_from_slice(&prg);
-    if chr_banks > 0 {
+    if chr_banks != 0 {
         rom.extend_from_slice(&options.chr_rom);
         let pad = chr_banks * CHR_BANK_BYTES - options.chr_rom.len();
-        if pad > 0 {
+        if pad != 0 {
             rom.extend(std::iter::repeat_n(0_u8, pad));
         }
     }
@@ -1361,7 +1361,12 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
     };
 
     if let Some(value) = parsed {
-        return Ok(Expr::Number(value * sign));
+        let signed = match sign {
+            -1 => -value,
+            1 => value,
+            _ => unreachable!("parse_expr sign is always +/-1"),
+        };
+        return Ok(Expr::Number(signed));
     }
 
     if sign != 1 {
@@ -1587,5 +1592,503 @@ mod tests {
 
         core.execute(Command::StepCpu).expect("loop jump");
         assert_eq!(core.cpu_pc(), 0xC002);
+    }
+
+    #[test]
+    fn rom_build_options_default_uses_8k_chr_bank() {
+        let defaults = RomBuildOptions::default();
+        assert_eq!(defaults.chr_rom.len(), 8 * 1024);
+    }
+
+    #[test]
+    fn dsl_error_display_includes_context() {
+        let duplicate = DslError::DuplicateLabel("LOOP".to_owned()).to_string();
+        assert_eq!(duplicate, "duplicate label 'LOOP'");
+
+        let unsupported = DslError::UnsupportedAddressing {
+            line: 9,
+            mnemonic: "LDA".to_owned(),
+            mode: "indirect".to_owned(),
+        }
+        .to_string();
+        assert_eq!(unsupported, "line 9: addressing mode indirect not supported for LDA");
+
+        let missing_reset = DslError::MissingResetVector.to_string();
+        assert!(missing_reset.contains("missing reset vector"));
+    }
+
+    #[test]
+    fn const_directive_resolves_symbols_and_rejects_duplicates() {
+        let program = assemble(
+            r#"
+            .const value = $10
+            .org $C000
+            LDA value
+            .reset $C000
+        "#,
+        )
+        .expect("const should resolve");
+        assert_eq!(program.bytes.get(&0xC000), Some(&0xA5));
+        assert_eq!(program.bytes.get(&0xC001), Some(&0x10));
+
+        let duplicate = assemble(
+            r#"
+            .const COUNT = 1
+            .const count = 2
+            .org $C000
+            .reset $C000
+        "#,
+        )
+        .expect_err("duplicate const should fail");
+        assert!(matches!(duplicate, DslError::DuplicateConst(name) if name == "COUNT"));
+    }
+
+    #[test]
+    fn addressing_mode_selection_prefers_zeropage_when_possible() {
+        let program = assemble(
+            r#"
+            .org $C000
+            LDA $10,X
+            LDA $1234,X
+            LDX $20,Y
+            LDX $1234,Y
+            LDA $30
+            LDA $1234
+            .reset $C000
+        "#,
+        )
+        .expect("assembly should succeed");
+
+        let expected = [
+            (0xC000, 0xB5),
+            (0xC001, 0x10),
+            (0xC002, 0xBD),
+            (0xC003, 0x34),
+            (0xC004, 0x12),
+            (0xC005, 0xB6),
+            (0xC006, 0x20),
+            (0xC007, 0xBE),
+            (0xC008, 0x34),
+            (0xC009, 0x12),
+            (0xC00A, 0xA5),
+            (0xC00B, 0x30),
+            (0xC00C, 0xAD),
+            (0xC00D, 0x34),
+            (0xC00E, 0x12),
+        ];
+        for (addr, opcode) in expected {
+            assert_eq!(
+                program.bytes.get(&addr),
+                Some(&opcode),
+                "unexpected opcode/operand byte at ${addr:04X}"
+            );
+        }
+    }
+
+    #[test]
+    fn branch_out_of_range_is_reported_for_immediate_target() {
+        let err = assemble(
+            r#"
+            .org $C000
+            BNE $C200
+            .reset $C000
+        "#,
+        )
+        .expect_err("out of range branch should fail");
+
+        match err {
+            DslError::BranchOutOfRange { from, to, .. } => {
+                assert_eq!(from, 0xC002);
+                assert_eq!(to, 0xC200);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn branch_out_of_range_is_reported_for_symbol_fixup() {
+        let err = assemble(
+            r#"
+            .org $C000
+            BNE FAR
+            .org $C200
+            FAR:
+                NOP
+            .reset $C000
+        "#,
+        )
+        .expect_err("out of range branch fixup should fail");
+
+        assert!(matches!(err, DslError::BranchOutOfRange { .. }));
+    }
+
+    #[test]
+    fn duplicate_address_allows_same_value_and_rejects_conflict() {
+        let ok = assemble(
+            r#"
+            .org $C000
+            .byte $01
+            .org $C000
+            .byte $01
+            .reset $C000
+        "#,
+        );
+        assert!(ok.is_ok());
+
+        let conflict = assemble(
+            r#"
+            .org $C000
+            .byte $01
+            .org $C000
+            .byte $02
+            .reset $C000
+        "#,
+        )
+        .expect_err("conflicting duplicate address should fail");
+        assert!(matches!(conflict, DslError::DuplicateAddress { .. }));
+    }
+
+    #[test]
+    fn emit_ines_rom_respects_chr_and_mirroring_layout() {
+        let program = assemble(
+            r#"
+            .bank 1
+            RESET:
+                NOP
+            .reset RESET
+        "#,
+        )
+        .expect("assembly should succeed");
+
+        let no_chr = emit_ines_nrom_rom(
+            &program,
+            &RomBuildOptions {
+                mirroring: Mirroring::Horizontal,
+                chr_rom: Vec::new(),
+            },
+        )
+        .expect("rom without chr should emit");
+        assert_eq!(no_chr[4], 1);
+        assert_eq!(no_chr[5], 0);
+        assert_eq!(no_chr.len(), 16 + PRG_BANK_BYTES);
+
+        let custom_chr = emit_ines_nrom_rom(
+            &program,
+            &RomBuildOptions {
+                mirroring: Mirroring::Vertical,
+                chr_rom: vec![0xAB, 0xCD, 0xEF],
+            },
+        )
+        .expect("rom with chr should emit");
+        assert_eq!(custom_chr[4], 1);
+        assert_eq!(custom_chr[5], 1);
+        assert_eq!(custom_chr[6] & 0x01, 0x01);
+        assert_eq!(custom_chr.len(), 16 + PRG_BANK_BYTES + CHR_BANK_BYTES);
+        let chr_start = 16 + PRG_BANK_BYTES;
+        assert_eq!(&custom_chr[chr_start..chr_start + 3], &[0xAB, 0xCD, 0xEF]);
+        assert!(custom_chr[chr_start + 3..].iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn emit_ines_rom_rejects_chr_bank_count_over_header_limit() {
+        let program = assemble(
+            r#"
+            .bank 1
+            RESET:
+                NOP
+            .reset RESET
+        "#,
+        )
+        .expect("assembly should succeed");
+
+        let max_ok = emit_ines_nrom_rom(
+            &program,
+            &RomBuildOptions {
+                mirroring: Mirroring::Horizontal,
+                chr_rom: vec![0_u8; usize::from(u8::MAX) * CHR_BANK_BYTES],
+            },
+        )
+        .expect("255 CHR banks should fit iNES header");
+        assert_eq!(max_ok[5], u8::MAX);
+
+        let too_many = emit_ines_nrom_rom(
+            &program,
+            &RomBuildOptions {
+                mirroring: Mirroring::Horizontal,
+                chr_rom: vec![0_u8; (usize::from(u8::MAX) + 1) * CHR_BANK_BYTES],
+            },
+        )
+        .expect_err("256 CHR banks should exceed iNES header");
+        assert!(matches!(too_many, DslError::InvalidRomLayout(message) if message.contains("exceeds iNES header limit")));
+    }
+
+    #[test]
+    fn unknown_or_mode_error_uses_mode_name_for_known_mnemonics() {
+        let known = unknown_or_mode_error(3, "LDA", AddressingMode::Indirect);
+        match known {
+            DslError::UnsupportedAddressing { line, mnemonic, mode } => {
+                assert_eq!(line, 3);
+                assert_eq!(mnemonic, "LDA");
+                assert_eq!(mode, "indirect");
+            }
+            other => panic!("unexpected known mnemonic error: {other:?}"),
+        }
+
+        let unknown = unknown_or_mode_error(4, "WUT", AddressingMode::Immediate);
+        match unknown {
+            DslError::UnknownMnemonic { line, mnemonic } => {
+                assert_eq!(line, 4);
+                assert_eq!(mnemonic, "WUT");
+            }
+            other => panic!("unexpected unknown mnemonic error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn mnemonic_and_mode_helpers_cover_known_values() {
+        assert!(has_mnemonic("LDA"));
+        assert!(has_mnemonic("TAX"));
+        assert!(!has_mnemonic("WUT"));
+
+        assert_eq!(mode_name(AddressingMode::Implied), "implied");
+        assert_eq!(mode_name(AddressingMode::Accumulator), "accumulator");
+        assert_eq!(mode_name(AddressingMode::Immediate), "immediate");
+        assert_eq!(mode_name(AddressingMode::ZeroPage), "zeropage");
+        assert_eq!(mode_name(AddressingMode::ZeroPageX), "zeropage,X");
+        assert_eq!(mode_name(AddressingMode::ZeroPageY), "zeropage,Y");
+        assert_eq!(mode_name(AddressingMode::Absolute), "absolute");
+        assert_eq!(mode_name(AddressingMode::AbsoluteX), "absolute,X");
+        assert_eq!(mode_name(AddressingMode::AbsoluteY), "absolute,Y");
+        assert_eq!(mode_name(AddressingMode::Indirect), "indirect");
+        assert_eq!(mode_name(AddressingMode::IndirectX), "(indirect,X)");
+        assert_eq!(mode_name(AddressingMode::IndirectY), "(indirect),Y");
+        assert_eq!(mode_name(AddressingMode::Relative), "relative");
+    }
+
+    #[test]
+    fn opcode_table_reports_supported_mode_pairs() {
+        use AddressingMode::{
+            Absolute, AbsoluteX, AbsoluteY, Accumulator, Immediate, Implied, Indirect, IndirectX,
+            IndirectY, Relative, ZeroPage, ZeroPageX, ZeroPageY,
+        };
+
+        fn assert_supported_modes(mnemonic: &str, modes: &[AddressingMode]) {
+            for mode in modes {
+                assert!(
+                    opcode_for(mnemonic, *mode).is_some(),
+                    "expected opcode for {mnemonic} in mode {}",
+                    mode_name(*mode)
+                );
+            }
+        }
+
+        assert_supported_modes("ADC", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("AND", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("ASL", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("BCC", &[Relative]);
+        assert_supported_modes("BCS", &[Relative]);
+        assert_supported_modes("BEQ", &[Relative]);
+        assert_supported_modes("BIT", &[ZeroPage, Absolute]);
+        assert_supported_modes("BMI", &[Relative]);
+        assert_supported_modes("BNE", &[Relative]);
+        assert_supported_modes("BPL", &[Relative]);
+        assert_supported_modes("BRK", &[Implied]);
+        assert_supported_modes("BVC", &[Relative]);
+        assert_supported_modes("BVS", &[Relative]);
+        assert_supported_modes("CLC", &[Implied]);
+        assert_supported_modes("CLD", &[Implied]);
+        assert_supported_modes("CLI", &[Implied]);
+        assert_supported_modes("CLV", &[Implied]);
+        assert_supported_modes("CMP", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("CPX", &[Immediate, ZeroPage, Absolute]);
+        assert_supported_modes("CPY", &[Immediate, ZeroPage, Absolute]);
+        assert_supported_modes("DEC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("DEX", &[Implied]);
+        assert_supported_modes("DEY", &[Implied]);
+        assert_supported_modes("EOR", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("INC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("INX", &[Implied]);
+        assert_supported_modes("INY", &[Implied]);
+        assert_supported_modes("JMP", &[Absolute, Indirect]);
+        assert_supported_modes("JSR", &[Absolute]);
+        assert_supported_modes("LDA", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("LDX", &[Immediate, ZeroPage, ZeroPageY, Absolute, AbsoluteY]);
+        assert_supported_modes("LDY", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("LSR", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("NOP", &[Implied]);
+        assert_supported_modes("ORA", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("PHA", &[Implied]);
+        assert_supported_modes("PHP", &[Implied]);
+        assert_supported_modes("PLA", &[Implied]);
+        assert_supported_modes("PLP", &[Implied]);
+        assert_supported_modes("ROL", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("ROR", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes("RTI", &[Implied]);
+        assert_supported_modes("RTS", &[Implied]);
+        assert_supported_modes("SBC", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("SEC", &[Implied]);
+        assert_supported_modes("SED", &[Implied]);
+        assert_supported_modes("SEI", &[Implied]);
+        assert_supported_modes("STA", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes("STX", &[ZeroPage, ZeroPageY, Absolute]);
+        assert_supported_modes("STY", &[ZeroPage, ZeroPageX, Absolute]);
+        assert_supported_modes("TAX", &[Implied]);
+        assert_supported_modes("TAY", &[Implied]);
+        assert_supported_modes("TSX", &[Implied]);
+        assert_supported_modes("TXA", &[Implied]);
+        assert_supported_modes("TXS", &[Implied]);
+        assert_supported_modes("TYA", &[Implied]);
+
+        assert!(opcode_for("LDA", AddressingMode::Implied).is_none());
+        assert!(opcode_for("WUT", AddressingMode::Immediate).is_none());
+    }
+
+    #[test]
+    fn parser_helper_functions_enforce_expected_rules() {
+        assert_eq!(
+            strip_comments(r#"LDA #$01 ; trailing comment"#),
+            "LDA #$01 "
+        );
+        assert_eq!(
+            strip_comments(r#"LDA #"//" // real comment"#),
+            r#"LDA #"//" "#
+        );
+
+        assert_eq!(
+            split_leading_label("loop: NOP"),
+            Some(("loop", " NOP"))
+        );
+        assert_eq!(split_leading_label("bad label: NOP"), None);
+
+        assert_eq!(
+            parse_const_assignment("NAME = $10", 12).expect("const assignment"),
+            ("NAME", "$10")
+        );
+        assert!(parse_const_assignment("NAME", 12).is_err());
+        assert!(parse_const_assignment("= $10", 12).is_err());
+        assert!(parse_const_assignment("NAME =", 12).is_err());
+
+        assert!(validate_symbol("GOOD_NAME1").is_ok());
+        assert!(validate_symbol("_good").is_ok());
+        assert!(validate_symbol("").is_err());
+        assert!(validate_symbol("1bad").is_err());
+        assert!(validate_symbol("bad-name").is_err());
+
+        assert_eq!(parse_expr("-$10", 1).expect("negative hex"), Expr::Number(-16));
+        assert_eq!(parse_expr("+0x20", 1).expect("positive hex"), Expr::Number(32));
+        assert_eq!(
+            parse_expr("label_name", 1).expect("symbol parse"),
+            Expr::Symbol("LABEL_NAME".to_owned())
+        );
+        assert!(parse_expr("-label_name", 1).is_err());
+    }
+
+    #[test]
+    fn csv_and_string_literal_helpers_handle_escapes_and_errors() {
+        let parts = split_csv(r#""A,B", $10, "C\"D""#).expect("csv parse");
+        assert_eq!(parts, vec![r#""A,B""#, "$10", r#""C\"D""#]);
+
+        let decoded = decode_string_literal(r#""A\n\r\t\\\"\x41""#).expect("string decode");
+        assert_eq!(decoded, vec![b'A', b'\n', b'\r', b'\t', b'\\', b'"', 0x41]);
+
+        let utf_err = decode_string_literal("\"\u{0100}\"").expect_err("out of byte range");
+        assert!(utf_err.contains("outside byte range"));
+
+        let dangling_escape =
+            decode_string_literal("\"abc\\\"").expect_err("dangling escape should fail");
+        assert!(dangling_escape.contains("dangling escape sequence"));
+    }
+
+    #[test]
+    fn parse_expr_reports_unknown_mnemonic_with_one_based_line_numbers() {
+        let err = assemble("WUT").expect_err("unknown mnemonic should fail");
+        match err {
+            DslError::UnknownMnemonic { line, mnemonic } => {
+                assert_eq!(line, 1);
+                assert_eq!(mnemonic, "WUT");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn branch_relative_encoding_is_correct_for_in_range_targets() {
+        let mut immediate = Assembler::new(AssembleConfig::default());
+        immediate.current_addr = 0xC001;
+        immediate
+            .emit_expr_byte(Expr::Number(0xC004), 1, FixupKind::Relative)
+            .expect("immediate relative should emit");
+        assert_eq!(immediate.bytes.get(&0xC001), Some(&0x02));
+
+        let mut fixup = Assembler::new(AssembleConfig::default());
+        fixup.fixups.push(Fixup {
+            line: 1,
+            addr: 0xC001,
+            expr: Expr::Symbol("TARGET".to_owned()),
+            kind: FixupKind::Relative,
+        });
+        fixup.labels.insert("TARGET".to_owned(), 0xC003);
+        fixup.vectors.reset = Some(Expr::Number(0xC000));
+        let finalized = fixup.finalize().expect("forward relative fixup should resolve");
+        assert_eq!(finalized.bytes.get(&0xC001), Some(&0x01));
+    }
+
+    #[test]
+    fn emit_ines_rom_keeps_single_bank_for_upper_bank_program_bytes_only() {
+        let program = assemble(
+            r#"
+            .bank 1
+            RESET:
+                LDA #$01
+                NOP
+            .reset RESET
+        "#,
+        )
+        .expect("assembly should succeed");
+        let rom = emit_ines_nrom_rom(&program, &RomBuildOptions::default())
+            .expect("rom should emit");
+        assert_eq!(rom[4], 1, "program without <$C000 bytes should stay single-bank");
+    }
+
+    #[test]
+    fn insert_mapped_byte_allows_vector_bytes_that_match_existing_program_data() {
+        let mut bytes = BTreeMap::new();
+        bytes.insert(VEC_RESET, 0x34);
+        bytes.insert(VEC_RESET + 1, 0x12);
+        let program = AssembledProgram {
+            default_org: 0xC000,
+            bytes,
+            labels: BTreeMap::new(),
+            nmi_vector: 0x1234,
+            reset_vector: 0x1234,
+            irq_vector: 0x1234,
+        };
+        let rom = emit_ines_nrom_rom(&program, &RomBuildOptions::default())
+            .expect("matching vector bytes should not conflict");
+        assert_eq!(rom[4], 1);
+    }
+
+    #[test]
+    fn strip_comments_handles_string_boundaries_and_trailing_slashes() {
+        assert_eq!(
+            strip_comments(r#".text "a;still" ; comment"#),
+            r#".text "a;still" "#
+        );
+        assert_eq!(strip_comments("/"), "/");
+        assert_eq!(strip_comments("/x"), "/x");
+        assert_eq!(strip_comments("x//comment"), "x");
+    }
+
+    #[test]
+    fn quoted_string_predicate_requires_both_delimiters() {
+        assert!(is_quoted_string(r#""ok""#));
+        assert!(!is_quoted_string(r#""missing-end"#));
+        assert!(!is_quoted_string(r#"missing-start""#));
+    }
+
+    #[test]
+    fn decode_string_literal_accepts_byte_boundary_character_ff() {
+        let decoded = decode_string_literal("\"\u{00FF}\"").expect("0xFF should be valid");
+        assert_eq!(decoded, vec![0xFF]);
     }
 }
