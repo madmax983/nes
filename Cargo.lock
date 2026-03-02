@@ -1722,6 +1722,8 @@ dependencies = [
 name = "nes-desktop"
 version = "0.1.0"
 dependencies = [
+ "comfy-table",
+ "crossterm 0.28.1",
  "gilrs",
  "nes-config",
  "nes-core",
