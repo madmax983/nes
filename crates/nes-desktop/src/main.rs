@@ -20,6 +20,7 @@ use nes_core::{
 };
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
+use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
 use winit::dpi::LogicalSize;
@@ -553,6 +554,9 @@ fn run() -> Result<(), String> {
         None
     };
 
+    let mut time_machine = TimeMachine::new(TimeMachineConfig::default());
+    let mut rewind_held = false;
+
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CloseRequested => {
@@ -566,6 +570,15 @@ fn run() -> Result<(), String> {
 
                 if key == VirtualKeyCode::Escape && pressed {
                     *control_flow = ControlFlow::Exit;
+                    return;
+                }
+
+                // R: hold to rewind, release to resume.
+                if key == VirtualKeyCode::R {
+                    rewind_held = pressed;
+                    if !pressed {
+                        time_machine.resume();
+                    }
                     return;
                 }
 
@@ -835,10 +848,14 @@ fn run() -> Result<(), String> {
                         return;
                     }
                 }
+            } else if rewind_held {
+                time_machine.rewind_step(&mut core);
             } else if let Err(err) = advance_core_for_host_frame(&mut core, step_mode) {
                 eprintln!("CPU halted at PC ${:04X}: {err}", core.cpu_pc());
                 *control_flow = ControlFlow::Exit;
                 return;
+            } else {
+                time_machine.record_frame(&core);
             }
 
             let step_elapsed = step_start.elapsed();
