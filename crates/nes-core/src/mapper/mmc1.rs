@@ -199,6 +199,133 @@ mod tests {
     }
 
     #[test]
+    fn mmc1_prg_mode_0_and_1_switch_32kb_banks() {
+        let mut m = Mmc1::new(4, 8); // 4 PRG banks (64KB total)
+        // Set first byte of bank 0
+        m.prg_rom[0] = 0x11;
+        // Set first byte of bank 1 (0x4000)
+        m.prg_rom[0x4000] = 0x22;
+        // Set first byte of bank 2 (0x8000)
+        m.prg_rom[0x8000] = 0x33;
+        // Set first byte of bank 3 (0xC000)
+        m.prg_rom[0xC000] = 0x44;
+
+        // Write control register (0x8000) to set PRG mode 0 (bits 2,3 = 0)
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+
+        // Select bank 2 (0xE000-FFFF register)
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x01); // bit 1 = 1
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00); // 00010 binary -> 2
+
+        // Mode 0/1 uses even/odd banks. It ignores the lowest bit of the selected bank.
+        // Selected = 2 -> 0x8000 uses bank 2, 0xC000 uses bank 3
+        assert_eq!(m.read_prg(0x8000), 0x33);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+
+        // Select bank 3 (0xE000-FFFF register)
+        m.write_prg(0xE000, 0x01); // bit 0 = 1
+        m.write_prg(0xE000, 0x01); // bit 1 = 1
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00); // 00011 binary -> 3
+
+        // Mode 0/1 ignores lowest bit, so 3 -> banks 2 and 3
+        assert_eq!(m.read_prg(0x8000), 0x33);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+
+        // Write control register to set PRG mode 1 (bits 2,3 = 0,1)
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x01);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+
+        assert_eq!(m.read_prg(0x8000), 0x33);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+    }
+
+    #[test]
+    fn mmc1_prg_mode_2_fixes_first_bank_and_switches_second() {
+        let mut m = Mmc1::new(4, 8); // 4 PRG banks (64KB total)
+        m.prg_rom[0] = 0x11; // Bank 0
+        m.prg_rom[0x4000] = 0x22; // Bank 1
+        m.prg_rom[0x8000] = 0x33; // Bank 2
+        m.prg_rom[0xC000] = 0x44; // Bank 3
+
+        // Write control register to set PRG mode 2 (bits 2,3 = 1,0)
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x01);
+        m.write_prg(0x8000, 0x00);
+
+        // Select bank 2
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00); // 00010 -> 2
+
+        // Mode 2 fixes 0x8000 at bank 0, switches 0xC000
+        assert_eq!(m.read_prg(0x8000), 0x11);
+        assert_eq!(m.read_prg(0xC000), 0x33);
+
+        // Select bank 3
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00); // 00011 -> 3
+
+        assert_eq!(m.read_prg(0x8000), 0x11);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+    }
+
+    #[test]
+    fn mmc1_prg_mode_3_switches_first_bank_and_fixes_last() {
+        let mut m = Mmc1::new(4, 8); // 4 PRG banks (64KB total)
+        m.prg_rom[0] = 0x11; // Bank 0
+        m.prg_rom[0x4000] = 0x22; // Bank 1
+        m.prg_rom[0x8000] = 0x33; // Bank 2
+        m.prg_rom[0xC000] = 0x44; // Bank 3
+
+        // Write control register to set PRG mode 3 (bits 2,3 = 1,1)
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x00);
+        m.write_prg(0x8000, 0x01);
+        m.write_prg(0x8000, 0x01);
+        m.write_prg(0x8000, 0x00);
+
+        // Select bank 1
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00); // 00001 -> 1
+
+        // Mode 3 switches 0x8000, fixes 0xC000 at last bank (bank 3)
+        assert_eq!(m.read_prg(0x8000), 0x22);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+
+        // Select bank 2
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x01);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00);
+        m.write_prg(0xE000, 0x00); // 00010 -> 2
+
+        assert_eq!(m.read_prg(0x8000), 0x33);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+    }
+
+    #[test]
     fn mmc1_commit_to_unhandled_range_does_not_panic() {
         let mut m = Mmc1::new(16, 8);
         // Address 0xA000 is CHR bank 0, unhandled in our current simplified mmc1
@@ -207,6 +334,14 @@ mod tests {
         m.write_prg(0xA000, 0x01);
         m.write_prg(0xA000, 0x01);
         m.write_prg(0xA000, 0x01);
+        assert!(m.shift_is_reset());
+
+        // Address 0xC000 is CHR bank 1, unhandled in our current simplified mmc1
+        m.write_prg(0xC000, 0x01);
+        m.write_prg(0xC000, 0x01);
+        m.write_prg(0xC000, 0x01);
+        m.write_prg(0xC000, 0x01);
+        m.write_prg(0xC000, 0x01);
         assert!(m.shift_is_reset());
     }
 }
