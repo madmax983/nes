@@ -77,6 +77,15 @@ Web demo build + local serve (Trunk):
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
 ```
 
+WASM path (web host -> core):
+
+1. `web/index.html` declares the Rust artifact input (`../crates/nes-web/Cargo.toml`) for Trunk.
+2. `crates/nes-web/Trunk.toml` sets the Trunk target to `../../web/index.html` and output to `../../web/dist`.
+3. `web/app.js` imports `NesWebEmulator` from generated wasm glue and drives the browser loop.
+4. `crates/nes-web/src/lib.rs` (`wasm-bindgen`) forwards JS calls to `WebRuntime`.
+5. `crates/nes-web/src/runtime.rs` translates those calls into `nes_core::Command` execution and query reads.
+6. `crates/nes-web/src/bridge.rs` maps DOM key codes to core button commands.
+
 Desktop can optionally host MCP on the same live `NesCore` instance:
 
 ```powershell
