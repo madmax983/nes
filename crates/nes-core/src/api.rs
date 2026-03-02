@@ -8,7 +8,7 @@ use core::fmt;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
-use crate::mapper::{Cnrom, Mmc1, Mmc3, Nrom, Uxrom};
+use crate::mapper::{Axrom, Cnrom, Gxrom, Mmc1, Mmc3, Nrom, Uxrom};
 use crate::ppu::{Ppu, PpuSnapshot};
 use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
@@ -201,6 +201,8 @@ enum LoadedMapper {
     Uxrom(Uxrom),
     Mmc1(Mmc1),
     Cnrom(Cnrom),
+    Axrom(Axrom),
+    Gxrom(Gxrom),
     Mmc3(Mmc3),
 }
 
@@ -211,6 +213,8 @@ impl LoadedMapper {
             Self::Uxrom(mapper) => mapper.read_prg(addr),
             Self::Mmc1(mapper) => mapper.read_prg(addr),
             Self::Cnrom(mapper) => mapper.read_prg(addr),
+            Self::Axrom(mapper) => mapper.read_prg(addr),
+            Self::Gxrom(mapper) => mapper.read_prg(addr),
             Self::Mmc3(mapper) => mapper.read_prg(addr),
         }
     }
@@ -221,6 +225,8 @@ impl LoadedMapper {
             Self::Uxrom(mapper) => mapper.write_prg(addr, value),
             Self::Mmc1(mapper) => mapper.write_prg(addr, value),
             Self::Cnrom(mapper) => mapper.write_prg(addr, value),
+            Self::Axrom(mapper) => mapper.write_prg(addr, value),
+            Self::Gxrom(mapper) => mapper.write_prg(addr, value),
             Self::Mmc3(mapper) => mapper.write_prg(addr, value),
         }
     }
@@ -229,12 +235,14 @@ impl LoadedMapper {
         match self {
             Self::Mmc3(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Cnrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Gxrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             _ => None,
         }
     }
 
     fn mirroring_override(&self) -> Option<NametableMirroring> {
         match self {
+            Self::Axrom(mapper) => Some(mapper.mirroring()),
             Self::Mmc3(mapper) => Some(mapper.mirroring()),
             _ => None,
         }
@@ -949,6 +957,8 @@ impl NesCore {
             2 => self.build_uxrom(prg_rom),
             3 => self.build_cnrom(prg_rom, chr_rom),
             4 => self.build_mmc3(prg_rom, chr_rom, mirroring),
+            7 => self.build_axrom(prg_rom),
+            66 => self.build_gxrom(prg_rom, chr_rom),
             _ => Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
                 mapper_id,
             ))),
@@ -984,6 +994,15 @@ impl NesCore {
         Ok(LoadedMapper::Mmc1(Mmc1::from_prg_rom(prg_rom.to_vec(), 1)))
     }
 
+    fn build_axrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Axrom(Axrom::from_prg_rom(prg_rom.to_vec())))
+    }
+
     fn build_cnrom(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
         match prg_rom.len() {
             PRG_16K_BYTES | PRG_32K_BYTES => {}
@@ -999,6 +1018,23 @@ impl NesCore {
             )));
         }
         Ok(LoadedMapper::Cnrom(Cnrom::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_gxrom(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Gxrom(Gxrom::from_prg_chr(
             prg_rom.to_vec(),
             chr_rom.to_vec(),
         )))
@@ -1109,6 +1145,14 @@ impl NesCore {
             Some(LoadedMapper::Uxrom(mapper)) => 0x20 ^ mapper.selected_bank() as u64,
             Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
             Some(LoadedMapper::Cnrom(mapper)) => 0x35 ^ mapper.selected_chr_bank() as u64,
+            Some(LoadedMapper::Axrom(mapper)) => {
+                0x37 ^ u64::from(mapper.selected_bank())
+                    ^ (u64::from(mapper.selected_nametable_bank()) << 8)
+            }
+            Some(LoadedMapper::Gxrom(mapper)) => {
+                0x38 ^ u64::from(mapper.selected_prg_bank())
+                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
+            }
             Some(LoadedMapper::Mmc3(mapper)) => {
                 0x40 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
                     ^ (u64::from(mapper.read_prg(0xA000)) << 16)

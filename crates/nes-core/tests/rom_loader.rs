@@ -332,6 +332,160 @@ fn mmc3_bank_switch_via_prg_writes_changes_lower_8k_window() {
 }
 
 #[test]
+fn load_axrom_maps_initial_32k_bank_for_boot() {
+    let mut rom = sample_ines(7, 4); // 64KB PRG => two 32KB banks.
+    let prg_start = 16;
+    let bank_32k = 32 * 1024;
+
+    // Bank 0 ($8000): LDA #$11.
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x11;
+
+    // Bank 1 ($8000): LDA #$77.
+    let bank1 = prg_start + bank_32k;
+    rom[bank1] = 0xA9;
+    rom[bank1 + 1] = 0x77;
+
+    // Reset vector in bank 0 -> $8000.
+    rom[prg_start + bank_32k - 4] = 0x00;
+    rom[prg_start + bank_32k - 3] = 0x80;
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(info.mapper_id, 7);
+    assert_eq!(core.cpu_pc(), 0x8000);
+    assert_eq!(core.read_memory(0x8001), 0x11);
+
+    core.execute(Command::StepCpu).unwrap();
+    assert_eq!(core.cpu_a(), 0x11);
+}
+
+#[test]
+fn axrom_bank_switch_via_cpu_prg_write_changes_entire_prg_window() {
+    let mut rom = sample_ines(7, 4); // 64KB PRG => two 32KB banks.
+    let prg_start = 16;
+    let bank_32k = 32 * 1024;
+
+    rom[prg_start + 0x0101] = 0x10;
+    rom[prg_start + 0x4101] = 0x11;
+
+    let bank1 = prg_start + bank_32k;
+    rom[bank1 + 0x0101] = 0x42;
+    rom[bank1 + 0x4101] = 0x43;
+
+    // Reset vector in bank 0 -> $8000.
+    rom[prg_start + bank_32k - 4] = 0x00;
+    rom[prg_start + bank_32k - 3] = 0x80;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(core.read_memory(0x8101), 0x10);
+    assert_eq!(core.read_memory(0xC101), 0x11);
+
+    core.write_cpu_bus(0x8000, 0x01);
+
+    assert_eq!(core.read_memory(0x8101), 0x42);
+    assert_eq!(core.read_memory(0xC101), 0x43);
+}
+
+#[test]
+fn load_gxrom_maps_initial_32k_bank_for_boot() {
+    let mut rom = sample_ines_with_chr(66, 4, 2); // 64KB PRG + 16KB CHR.
+    let prg_start = 16;
+    let bank_32k = 32 * 1024;
+
+    // PRG bank 0 ($8000): LDA #$18.
+    rom[prg_start] = 0xA9;
+    rom[prg_start + 1] = 0x18;
+
+    // PRG bank 1 ($8000): LDA #$66.
+    let bank1 = prg_start + bank_32k;
+    rom[bank1] = 0xA9;
+    rom[bank1 + 1] = 0x66;
+
+    // Reset vector in bank 0 -> $8000.
+    rom[prg_start + bank_32k - 4] = 0x00;
+    rom[prg_start + bank_32k - 3] = 0x80;
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+
+    assert_eq!(info.mapper_id, 66);
+    assert_eq!(core.cpu_pc(), 0x8000);
+    assert_eq!(core.read_memory(0x8001), 0x18);
+
+    core.execute(Command::StepCpu).unwrap();
+    assert_eq!(core.cpu_a(), 0x18);
+}
+
+#[test]
+fn gxrom_bank_switch_via_cpu_prg_write_updates_prg_and_chr_windows() {
+    let mut rom = sample_ines_with_chr(66, 4, 2); // 64KB PRG + 16KB CHR.
+    let prg_start = 16;
+    let prg_len = 4 * 16 * 1024;
+    let bank_32k = 32 * 1024;
+
+    // PRG bank 0 markers.
+    rom[prg_start + 0x0101] = 0x10;
+    rom[prg_start + 0x4101] = 0x11;
+
+    // PRG bank 1 markers.
+    let bank1 = prg_start + bank_32k;
+    rom[bank1 + 0x0101] = 0x42;
+    rom[bank1 + 0x4101] = 0x43;
+
+    // Stable loop in currently selected bank 0.
+    rom[prg_start] = 0xEA; // NOP
+    rom[prg_start + 1] = 0x4C; // JMP $8000
+    rom[prg_start + 2] = 0x00;
+    rom[prg_start + 3] = 0x80;
+
+    // Reset vector in bank 0 -> $8000.
+    rom[prg_start + bank_32k - 4] = 0x00;
+    rom[prg_start + bank_32k - 3] = 0x80;
+
+    let chr_start = prg_start + prg_len;
+    let chr_bank0 = chr_start;
+    let chr_bank1 = chr_start + 8 * 1024;
+
+    // CHR bank 0 tile 1: palette color index 1.
+    rom[chr_bank0 + 0x10..chr_bank0 + 0x18].fill(0xFF);
+    rom[chr_bank0 + 0x18..chr_bank0 + 0x20].fill(0x00);
+
+    // CHR bank 1 tile 1: palette color index 2.
+    rom[chr_bank1 + 0x10..chr_bank1 + 0x18].fill(0x00);
+    rom[chr_bank1 + 0x18..chr_bank1 + 0x20].fill(0xFF);
+
+    let mut core = NesCore::new();
+    let info = core.load_ines_rom(&rom).unwrap();
+    assert_eq!(info.mapper_id, 66);
+
+    assert_eq!(core.read_memory(0x8101), 0x10);
+    assert_eq!(core.read_memory(0xC101), 0x11);
+
+    core.write_cpu_bus(0x2001, 0x0A); // enable background rendering + leftmost 8px
+    write_ppu_data(&mut core, 0x3F00, &[0x0F, 0x16, 0x2A, 0x00]);
+    write_ppu_data(&mut core, 0x2000, &[0x01]); // top-left tile uses pattern 1
+    core.execute(Command::StepFrame).unwrap();
+    let frame_before = core.framebuffer_rgba();
+    let before = pixel_rgb(&frame_before, 0, 0);
+
+    core.write_cpu_bus(0x8000, 0x11); // prg bank 1, chr bank 1
+    assert_eq!(core.read_memory(0x8101), 0x42);
+    assert_eq!(core.read_memory(0xC101), 0x43);
+
+    core.execute(Command::StepFrame).unwrap();
+    let frame_after = core.framebuffer_rgba();
+    let after = pixel_rgb(&frame_after, 0, 0);
+    assert_ne!(
+        before, after,
+        "switching GxROM CHR bank should alter background pixel output"
+    );
+}
+
+#[test]
 fn cnrom_chr_bank_switch_via_prg_write_changes_background_pixels() {
     let mut rom = sample_ines_with_chr(3, 2, 2);
     let prg_start = 16;
