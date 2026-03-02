@@ -1,0 +1,21 @@
+--- crates/nes-web/src/bridge.rs
++++ delete match arm Command::ReleaseButton(_) in BridgeCommand::tool_name
+@@ -5,17 +5,17 @@
+     pub core: Command,
+ }
+
+ impl BridgeCommand {
+     #[must_use]
+     pub fn tool_name(self) -> &'static str {
+         match self.core {
+             Command::PressButton(_) => "press_button",
+-            Command::ReleaseButton(_) => "release_button",
++             /* ~ changed by cargo-mutants ~ */
+             _ => "unsupported",
+         }
+     }
+ }
+
+ #[must_use]
+ pub fn map_dom_key_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+     let button = match key_code {

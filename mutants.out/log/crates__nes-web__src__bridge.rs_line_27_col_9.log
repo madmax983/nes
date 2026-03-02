@@ -1,0 +1,100 @@
+
+*** crates/nes-web/src/bridge.rs:27:9: delete match arm "ArrowDown" in map_dom_key_to_command
+
+*** mutation diff:
+--- crates/nes-web/src/bridge.rs
++++ delete match arm "ArrowDown" in map_dom_key_to_command
+@@ -19,17 +19,17 @@
+ #[must_use]
+ pub fn map_dom_key_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+     let button = match key_code {
+         "KeyZ" => Button::A,
+         "KeyX" => Button::B,
+         "Enter" => Button::Start,
+         "ShiftRight" => Button::Select,
+         "ArrowUp" => Button::Up,
+-        "ArrowDown" => Button::Down,
++         /* ~ changed by cargo-mutants ~ */
+         "ArrowLeft" => Button::Left,
+         "ArrowRight" => Button::Right,
+         _ => return None,
+     };
+
+     let core = if pressed {
+         Command::PressButton(button)
+     } else {
+
+
+*** /home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --no-run --verbose --package=nes-web@0.1.0
+       Fresh unicode-ident v1.0.24
+       Fresh proc-macro2 v1.0.106
+       Fresh bumpalo v3.20.2
+       Fresh quote v1.0.44
+       Fresh wasm-bindgen-shared v0.2.113
+       Fresh once_cell v1.21.3
+       Fresh cfg-if v1.0.4
+       Fresh rustversion v1.0.22
+       Fresh syn v2.0.117
+       Fresh nes-core v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-core)
+       Fresh wasm-bindgen-macro-support v0.2.113
+       Fresh wasm-bindgen-macro v0.2.113
+       Fresh wasm-bindgen v0.2.113
+       Dirty nes-web v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-web): the file `crates/nes-web/src/bridge.rs` has changed (1772442233.370663143s, 1s after last build at 1772442232.598663151s)
+   Compiling nes-web v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-web)
+     Running `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name nes_web --edition=2024 crates/nes-web/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=47a861cb61b6e830 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib`
+     Running `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name nes_web --edition=2024 crates/nes-web/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=32bf900276937150 -C extra-filename=-800771184762ed09 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib`
+     Running `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name web_bridge --edition=2024 crates/nes-web/tests/web_bridge.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=cfdbce87f717f598 -C extra-filename=-3d57ee163378f3b2 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern nes_web=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_web.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.56s
+  Executable `/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/nes_web-800771184762ed09`
+  Executable `/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/web_bridge-3d57ee163378f3b2`
+
+*** result: Success
+
+*** /home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --verbose --package=nes-web@0.1.0
+       Fresh unicode-ident v1.0.24
+       Fresh bumpalo v3.20.2
+       Fresh proc-macro2 v1.0.106
+       Fresh cfg-if v1.0.4
+       Fresh quote v1.0.44
+       Fresh rustversion v1.0.22
+       Fresh wasm-bindgen-shared v0.2.113
+       Fresh once_cell v1.21.3
+       Fresh nes-core v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-core)
+       Fresh syn v2.0.117
+       Fresh wasm-bindgen-macro-support v0.2.113
+       Fresh wasm-bindgen-macro v0.2.113
+       Fresh wasm-bindgen v0.2.113
+       Fresh nes-web v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-web)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/nes_web-800771184762ed09`
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/web_bridge-3d57ee163378f3b2`
+
+running 5 tests
+test release_button_command_maps_to_tool_name ... ok
+test dom_key_maps_all_supported_keys ... FAILED
+test dom_key_maps_to_press_button_command ... ok
+test runtime_dispatch_dom_key_updates_controller_state ... ok
+test runtime_loads_minimal_rom_and_produces_video_audio_buffers ... ok
+
+failures:
+
+---- dom_key_maps_all_supported_keys stdout ----
+
+thread 'dom_key_maps_all_supported_keys' (32928) panicked at crates/nes-web/tests/web_bridge.rs:17:5:
+assertion failed: map_dom_key_to_command("ArrowDown", true).is_some()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    dom_key_maps_all_supported_keys
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+error: test failed, to rerun pass `-p nes-web --test web_bridge`
+
+*** result: Failure(101)
