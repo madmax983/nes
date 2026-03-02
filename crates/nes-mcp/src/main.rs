@@ -271,9 +271,6 @@ fn map_tool_arguments(arguments: &Map<String, Value>) -> ToolParams {
 fn json_arg_to_string(value: &Value) -> String {
     match value {
         Value::String(v) => v.clone(),
-        Value::Number(v) => v.to_string(),
-        Value::Bool(v) => v.to_string(),
-        Value::Null => "null".to_owned(),
         _ => value.to_string(),
     }
 }

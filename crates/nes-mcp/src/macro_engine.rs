@@ -168,4 +168,35 @@ mod tests {
         assert!(res2.is_err());
         assert!(res2.unwrap_err().contains("Invalid button 'MAGIC_BUTTON'"));
     }
+
+    #[test]
+    fn test_execute_macro_script_accepts_trailing_tokens_for_known_commands() {
+        let mut core = NesCore::new();
+        let initial_frames = core.ppu_frame_counter();
+        let script = "
+            WAIT 2 trailing
+            PRESS A trailing
+            RELEASE A trailing
+        ";
+        let elapsed = execute_macro_script(&mut core, script).expect("script with extra args");
+        assert_eq!(elapsed, 2);
+        assert_eq!(core.ppu_frame_counter(), initial_frames + 2);
+        assert_eq!(core.controller_bits(), 0);
+    }
+
+    #[test]
+    fn test_execute_macro_script_reset_and_directional_buttons() {
+        let mut core = NesCore::new();
+        let script = "
+            PRESS Select
+            PRESS Up
+            PRESS Down
+            PRESS Left
+            PRESS Right
+            RESET
+        ";
+        let elapsed = execute_macro_script(&mut core, script).expect("script executes");
+        assert_eq!(elapsed, 0);
+        assert_eq!(core.controller_bits(), 0);
+    }
 }

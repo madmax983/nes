@@ -723,8 +723,8 @@ fn encode_base64(bytes: &[u8]) -> String {
         i += 3;
 
         out.push(ALPHABET[usize::from(b0 >> 2)] as char);
-        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))] as char);
-        out.push(ALPHABET[usize::from(((b1 & 0x0F) << 2) | (b2 >> 6))] as char);
+        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) + (b1 >> 4))] as char);
+        out.push(ALPHABET[usize::from(((b1 & 0x0F) << 2) + (b2 >> 6))] as char);
         out.push(ALPHABET[usize::from(b2 & 0x3F)] as char);
     }
 
@@ -739,7 +739,7 @@ fn encode_base64(bytes: &[u8]) -> String {
         let b0 = bytes[i];
         let b1 = bytes[i + 1];
         out.push(ALPHABET[usize::from(b0 >> 2)] as char);
-        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) | (b1 >> 4))] as char);
+        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) + (b1 >> 4))] as char);
         out.push(ALPHABET[usize::from((b1 & 0x0F) << 2)] as char);
         out.push('=');
     }
@@ -767,7 +767,7 @@ fn parse_hex_bytes(raw: &str) -> Result<Vec<u8>, DispatchError> {
     while index < as_bytes.len() {
         let hi = decode_hex_nibble(as_bytes[index], index)?;
         let lo = decode_hex_nibble(as_bytes[index + 1], index + 1)?;
-        bytes.push((hi << 4) | lo);
+        bytes.push((hi << 4) + lo);
         index += 2;
     }
     Ok(bytes)
@@ -790,9 +790,9 @@ mod tests {
     use nes_core::{FRAME_HEIGHT, FRAME_WIDTH, NesCore};
 
     use super::{
-        Button, DispatchError, Mirroring, ToolParams, encode_bmp, parse_button,
-        parse_dsl_rom_options, parse_player2, parse_slot, parse_speed_permille, parse_u64,
-        sync_audio_output, sync_frame_output,
+        Button, DispatchError, Mirroring, ToolParams, encode_base64, encode_bmp, parse_button,
+        parse_dsl_rom_options, parse_hex_bytes, parse_player2, parse_slot, parse_speed_permille,
+        parse_u64, sync_audio_output, sync_frame_output,
     };
     use crate::output::latest_output_metadata;
 
@@ -838,19 +838,31 @@ mod tests {
 
         let bad_number =
             parse_speed_permille(&params(&[("multiplier", "abc")])).expect_err("invalid number");
-        assert!(matches!(bad_number, DispatchError::InvalidParams(_)));
+        assert_eq!(
+            bad_number.to_string(),
+            "invalid params: multiplier must be a positive number"
+        );
 
         let not_positive =
             parse_speed_permille(&params(&[("multiplier", "0")])).expect_err("non-positive");
-        assert!(matches!(not_positive, DispatchError::InvalidParams(_)));
+        assert_eq!(
+            not_positive.to_string(),
+            "invalid params: multiplier must be a positive number"
+        );
 
         let not_finite =
             parse_speed_permille(&params(&[("multiplier", "NaN")])).expect_err("not finite");
-        assert!(matches!(not_finite, DispatchError::InvalidParams(_)));
+        assert_eq!(
+            not_finite.to_string(),
+            "invalid params: multiplier must be a positive number"
+        );
 
         let out_of_range =
             parse_speed_permille(&params(&[("multiplier", "1000")])).expect_err("out of range");
-        assert!(matches!(out_of_range, DispatchError::InvalidParams(_)));
+        assert_eq!(
+            out_of_range.to_string(),
+            "invalid params: multiplier is out of supported range"
+        );
     }
 
     #[test]
@@ -874,6 +886,10 @@ mod tests {
         let defaults = parse_dsl_rom_options(&ToolParams::new()).expect("default options");
         assert_eq!(defaults.mirroring, Mirroring::Horizontal);
         assert_eq!(defaults.chr_rom.len(), 8 * 1024);
+
+        let horizontal = parse_dsl_rom_options(&params(&[("mirroring", "horizontal")]))
+            .expect("horizontal options");
+        assert_eq!(horizontal.mirroring, Mirroring::Horizontal);
 
         let vertical = parse_dsl_rom_options(&params(&[
             ("mirroring", "vertical"),
@@ -906,6 +922,60 @@ mod tests {
                 255, 0, 0, 255, 255, 255, 0, 0, // bottom row (BGR + padding)
                 0, 0, 255, 0, 255, 0, 0, 0, // top row (BGR + padding)
             ]
+        );
+    }
+
+    #[test]
+    fn encode_bmp_uses_expected_padding_for_odd_row_widths() {
+        let rgba = vec![12, 34, 56, 255, 90, 80, 70, 255];
+        let bmp = encode_bmp(1, 2, &rgba).expect("encode bmp with row padding");
+        assert_eq!(bmp.len(), 62);
+        assert_eq!(u32::from_le_bytes([bmp[34], bmp[35], bmp[36], bmp[37]]), 8);
+        assert_eq!(
+            &bmp[54..],
+            &[
+                70, 80, 90, 0, // bottom row + 1 byte padding
+                56, 34, 12, 0, // top row + 1 byte padding
+            ]
+        );
+    }
+
+    #[test]
+    fn encode_base64_matches_known_vectors() {
+        assert_eq!(encode_base64(b""), "");
+        assert_eq!(encode_base64(b"f"), "Zg==");
+        assert_eq!(encode_base64(b"fo"), "Zm8=");
+        assert_eq!(encode_base64(b"foo"), "Zm9v");
+        assert_eq!(encode_base64(b"foob"), "Zm9vYg==");
+        assert_eq!(encode_base64(b"fooba"), "Zm9vYmE=");
+        assert_eq!(encode_base64(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn parse_hex_bytes_supports_mixed_case_whitespace_and_underscores() {
+        let parsed = parse_hex_bytes("de ad_BE ef").expect("valid mixed hex");
+        assert_eq!(parsed, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+    }
+
+    #[test]
+    fn parse_hex_bytes_reports_shape_and_digit_errors() {
+        let odd = parse_hex_bytes("ABC").expect_err("odd hex length");
+        assert_eq!(
+            odd.to_string(),
+            "invalid params: rom_hex must have an even number of hex digits"
+        );
+
+        let bad = parse_hex_bytes("AAx0").expect_err("invalid hex digit");
+        assert_eq!(
+            bad.to_string(),
+            "invalid params: rom_hex has invalid hex digit 'x' at index 2"
+        );
+
+        let bad_low_nibble =
+            parse_hex_bytes("AA0x").expect_err("invalid low nibble index should be precise");
+        assert_eq!(
+            bad_low_nibble.to_string(),
+            "invalid params: rom_hex has invalid hex digit 'x' at index 3"
         );
     }
 

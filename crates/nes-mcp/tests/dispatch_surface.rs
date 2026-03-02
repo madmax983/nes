@@ -242,6 +242,16 @@ fn get_ppu_frame_counter_reflects_core_progress() {
 }
 
 #[test]
+fn get_fps_returns_fps_output_variant() {
+    let mut core = NesCore::new();
+    let output = dispatch_tool(&mut core, "get_fps", &ToolParams::new()).unwrap();
+    match output {
+        DispatchOutput::Fps { fps_milli } => assert!(fps_milli > 0),
+        other => panic!("unexpected get_fps output: {other:?}"),
+    }
+}
+
+#[test]
 fn get_frame_reports_full_rgba_payload_size() {
     let mut core = NesCore::new();
     let output = dispatch_tool(&mut core, "get_frame", &ToolParams::new()).unwrap();
