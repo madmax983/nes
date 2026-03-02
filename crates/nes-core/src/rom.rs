@@ -1,3 +1,9 @@
+//! ROM parsing and iNES/NES2 header interpretation.
+//!
+//! This module extracts mapper metadata and PRG/CHR slices from raw `.nes`
+//! bytes. Parsing is intentionally strict: unsupported layouts or header
+//! features return explicit [`RomError`] values.
+
 use core::fmt;
 
 const INES_HEADER_LEN: usize = 16;
@@ -8,28 +14,49 @@ const CHR_BANK_BYTES: usize = 8 * 1024;
 const INES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Nametable mirroring mode declared by the cartridge header.
 pub enum NametableMirroring {
+    /// Horizontal arrangement (`[A A][B B]`).
     Horizontal,
+    /// Vertical arrangement (`[A B][A B]`).
     Vertical,
+    /// One-screen mirroring to first nametable page.
+    OneScreenLower,
+    /// One-screen mirroring to second nametable page.
+    OneScreenUpper,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Parsed iNES ROM view backed by the original ROM byte slice.
 pub struct InesRom<'a> {
+    /// iNES mapper number.
     pub mapper_id: u8,
+    /// PRG ROM data slice.
     pub prg_rom: &'a [u8],
+    /// CHR ROM data slice (empty when CHR RAM is used).
     pub chr_rom: &'a [u8],
+    /// Cartridge nametable mirroring mode.
     pub mirroring: NametableMirroring,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Structured ROM loading failures.
 pub enum RomError {
+    /// File does not start with `NES<EOF>`.
     InvalidMagic,
+    /// Four-screen mirroring is not implemented yet.
     UnsupportedFourScreenMirroring,
+    /// NES 2.0 exponent/multiplier sizing is not implemented.
     UnsupportedNes2SizeEncoding,
+    /// NES 2.0 extended mapper IDs are currently unsupported.
     UnsupportedNes2ExtendedMapper(u16),
+    /// PRG bank count is zero.
     MissingPrgRom,
+    /// Mapper is outside the supported set.
     UnsupportedMapper(u8),
+    /// PRG size does not match mapper constraints.
     UnsupportedPrgLayout(usize),
+    /// File ended before required PRG/CHR bytes were available.
     Truncated { expected_min: usize, actual: usize },
 }
 
@@ -62,6 +89,12 @@ impl fmt::Display for RomError {
 
 impl std::error::Error for RomError {}
 
+/// Parses an iNES/NES2 ROM image and returns a borrowed [`InesRom`] view.
+///
+/// # Errors
+///
+/// Returns [`RomError`] when header bytes are invalid, sizes are unsupported,
+/// or the input is truncated.
 pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
     if bytes.len() < INES_HEADER_LEN {
         return Err(RomError::Truncated {

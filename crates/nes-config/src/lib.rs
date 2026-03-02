@@ -12,6 +12,13 @@ const DEFAULT_METRICS_ENABLED: bool = false;
 const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
+const DEFAULT_NETPLAY_ENABLED: bool = false;
+const DEFAULT_NETPLAY_RELAY_ADDR: &str = "127.0.0.1:4545";
+const DEFAULT_NETPLAY_ROOM: &str = "default";
+const DEFAULT_NETPLAY_PLAYER: u8 = 1;
+const DEFAULT_NETPLAY_INPUT_DELAY_FRAMES: u32 = 2;
+const DEFAULT_NETPLAY_MAX_ROLLBACK_FRAMES: u32 = 240;
+const DEFAULT_NETPLAY_HASH_CHECK_EVERY_FRAMES: u64 = 120;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -63,11 +70,38 @@ pub struct RomPathsConfig {
     pub bbbradsmith_audio_golden_dir: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct NetplayConfig {
+    pub enabled: bool,
+    pub relay_addr: String,
+    pub room: String,
+    pub player: u8,
+    pub input_delay_frames: u32,
+    pub max_rollback_frames: u32,
+    pub hash_check_every_frames: u64,
+}
+
+impl Default for NetplayConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_NETPLAY_ENABLED,
+            relay_addr: DEFAULT_NETPLAY_RELAY_ADDR.to_owned(),
+            room: DEFAULT_NETPLAY_ROOM.to_owned(),
+            player: DEFAULT_NETPLAY_PLAYER,
+            input_delay_frames: DEFAULT_NETPLAY_INPUT_DELAY_FRAMES,
+            max_rollback_frames: DEFAULT_NETPLAY_MAX_ROLLBACK_FRAMES,
+            hash_check_every_frames: DEFAULT_NETPLAY_HASH_CHECK_EVERY_FRAMES,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct NesConfig {
     pub desktop: DesktopConfig,
     pub roms: RomPathsConfig,
+    pub netplay: NetplayConfig,
 }
 
 impl NesConfig {

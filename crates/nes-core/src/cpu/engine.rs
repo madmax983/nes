@@ -1,3 +1,9 @@
+//! 6502 CPU execution engine.
+//!
+//! The CPU model owns a 64K memory image, executes one instruction at a time,
+//! records bus activity, and tracks write side-effects for MMIO application in
+//! the outer core.
+
 use core::fmt;
 use std::cell::RefCell;
 
@@ -28,7 +34,9 @@ const CPU_BASE_CYCLES: [u8; 256] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// CPU instruction execution errors.
 pub enum CpuError {
+    /// Opcode is not implemented.
     UnknownOpcode(u8),
 }
 
@@ -43,38 +51,59 @@ impl fmt::Display for CpuError {
 impl std::error::Error for CpuError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Serializable register snapshot.
 pub struct CpuSnapshot {
+    /// Program counter.
     pub pc: u16,
+    /// Accumulator register.
     pub a: u8,
+    /// X index register.
     pub x: u8,
+    /// Y index register.
     pub y: u8,
+    /// Stack pointer.
     pub sp: u8,
+    /// Raw status flags.
     pub status: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One observed CPU write on the CPU bus.
 pub struct CpuWrite {
+    /// Target address.
     pub addr: u16,
+    /// Written value.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// CPU write that targeted PRG space (`>= 0x8000`).
 pub struct CpuPrgWrite {
+    /// Target address.
     pub addr: u16,
+    /// Written value.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Bus access classification used in instruction traces.
 pub enum CpuBusAccessKind {
+    /// Read transaction.
     Read,
+    /// Write transaction.
     Write,
+    /// Dummy read used for timing-accurate microphases.
     DummyRead,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One observed CPU bus transaction.
 pub struct CpuBusAccess {
+    /// Access address.
     pub addr: u16,
+    /// Data value seen on the access.
     pub value: u8,
+    /// Access kind.
     pub kind: CpuBusAccessKind,
 }
 
@@ -89,6 +118,7 @@ struct TraceSnapshot {
 }
 
 #[derive(Debug, Clone)]
+/// 6502 CPU state and execution engine.
 pub struct Cpu {
     pc: u16,
     a: u8,
@@ -103,6 +133,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    /// Creates a CPU with canonical power-on register defaults.
     #[must_use]
     pub fn new(start_pc: u16) -> Self {
         Self {
@@ -119,40 +150,48 @@ impl Cpu {
         }
     }
 
+    /// Returns program counter.
     #[must_use]
     pub const fn pc(&self) -> u16 {
         self.pc
     }
 
+    /// Returns accumulator.
     #[must_use]
     pub const fn a(&self) -> u8 {
         self.a
     }
 
+    /// Returns X register.
     #[must_use]
     pub const fn x(&self) -> u8 {
         self.x
     }
 
+    /// Returns Y register.
     #[must_use]
     pub const fn y(&self) -> u8 {
         self.y
     }
 
+    /// Returns stack pointer.
     #[must_use]
     pub const fn sp(&self) -> u8 {
         self.sp
     }
 
+    /// Reads a byte from CPU memory image.
     #[must_use]
     pub fn read_byte(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
+    /// Writes a byte into CPU memory image.
     pub fn write_byte(&mut self, addr: u16, value: u8) {
         self.memory[addr as usize] = value;
     }
 
+    /// Captures register snapshot.
     #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
         CpuSnapshot {
@@ -165,6 +204,7 @@ impl Cpu {
         }
     }
 
+    /// Restores CPU registers and clears transient trace buffers.
     pub fn restore(&mut self, snapshot: CpuSnapshot) {
         self.pc = snapshot.pc;
         self.a = snapshot.a;
@@ -177,6 +217,7 @@ impl Cpu {
         self.bus_trace.borrow_mut().clear();
     }
 
+    /// Resets CPU registers and clears transient trace buffers.
     pub fn reset(&mut self, start_pc: u16) {
         self.pc = start_pc;
         self.a = 0;
@@ -189,6 +230,7 @@ impl Cpu {
         self.bus_trace.borrow_mut().clear();
     }
 
+    /// Copies raw bytes into CPU memory image at `start`.
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {
         let start = start as usize;
         let end = start.saturating_add(bytes.len()).min(self.memory.len());
@@ -196,6 +238,7 @@ impl Cpu {
         self.memory[start..end].copy_from_slice(&bytes[..len]);
     }
 
+    /// Services an NMI interrupt.
     pub fn service_nmi(&mut self) {
         let pc = self.pc;
         self.push((pc >> 8) as u8);
@@ -205,6 +248,9 @@ impl Cpu {
         self.pc = self.read_u16(0xFFFA);
     }
 
+    /// Services an IRQ interrupt if not masked.
+    ///
+    /// Returns `true` when the IRQ was taken.
     pub fn service_irq(&mut self) -> bool {
         if self.status.interrupt_disable() {
             return false;
@@ -219,10 +265,20 @@ impl Cpu {
         true
     }
 
+    /// Executes one instruction and returns formatted trace text.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CpuError`] when opcode decoding/execution fails.
     pub fn step_with_trace(&mut self) -> Result<String, CpuError> {
         self.step_with_trace_and_cycles().map(|(trace, _)| trace)
     }
 
+    /// Executes one instruction and returns trace text + cycle count.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CpuError`] when opcode decoding/execution fails.
     pub fn step_with_trace_and_cycles(&mut self) -> Result<(String, u8), CpuError> {
         self.writes.clear();
         self.prg_writes.clear();
@@ -398,52 +454,8 @@ impl Cpu {
                 Ok(trace)
             }
             0x03 | 0x07 | 0x0F | 0x13 | 0x17 | 0x1B | 0x1F => {
-                let (addr, bytes, mnemonic) = match opcode {
-                    0x03 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let ptr = zp.wrapping_add(self.x);
-                        (
-                            self.read_u16_zp(ptr),
-                            vec![opcode, zp],
-                            format!("SLO (${zp:02X},X)"),
-                        )
-                    }
-                    0x07 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        (zp as u16, vec![opcode, zp], format!("SLO ${zp:02X}"))
-                    }
-                    0x0F => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let addr = u16::from_le_bytes([low, high]);
-                        (addr, vec![opcode, low, high], format!("SLO ${addr:04X}"))
-                    }
-                    0x13 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let base = self.read_u16_zp(zp);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, zp], format!("SLO (${zp:02X}),Y"))
-                    }
-                    0x17 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let addr = zp.wrapping_add(self.x) as u16;
-                        (addr, vec![opcode, zp], format!("SLO ${zp:02X},X"))
-                    }
-                    0x1B => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, low, high], format!("SLO ${base:04X},Y"))
-                    }
-                    _ => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.x as u16);
-                        (addr, vec![opcode, low, high], format!("SLO ${base:04X},X"))
-                    }
-                };
+                let (addr, bytes, mnemonic) =
+                    self.decode_unofficial_rmw_addressing(snapshot, opcode, "SLO");
                 let trace = format_trace(snapshot, &bytes, &mnemonic);
                 let value = self.read(addr);
                 let next = self.asl_value(value);
@@ -453,52 +465,8 @@ impl Cpu {
                 Ok(trace)
             }
             0x23 | 0x27 | 0x2F | 0x33 | 0x37 | 0x3B | 0x3F => {
-                let (addr, bytes, mnemonic) = match opcode {
-                    0x23 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let ptr = zp.wrapping_add(self.x);
-                        (
-                            self.read_u16_zp(ptr),
-                            vec![opcode, zp],
-                            format!("RLA (${zp:02X},X)"),
-                        )
-                    }
-                    0x27 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        (zp as u16, vec![opcode, zp], format!("RLA ${zp:02X}"))
-                    }
-                    0x2F => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let addr = u16::from_le_bytes([low, high]);
-                        (addr, vec![opcode, low, high], format!("RLA ${addr:04X}"))
-                    }
-                    0x33 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let base = self.read_u16_zp(zp);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, zp], format!("RLA (${zp:02X}),Y"))
-                    }
-                    0x37 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let addr = zp.wrapping_add(self.x) as u16;
-                        (addr, vec![opcode, zp], format!("RLA ${zp:02X},X"))
-                    }
-                    0x3B => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, low, high], format!("RLA ${base:04X},Y"))
-                    }
-                    _ => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.x as u16);
-                        (addr, vec![opcode, low, high], format!("RLA ${base:04X},X"))
-                    }
-                };
+                let (addr, bytes, mnemonic) =
+                    self.decode_unofficial_rmw_addressing(snapshot, opcode, "RLA");
                 let trace = format_trace(snapshot, &bytes, &mnemonic);
                 let value = self.read(addr);
                 let next = self.rol_value(value);
@@ -508,52 +476,8 @@ impl Cpu {
                 Ok(trace)
             }
             0x43 | 0x47 | 0x4F | 0x53 | 0x57 | 0x5B | 0x5F => {
-                let (addr, bytes, mnemonic) = match opcode {
-                    0x43 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let ptr = zp.wrapping_add(self.x);
-                        (
-                            self.read_u16_zp(ptr),
-                            vec![opcode, zp],
-                            format!("SRE (${zp:02X},X)"),
-                        )
-                    }
-                    0x47 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        (zp as u16, vec![opcode, zp], format!("SRE ${zp:02X}"))
-                    }
-                    0x4F => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let addr = u16::from_le_bytes([low, high]);
-                        (addr, vec![opcode, low, high], format!("SRE ${addr:04X}"))
-                    }
-                    0x53 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let base = self.read_u16_zp(zp);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, zp], format!("SRE (${zp:02X}),Y"))
-                    }
-                    0x57 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let addr = zp.wrapping_add(self.x) as u16;
-                        (addr, vec![opcode, zp], format!("SRE ${zp:02X},X"))
-                    }
-                    0x5B => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, low, high], format!("SRE ${base:04X},Y"))
-                    }
-                    _ => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.x as u16);
-                        (addr, vec![opcode, low, high], format!("SRE ${base:04X},X"))
-                    }
-                };
+                let (addr, bytes, mnemonic) =
+                    self.decode_unofficial_rmw_addressing(snapshot, opcode, "SRE");
                 let trace = format_trace(snapshot, &bytes, &mnemonic);
                 let value = self.read(addr);
                 let next = self.lsr_value(value);
@@ -563,52 +487,8 @@ impl Cpu {
                 Ok(trace)
             }
             0x63 | 0x67 | 0x6F | 0x73 | 0x77 | 0x7B | 0x7F => {
-                let (addr, bytes, mnemonic) = match opcode {
-                    0x63 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let ptr = zp.wrapping_add(self.x);
-                        (
-                            self.read_u16_zp(ptr),
-                            vec![opcode, zp],
-                            format!("RRA (${zp:02X},X)"),
-                        )
-                    }
-                    0x67 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        (zp as u16, vec![opcode, zp], format!("RRA ${zp:02X}"))
-                    }
-                    0x6F => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let addr = u16::from_le_bytes([low, high]);
-                        (addr, vec![opcode, low, high], format!("RRA ${addr:04X}"))
-                    }
-                    0x73 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let base = self.read_u16_zp(zp);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, zp], format!("RRA (${zp:02X}),Y"))
-                    }
-                    0x77 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let addr = zp.wrapping_add(self.x) as u16;
-                        (addr, vec![opcode, zp], format!("RRA ${zp:02X},X"))
-                    }
-                    0x7B => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, low, high], format!("RRA ${base:04X},Y"))
-                    }
-                    _ => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.x as u16);
-                        (addr, vec![opcode, low, high], format!("RRA ${base:04X},X"))
-                    }
-                };
+                let (addr, bytes, mnemonic) =
+                    self.decode_unofficial_rmw_addressing(snapshot, opcode, "RRA");
                 let trace = format_trace(snapshot, &bytes, &mnemonic);
                 let value = self.read(addr);
                 let next = self.ror_value(value);
@@ -618,52 +498,8 @@ impl Cpu {
                 Ok(trace)
             }
             0xC3 | 0xC7 | 0xCF | 0xD3 | 0xD7 | 0xDB | 0xDF => {
-                let (addr, bytes, mnemonic) = match opcode {
-                    0xC3 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let ptr = zp.wrapping_add(self.x);
-                        (
-                            self.read_u16_zp(ptr),
-                            vec![opcode, zp],
-                            format!("DCP (${zp:02X},X)"),
-                        )
-                    }
-                    0xC7 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        (zp as u16, vec![opcode, zp], format!("DCP ${zp:02X}"))
-                    }
-                    0xCF => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let addr = u16::from_le_bytes([low, high]);
-                        (addr, vec![opcode, low, high], format!("DCP ${addr:04X}"))
-                    }
-                    0xD3 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let base = self.read_u16_zp(zp);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, zp], format!("DCP (${zp:02X}),Y"))
-                    }
-                    0xD7 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let addr = zp.wrapping_add(self.x) as u16;
-                        (addr, vec![opcode, zp], format!("DCP ${zp:02X},X"))
-                    }
-                    0xDB => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, low, high], format!("DCP ${base:04X},Y"))
-                    }
-                    _ => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.x as u16);
-                        (addr, vec![opcode, low, high], format!("DCP ${base:04X},X"))
-                    }
-                };
+                let (addr, bytes, mnemonic) =
+                    self.decode_unofficial_rmw_addressing(snapshot, opcode, "DCP");
                 let trace = format_trace(snapshot, &bytes, &mnemonic);
                 let next = self.read(addr).wrapping_sub(1);
                 self.write_and_track(addr, next);
@@ -672,52 +508,8 @@ impl Cpu {
                 Ok(trace)
             }
             0xE3 | 0xE7 | 0xEF | 0xF3 | 0xF7 | 0xFB | 0xFF => {
-                let (addr, bytes, mnemonic) = match opcode {
-                    0xE3 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let ptr = zp.wrapping_add(self.x);
-                        (
-                            self.read_u16_zp(ptr),
-                            vec![opcode, zp],
-                            format!("ISC (${zp:02X},X)"),
-                        )
-                    }
-                    0xE7 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        (zp as u16, vec![opcode, zp], format!("ISC ${zp:02X}"))
-                    }
-                    0xEF => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let addr = u16::from_le_bytes([low, high]);
-                        (addr, vec![opcode, low, high], format!("ISC ${addr:04X}"))
-                    }
-                    0xF3 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let base = self.read_u16_zp(zp);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, zp], format!("ISC (${zp:02X}),Y"))
-                    }
-                    0xF7 => {
-                        let zp = self.read(snapshot.pc.wrapping_add(1));
-                        let addr = zp.wrapping_add(self.x) as u16;
-                        (addr, vec![opcode, zp], format!("ISC ${zp:02X},X"))
-                    }
-                    0xFB => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.y as u16);
-                        (addr, vec![opcode, low, high], format!("ISC ${base:04X},Y"))
-                    }
-                    _ => {
-                        let low = self.read(snapshot.pc.wrapping_add(1));
-                        let high = self.read(snapshot.pc.wrapping_add(2));
-                        let base = u16::from_le_bytes([low, high]);
-                        let addr = base.wrapping_add(self.x as u16);
-                        (addr, vec![opcode, low, high], format!("ISC ${base:04X},X"))
-                    }
-                };
+                let (addr, bytes, mnemonic) =
+                    self.decode_unofficial_rmw_addressing(snapshot, opcode, "ISC");
                 let trace = format_trace(snapshot, &bytes, &mnemonic);
                 let next = self.read(addr).wrapping_add(1);
                 self.write_and_track(addr, next);
@@ -2397,6 +2189,73 @@ impl Cpu {
         cycles
     }
 
+    fn decode_unofficial_rmw_addressing(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, Vec<u8>, String) {
+        match opcode & 0x1F {
+            0x03 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let ptr = zp.wrapping_add(snapshot.x);
+                (
+                    self.read_u16_zp(ptr),
+                    vec![opcode, zp],
+                    format!("{mnemonic} (${zp:02X},X)"),
+                )
+            }
+            0x07 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                (zp as u16, vec![opcode, zp], format!("{mnemonic} ${zp:02X}"))
+            }
+            0x0F => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                (
+                    addr,
+                    vec![opcode, low, high],
+                    format!("{mnemonic} ${addr:04X}"),
+                )
+            }
+            0x13 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let base = self.read_u16_zp(zp);
+                let addr = base.wrapping_add(snapshot.y as u16);
+                (addr, vec![opcode, zp], format!("{mnemonic} (${zp:02X}),Y"))
+            }
+            0x17 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(snapshot.x) as u16;
+                (addr, vec![opcode, zp], format!("{mnemonic} ${zp:02X},X"))
+            }
+            0x1B => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(snapshot.y as u16);
+                (
+                    addr,
+                    vec![opcode, low, high],
+                    format!("{mnemonic} ${base:04X},Y"),
+                )
+            }
+            0x1F => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(snapshot.x as u16);
+                (
+                    addr,
+                    vec![opcode, low, high],
+                    format!("{mnemonic} ${base:04X},X"),
+                )
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn absolute_operand_base(&self, snapshot: TraceSnapshot) -> u16 {
         let low = self.peek(snapshot.pc.wrapping_add(1));
         let high = self.peek(snapshot.pc.wrapping_add(2));
@@ -2459,16 +2318,28 @@ impl Cpu {
         )
     }
 
-    pub fn take_writes(&mut self) -> Vec<CpuWrite> {
-        core::mem::take(&mut self.writes)
+    /// Swaps the collected non-PRG writes into the provided vector.
+    ///
+    /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
+    /// eliminating continuous heap allocations on the hot path during instruction steps.
+    pub fn swap_writes(&mut self, dest: &mut Vec<CpuWrite>) {
+        std::mem::swap(&mut self.writes, dest);
     }
 
-    pub fn take_prg_writes(&mut self) -> Vec<CpuPrgWrite> {
-        core::mem::take(&mut self.prg_writes)
+    /// Swaps the collected PRG-space writes into the provided vector.
+    ///
+    /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
+    /// eliminating continuous heap allocations on the hot path during instruction steps.
+    pub fn swap_prg_writes(&mut self, dest: &mut Vec<CpuPrgWrite>) {
+        std::mem::swap(&mut self.prg_writes, dest);
     }
 
-    pub fn take_bus_trace(&mut self) -> Vec<CpuBusAccess> {
-        core::mem::take(&mut *self.bus_trace.borrow_mut())
+    /// Swaps the bus trace records into the provided vector.
+    ///
+    /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
+    /// eliminating continuous heap allocations on the hot path during instruction steps.
+    pub fn swap_bus_trace(&self, dest: &mut Vec<CpuBusAccess>) {
+        std::mem::swap(&mut *self.bus_trace.borrow_mut(), dest);
     }
 
     fn push(&mut self, value: u8) {

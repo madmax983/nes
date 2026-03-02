@@ -391,6 +391,74 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "reset_pc": reset_pc
             })
         }
+        DispatchOutput::MacroExecuted {
+            frames_elapsed,
+            final_controller_bits,
+        } => {
+            json!({
+                "kind": "macro_executed",
+                "frames_elapsed": frames_elapsed,
+                "final_controller_bits": final_controller_bits,
+            })
+        }
+        DispatchOutput::DslAssembled {
+            bytes_written,
+            label_count,
+            nmi_vector,
+            reset_vector,
+            irq_vector,
+        } => {
+            json!({
+                "kind": "dsl_assembled",
+                "bytes_written": bytes_written,
+                "label_count": label_count,
+                "nmi_vector": nmi_vector,
+                "reset_vector": reset_vector,
+                "irq_vector": irq_vector,
+            })
+        }
+        DispatchOutput::DslRomLoaded {
+            mapper_id,
+            prg_rom_bytes,
+            reset_pc,
+            rom_bytes,
+        } => {
+            json!({
+                "kind": "dsl_rom_loaded",
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+                "reset_pc": reset_pc,
+                "rom_bytes": rom_bytes,
+            })
+        }
+        DispatchOutput::DslRomExported {
+            path,
+            bytes,
+            mapper_id,
+            prg_rom_bytes,
+        } => {
+            json!({
+                "kind": "dsl_rom_exported",
+                "path": path,
+                "bytes": bytes,
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+            })
+        }
+        DispatchOutput::DslRomExportedBase64 {
+            rom_base64,
+            bytes,
+            mapper_id,
+            prg_rom_bytes,
+        } => {
+            json!({
+                "kind": "dsl_rom_exported_base64",
+                "rom_base64": rom_base64,
+                "bytes": bytes,
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+            })
+        }
     }
 }
 
@@ -399,7 +467,8 @@ fn tool_input_schema(tool_name: &str) -> Value {
         "set_controller_state" => json!({
             "type": "object",
             "properties": {
-                "bits": { "type": "integer", "minimum": 0, "maximum": 255 }
+                "bits": { "type": "integer", "minimum": 0, "maximum": 255 },
+                "player": { "type": "integer", "enum": [1, 2] }
             },
             "required": ["bits"],
             "additionalProperties": false
@@ -410,7 +479,8 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "button": {
                     "type": "string",
                     "enum": ["A", "B", "Select", "Start", "Up", "Down", "Left", "Right"]
-                }
+                },
+                "player": { "type": "integer", "enum": [1, 2] }
             },
             "required": ["button"],
             "additionalProperties": false
@@ -463,6 +533,45 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 { "required": ["rom_path"] },
                 { "required": ["rom_hex"] }
             ],
+            "additionalProperties": false
+        }),
+        "assemble_6502_dsl" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 }
+            },
+            "required": ["source"],
+            "additionalProperties": false
+        }),
+        "load_6502_dsl" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "chr_hex": { "type": "string", "minLength": 2 }
+            },
+            "required": ["source"],
+            "additionalProperties": false
+        }),
+        "export_6502_dsl_rom" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "output_path": { "type": "string", "minLength": 1 },
+                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "chr_hex": { "type": "string", "minLength": 2 }
+            },
+            "required": ["source", "output_path"],
+            "additionalProperties": false
+        }),
+        "export_6502_dsl_rom_base64" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "chr_hex": { "type": "string", "minLength": 2 }
+            },
+            "required": ["source"],
             "additionalProperties": false
         }),
         _ => json!({

@@ -2,6 +2,10 @@ use std::f64::consts::PI;
 use std::fs;
 use std::path::Path;
 
+mod homebrew;
+
+pub use homebrew::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
+
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -334,7 +338,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
-    matches!(mapper_id, 0..=2)
+    matches!(mapper_id, 0 | 1 | 2 | 4)
 }
 
 #[cfg(test)]
@@ -434,6 +438,7 @@ mod tests {
         assert!(mapper_supported_by_core(0));
         assert!(mapper_supported_by_core(1));
         assert!(mapper_supported_by_core(2));
+        assert!(mapper_supported_by_core(4));
         assert!(!mapper_supported_by_core(69));
     }
 }

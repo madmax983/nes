@@ -1,0 +1,1 @@
+## 2026-02-28 - [Initial Audit]\n**Learning:** The MMC1 mapper logic has significant coverage gaps around bank switching modes and shift register commits.\n**Action:** Add comprehensive unit tests in crates/nes-core/src/mapper/mmc1.rs to cover these edge cases.

@@ -3,4 +3,10 @@ name = "nes-core"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+nova = []
+
 [dependencies]
+
+[dev-dependencies]
+proptest = "1.0.0"

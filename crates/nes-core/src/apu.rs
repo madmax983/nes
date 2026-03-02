@@ -1,3 +1,8 @@
+//! Audio Processing Unit (APU) model and sample generation.
+//!
+//! Implements pulse/triangle/noise/DMC channels, frame sequencer timing,
+//! IRQ behavior, and mixed PCM sample generation for host playback.
+
 use std::collections::VecDeque;
 use std::sync::OnceLock;
 
@@ -44,8 +49,11 @@ const LENGTH_TABLE: [u8; 32] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// DMC DMA fetch request produced by the APU.
 pub struct DmcDmaRequest {
+    /// CPU address to fetch sample byte from.
     pub addr: u16,
+    /// CPU cycles to stall while performing the fetch.
     pub stall_cycles: u16,
 }
 
@@ -641,6 +649,7 @@ impl DmcChannel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Serializable APU snapshot.
 pub struct ApuSnapshot {
     cpu_cycles: u64,
     frame_cycle: u16,
@@ -664,6 +673,7 @@ pub struct ApuSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Runtime APU state and channel graph.
 pub struct Apu {
     cpu_cycles: u64,
     frame_cycle: u16,
@@ -687,6 +697,7 @@ pub struct Apu {
 }
 
 impl Apu {
+    /// Creates a power-on initialized APU.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -712,10 +723,12 @@ impl Apu {
         }
     }
 
+    /// Resets the APU to power-on state.
     pub fn reset(&mut self) {
         *self = Self::new();
     }
 
+    /// Captures full APU snapshot.
     #[must_use]
     pub fn snapshot(&self) -> ApuSnapshot {
         ApuSnapshot {
@@ -741,6 +754,7 @@ impl Apu {
         }
     }
 
+    /// Restores APU from snapshot.
     pub fn restore(&mut self, snapshot: ApuSnapshot) {
         self.cpu_cycles = snapshot.cpu_cycles;
         self.frame_cycle = snapshot.frame_cycle;
@@ -763,6 +777,7 @@ impl Apu {
         self.samples = snapshot.samples.into_iter().collect();
     }
 
+    /// Writes an APU/MMIO register (`$4000-$4017`).
     pub fn write_register(&mut self, addr: u16, value: u8) {
         match addr {
             0x4000 => self.pulse1.write_control(value),
@@ -789,6 +804,9 @@ impl Apu {
         }
     }
 
+    /// Steps one CPU cycle worth of APU timing.
+    ///
+    /// Returns an optional DMC DMA request that the host/core must service.
     pub fn step_cpu_cycle(&mut self, paused: bool) -> Option<DmcDmaRequest> {
         self.cpu_cycles = self.cpu_cycles.saturating_add(1);
         self.frame_cycle = self.frame_cycle.saturating_add(1);
@@ -812,16 +830,22 @@ impl Apu {
         dmc_request
     }
 
+    /// Loads one fetched DMC sample byte.
     pub fn load_dmc_sample(&mut self, sample: u8) {
         self.dmc.load_sample(sample);
     }
 
-    #[must_use]
-    pub fn drain_samples(&mut self, count: usize, paused: bool) -> Vec<i16> {
-        let mut drained = Vec::with_capacity(count);
-        while drained.len() < count {
+    /// Fills exactly `buffer.len()` PCM samples into the provided buffer.
+    ///
+    /// If insufficient samples are queued, the APU will keep stepping until
+    /// enough samples are generated.
+    pub fn fill_samples(&mut self, buffer: &mut [i16], paused: bool) {
+        let mut idx = 0;
+        let count = buffer.len();
+        while idx < count {
             if let Some(sample) = self.samples.pop_front() {
-                drained.push(sample);
+                buffer[idx] = sample;
+                idx += 1;
                 continue;
             }
             if self.step_cpu_cycle(paused).is_some() {
@@ -829,9 +853,9 @@ impl Apu {
                 self.dmc.load_sample(0);
             }
         }
-        drained
     }
 
+    /// Reads status register with side-effects (clears frame IRQ latch).
     #[must_use]
     pub fn read_status(&mut self) -> u8 {
         let status = self.peek_status();
@@ -839,6 +863,7 @@ impl Apu {
         status
     }
 
+    /// Reads status register without side-effects.
     #[must_use]
     pub fn peek_status(&self) -> u8 {
         let mut status = 0_u8;
@@ -866,41 +891,49 @@ impl Apu {
         status
     }
 
+    /// Returns total APU CPU-cycle ticks.
     #[must_use]
     pub fn total_cycles(&self) -> u64 {
         self.cpu_cycles
     }
 
+    /// Returns frame-sequencer quarter-frame tick count.
     #[must_use]
     pub fn quarter_frame_ticks(&self) -> u64 {
         self.quarter_frame_ticks
     }
 
+    /// Returns frame-sequencer half-frame tick count.
     #[must_use]
     pub fn half_frame_ticks(&self) -> u64 {
         self.half_frame_ticks
     }
 
+    /// Returns combined frame IRQ or DMC IRQ pending state.
     #[must_use]
     pub fn irq_pending(&self) -> bool {
         self.frame_irq_pending || self.dmc.irq_pending()
     }
 
+    /// Returns DMC IRQ pending state.
     #[must_use]
     pub fn dmc_irq_pending(&self) -> bool {
         self.dmc.irq_pending()
     }
 
+    /// Returns remaining bytes in active DMC sample playback.
     #[must_use]
     pub fn dmc_bytes_remaining(&self) -> u16 {
         self.dmc.bytes_remaining()
     }
 
+    /// Returns total DMC fetch request count.
     #[must_use]
     pub fn dmc_fetch_count(&self) -> u64 {
         self.dmc.fetch_count()
     }
 
+    /// Returns `(pulse1_timer_reload, pulse2_timer_reload)`.
     #[must_use]
     pub fn pulse_timer_reloads(&self) -> (u16, u16) {
         (self.pulse1.timer_reload, self.pulse2.timer_reload)

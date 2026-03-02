@@ -1,0 +1,34 @@
+[workspace]
+[package]
+name = "nes-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.3", features = ["derive"] }
+nes-core = { path = "../../nes-core" }
+
+[build-dependencies]
+
+[[bin]]
+name = "api_fuzz"
+path = "fuzz_targets/api_fuzz.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "execute_fuzz"
+path = "fuzz_targets/execute_fuzz.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "api_read_write"
+path = "fuzz_targets/api_read_write.rs"
+test = false
+doc = false

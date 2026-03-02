@@ -1,11 +1,16 @@
+//! The core emulator API surface.
+//!
+//! This module provides the primary interface for controlling the NES emulator,
+//! injecting inputs, and querying its state. The [`NesCore`] struct is the
+//! main entry point for host applications.
+
 use core::fmt;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
-use crate::mapper::{Mmc1, Nrom, Uxrom};
+use crate::mapper::{Axrom, Cnrom, Gxrom, Mmc1, Mmc3, Nrom, Uxrom};
 use crate::ppu::{Ppu, PpuSnapshot};
-use crate::replay::replay_commands;
-use crate::rom::{RomError, parse_ines};
+use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
 const DEFAULT_START_PC: u16 = 0xC000;
@@ -13,27 +18,52 @@ const DEFAULT_SPEED_PERMILLE: u16 = 1_000;
 const BASE_FPS_MILLI: u32 = 60_000;
 const PRG_16K_BYTES: usize = 16 * 1024;
 const PRG_32K_BYTES: usize = 32 * 1024;
+const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
+const CHR_8K_BYTES: usize = 8 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
+/// NES visible frame width in pixels.
 pub const FRAME_WIDTH: usize = 256;
+/// NES visible frame height in pixels.
 pub const FRAME_HEIGHT: usize = 240;
+/// Framebuffer byte count for `RGBA8` format.
 pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
+/// Default host audio sample rate.
 pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
+/// Samples produced/consumed per 60Hz host frame.
 pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
 
+/// Represents a standard NES controller button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
+    /// A button.
     A,
+    /// B button.
     B,
+    /// Select button.
     Select,
+    /// Start button.
     Start,
+    /// Up direction.
     Up,
+    /// Down direction.
     Down,
+    /// Left direction.
     Left,
+    /// Right direction.
     Right,
 }
 
 impl Button {
+    /// Returns this button's bit in controller bitfields.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::Button;
+    /// assert_eq!(Button::A.bit_mask(), 0b0000_0001);
+    /// assert_eq!(Button::Start.bit_mask(), 0b0000_1000);
+    /// ```
     #[must_use]
     pub fn bit_mask(self) -> u8 {
         match self {
@@ -49,66 +79,119 @@ impl Button {
     }
 }
 
+/// Commands that can be executed by the [`NesCore`] to change its state
+/// or advance the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
+    /// Pause emulation stepping.
     Pause,
+    /// Resume emulation stepping.
     Resume,
+    /// Reset runtime state while preserving speed setting.
     Reset,
+    /// Reset runtime state and restore default speed.
     PowerCycle,
+    /// Execute one CPU instruction.
     StepCpu,
+    /// Execute until next scanline boundary.
     StepScanline,
+    /// Execute until next frame boundary.
     StepFrame,
+    /// Replace full controller bitfield.
     SetControllerState(u8),
+    /// Replace full controller bitfield for player 2.
+    SetController2State(u8),
+    /// Press a single controller button.
     PressButton(Button),
+    /// Press a single controller button for player 2.
+    PressButton2(Button),
+    /// Release a single controller button.
     ReleaseButton(Button),
+    /// Release a single controller button for player 2.
+    ReleaseButton2(Button),
+    /// Set speed multiplier in permille (`1000 == 1.0x`).
     SetSpeed(u16),
 }
 
+/// Queries that can be sent to the [`NesCore`] to inspect its current state
+/// without advancing the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreQuery {
+    /// Returns paused/speed/controller state.
     EmulatorState,
+    /// Returns current CPU registers.
     Registers,
+    /// Returns memory-mapped read value for one address.
     Memory(u16),
+    /// Returns current target FPS in milli-Hz.
     FpsMilli,
+    /// Returns PPU frame counter.
     PpuFrameCounter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lightweight machine status query response.
 pub struct EmulatorState {
+    /// Pause state.
     pub paused: bool,
+    /// Speed multiplier in permille.
     pub speed_permille: u16,
+    /// Latched controller bits.
     pub controller_bits: u8,
+    /// Latched controller bits for player 2.
+    pub controller2_bits: u8,
 }
 
+/// The result of executing a [`CoreQuery`] on the [`NesCore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryResult {
+    /// [`CoreQuery::EmulatorState`] response.
     EmulatorState(EmulatorState),
+    /// [`CoreQuery::Registers`] response.
     Registers(CpuSnapshot),
+    /// [`CoreQuery::Memory`] response.
     Memory(u8),
+    /// [`CoreQuery::FpsMilli`] response.
     FpsMilli(u32),
+    /// [`CoreQuery::PpuFrameCounter`] response.
     PpuFrameCounter(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Complete serializable machine snapshot for save-state support.
 pub struct CoreSnapshot {
+    /// Pause state.
     pub paused: bool,
+    /// Speed multiplier.
     pub speed_permille: u16,
+    /// Controller bits.
     pub controller_bits: u8,
+    /// Controller bits for player 2.
+    pub controller2_bits: u8,
+    /// Scheduler counters.
     pub scheduler: SchedulerSnapshot,
+    /// PPU state.
     pub ppu: PpuSnapshot,
+    /// APU state.
     pub apu: ApuSnapshot,
+    /// CPU state.
     pub cpu: CpuSnapshot,
     controller_strobe: bool,
     controller_shift: u8,
+    controller2_shift: u8,
     pending_oam_dma_page: Option<u8>,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Metadata returned after successfully loading a ROM.
 pub struct RomLoadInfo {
+    /// Mapper ID from iNES header.
     pub mapper_id: u8,
+    /// PRG ROM payload size in bytes.
     pub prg_rom_bytes: usize,
+    /// Effective reset vector used by the core.
     pub reset_pc: u16,
 }
 
@@ -117,6 +200,10 @@ enum LoadedMapper {
     Nrom(Nrom),
     Uxrom(Uxrom),
     Mmc1(Mmc1),
+    Cnrom(Cnrom),
+    Axrom(Axrom),
+    Gxrom(Gxrom),
+    Mmc3(Mmc3),
 }
 
 impl LoadedMapper {
@@ -125,6 +212,10 @@ impl LoadedMapper {
             Self::Nrom(mapper) => mapper.read_prg(addr),
             Self::Uxrom(mapper) => mapper.read_prg(addr),
             Self::Mmc1(mapper) => mapper.read_prg(addr),
+            Self::Cnrom(mapper) => mapper.read_prg(addr),
+            Self::Axrom(mapper) => mapper.read_prg(addr),
+            Self::Gxrom(mapper) => mapper.read_prg(addr),
+            Self::Mmc3(mapper) => mapper.read_prg(addr),
         }
     }
 
@@ -133,10 +224,82 @@ impl LoadedMapper {
             Self::Nrom(mapper) => mapper.write_prg(addr, value),
             Self::Uxrom(mapper) => mapper.write_prg(addr, value),
             Self::Mmc1(mapper) => mapper.write_prg(addr, value),
+            Self::Cnrom(mapper) => mapper.write_prg(addr, value),
+            Self::Axrom(mapper) => mapper.write_prg(addr, value),
+            Self::Gxrom(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc3(mapper) => mapper.write_prg(addr, value),
+        }
+    }
+
+    fn chr_window(&self) -> Option<([u8; CHR_8K_BYTES], bool)> {
+        match self {
+            Self::Mmc3(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Cnrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Gxrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            _ => None,
+        }
+    }
+
+    fn mirroring_override(&self) -> Option<NametableMirroring> {
+        match self {
+            Self::Axrom(mapper) => Some(mapper.mirroring()),
+            Self::Mmc3(mapper) => Some(mapper.mirroring()),
+            _ => None,
+        }
+    }
+
+    fn irq_pending(&self) -> bool {
+        match self {
+            Self::Mmc3(mapper) => mapper.irq_pending(),
+            _ => false,
+        }
+    }
+
+    fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool) {
+        if let Self::Mmc3(mapper) = self {
+            mapper.on_ppu_dot(scanline, dot, rendering_enabled);
         }
     }
 }
 
+/// The central NES emulator state machine.
+///
+/// `NesCore` manages the execution of the CPU, PPU, and APU, synchronizing
+/// their clocks and handling memory access between them. Host applications
+/// use this struct to load ROMs, advance emulation frames, and extract
+/// video/audio outputs.
+///
+/// ## Panics
+///
+/// The example below uses [`Result::unwrap`] for brevity. In a real application,
+/// errors from [`NesCore::load_ines_rom`] and [`NesCore::execute`] should be
+/// handled properly. Unwrapping a [`CoreError::RomLoadFailed`] or
+/// [`CoreError::InvalidSpeed`] will cause a panic.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, Command, Button};
+///
+/// let mut core = NesCore::new();
+/// // Load a minimal dummy ROM (normally you'd load a real .nes file)
+/// let mut dummy_rom = vec![
+///     0x4E, 0x45, 0x53, 0x1A, // "NES\x1A"
+///     0x01, 0x01, 0x00, 0x00, // 16KB PRG, 8KB CHR, NROM
+///     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Padding
+/// ];
+/// // Append 16KB PRG ROM and 8KB CHR ROM to make it a valid cartridge
+/// dummy_rom.extend(vec![0x00; 16 * 1024 + 8 * 1024]);
+/// core.load_ines_rom(&dummy_rom).unwrap();
+///
+/// // Execute commands to drive the core
+/// core.execute(Command::StepFrame).unwrap();
+/// core.execute(Command::PressButton(Button::A)).unwrap();
+///
+/// // Extract framebuffer for rendering
+/// let frame = core.framebuffer_rgba();
+/// assert_eq!(frame.len(), 256 * 240 * 4);
+/// ```
 #[derive(Debug, Clone)]
 pub struct NesCore {
     paused: bool,
@@ -144,8 +307,10 @@ pub struct NesCore {
     scheduler: Scheduler,
     ppu: Ppu,
     controller_bits: u8,
+    controller2_bits: u8,
     controller_strobe: bool,
     controller_shift: u8,
+    controller2_shift: u8,
     mapper: Option<LoadedMapper>,
     reset_pc: u16,
     cpu: Cpu,
@@ -153,13 +318,19 @@ pub struct NesCore {
     pending_oam_dma_page: Option<u8>,
     last_cpu_trace: Option<String>,
     last_cpu_bus_trace: Vec<CpuBusAccess>,
+    scratch_writes: Vec<CpuWrite>,
 }
 
+/// Errors that can occur when interacting with the [`NesCore`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
+    /// Command is not currently supported by the runtime mode.
     UnsupportedCommand,
+    /// Speed value was zero.
     InvalidSpeed(u16),
+    /// ROM parse/load failed.
     RomLoadFailed(RomError),
+    /// CPU stepping failed.
     CpuStepFailed(CpuError),
 }
 
@@ -177,6 +348,15 @@ impl fmt::Display for CoreError {
 impl std::error::Error for CoreError {}
 
 impl NesCore {
+    /// Creates a new core with power-on defaults and no loaded mapper.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert!(!core.is_paused());
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -185,8 +365,10 @@ impl NesCore {
             scheduler: Scheduler::new(),
             ppu: Ppu::new(),
             controller_bits: 0,
+            controller2_bits: 0,
             controller_strobe: false,
             controller_shift: 0,
+            controller2_shift: 0,
             mapper: None,
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
@@ -194,29 +376,44 @@ impl NesCore {
             pending_oam_dma_page: None,
             last_cpu_trace: None,
             last_cpu_bus_trace: Vec::new(),
+            scratch_writes: Vec::new(),
         }
     }
 
+    /// Returns whether stepping is currently paused.
     #[must_use]
     pub fn is_paused(&self) -> bool {
         self.paused
     }
 
+    /// Returns current speed multiplier in permille (`1000 == 1.0x`).
     #[must_use]
     pub const fn speed_permille(&self) -> u16 {
         self.speed_permille
     }
 
+    /// Returns total CPU cycles observed by the scheduler.
     #[must_use]
     pub fn total_cycles(&self) -> u64 {
         self.scheduler.total_cycles()
     }
 
+    /// Returns current controller bitfield.
     #[must_use]
     pub fn controller_bits(&self) -> u8 {
         self.controller_bits
     }
 
+    /// Returns current controller bitfield for player 2.
+    #[must_use]
+    pub fn controller2_bits(&self) -> u8 {
+        self.controller2_bits
+    }
+
+    /// Loads raw bytes into CPU memory image.
+    ///
+    /// When writing into PRG space (`>= 0x8000`), active mapper state is
+    /// cleared so raw memory execution semantics remain explicit.
     pub fn load_cpu_bytes(&mut self, start: u16, bytes: &[u8]) {
         if start >= 0x8000 {
             self.mapper = None;
@@ -225,36 +422,43 @@ impl NesCore {
         self.cpu.load_bytes(start, bytes);
     }
 
+    /// Returns CPU program counter.
     #[must_use]
     pub fn cpu_pc(&self) -> u16 {
         self.cpu.pc()
     }
 
+    /// Returns CPU accumulator.
     #[must_use]
     pub fn cpu_a(&self) -> u8 {
         self.cpu.a()
     }
 
+    /// Returns CPU X register.
     #[must_use]
     pub fn cpu_x(&self) -> u8 {
         self.cpu.x()
     }
 
+    /// Returns last executed instruction trace string, if any.
     #[must_use]
     pub fn last_cpu_trace(&self) -> Option<&str> {
         self.last_cpu_trace.as_deref()
     }
 
+    /// Returns CPU register snapshot.
     #[must_use]
     pub fn cpu_snapshot(&self) -> CpuSnapshot {
         self.cpu.snapshot()
     }
 
+    /// Returns last instruction's bus access trace entries.
     #[must_use]
     pub fn last_cpu_bus_trace(&self) -> &[CpuBusAccess] {
         &self.last_cpu_bus_trace
     }
 
+    /// Reads CPU-visible memory with MMIO-aware behavior.
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
         match addr {
@@ -262,93 +466,111 @@ impl NesCore {
             0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
             0x2007 => self.ppu.peek_data_for_cpu_read(),
             0x4015 => self.apu.peek_status(),
-            0x4016 => self.controller_port_sample(),
+            0x4016 => self.controller_port_sample(false),
+            0x4017 => self.controller_port_sample(true),
             _ => self.cpu.read_byte(addr),
         }
     }
 
+    /// Reads `$4015` APU status and mirrors the result into CPU memory.
     pub fn read_apu_status(&mut self) -> u8 {
         let status = self.apu.read_status();
         self.cpu.write_byte(0x4015, status);
         status
     }
 
+    /// Writes to CPU bus then applies mapped side-effects immediately.
     pub fn write_cpu_bus(&mut self, addr: u16, value: u8) {
         self.cpu.write_byte(addr, value);
         self.apply_cpu_writes(&[CpuWrite { addr, value }]);
         self.sync_ppu_register_image();
     }
 
+    /// Returns PPU frame counter.
     #[must_use]
     pub fn ppu_frame_counter(&self) -> u64 {
         self.ppu.frame_counter()
     }
 
+    /// Returns current PPU scanline.
     #[must_use]
     pub fn ppu_scanline(&self) -> u16 {
         self.ppu.scanline()
     }
 
+    /// Returns current PPU dot.
     #[must_use]
     pub fn ppu_dot(&self) -> u16 {
         self.ppu.dot()
     }
 
+    /// Returns total PPU cycles from scheduler.
     #[must_use]
     pub fn ppu_total_cycles(&self) -> u64 {
         self.scheduler.ppu_cycles()
     }
 
+    /// Returns total APU cycles from scheduler.
     #[must_use]
     pub fn apu_total_cycles(&self) -> u64 {
         self.scheduler.apu_cycles()
     }
 
+    /// Returns APU quarter-frame tick counter.
     #[must_use]
     pub fn apu_quarter_frame_ticks(&self) -> u64 {
         self.apu.quarter_frame_ticks()
     }
 
+    /// Returns APU half-frame tick counter.
     #[must_use]
     pub fn apu_half_frame_ticks(&self) -> u64 {
         self.apu.half_frame_ticks()
     }
 
+    /// Returns whether any APU IRQ source is pending.
     #[must_use]
     pub fn apu_irq_pending(&self) -> bool {
         self.apu.irq_pending()
     }
 
+    /// Returns whether DMC IRQ is pending.
     #[must_use]
     pub fn apu_dmc_irq_pending(&self) -> bool {
         self.apu.dmc_irq_pending()
     }
 
+    /// Returns remaining DMC sample bytes.
     #[must_use]
     pub fn apu_dmc_bytes_remaining(&self) -> u16 {
         self.apu.dmc_bytes_remaining()
     }
 
+    /// Returns DMC memory fetch count.
     #[must_use]
     pub fn apu_dmc_fetch_count(&self) -> u64 {
         self.apu.dmc_fetch_count()
     }
 
+    /// Returns pulse timer reloads for debug/metrics inspection.
     #[must_use]
     pub fn apu_pulse_timer_reloads(&self) -> (u16, u16) {
         self.apu.pulse_timer_reloads()
     }
 
+    /// Reads one OAM byte by index.
     #[must_use]
     pub fn ppu_oam_byte(&self, index: u8) -> u8 {
         self.ppu.oam_byte(index)
     }
 
+    /// Returns target frames-per-second as milli-Hz.
     #[must_use]
     pub fn fps_milli(&self) -> u32 {
         BASE_FPS_MILLI.saturating_mul(self.speed_permille as u32) / DEFAULT_SPEED_PERMILLE as u32
     }
 
+    /// Returns a freshly allocated RGBA framebuffer snapshot.
     #[must_use]
     pub fn framebuffer_rgba(&self) -> Vec<u8> {
         let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
@@ -356,20 +578,25 @@ impl NesCore {
         frame
     }
 
+    /// Writes current RGBA framebuffer into caller-provided buffer.
     pub fn fill_framebuffer_rgba(&self, frame: &mut [u8]) {
         self.ppu.render_rgba(frame);
     }
 
+    /// Drains one host-frame-sized audio chunk (`AUDIO_CHUNK_SAMPLES`).
     #[must_use]
     pub fn audio_chunk_i16(&mut self) -> Vec<i16> {
-        self.apu.drain_samples(AUDIO_CHUNK_SAMPLES, self.paused)
+        let mut buffer = vec![0; AUDIO_CHUNK_SAMPLES];
+        self.fill_audio_chunk_i16(&mut buffer);
+        buffer
     }
 
+    /// Fills caller-provided audio buffer with drained APU samples.
     pub fn fill_audio_chunk_i16(&mut self, samples: &mut [i16]) {
-        let drained = self.apu.drain_samples(samples.len(), self.paused);
-        samples.copy_from_slice(&drained);
+        self.apu.fill_samples(samples, self.paused);
     }
 
+    /// Returns a compact hash of emulation state for regression checks.
     #[must_use]
     pub fn state_hash(&self) -> u64 {
         let paused = if self.paused { 1_u64 } else { 0_u64 };
@@ -380,8 +607,10 @@ impl NesCore {
             ^ self.scheduler.apu_cycles().rotate_left(47)
             ^ (self.speed_permille as u64).rotate_left(3)
             ^ (self.controller_bits as u64).rotate_left(7)
+            ^ (self.controller2_bits as u64).rotate_left(27)
             ^ ((if self.controller_strobe { 1_u64 } else { 0_u64 }).rotate_left(15))
             ^ (self.controller_shift as u64).rotate_left(21)
+            ^ (self.controller2_shift as u64).rotate_left(33)
             ^ (cpu.pc as u64).rotate_left(19)
             ^ (cpu.a as u64).rotate_left(23)
             ^ (cpu.x as u64).rotate_left(31)
@@ -396,53 +625,111 @@ impl NesCore {
             ^ self.mapper_hash_component().rotate_left(53)
     }
 
+    /// Captures full core save-state snapshot.
+    /// Creates a complete snapshot of the emulation state for save states or rollback.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// let snap = core.save_state();
+    /// ```
     #[must_use]
     pub fn save_state(&self) -> CoreSnapshot {
         CoreSnapshot {
             paused: self.paused,
             speed_permille: self.speed_permille,
             controller_bits: self.controller_bits,
+            controller2_bits: self.controller2_bits,
             scheduler: self.scheduler.snapshot(),
             ppu: self.ppu.snapshot(),
             apu: self.apu.snapshot(),
             cpu: self.cpu.snapshot(),
             controller_strobe: self.controller_strobe,
             controller_shift: self.controller_shift,
+            controller2_shift: self.controller2_shift,
             pending_oam_dma_page: self.pending_oam_dma_page,
             mapper: self.mapper.clone(),
             reset_pc: self.reset_pc,
         }
     }
 
+    /// Restores full core save-state snapshot.
+    /// Restores the emulator from a previously created [`CoreSnapshot`].
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let mut core = NesCore::new();
+    /// let snap = core.save_state();
+    /// core.load_state(&snap);
+    /// ```
     pub fn load_state(&mut self, snapshot: &CoreSnapshot) {
         self.paused = snapshot.paused;
         self.speed_permille = snapshot.speed_permille;
         self.controller_bits = snapshot.controller_bits;
+        self.controller2_bits = snapshot.controller2_bits;
         self.scheduler.restore(snapshot.scheduler);
         self.ppu.restore(snapshot.ppu);
         self.apu.restore(snapshot.apu.clone());
         self.cpu.restore(snapshot.cpu);
         self.controller_strobe = snapshot.controller_strobe;
         self.controller_shift = snapshot.controller_shift;
+        self.controller2_shift = snapshot.controller2_shift;
         self.pending_oam_dma_page = snapshot.pending_oam_dma_page;
         self.mapper = snapshot.mapper.clone();
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
+        self.sync_mapper_chr_window();
+        self.sync_mapper_mirroring();
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
+        self.scratch_writes.clear();
     }
 
+    /// Replays a command stream identically on this core.
+    ///
+    /// Useful for recording and reproducing macros or input sequences.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the first command execution failure.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command};
+    /// let mut core = NesCore::new();
+    /// // Normally, you'd load a ROM first:
+    /// // core.load_ines_rom(&rom_bytes).unwrap();
+    /// // core.replay(&[Command::StepFrame, Command::StepFrame]).unwrap();
+    /// ```
     pub fn replay(&mut self, commands: &[Command]) -> Result<(), CoreError> {
-        replay_commands(self, commands)
+        for command in commands {
+            self.execute(*command)?;
+        }
+        Ok(())
     }
 
+    /// Parses and loads an iNES format ROM from bytes.
+    ///
+    /// This sets up the internal mapper and memory mappings, preparing the
+    /// emulator to execute code.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::RomLoadFailed`] when parsing or mapper validation fails.
     pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
         let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
-        let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom)?;
+        let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom, rom.chr_rom, rom.mirroring)?;
         self.mapper = Some(mapper);
         self.ppu.load_cartridge(rom.chr_rom, rom.mirroring);
         self.sync_mapper_prg_window();
+        self.sync_mapper_chr_window();
+        self.sync_mapper_mirroring();
 
         let reset_pc = {
             let lo = self.cpu.read_byte(0xFFFC);
@@ -454,8 +741,10 @@ impl NesCore {
 
         self.paused = false;
         self.controller_bits = 0;
+        self.controller2_bits = 0;
         self.controller_strobe = false;
         self.controller_shift = 0;
+        self.controller2_shift = 0;
         self.scheduler.reset();
         self.ppu.reset();
         self.apu.reset();
@@ -464,6 +753,7 @@ impl NesCore {
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
+        self.scratch_writes.clear();
 
         Ok(RomLoadInfo {
             mapper_id: rom.mapper_id,
@@ -472,6 +762,23 @@ impl NesCore {
         })
     }
 
+    /// Executes a single control or input command.
+    ///
+    /// This is the primary way to step the emulator forward, reset it,
+    /// or pass inputs. See [`Command`] for available actions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CoreError`] when command preconditions fail or stepping fails.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command, Button};
+    /// let mut core = NesCore::new();
+    /// // Normally you load a ROM first before stepping, but we can safely press buttons
+    /// core.execute(Command::PressButton(Button::A)).unwrap();
+    /// ```
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
         match command {
             Command::Pause => {
@@ -504,17 +811,32 @@ impl NesCore {
                 Ok(())
             }
             Command::SetControllerState(bits) => {
-                self.set_controller_bits(bits);
+                self.set_controller_bits(bits, false);
+                self.sync_ppu_register_image();
+                Ok(())
+            }
+            Command::SetController2State(bits) => {
+                self.set_controller_bits(bits, true);
                 self.sync_ppu_register_image();
                 Ok(())
             }
             Command::PressButton(button) => {
-                self.set_controller_bits(self.controller_bits | button.bit_mask());
+                self.set_controller_bits(self.controller_bits | button.bit_mask(), false);
+                self.sync_ppu_register_image();
+                Ok(())
+            }
+            Command::PressButton2(button) => {
+                self.set_controller_bits(self.controller2_bits | button.bit_mask(), true);
                 self.sync_ppu_register_image();
                 Ok(())
             }
             Command::ReleaseButton(button) => {
-                self.set_controller_bits(self.controller_bits & !button.bit_mask());
+                self.set_controller_bits(self.controller_bits & !button.bit_mask(), false);
+                self.sync_ppu_register_image();
+                Ok(())
+            }
+            Command::ReleaseButton2(button) => {
+                self.set_controller_bits(self.controller2_bits & !button.bit_mask(), true);
                 self.sync_ppu_register_image();
                 Ok(())
             }
@@ -528,6 +850,11 @@ impl NesCore {
         }
     }
 
+    /// Executes a readonly query against current state.
+    /// Performs a non-mutating query against the emulator state.
+    ///
+    /// Useful for extracting out-of-band information, like [`EmulatorState`]
+    /// or reading mapped memory addresses without modifying cycles.
     #[must_use]
     pub fn query(&self, query: CoreQuery) -> QueryResult {
         match query {
@@ -535,6 +862,7 @@ impl NesCore {
                 paused: self.paused,
                 speed_permille: self.speed_permille,
                 controller_bits: self.controller_bits,
+                controller2_bits: self.controller2_bits,
             }),
             CoreQuery::Registers => QueryResult::Registers(self.cpu.snapshot()),
             CoreQuery::Memory(addr) => QueryResult::Memory(self.read_memory(addr)),
@@ -550,10 +878,15 @@ impl NesCore {
             .step_with_trace_and_cycles()
             .map_err(CoreError::CpuStepFailed)?;
         self.last_cpu_trace = Some(trace);
-        self.last_cpu_bus_trace = self.cpu.take_bus_trace();
+        self.last_cpu_bus_trace.clear();
+        self.cpu.swap_bus_trace(&mut self.last_cpu_bus_trace);
 
-        let writes = self.cpu.take_writes();
+        let mut writes = core::mem::take(&mut self.scratch_writes);
+        writes.clear();
+        self.cpu.swap_writes(&mut writes);
         self.apply_cpu_writes(&writes);
+        self.scratch_writes = writes;
+
         self.apply_cpu_reads();
 
         let cpu_cycles = u64::from(cpu_cycles);
@@ -569,7 +902,7 @@ impl NesCore {
             for _ in 0..7 {
                 self.step_hardware_cycle();
             }
-        } else if self.apu.irq_pending() && self.cpu.service_irq() {
+        } else if (self.apu.irq_pending() || self.mapper_irq_pending()) && self.cpu.service_irq() {
             for _ in 0..7 {
                 self.step_hardware_cycle();
             }
@@ -597,8 +930,10 @@ impl NesCore {
     fn reset_runtime(&mut self) {
         self.paused = false;
         self.controller_bits = 0;
+        self.controller2_bits = 0;
         self.controller_strobe = false;
         self.controller_shift = 0;
+        self.controller2_shift = 0;
         self.scheduler.reset();
         self.ppu.reset();
         self.apu.reset();
@@ -607,13 +942,24 @@ impl NesCore {
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
+        self.scratch_writes.clear();
     }
 
-    fn build_mapper(&self, mapper_id: u8, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+    fn build_mapper(
+        &self,
+        mapper_id: u8,
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+        mirroring: NametableMirroring,
+    ) -> Result<LoadedMapper, CoreError> {
         match mapper_id {
             0 => self.build_nrom(prg_rom),
             1 => self.build_mmc1(prg_rom),
             2 => self.build_uxrom(prg_rom),
+            3 => self.build_cnrom(prg_rom, chr_rom),
+            4 => self.build_mmc3(prg_rom, chr_rom, mirroring),
+            7 => self.build_axrom(prg_rom),
+            66 => self.build_gxrom(prg_rom, chr_rom),
             _ => Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
                 mapper_id,
             ))),
@@ -649,12 +995,97 @@ impl NesCore {
         Ok(LoadedMapper::Mmc1(Mmc1::from_prg_rom(prg_rom.to_vec(), 1)))
     }
 
+    fn build_axrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Axrom(Axrom::from_prg_rom(prg_rom.to_vec())))
+    }
+
+    fn build_cnrom(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        match prg_rom.len() {
+            PRG_16K_BYTES | PRG_32K_BYTES => {}
+            other => {
+                return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                    other,
+                )));
+            }
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Cnrom(Cnrom::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_gxrom(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Gxrom(Gxrom::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_mmc3(
+        &self,
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+        mirroring: NametableMirroring,
+    ) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc3(Mmc3::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+            mirroring,
+        )))
+    }
+
     fn sync_mapper_prg_window(&mut self) {
         if let Some(mapper) = self.mapper.as_ref() {
             for addr in 0x8000..=0xFFFF {
                 let value = mapper.read_prg(addr);
                 self.cpu.write_byte(addr, value);
             }
+        }
+    }
+
+    fn sync_mapper_chr_window(&mut self) {
+        if let Some(mapper) = self.mapper.as_ref()
+            && let Some((chr_window, writable)) = mapper.chr_window()
+        {
+            self.ppu.set_chr_window(&chr_window, writable);
+        }
+    }
+
+    fn sync_mapper_mirroring(&mut self) {
+        if let Some(mapper) = self.mapper.as_ref()
+            && let Some(mirroring) = mapper.mirroring_override()
+        {
+            self.ppu.set_mirroring(mirroring);
         }
     }
 
@@ -700,6 +1131,8 @@ impl NesCore {
 
         if remap_needed {
             self.sync_mapper_prg_window();
+            self.sync_mapper_chr_window();
+            self.sync_mapper_mirroring();
         }
         if ppu_changed {
             self.sync_ppu_register_image();
@@ -712,6 +1145,19 @@ impl NesCore {
             Some(LoadedMapper::Nrom(_)) => 0x10,
             Some(LoadedMapper::Uxrom(mapper)) => 0x20 ^ mapper.selected_bank() as u64,
             Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
+            Some(LoadedMapper::Cnrom(mapper)) => 0x35 ^ mapper.selected_chr_bank() as u64,
+            Some(LoadedMapper::Axrom(mapper)) => {
+                0x37 ^ u64::from(mapper.selected_bank())
+                    ^ (u64::from(mapper.selected_nametable_bank()) << 8)
+            }
+            Some(LoadedMapper::Gxrom(mapper)) => {
+                0x38 ^ u64::from(mapper.selected_prg_bank())
+                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
+            }
+            Some(LoadedMapper::Mmc3(mapper)) => {
+                0x40 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+            }
         }
     }
 
@@ -724,14 +1170,18 @@ impl NesCore {
         self.cpu
             .write_byte(0x2007, self.ppu.peek_data_for_cpu_read());
         self.cpu.write_byte(0x4015, self.apu.peek_status());
-        self.cpu.write_byte(0x4016, self.controller_port_sample());
+        self.cpu
+            .write_byte(0x4016, self.controller_port_sample(false));
+        self.cpu
+            .write_byte(0x4017, self.controller_port_sample(true));
     }
 
     fn apply_cpu_reads(&mut self) {
         let mut saw_ppu_status_read = false;
         let mut ppu_data_reads = 0_u8;
         let mut apu_status_reads = 0_u8;
-        let mut controller_reads = 0_u8;
+        let mut controller1_reads = 0_u8;
+        let mut controller2_reads = 0_u8;
 
         for access in &self.last_cpu_bus_trace {
             if access.kind != CpuBusAccessKind::Read {
@@ -741,7 +1191,8 @@ impl NesCore {
                 0x2002 => saw_ppu_status_read = true,
                 0x2007 => ppu_data_reads = ppu_data_reads.saturating_add(1),
                 0x4015 => apu_status_reads = apu_status_reads.saturating_add(1),
-                0x4016 => controller_reads = controller_reads.saturating_add(1),
+                0x4016 => controller1_reads = controller1_reads.saturating_add(1),
+                0x4017 => controller2_reads = controller2_reads.saturating_add(1),
                 _ => {}
             }
         }
@@ -755,15 +1206,26 @@ impl NesCore {
         for _ in 0..apu_status_reads {
             let _ = self.apu.read_status();
         }
-        for _ in 0..controller_reads {
-            self.consume_controller_read();
+        for _ in 0..controller1_reads {
+            self.consume_controller_read(false);
+        }
+        for _ in 0..controller2_reads {
+            self.consume_controller_read(true);
         }
     }
 
-    fn set_controller_bits(&mut self, bits: u8) {
-        self.controller_bits = bits;
+    fn set_controller_bits(&mut self, bits: u8, player2: bool) {
+        if player2 {
+            self.controller2_bits = bits;
+        } else {
+            self.controller_bits = bits;
+        }
         if self.controller_strobe {
-            self.controller_shift = bits;
+            if player2 {
+                self.controller2_shift = bits;
+            } else {
+                self.controller_shift = bits;
+            }
         }
     }
 
@@ -772,28 +1234,43 @@ impl NesCore {
         if next_strobe {
             self.controller_strobe = true;
             self.controller_shift = self.controller_bits;
+            self.controller2_shift = self.controller2_bits;
             return;
         }
 
         if self.controller_strobe {
             self.controller_shift = self.controller_bits;
+            self.controller2_shift = self.controller2_bits;
         }
         self.controller_strobe = false;
     }
 
-    fn controller_port_sample(&self) -> u8 {
-        let bit = if self.controller_strobe {
-            self.controller_bits & 1
+    fn controller_port_sample(&self, player2: bool) -> u8 {
+        let (bits, shift) = if player2 {
+            (self.controller2_bits, self.controller2_shift)
         } else {
-            self.controller_shift & 1
+            (self.controller_bits, self.controller_shift)
+        };
+        let bit = if self.controller_strobe {
+            bits & 1
+        } else {
+            shift & 1
         };
         bit | CONTROLLER_OPEN_BUS_MASK
     }
 
-    fn consume_controller_read(&mut self) {
+    fn consume_controller_read(&mut self, player2: bool) {
         if !self.controller_strobe {
-            self.controller_shift = (self.controller_shift >> 1) | 0x80;
+            if player2 {
+                self.controller2_shift = (self.controller2_shift >> 1) | 0x80;
+            } else {
+                self.controller_shift = (self.controller_shift >> 1) | 0x80;
+            }
         }
+    }
+
+    fn mapper_irq_pending(&self) -> bool {
+        self.mapper.as_ref().is_some_and(LoadedMapper::irq_pending)
     }
 
     fn step_hardware_cycle(&mut self) {
@@ -803,6 +1280,13 @@ impl NesCore {
         for _ in 0..3 {
             self.scheduler.step_ppu_cycle();
             self.ppu.step_dot();
+            if let Some(mapper) = self.mapper.as_mut() {
+                mapper.on_ppu_dot(
+                    self.ppu.scanline(),
+                    self.ppu.dot(),
+                    self.ppu.rendering_enabled_for_mapper_irq(),
+                );
+            }
         }
         if let Some(request) = dmc_request {
             self.apply_dmc_dma_request(request);
@@ -819,6 +1303,13 @@ impl NesCore {
             for _ in 0..3 {
                 self.scheduler.step_ppu_cycle();
                 self.ppu.step_dot();
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.on_ppu_dot(
+                        self.ppu.scanline(),
+                        self.ppu.dot(),
+                        self.ppu.rendering_enabled_for_mapper_irq(),
+                    );
+                }
             }
             if let Some(chained) = dmc_request {
                 let byte = self.cpu.read_byte(chained.addr);

@@ -1,4 +1,5 @@
 mod dispatch;
+pub mod macro_engine;
 mod output;
 mod tools;
 

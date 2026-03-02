@@ -11,6 +11,8 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 - `crates/nes-web`: browser input bridge and runtime adapter.
 - `crates/nes-proof`: Verus proof specs and lemmas.
 - `crates/nes-test-harness`: replay + ROM gate tests.
+- `crates/nes-netplay`: rollback netcode engine + relay protocol types.
+- `crates/nes-relay`: room relay server for internet netplay sessions.
 
 ## v0 Quality Gates
 
@@ -29,9 +31,16 @@ cargo test --workspace --all-targets --all-features
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verus-check.ps1
 ```
 
+Coverage locally (same format uploaded in CI):
+
+```powershell
+cargo llvm-cov --workspace --all-features --all-targets --lcov --output-path lcov.info
+```
+
 ## Runtime And ROM Config
 
 Runtime and ROM paths are configured through `nes.toml` at the workspace root.
+Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
 Desktop/TUI launch commands:
 
@@ -40,6 +49,53 @@ cargo run -p nes-desktop --release -- "C:\Users\markm\roms\Super Mario Bros. (Wo
 cargo run -p nes-desktop --release -- --config .\nes.toml
 cargo run -p nes-tui -- --config .\nes.toml
 ```
+
+Rollback netplay (across-town) flow:
+
+```powershell
+# Terminal 1: relay server
+cargo run -p nes-relay -- --bind 0.0.0.0:4545
+
+# Terminal 2: player 1
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 1 "C:\Users\markm\roms\River City Ransom (USA).nes"
+
+# Terminal 3: player 2
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 "C:\Users\markm\roms\River City Ransom (USA).nes"
+```
+
+Relay can inject controlled network faults for rollback testing:
+
+```powershell
+cargo run -p nes-relay --release -- --bind 0.0.0.0:4545 --latency-ms 45 --jitter-ms 12 --loss-pct 0 --reorder-pct 25
+```
+
+Desktop netplay metrics now include `net_rtt_ms`, `net_jitter_ms`, `net_rollbacks`, `net_max_rb`, `net_desyncs`, and adaptive `net_delay_frames`.
+
+WebAssembly build:
+
+```powershell
+cargo build -p nes-web --target wasm32-unknown-unknown
+```
+
+Web demo build + local serve (Trunk):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
+```
+
+Web host ROM persistence:
+- Uploaded ROMs are stored locally via IndexedDB for next launch.
+- The last saved ROM auto-restores on startup.
+- `Forget Saved ROM` clears the locally stored ROM bytes.
+
+WASM path (web host -> core):
+
+1. `web/index.html` declares the Rust artifact input (`../crates/nes-web/Cargo.toml`) for Trunk.
+2. `crates/nes-web/Trunk.toml` sets the Trunk target to `../../web/index.html` and output to `../../web/dist`.
+3. `web/app.js` imports `NesWebEmulator` from generated wasm glue and drives the browser loop.
+4. `crates/nes-web/src/lib.rs` (`wasm-bindgen`) forwards JS calls to `WebRuntime`.
+5. `crates/nes-web/src/runtime.rs` translates those calls into `nes_core::Command` execution and query reads.
+6. `crates/nes-web/src/bridge.rs` maps DOM key codes to core button commands.
 
 Desktop can optionally host MCP on the same live `NesCore` instance:
 
@@ -72,13 +128,19 @@ Run ROM credibility tests (including ignored ROM suites) with:
 cargo test -p nes-test-harness -- --ignored
 ```
 
+Run rollback reliability soak gate (deterministic 2-peer fault simulation):
+
+```powershell
+cargo test -p nes-test-harness --test netplay_rollback -- --nocapture
+```
+
 Run only the bbbradsmith audio checks:
 
 ```powershell
 cargo test -p nes-test-harness --test rom_bbbradsmith_audio -- --ignored --nocapture
 ```
 
-Generate/update golden PCM captures for supported mapper ROMs (0/1/2):
+Generate/update golden PCM captures for supported mapper ROMs (0/1/2/4):
 
 ```powershell
 cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config .\nes.toml
@@ -88,4 +150,24 @@ Force overwrite existing golden files:
 
 ```powershell
 cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config .\nes.toml --force
+```
+
+## Homebrew ROM
+
+Build the in-repo custom ROM (no external assembler required):
+
+```powershell
+cargo run -p nes-test-harness --bin build_homebrew_rom
+```
+
+Run it:
+
+```powershell
+cargo run -p nes-desktop --release -- .\roms\homebrew\homebrew.nes
+```
+
+Or build and run in one command:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_homebrew.ps1
 ```

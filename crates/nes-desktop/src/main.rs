@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -5,13 +6,20 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
+mod netplay;
 
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
+use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
 };
-use nes_core::{AUDIO_SAMPLE_RATE, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
-use nes_desktop::app::map_key_event_to_command;
+use nes_core::{
+    AUDIO_SAMPLE_RATE, Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore,
+};
+use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
 use winit::dpi::LogicalSize;
@@ -21,6 +29,7 @@ use winit::window::WindowBuilder;
 
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
+use crate::netplay::{NetplayClient, NetplayRuntimeConfig};
 
 const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
 const DEFAULT_WINDOW_SCALE: u32 = 3;
@@ -31,6 +40,20 @@ const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
+const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
+const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
+const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
+const CONTROLLER_BUTTONS: [Button; 8] = [
+    Button::A,
+    Button::B,
+    Button::Select,
+    Button::Start,
+    Button::Up,
+    Button::Down,
+    Button::Left,
+    Button::Right,
+];
 
 struct RuntimeConfig {
     rom_path: String,
@@ -44,6 +67,21 @@ struct RuntimeConfig {
     loaded_config_path: Option<PathBuf>,
     mcp_enabled: bool,
     mcp_bind_addr: String,
+    netplay: Option<NetplayRuntimeConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RuntimeArgs {
+    rom_path: Option<String>,
+    mcp_enabled: bool,
+    mcp_bind_addr: String,
+    netplay_enabled: bool,
+    netplay_relay_addr: Option<String>,
+    netplay_room: Option<String>,
+    netplay_player: Option<u8>,
+    netplay_input_delay_frames: Option<u32>,
+    netplay_max_rollback_frames: Option<u32>,
+    netplay_hash_check_every_frames: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +100,57 @@ struct AudioOutput {
     _stream: OutputStream,
 }
 
+struct NetplayRuntimeStats {
+    latest_rtt_ms: Option<f64>,
+    jitter_ms: f64,
+    rollback_count: u64,
+    max_rollback_distance: u64,
+    desync_count: u64,
+    input_delay_frames: u32,
+}
+
+impl NetplayRuntimeStats {
+    fn new(input_delay_frames: u32) -> Self {
+        Self {
+            latest_rtt_ms: None,
+            jitter_ms: 0.0,
+            rollback_count: 0,
+            max_rollback_distance: 0,
+            desync_count: 0,
+            input_delay_frames,
+        }
+    }
+
+    fn observe_rtt_ms(&mut self, rtt_ms: f64) {
+        if let Some(previous) = self.latest_rtt_ms {
+            let delta = (rtt_ms - previous).abs();
+            if self.jitter_ms <= f64::EPSILON {
+                self.jitter_ms = delta;
+            } else {
+                // RFC3550-style EWMA jitter estimator.
+                self.jitter_ms += (delta - self.jitter_ms) * 0.125;
+            }
+        }
+        self.latest_rtt_ms = Some(rtt_ms);
+    }
+
+    fn observe_rollback(&mut self, distance: u64) {
+        if distance == 0 {
+            return;
+        }
+        self.rollback_count = self.rollback_count.saturating_add(1);
+        self.max_rollback_distance = self.max_rollback_distance.max(distance);
+    }
+
+    fn observe_desync(&mut self) {
+        self.desync_count = self.desync_count.saturating_add(1);
+    }
+
+    fn latest_rtt_ms_or_zero(&self) -> f64 {
+        self.latest_rtt_ms.unwrap_or(0.0)
+    }
+}
+
 struct PerfMetrics {
     enabled: bool,
     every_n_frames: u64,
@@ -78,6 +167,12 @@ struct PerfMetrics {
     warned_stall: bool,
     audio_queue_peak: usize,
     audio_queue_drops: u64,
+    netplay_rtt_ms: f64,
+    netplay_jitter_ms: f64,
+    netplay_rollbacks: u64,
+    netplay_max_rollback_distance: u64,
+    netplay_desyncs: u64,
+    netplay_input_delay_frames: u32,
 }
 
 impl PerfMetrics {
@@ -98,6 +193,12 @@ impl PerfMetrics {
             warned_stall: false,
             audio_queue_peak: 0,
             audio_queue_drops: 0,
+            netplay_rtt_ms: 0.0,
+            netplay_jitter_ms: 0.0,
+            netplay_rollbacks: 0,
+            netplay_max_rollback_distance: 0,
+            netplay_desyncs: 0,
+            netplay_input_delay_frames: 0,
         }
     }
 
@@ -166,12 +267,18 @@ impl PerfMetrics {
         let avg_render_ms = self.render_work.as_secs_f64() * 1_000.0 / self.report_frames as f64;
 
         println!(
-            "[metrics] wall_fps={wall_fps:.1} emu_fps={emu_fps:.1} avg_step_ms={avg_step_ms:.2} avg_render_ms={avg_render_ms:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={}",
+            "[metrics] wall_fps={wall_fps:.1} emu_fps={emu_fps:.1} avg_step_ms={avg_step_ms:.2} avg_render_ms={avg_render_ms:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
             self.late_frames,
             self.pc_stall_frames,
             self.unchanged_frame_count,
             self.audio_queue_peak,
-            self.audio_queue_drops
+            self.audio_queue_drops,
+            self.netplay_rtt_ms,
+            self.netplay_jitter_ms,
+            self.netplay_rollbacks,
+            self.netplay_max_rollback_distance,
+            self.netplay_desyncs,
+            self.netplay_input_delay_frames
         );
 
         self.report_start = Instant::now();
@@ -182,6 +289,9 @@ impl PerfMetrics {
         self.late_frames = 0;
         self.audio_queue_peak = 0;
         self.audio_queue_drops = 0;
+        self.netplay_rollbacks = 0;
+        self.netplay_max_rollback_distance = 0;
+        self.netplay_desyncs = 0;
     }
 
     fn on_audio_queue(&mut self, queue_depth: usize, dropped: bool) {
@@ -192,6 +302,18 @@ impl PerfMetrics {
         if dropped {
             self.audio_queue_drops = self.audio_queue_drops.saturating_add(1);
         }
+    }
+
+    fn on_netplay_stats(&mut self, stats: &NetplayRuntimeStats) {
+        if !self.enabled {
+            return;
+        }
+        self.netplay_rtt_ms = stats.latest_rtt_ms_or_zero();
+        self.netplay_jitter_ms = stats.jitter_ms;
+        self.netplay_rollbacks = stats.rollback_count;
+        self.netplay_max_rollback_distance = stats.max_rollback_distance;
+        self.netplay_desyncs = stats.desync_count;
+        self.netplay_input_delay_frames = stats.input_delay_frames;
     }
 }
 
@@ -258,19 +380,65 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
     let step_mode = runtime.step_mode;
 
-    println!("Loaded ROM: {rom_path}");
-    println!(
-        "Mapper {}, PRG {} bytes, reset vector ${:04X}",
-        info.mapper_id, info.prg_rom_bytes, info.reset_pc
-    );
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("ROM Path"),
+        Cell::new(&rom_path).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("ROM Info"),
+        Cell::new(format!(
+            "Mapper {}, PRG {} bytes, reset vector ${:04X}",
+            info.mapper_id, info.prg_rom_bytes, info.reset_pc
+        )),
+    ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
-        println!("Config: {}", config_path.display());
+        table.add_row(vec![
+            Cell::new("Config"),
+            Cell::new(config_path.display().to_string()),
+        ]);
     }
-    println!("Controls: Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit");
+    table.add_row(vec![
+        Cell::new("Controls"),
+        Cell::new("keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit"),
+    ]);
+    table.add_row(vec![
+        Cell::new("Gamepad"),
+        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
+    ]);
     match step_mode {
-        StepMode::Frame => println!("Step mode: frame"),
-        StepMode::CpuBudget(steps) => println!("Step mode: cpu ({steps} instructions/frame)"),
+        StepMode::Frame => {
+            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
+        }
+        StepMode::CpuBudget(steps) => {
+            table.add_row(vec![
+                Cell::new("Step Mode"),
+                Cell::new(format!("cpu ({steps} instructions/frame)")),
+            ]);
+        }
     }
+    if let Some(netplay) = runtime.netplay.as_ref() {
+        table.add_row(vec![
+            Cell::new("Netplay"),
+            Cell::new(format!(
+                "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
+                netplay.relay_addr,
+                netplay.room,
+                netplay.player,
+                netplay.input_delay_frames,
+                netplay.max_rollback_frames,
+                netplay.hash_check_every_frames
+            )),
+        ]);
+    }
+
+    println!("{}", "nes-desktop".with(Color::Cyan).bold());
+    println!("{table}\n");
     if cfg!(debug_assertions) {
         eprintln!(
             "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
@@ -285,6 +453,36 @@ fn run() -> Result<(), String> {
     } else {
         None
     };
+
+    let netplay_client = if let Some(netplay) = runtime.netplay.as_ref() {
+        Some(NetplayClient::connect(netplay)?)
+    } else {
+        None
+    };
+    let mut rollback = if let Some(netplay) = runtime.netplay.as_ref() {
+        Some(
+            RollbackEngine::new(RollbackConfig {
+                local_player: netplay.player,
+                input_delay_frames: netplay.input_delay_frames,
+                max_rollback_frames: netplay.max_rollback_frames,
+            })
+            .map_err(|err| format!("failed to initialize rollback engine: {err}"))?,
+        )
+    } else {
+        None
+    };
+    let netplay_hash_check_every = runtime
+        .netplay
+        .as_ref()
+        .map_or(0, |netplay| netplay.hash_check_every_frames);
+    let netplay_local_player = runtime.netplay.as_ref().map_or(1, |netplay| netplay.player);
+    let mut netplay_stats = runtime
+        .netplay
+        .as_ref()
+        .map(|netplay| NetplayRuntimeStats::new(netplay.input_delay_frames));
+    let mut netplay_next_ping_at = Instant::now();
+    let mut netplay_ping_nonce = 1_u64;
+    let mut netplay_pending_pings = BTreeMap::<u64, Instant>::new();
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -312,6 +510,34 @@ fn run() -> Result<(), String> {
         core.ppu_frame_counter(),
     );
     let trace_every_frames = runtime.trace_every_frames;
+    let mut gilrs = match Gilrs::new() {
+        Ok(mut state) => {
+            while state.next_event().is_some() {}
+            Some(state)
+        }
+        Err(err) => {
+            eprintln!("Gamepad support unavailable: {err}");
+            None
+        }
+    };
+    let mut active_gamepads = [None::<GamepadId>; 2];
+    if let Some(gilrs_state) = gilrs.as_ref() {
+        let connected = connected_gamepad_ids(gilrs_state);
+        for (player, slot) in active_gamepads.iter_mut().enumerate() {
+            *slot = connected.get(player).copied();
+            if let Some(gamepad_id) = *slot {
+                println!(
+                    "Gamepad P{} connected: {}",
+                    player + 1,
+                    gilrs_state.gamepad(gamepad_id).name()
+                );
+            } else {
+                println!("Gamepad P{} connected: none", player + 1);
+            }
+        }
+    }
+    let mut gamepad_bits = [0_u8; 2];
+    let mut keyboard_bits = 0_u8;
 
     let audio_output = if runtime.audio_enabled {
         match AudioOutput::try_new() {
@@ -343,12 +569,21 @@ fn run() -> Result<(), String> {
                     return;
                 }
 
-                if let Some(key_code) = map_virtual_keycode(key)
-                    && let Some(mapped) = map_key_event_to_command(key_code, pressed)
-                    && let Err(err) = core.execute(mapped.core)
-                {
-                    eprintln!("Input command failed: {err}");
-                    *control_flow = ControlFlow::Exit;
+                if let Some(key_code) = map_virtual_keycode(key) {
+                    if rollback.is_some() {
+                        if let Some(button_mask) = map_key_event_to_button_bit(key_code) {
+                            if pressed {
+                                keyboard_bits |= button_mask;
+                            } else {
+                                keyboard_bits &= !button_mask;
+                            }
+                        }
+                    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed)
+                        && let Err(err) = core.execute(mapped.core)
+                    {
+                        eprintln!("Input command failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                    }
                 }
             }
             WindowEvent::Resized(size) => {
@@ -372,6 +607,47 @@ fn run() -> Result<(), String> {
                 host.drain(&mut core);
             }
 
+            if let Some(gilrs_state) = gilrs.as_mut() {
+                while gilrs_state.next_event().is_some() {}
+                let next_active = select_active_gamepad_ids(gilrs_state, active_gamepads);
+                if next_active != active_gamepads {
+                    for player in 0..active_gamepads.len() {
+                        if next_active[player] != active_gamepads[player] {
+                            if let Some(gamepad_id) = next_active[player] {
+                                println!(
+                                    "Gamepad P{} active: {}",
+                                    player + 1,
+                                    gilrs_state.gamepad(gamepad_id).name()
+                                );
+                            } else if active_gamepads[player].is_some() {
+                                println!("Gamepad P{} disconnected", player + 1);
+                            }
+                        }
+                    }
+                    active_gamepads = next_active;
+                }
+
+                for player in 0..gamepad_bits.len() {
+                    let next_gamepad_bits = active_gamepads[player]
+                        .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
+                        .unwrap_or_default();
+                    if rollback.is_none() {
+                        for command in controller_state_delta_for_player(
+                            gamepad_bits[player],
+                            next_gamepad_bits,
+                            player == 1,
+                        ) {
+                            if let Err(err) = core.execute(command) {
+                                eprintln!("Gamepad command failed: {err}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                        }
+                    }
+                    gamepad_bits[player] = next_gamepad_bits;
+                }
+            }
+
             let now = Instant::now();
             if now < next_frame_deadline {
                 *control_flow = ControlFlow::WaitUntil(next_frame_deadline);
@@ -381,7 +657,185 @@ fn run() -> Result<(), String> {
             next_frame_deadline = now + TARGET_FRAME_TIME;
             let step_start = Instant::now();
 
-            if let Err(err) = advance_core_for_host_frame(&mut core, step_mode) {
+            if let Some(rollback_engine) = rollback.as_mut() {
+                let local_slot = usize::from(netplay_local_player.saturating_sub(1));
+                let local_gamepad_bits = gamepad_bits
+                    .get(local_slot)
+                    .copied()
+                    .unwrap_or_else(|| gamepad_bits.iter().copied().find(|bits| *bits != 0).unwrap_or(0));
+                let scheduled = rollback_engine.schedule_local_input(keyboard_bits | local_gamepad_bits);
+                if let Some(client) = netplay_client.as_ref()
+                    && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
+                {
+                    eprintln!("Netplay send input failed: {err}");
+                    *control_flow = ControlFlow::Exit;
+                    return;
+                }
+                if let Some(client) = netplay_client.as_ref() {
+                    if now >= netplay_next_ping_at {
+                        let nonce = netplay_ping_nonce;
+                        netplay_ping_nonce = netplay_ping_nonce.wrapping_add(1);
+                        netplay_pending_pings.insert(nonce, now);
+                        // Bound growth in case a peer vanishes without replying.
+                        while netplay_pending_pings.len() > 128 {
+                            if let Some(oldest_nonce) =
+                                netplay_pending_pings.keys().next().copied()
+                            {
+                                netplay_pending_pings.remove(&oldest_nonce);
+                            }
+                        }
+                        if let Err(err) = client.send_ping(nonce) {
+                            eprintln!("Netplay send ping failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                        netplay_next_ping_at = now + NETPLAY_PING_INTERVAL;
+                    }
+
+                    loop {
+                        let message = match client.try_recv() {
+                            Ok(next) => next,
+                            Err(err) => {
+                                eprintln!("Netplay receive failed: {err}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                        };
+                        let Some(message) = message else {
+                            break;
+                        };
+                        match message {
+                            ServerMessage::PeerInput { player, frame, bits } => {
+                                if player != netplay_local_player {
+                                    let ingest = rollback_engine.ingest_remote_input(frame, bits);
+                                    if ingest.rollback_queued {
+                                        eprintln!(
+                                            "[netplay] queued rollback from frame {} due to late remote input",
+                                            frame
+                                        );
+                                    }
+                                }
+                            }
+                            ServerMessage::PeerHash {
+                                player,
+                                frame,
+                                state_hash,
+                            } => {
+                                if player != netplay_local_player {
+                                    match rollback_engine.compare_remote_hash(frame, state_hash) {
+                                        HashComparison::Match => {}
+                                        HashComparison::Mismatch => {
+                                            eprintln!(
+                                                "[netplay] desync detected at frame {} (remote hash {:016X})",
+                                                frame,
+                                                state_hash
+                                            );
+                                            if let Some(stats) = netplay_stats.as_mut() {
+                                                stats.observe_desync();
+                                            }
+                                        }
+                                        HashComparison::PendingLocalFrame => {}
+                                    }
+                                }
+                            }
+                            ServerMessage::Joined {
+                                room,
+                                player,
+                                peer_present,
+                            } => {
+                                println!(
+                                    "[netplay] joined room '{}' as P{} (peer_present={})",
+                                    room, player, peer_present
+                                );
+                            }
+                            ServerMessage::PeerJoined { player } => {
+                                println!("[netplay] peer joined as P{}", player);
+                            }
+                            ServerMessage::PeerLeft { player } => {
+                                println!("[netplay] peer left (P{})", player);
+                            }
+                            ServerMessage::Error { message } => {
+                                eprintln!("[netplay] relay error: {message}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                            ServerMessage::Pong { nonce } => {
+                                if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
+                                    let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
+                                    if let Some(stats) = netplay_stats.as_mut() {
+                                        stats.observe_rtt_ms(rtt_ms);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                match rollback_engine.advance_frame(&mut core) {
+                    Ok(step) => {
+                        if step.rollback_distance > 0 {
+                            eprintln!(
+                                "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
+                                step.rollback_distance, step.frame, step.local_bits, step.remote_bits
+                            );
+                            if let Some(stats) = netplay_stats.as_mut() {
+                                stats.observe_rollback(step.rollback_distance);
+                            }
+                        }
+
+                        let current_delay = rollback_engine.input_delay_frames();
+                        let max_auto_delay = rollback_engine.max_rollback_frames().clamp(
+                            NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                            NETPLAY_AUTO_DELAY_MAX_FRAMES,
+                        );
+                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
+                            recommended_input_delay_frames(
+                                stats.latest_rtt_ms,
+                                stats.jitter_ms,
+                                NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                                max_auto_delay,
+                                current_delay,
+                            )
+                        } else {
+                            current_delay
+                        };
+                        if target_delay != current_delay {
+                            if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
+                                eprintln!("Netplay adaptive delay update failed: {err}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                            if let Some(stats) = netplay_stats.as_mut() {
+                                stats.input_delay_frames = target_delay;
+                                eprintln!(
+                                    "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                                    current_delay,
+                                    target_delay,
+                                    stats.latest_rtt_ms_or_zero(),
+                                    stats.jitter_ms
+                                );
+                            }
+                        } else if let Some(stats) = netplay_stats.as_mut() {
+                            stats.input_delay_frames = current_delay;
+                        }
+
+                        if netplay_hash_check_every > 0
+                            && step.frame.is_multiple_of(netplay_hash_check_every)
+                            && let Some(client) = netplay_client.as_ref()
+                            && let Err(err) = client.send_hash(step.frame, step.state_hash)
+                        {
+                            eprintln!("Netplay send hash failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("Netplay rollback step failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
+                }
+            } else if let Err(err) = advance_core_for_host_frame(&mut core, step_mode) {
                 eprintln!("CPU halted at PC ${:04X}: {err}", core.cpu_pc());
                 *control_flow = ControlFlow::Exit;
                 return;
@@ -390,17 +844,21 @@ fn run() -> Result<(), String> {
             let step_elapsed = step_start.elapsed();
             frame_index = frame_index.saturating_add(1);
             metrics.on_step(&core, step_elapsed, missed_deadline);
+            if let Some(stats) = netplay_stats.as_ref() {
+                metrics.on_netplay_stats(stats);
+            }
             if trace_every_frames > 0 && frame_index.is_multiple_of(trace_every_frames) {
                 let regs = core.cpu_snapshot();
                 println!(
-                    "frame={} ppu_frame={} pc=${:04X} a={:02X} x={:02X} y={:02X} ctrl={:02X}",
+                    "frame={} ppu_frame={} pc=${:04X} a={:02X} x={:02X} y={:02X} ctrl1={:02X} ctrl2={:02X}",
                     frame_index,
                     core.ppu_frame_counter(),
                     regs.pc,
                     regs.a,
                     regs.x,
                     regs.y,
-                    core.controller_bits()
+                    core.controller_bits(),
+                    core.controller2_bits()
                 );
             }
 
@@ -443,7 +901,7 @@ fn run() -> Result<(), String> {
 fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     let raw_args: Vec<String> = env::args().skip(1).collect();
     let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
-    let (rom_path_arg, mcp_enabled, mcp_bind_addr) = parse_runtime_args(&pass_through)?;
+    let runtime_args = parse_runtime_args(&pass_through)?;
 
     let loaded_config_path = config_path.clone().or_else(|| {
         let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
@@ -455,7 +913,8 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     });
     let config = NesConfig::load_or_default(config_path.as_deref())?;
 
-    let rom_path = rom_path_arg
+    let rom_path = runtime_args
+        .rom_path
         .or_else(|| config.desktop.rom_path.clone())
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
@@ -480,9 +939,48 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         config.desktop.capture_path_template,
         config.desktop.capture_every_frames,
     );
-    let step_mode = match config.desktop.step_mode {
-        StepModeConfig::Frame => StepMode::Frame,
-        StepModeConfig::Cpu => StepMode::CpuBudget(cpu_steps_per_frame),
+    let netplay_enabled = runtime_args.netplay_enabled || config.netplay.enabled;
+    let step_mode = if netplay_enabled {
+        StepMode::Frame
+    } else {
+        match config.desktop.step_mode {
+            StepModeConfig::Frame => StepMode::Frame,
+            StepModeConfig::Cpu => StepMode::CpuBudget(cpu_steps_per_frame),
+        }
+    };
+
+    let netplay = if netplay_enabled {
+        let relay_addr = runtime_args
+            .netplay_relay_addr
+            .or_else(|| Some(config.netplay.relay_addr.clone()))
+            .unwrap_or_default();
+        let room = runtime_args
+            .netplay_room
+            .or_else(|| Some(config.netplay.room.clone()))
+            .unwrap_or_default();
+        let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
+        let input_delay_frames = runtime_args
+            .netplay_input_delay_frames
+            .unwrap_or(config.netplay.input_delay_frames);
+        let max_rollback_frames = runtime_args
+            .netplay_max_rollback_frames
+            .unwrap_or(config.netplay.max_rollback_frames);
+        let hash_check_every_frames = runtime_args
+            .netplay_hash_check_every_frames
+            .unwrap_or(config.netplay.hash_check_every_frames);
+        if room.trim().is_empty() {
+            return Err("netplay room cannot be empty".to_owned());
+        }
+        Some(NetplayRuntimeConfig {
+            relay_addr,
+            room,
+            player,
+            input_delay_frames,
+            max_rollback_frames,
+            hash_check_every_frames,
+        })
+    } else {
+        None
     };
 
     Ok(RuntimeConfig {
@@ -495,25 +993,40 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         metrics_every_frames,
         capture,
         loaded_config_path,
-        mcp_enabled,
-        mcp_bind_addr,
+        mcp_enabled: runtime_args.mcp_enabled,
+        mcp_bind_addr: runtime_args.mcp_bind_addr,
+        netplay,
     })
 }
 
-fn parse_runtime_args(args: &[String]) -> Result<(Option<String>, bool, String), String> {
-    let mut rom_path_arg = None::<String>;
-    let mut mcp_enabled = false;
-    let mut mcp_bind_addr = DEFAULT_MCP_BIND_ADDR.to_owned();
+fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
+    let mut parsed = RuntimeArgs {
+        rom_path: None,
+        mcp_enabled: false,
+        mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
+        netplay_enabled: false,
+        netplay_relay_addr: None,
+        netplay_room: None,
+        netplay_player: None,
+        netplay_input_delay_frames: None,
+        netplay_max_rollback_frames: None,
+        netplay_hash_check_every_frames: None,
+    };
     let mut idx = 0_usize;
     while idx < args.len() {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
             return Err(format!(
-                "Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
             ));
         }
         if arg == "--mcp-host" {
-            mcp_enabled = true;
+            parsed.mcp_enabled = true;
+            idx += 1;
+            continue;
+        }
+        if arg == "--netplay" {
+            parsed.netplay_enabled = true;
             idx += 1;
             continue;
         }
@@ -521,7 +1034,57 @@ fn parse_runtime_args(args: &[String]) -> Result<(Option<String>, bool, String),
             let Some(bind_addr) = args.get(idx + 1) else {
                 return Err("missing value after --mcp-bind".to_owned());
             };
-            mcp_bind_addr = bind_addr.clone();
+            parsed.mcp_bind_addr = bind_addr.clone();
+            idx += 2;
+            continue;
+        }
+        if arg == "--netplay-relay" {
+            let Some(relay_addr) = args.get(idx + 1) else {
+                return Err("missing value after --netplay-relay".to_owned());
+            };
+            parsed.netplay_relay_addr = Some(relay_addr.clone());
+            idx += 2;
+            continue;
+        }
+        if arg == "--netplay-room" {
+            let Some(room) = args.get(idx + 1) else {
+                return Err("missing value after --netplay-room".to_owned());
+            };
+            parsed.netplay_room = Some(room.clone());
+            idx += 2;
+            continue;
+        }
+        if arg == "--netplay-player" {
+            let Some(player) = args.get(idx + 1) else {
+                return Err("missing value after --netplay-player".to_owned());
+            };
+            parsed.netplay_player = Some(parse_u8_arg(player, "--netplay-player")?);
+            idx += 2;
+            continue;
+        }
+        if arg == "--netplay-delay" {
+            let Some(delay) = args.get(idx + 1) else {
+                return Err("missing value after --netplay-delay".to_owned());
+            };
+            parsed.netplay_input_delay_frames = Some(parse_u32_arg(delay, "--netplay-delay")?);
+            idx += 2;
+            continue;
+        }
+        if arg == "--netplay-max-rollback" {
+            let Some(max_rollback) = args.get(idx + 1) else {
+                return Err("missing value after --netplay-max-rollback".to_owned());
+            };
+            parsed.netplay_max_rollback_frames =
+                Some(parse_u32_arg(max_rollback, "--netplay-max-rollback")?);
+            idx += 2;
+            continue;
+        }
+        if arg == "--netplay-hash-every" {
+            let Some(hash_every) = args.get(idx + 1) else {
+                return Err("missing value after --netplay-hash-every".to_owned());
+            };
+            parsed.netplay_hash_check_every_frames =
+                Some(parse_u64_arg(hash_every, "--netplay-hash-every")?);
             idx += 2;
             continue;
         }
@@ -529,24 +1092,120 @@ fn parse_runtime_args(args: &[String]) -> Result<(Option<String>, bool, String),
             if bind_addr.is_empty() {
                 return Err("missing value after --mcp-bind=".to_owned());
             }
-            mcp_bind_addr = bind_addr.to_owned();
+            parsed.mcp_bind_addr = bind_addr.to_owned();
+            idx += 1;
+            continue;
+        }
+        if let Some(relay_addr) = arg.strip_prefix("--netplay-relay=") {
+            if relay_addr.is_empty() {
+                return Err("missing value after --netplay-relay=".to_owned());
+            }
+            parsed.netplay_relay_addr = Some(relay_addr.to_owned());
+            idx += 1;
+            continue;
+        }
+        if let Some(room) = arg.strip_prefix("--netplay-room=") {
+            if room.is_empty() {
+                return Err("missing value after --netplay-room=".to_owned());
+            }
+            parsed.netplay_room = Some(room.to_owned());
+            idx += 1;
+            continue;
+        }
+        if let Some(player) = arg.strip_prefix("--netplay-player=") {
+            if player.is_empty() {
+                return Err("missing value after --netplay-player=".to_owned());
+            }
+            parsed.netplay_player = Some(parse_u8_arg(player, "--netplay-player")?);
+            idx += 1;
+            continue;
+        }
+        if let Some(delay) = arg.strip_prefix("--netplay-delay=") {
+            if delay.is_empty() {
+                return Err("missing value after --netplay-delay=".to_owned());
+            }
+            parsed.netplay_input_delay_frames = Some(parse_u32_arg(delay, "--netplay-delay")?);
+            idx += 1;
+            continue;
+        }
+        if let Some(max_rollback) = arg.strip_prefix("--netplay-max-rollback=") {
+            if max_rollback.is_empty() {
+                return Err("missing value after --netplay-max-rollback=".to_owned());
+            }
+            parsed.netplay_max_rollback_frames =
+                Some(parse_u32_arg(max_rollback, "--netplay-max-rollback")?);
+            idx += 1;
+            continue;
+        }
+        if let Some(hash_every) = arg.strip_prefix("--netplay-hash-every=") {
+            if hash_every.is_empty() {
+                return Err("missing value after --netplay-hash-every=".to_owned());
+            }
+            parsed.netplay_hash_check_every_frames =
+                Some(parse_u64_arg(hash_every, "--netplay-hash-every")?);
             idx += 1;
             continue;
         }
         if arg.starts_with("--") {
             return Err(format!(
-                "unknown flag '{arg}'. Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [rom_path]"
+                "unknown flag '{arg}'. Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [rom_path]"
             ));
         }
-        if rom_path_arg.is_some() {
+        if parsed.rom_path.is_some() {
             return Err(
                 "multiple ROM paths provided; expected at most one positional ROM path".to_owned(),
             );
         }
-        rom_path_arg = Some(arg.clone());
+        parsed.rom_path = Some(arg.clone());
         idx += 1;
     }
-    Ok((rom_path_arg, mcp_enabled, mcp_bind_addr))
+    Ok(parsed)
+}
+
+fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {
+    value
+        .parse::<u8>()
+        .map_err(|_| format!("{flag} must be an integer in [0, 255]"))
+}
+
+fn parse_u32_arg(value: &str, flag: &str) -> Result<u32, String> {
+    value
+        .parse::<u32>()
+        .map_err(|_| format!("{flag} must be a non-negative integer"))
+}
+
+fn parse_u64_arg(value: &str, flag: &str) -> Result<u64, String> {
+    value
+        .parse::<u64>()
+        .map_err(|_| format!("{flag} must be a non-negative integer"))
+}
+
+fn recommended_input_delay_frames(
+    rtt_ms: Option<f64>,
+    jitter_ms: f64,
+    min_delay_frames: u32,
+    max_delay_frames: u32,
+    current_delay_frames: u32,
+) -> u32 {
+    if min_delay_frames >= max_delay_frames {
+        return min_delay_frames;
+    }
+    let Some(rtt_ms) = rtt_ms else {
+        return current_delay_frames;
+    };
+
+    let frame_time_ms = 1_000.0 / 60.0;
+    let estimated_one_way_ms = (rtt_ms * 0.5) + (jitter_ms * 1.5);
+    let raw_target = (estimated_one_way_ms / frame_time_ms).ceil() as u32 + 1;
+    let target = raw_target.clamp(min_delay_frames, max_delay_frames);
+
+    if target > current_delay_frames {
+        target
+    } else if target + 1 < current_delay_frames {
+        current_delay_frames - 1
+    } else {
+        current_delay_frames
+    }
 }
 
 fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
@@ -561,6 +1220,104 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
         VirtualKeyCode::Right => Some("ArrowRight"),
         _ => None,
     }
+}
+
+fn connected_gamepad_ids(gilrs: &Gilrs) -> Vec<GamepadId> {
+    gilrs
+        .gamepads()
+        .filter_map(|(id, gamepad)| gamepad.is_connected().then_some(id))
+        .collect()
+}
+
+fn select_active_gamepad_ids(
+    gilrs: &Gilrs,
+    current: [Option<GamepadId>; 2],
+) -> [Option<GamepadId>; 2] {
+    let connected = connected_gamepad_ids(gilrs);
+    let mut next = [None::<GamepadId>; 2];
+
+    for player in 0..next.len() {
+        if let Some(gamepad_id) = current[player]
+            && connected.contains(&gamepad_id)
+            && !next.contains(&Some(gamepad_id))
+        {
+            next[player] = Some(gamepad_id);
+        }
+    }
+
+    for gamepad_id in connected {
+        if next.iter().all(|slot| *slot != Some(gamepad_id))
+            && let Some(slot) = next.iter_mut().find(|slot| slot.is_none())
+        {
+            *slot = Some(gamepad_id);
+        }
+    }
+
+    next
+}
+
+fn sample_gamepad_bits(gilrs: &Gilrs, gamepad_id: GamepadId) -> u8 {
+    let gamepad = gilrs.gamepad(gamepad_id);
+    if !gamepad.is_connected() {
+        return 0;
+    }
+
+    let mut bits = 0_u8;
+    // Keep both common face layouts usable across Xbox/Switch-style controllers.
+    if gamepad.is_pressed(GamepadButton::South) || gamepad.is_pressed(GamepadButton::East) {
+        bits |= Button::A.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::West) || gamepad.is_pressed(GamepadButton::North) {
+        bits |= Button::B.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::Select) {
+        bits |= Button::Select.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::Start) {
+        bits |= Button::Start.bit_mask();
+    }
+
+    let left_x = gamepad.value(GamepadAxis::LeftStickX);
+    let left_y = gamepad.value(GamepadAxis::LeftStickY);
+    if gamepad.is_pressed(GamepadButton::DPadUp) || left_y <= -GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Up.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::DPadDown) || left_y >= GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Down.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::DPadLeft) || left_x <= -GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Left.bit_mask();
+    }
+    if gamepad.is_pressed(GamepadButton::DPadRight) || left_x >= GAMEPAD_AXIS_THRESHOLD {
+        bits |= Button::Right.bit_mask();
+    }
+
+    bits
+}
+
+fn controller_state_delta_for_player(previous: u8, current: u8, player2: bool) -> Vec<Command> {
+    let mut commands = Vec::with_capacity(CONTROLLER_BUTTONS.len());
+    for button in CONTROLLER_BUTTONS {
+        let mask = button.bit_mask();
+        match (previous & mask != 0, current & mask != 0) {
+            (false, true) => {
+                commands.push(if player2 {
+                    Command::PressButton2(button)
+                } else {
+                    Command::PressButton(button)
+                });
+            }
+            (true, false) => {
+                commands.push(if player2 {
+                    Command::ReleaseButton2(button)
+                } else {
+                    Command::ReleaseButton(button)
+                });
+            }
+            _ => {}
+        }
+    }
+    commands
 }
 
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {
@@ -686,7 +1443,11 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_MCP_BIND_ADDR, parse_runtime_args};
+    use super::{
+        DEFAULT_MCP_BIND_ADDR, RuntimeArgs, controller_state_delta_for_player, parse_runtime_args,
+        recommended_input_delay_frames,
+    };
+    use nes_core::{Button, Command};
 
     #[test]
     fn parse_runtime_args_accepts_mcp_host_and_bind_flags() {
@@ -696,28 +1457,28 @@ mod tests {
             "127.0.0.1:7777".to_owned(),
             "game.nes".to_owned(),
         ];
-        let (rom_path, mcp_enabled, bind_addr) = parse_runtime_args(&args).expect("parse args");
-        assert_eq!(rom_path.as_deref(), Some("game.nes"));
-        assert!(mcp_enabled);
-        assert_eq!(bind_addr, "127.0.0.1:7777");
+        let parsed = parse_runtime_args(&args).expect("parse args");
+        assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+        assert!(parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
     }
 
     #[test]
     fn parse_runtime_args_accepts_equals_bind_form() {
         let args = vec!["--mcp-bind=127.0.0.1:7000".to_owned()];
-        let (rom_path, mcp_enabled, bind_addr) = parse_runtime_args(&args).expect("parse args");
-        assert!(rom_path.is_none());
-        assert!(!mcp_enabled);
-        assert_eq!(bind_addr, "127.0.0.1:7000");
+        let parsed = parse_runtime_args(&args).expect("parse args");
+        assert!(parsed.rom_path.is_none());
+        assert!(!parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7000");
     }
 
     #[test]
     fn parse_runtime_args_defaults_bind_when_flag_absent() {
         let args = vec!["game.nes".to_owned()];
-        let (rom_path, mcp_enabled, bind_addr) = parse_runtime_args(&args).expect("parse args");
-        assert_eq!(rom_path.as_deref(), Some("game.nes"));
-        assert!(!mcp_enabled);
-        assert_eq!(bind_addr, DEFAULT_MCP_BIND_ADDR);
+        let parsed = parse_runtime_args(&args).expect("parse args");
+        assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+        assert!(!parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, DEFAULT_MCP_BIND_ADDR);
     }
 
     #[test]
@@ -725,5 +1486,89 @@ mod tests {
         let args = vec!["--bogus".to_owned()];
         let err = parse_runtime_args(&args).expect_err("unknown flag should fail");
         assert!(err.contains("unknown flag"));
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_netplay_flags() {
+        let args = vec![
+            "--netplay".to_owned(),
+            "--netplay-relay=relay.example:4545".to_owned(),
+            "--netplay-room".to_owned(),
+            "river-city".to_owned(),
+            "--netplay-player".to_owned(),
+            "2".to_owned(),
+            "--netplay-delay=3".to_owned(),
+            "--netplay-max-rollback".to_owned(),
+            "360".to_owned(),
+            "--netplay-hash-every".to_owned(),
+            "90".to_owned(),
+        ];
+        let parsed = parse_runtime_args(&args).expect("parse args");
+        let expected = RuntimeArgs {
+            rom_path: None,
+            mcp_enabled: false,
+            mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
+            netplay_enabled: true,
+            netplay_relay_addr: Some("relay.example:4545".to_owned()),
+            netplay_room: Some("river-city".to_owned()),
+            netplay_player: Some(2),
+            netplay_input_delay_frames: Some(3),
+            netplay_max_rollback_frames: Some(360),
+            netplay_hash_check_every_frames: Some(90),
+        };
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn adaptive_delay_reacts_to_rtt_and_jitter() {
+        let increased = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+        assert!(
+            increased >= 4,
+            "expected higher delay for higher RTT+jitter"
+        );
+
+        let unchanged = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, increased);
+        assert!(
+            unchanged == increased || unchanged + 1 == increased,
+            "hysteresis should avoid abrupt downshifts"
+        );
+    }
+
+    #[test]
+    fn adaptive_delay_uses_current_when_no_rtt_sample() {
+        let delay = recommended_input_delay_frames(None, 0.0, 1, 12, 3);
+        assert_eq!(delay, 3);
+    }
+
+    #[test]
+    fn controller_state_delta_emits_press_and_release() {
+        let press = controller_state_delta_for_player(
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            false,
+        );
+        assert_eq!(
+            press,
+            vec![
+                Command::PressButton(Button::A),
+                Command::PressButton(Button::Right)
+            ]
+        );
+
+        let release = controller_state_delta_for_player(
+            Button::A.bit_mask() | Button::B.bit_mask(),
+            Button::B.bit_mask(),
+            false,
+        );
+        assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
+    }
+
+    #[test]
+    fn controller_state_delta_for_player2_uses_player2_commands() {
+        let press = controller_state_delta_for_player(0, Button::A.bit_mask(), true);
+        assert_eq!(press, vec![Command::PressButton2(Button::A)]);
+
+        let release = controller_state_delta_for_player(Button::Start.bit_mask(), 0, true);
+        assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
     }
 }

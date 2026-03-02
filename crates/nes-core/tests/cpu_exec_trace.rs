@@ -199,8 +199,10 @@ fn sta_absolute_writes_memory_and_emits_prg_write() {
         "C002  8D 00 80  STA $8000                       A:05 X:00 Y:00 P:24 SP:FD"
     );
 
+    let mut prg_writes = Vec::new();
+    cpu.swap_prg_writes(&mut prg_writes);
     assert_eq!(
-        cpu.take_prg_writes(),
+        prg_writes,
         vec![CpuPrgWrite {
             addr: 0x8000,
             value: 0x05
@@ -260,8 +262,10 @@ fn sta_absolute_x_writes_indexed_target() {
     cpu.step_with_trace().unwrap();
 
     assert_eq!(cpu.read_byte(0x8001), 0x77);
+    let mut prg_writes = Vec::new();
+    cpu.swap_prg_writes(&mut prg_writes);
     assert_eq!(
-        cpu.take_prg_writes(),
+        prg_writes,
         vec![CpuPrgWrite {
             addr: 0x8001,
             value: 0x77
@@ -275,7 +279,8 @@ fn bus_microphase_for_lda_immediate_matches_cycle_reads() {
     cpu.load_bytes(0xC000, &[0xA9, 0x42]);
 
     cpu.step_with_trace().unwrap();
-    let bus = cpu.take_bus_trace();
+    let mut bus = Vec::new();
+    cpu.swap_bus_trace(&mut bus);
 
     assert_eq!(
         bus,
@@ -301,7 +306,8 @@ fn bus_microphase_for_sta_absolute_matches_fetch_fetch_fetch_write() {
     cpu.step_with_trace().unwrap();
 
     cpu.step_with_trace().unwrap();
-    let bus = cpu.take_bus_trace();
+    let mut bus = Vec::new();
+    cpu.swap_bus_trace(&mut bus);
 
     assert_eq!(
         bus,
@@ -337,7 +343,8 @@ fn irq_service_vectors_when_interrupts_enabled() {
     cpu.load_bytes(0xFFFE, &[0x34, 0x12]);
 
     cpu.step_with_trace().unwrap();
-    let _ = cpu.take_bus_trace();
+    let mut dummy = Vec::new();
+    cpu.swap_bus_trace(&mut dummy);
 
     assert!(cpu.service_irq());
     assert_eq!(cpu.pc(), 0x1234);
@@ -345,7 +352,8 @@ fn irq_service_vectors_when_interrupts_enabled() {
     assert_eq!(cpu.read_byte(0x01FD), 0xC0);
     assert_eq!(cpu.read_byte(0x01FC), 0xC001_u16 as u8);
 
-    let bus = cpu.take_bus_trace();
+    let mut bus = Vec::new();
+    cpu.swap_bus_trace(&mut bus);
     assert_eq!(bus.len(), 5);
     assert_eq!(bus[0].addr, 0x01FD);
     assert_eq!(bus[0].kind, CpuBusAccessKind::Write);
@@ -367,5 +375,7 @@ fn irq_service_is_masked_when_interrupt_disable_is_set() {
     assert!(!cpu.service_irq());
     assert_eq!(cpu.pc(), 0xC000);
     assert_eq!(cpu.sp(), 0xFD);
-    assert!(cpu.take_bus_trace().is_empty());
+    let mut bus = Vec::new();
+    cpu.swap_bus_trace(&mut bus);
+    assert!(bus.is_empty());
 }

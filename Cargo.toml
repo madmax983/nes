@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/nes-core",
+    "crates/nes-dsl",
     "crates/nes-config",
     "crates/nes-mcp",
     "crates/nes-desktop",
@@ -9,6 +10,8 @@ members = [
     "crates/nes-web",
     "crates/nes-proof",
     "crates/nes-test-harness",
+    "crates/nes-netplay",
+    "crates/nes-relay",
 ]
 
 [profile.dev.package.nes-core]
