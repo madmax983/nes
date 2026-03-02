@@ -1,1 +1,0 @@
-crates/nes-web/src/bridge.rs:21:5: replace map_dom_key_to_command -> Option<BridgeCommand> with Some(Default::default())
