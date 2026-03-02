@@ -352,7 +352,7 @@ fn prune_before<T>(map: &mut BTreeMap<u64, T>, keep_from: u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{HashComparison, RollbackConfig, RollbackEngine};
+    use super::{HashComparison, RollbackConfig, RollbackEngine, RollbackError};
     use nes_core::{Command, NesCore};
 
     fn make_core_for_rollback() -> NesCore {
@@ -452,5 +452,168 @@ mod tests {
             err,
             super::RollbackError::InvalidRollbackConfig { .. }
         ));
+    }
+
+    #[test]
+    fn rollback_engine_exposes_initial_config_and_state() {
+        let engine = RollbackEngine::new(RollbackConfig {
+            local_player: 2,
+            input_delay_frames: 3,
+            max_rollback_frames: 42,
+        })
+        .expect("valid config");
+        assert_eq!(engine.next_frame(), 0);
+        assert_eq!(engine.local_player(), 2);
+        assert_eq!(engine.input_delay_frames(), 3);
+        assert_eq!(engine.max_rollback_frames(), 42);
+    }
+
+    #[test]
+    fn rollback_engine_allows_input_delay_equal_to_rollback_window() {
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 1,
+            max_rollback_frames: 4,
+        })
+        .expect("valid config");
+        engine
+            .set_input_delay_frames(4)
+            .expect("equal delay and rollback window should be valid");
+        assert_eq!(engine.input_delay_frames(), 4);
+    }
+
+    #[test]
+    fn rollback_engine_schedule_local_input_applies_delay_to_target_frame() {
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 2,
+            max_rollback_frames: 10,
+        })
+        .expect("valid config");
+        let scheduled = engine.schedule_local_input(0x3C);
+        assert_eq!(scheduled.frame, 2);
+        assert_eq!(scheduled.bits, 0x3C);
+    }
+
+    #[test]
+    fn rollback_engine_frame_hash_and_resolved_inputs_are_queryable() {
+        let mut core = make_core_for_rollback();
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 0,
+            max_rollback_frames: 60,
+        })
+        .expect("valid config");
+
+        assert_eq!(engine.frame_hash(0), None);
+        assert_eq!(engine.resolved_inputs(0), None);
+
+        let _ = engine.schedule_local_input(0x11);
+        let _ = engine.ingest_remote_input(0, 0x22);
+        let step = engine.advance_frame(&mut core).expect("step");
+
+        assert_eq!(step.frame, 0);
+        assert_eq!(engine.frame_hash(0), Some(step.state_hash));
+        assert_eq!(engine.resolved_inputs(0), Some((0x11, 0x22)));
+    }
+
+    #[test]
+    fn rollback_engine_rejects_rollback_beyond_configured_window() {
+        let mut core = make_core_for_rollback();
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 0,
+            max_rollback_frames: 2,
+        })
+        .expect("valid config");
+
+        for _ in 0..5 {
+            let _ = engine.schedule_local_input(0);
+            let _ = engine.advance_frame(&mut core).expect("advance");
+        }
+        let _ = engine.ingest_remote_input(0, 0x01);
+        let _ = engine.schedule_local_input(0);
+        let err = engine
+            .advance_frame(&mut core)
+            .expect_err("rollback beyond max window should fail");
+
+        match err {
+            RollbackError::RollbackWindowExceeded {
+                rollback_from,
+                next_frame,
+                max_rollback_frames,
+            } => {
+                assert_eq!(rollback_from, 0);
+                assert_eq!(next_frame, 5);
+                assert_eq!(max_rollback_frames, 2);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rollback_engine_allows_rollback_exactly_at_configured_window() {
+        let mut core = make_core_for_rollback();
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 0,
+            max_rollback_frames: 2,
+        })
+        .expect("valid config");
+
+        for _ in 0..2 {
+            let _ = engine.schedule_local_input(0);
+            let _ = engine.advance_frame(&mut core).expect("advance");
+        }
+
+        let ingest = engine.ingest_remote_input(0, 0x01);
+        assert!(ingest.rollback_queued);
+
+        let _ = engine.schedule_local_input(0);
+        let step = engine
+            .advance_frame(&mut core)
+            .expect("rollback equal to window should be allowed");
+
+        assert_eq!(step.frame, 2);
+        assert_eq!(step.rollback_distance, 2);
+    }
+
+    #[test]
+    fn rollback_engine_prunes_old_hashes_after_advance() {
+        let mut core = make_core_for_rollback();
+        let mut engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 0,
+            max_rollback_frames: 2,
+        })
+        .expect("valid config");
+
+        for _ in 0..5 {
+            let _ = engine.schedule_local_input(0);
+            let _ = engine.advance_frame(&mut core).expect("advance");
+        }
+
+        assert_eq!(engine.next_frame(), 5);
+        assert_eq!(engine.frame_hash(0), None);
+        assert_eq!(engine.frame_hash(1), None);
+        assert!(engine.frame_hash(4).is_some());
+    }
+
+    #[test]
+    fn rollback_error_display_messages_include_context() {
+        let invalid_player = RollbackError::InvalidLocalPlayer(9).to_string();
+        assert!(invalid_player.contains("1 or 2"));
+        assert!(invalid_player.contains("9"));
+
+        let invalid_config = RollbackError::InvalidRollbackConfig {
+            input_delay_frames: 7,
+            max_rollback_frames: 3,
+        }
+        .to_string();
+        assert!(invalid_config.contains("input_delay_frames=7"));
+        assert!(invalid_config.contains("max_rollback_frames=3"));
+
+        let missing_snapshot = RollbackError::MissingSnapshot(12).to_string();
+        assert!(missing_snapshot.contains("frame 12"));
     }
 }
