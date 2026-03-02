@@ -8,6 +8,24 @@ fn dom_key_maps_to_press_button_command() {
 }
 
 #[test]
+fn dom_key_maps_all_supported_keys() {
+    assert!(map_dom_key_to_command("KeyZ", true).is_some());
+    assert!(map_dom_key_to_command("KeyX", true).is_some());
+    assert!(map_dom_key_to_command("Enter", true).is_some());
+    assert!(map_dom_key_to_command("ShiftRight", true).is_some());
+    assert!(map_dom_key_to_command("ArrowUp", true).is_some());
+    assert!(map_dom_key_to_command("ArrowDown", true).is_some());
+    assert!(map_dom_key_to_command("ArrowLeft", true).is_some());
+    assert!(map_dom_key_to_command("ArrowRight", true).is_some());
+}
+
+#[test]
+fn release_button_command_maps_to_tool_name() {
+    let cmd = map_dom_key_to_command("KeyZ", false).unwrap();
+    assert_eq!(cmd.tool_name(), "release_button");
+}
+
+#[test]
 fn runtime_loads_minimal_rom_and_produces_video_audio_buffers() {
     let rom = minimal_nrom_rom();
     let mut runtime = WebRuntime::new();

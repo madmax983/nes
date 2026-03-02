@@ -1,0 +1,90 @@
+
+*** crates/nes-web/src/bridge.rs:21:5: replace map_dom_key_to_command -> Option<BridgeCommand> with Some(Default::default())
+
+*** mutation diff:
+--- crates/nes-web/src/bridge.rs
++++ replace map_dom_key_to_command -> Option<BridgeCommand> with Some(Default::default())
+@@ -13,28 +13,10 @@
+             Command::ReleaseButton(_) => "release_button",
+             _ => "unsupported",
+         }
+     }
+ }
+
+ #[must_use]
+ pub fn map_dom_key_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+-    let button = match key_code {
+-        "KeyZ" => Button::A,
+-        "KeyX" => Button::B,
+-        "Enter" => Button::Start,
+-        "ShiftRight" => Button::Select,
+-        "ArrowUp" => Button::Up,
+-        "ArrowDown" => Button::Down,
+-        "ArrowLeft" => Button::Left,
+-        "ArrowRight" => Button::Right,
+-        _ => return None,
+-    };
+-
+-    let core = if pressed {
+-        Command::PressButton(button)
+-    } else {
+-        Command::ReleaseButton(button)
+-    };
+-
+-    Some(BridgeCommand { core })
++    Some(Default::default()) /* ~ changed by cargo-mutants ~ */
+ }
+
+
+*** /home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo test --no-run --verbose --package=nes-web@0.1.0
+       Fresh unicode-ident v1.0.24
+       Fresh proc-macro2 v1.0.106
+       Fresh quote v1.0.44
+       Fresh wasm-bindgen-shared v0.2.113
+       Fresh bumpalo v3.20.2
+       Fresh once_cell v1.21.3
+       Fresh syn v2.0.117
+       Fresh cfg-if v1.0.4
+       Fresh nes-core v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-core)
+       Fresh rustversion v1.0.22
+       Fresh wasm-bindgen-macro-support v0.2.113
+       Fresh wasm-bindgen-macro v0.2.113
+       Fresh wasm-bindgen v0.2.113
+       Dirty nes-web v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-web): the file `crates/nes-web/src/bridge.rs` has changed (1772442228.530663197s, 1s after last build at 1772442227.750663206s)
+   Compiling nes-web v0.1.0 (/tmp/cargo-mutants-app-XOdFY5.tmp/crates/nes-web)
+     Running `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name nes_web --edition=2024 crates/nes-web/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=47a861cb61b6e830 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib`
+     Running `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name nes_web --edition=2024 crates/nes-web/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=32bf900276937150 -C extra-filename=-800771184762ed09 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib`
+warning: unused import: `Button`
+ --> crates/nes-web/src/bridge.rs:1:16
+  |
+1 | use nes_core::{Button, Command};
+  |                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: the trait bound `BridgeCommand: Default` is not satisfied
+  --> crates/nes-web/src/bridge.rs:21:10
+   |
+21 |     Some(Default::default()) /* ~ changed by cargo-mutants ~ */
+   |          ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Default` is not implemented for `BridgeCommand`
+  --> crates/nes-web/src/bridge.rs:4:1
+   |
+ 4 | pub struct BridgeCommand {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `nes-web` (lib test) generated 1 warning
+error: could not compile `nes-web` (lib test) due to 1 previous error; 1 warning emitted
+
+Caused by:
+  process didn't exit successfully: `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name nes_web --edition=2024 crates/nes-web/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=32bf900276937150 -C extra-filename=-800771184762ed09 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib` (exit status: 1)
+warning: build failed, waiting for other jobs to finish...
+warning: `nes-web` (lib) generated 1 warning (1 duplicate)
+error: could not compile `nes-web` (lib) due to 1 previous error; 1 warning emitted
+
+Caused by:
+  process didn't exit successfully: `/home/jules/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc --crate-name nes_web --edition=2024 crates/nes-web/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=47a861cb61b6e830 --out-dir /tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps -C incremental=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/incremental -L dependency=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps --extern nes_core=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libnes_core-f0872704b058a123.rlib --extern wasm_bindgen=/tmp/cargo-mutants-app-XOdFY5.tmp/target/debug/deps/libwasm_bindgen-5aed221a4b896dba.rlib` (exit status: 1)
+
+*** result: Failure(101)
