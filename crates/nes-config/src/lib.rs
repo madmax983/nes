@@ -138,34 +138,108 @@ pub fn normalize_nonzero_u64(value: u64, fallback: u64) -> u64 {
 pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<String>), String> {
     let mut config_path = None::<PathBuf>;
     let mut pass_through = Vec::new();
-    let mut idx = 0_usize;
-    while idx < args.len() {
-        let arg = &args[idx];
+    let mut arg_iter = args.iter();
+    while let Some(arg) = arg_iter.next() {
         if arg == "--config" {
-            let Some(path) = args.get(idx + 1) else {
+            let Some(path) = arg_iter.next() else {
                 return Err("missing value after --config".to_owned());
             };
             config_path = Some(PathBuf::from(path));
-            idx += 2;
             continue;
         }
         if let Some(value) = arg.strip_prefix("--config=") {
             if !value.is_empty() {
                 config_path = Some(PathBuf::from(value));
-                idx += 1;
                 continue;
             }
             return Err("missing value after --config=".to_owned());
         }
         pass_through.push(arg.clone());
-        idx += 1;
     }
     Ok((config_path, pass_through))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_config_path_arg;
+    use std::fs;
+    use std::path::PathBuf;
+
+    use super::{
+        NesConfig, normalize_nonzero_u32, normalize_nonzero_u64, parse_config_path_arg,
+    };
+
+    fn temp_config_path(stem: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("nes-config-{stem}-{nonce}.toml"))
+    }
+
+    fn write_temp_config(contents: &str, stem: &str) -> PathBuf {
+        let path = temp_config_path(stem);
+        fs::write(&path, contents).expect("should write temp config");
+        path
+    }
+
+    fn remove_if_exists(path: &PathBuf) {
+        if path.exists() {
+            fs::remove_file(path).expect("should remove temp file");
+        }
+    }
+
+    #[test]
+    fn load_reads_non_default_values_from_file() {
+        let path = write_temp_config(
+            r#"
+[desktop]
+window_scale = 7
+audio_enabled = false
+
+[netplay]
+enabled = true
+room = "arena"
+"#,
+            "load-non-defaults",
+        );
+        let loaded = NesConfig::load(&path).expect("load should succeed");
+        remove_if_exists(&path);
+
+        assert_eq!(loaded.desktop.window_scale, 7);
+        assert!(!loaded.desktop.audio_enabled);
+        assert!(loaded.netplay.enabled);
+        assert_eq!(loaded.netplay.room, "arena");
+    }
+
+    #[test]
+    fn load_returns_error_for_missing_file() {
+        let path = temp_config_path("missing");
+        let err = NesConfig::load(&path).expect_err("missing config should fail");
+        assert!(err.contains("failed to read config"));
+    }
+
+    #[test]
+    fn load_or_default_uses_provided_path_when_present() {
+        let path = write_temp_config(
+            r#"
+[desktop]
+window_scale = 9
+"#,
+            "load-or-default-path",
+        );
+        let loaded = NesConfig::load_or_default(Some(&path)).expect("load_or_default should load");
+        remove_if_exists(&path);
+
+        assert_eq!(loaded.desktop.window_scale, 9);
+    }
+
+    #[test]
+    fn normalize_nonzero_helpers_use_fallback_only_for_zero() {
+        assert_eq!(normalize_nonzero_u32(0, 77), 77);
+        assert_eq!(normalize_nonzero_u32(5, 77), 5);
+        assert_eq!(normalize_nonzero_u64(0, 99), 99);
+        assert_eq!(normalize_nonzero_u64(42, 99), 42);
+    }
 
     #[test]
     fn parse_config_path_arg_supports_split_flag() {
@@ -198,5 +272,26 @@ mod tests {
         let args = vec!["--config".to_owned()];
         let err = parse_config_path_arg(&args).expect_err("parse should fail");
         assert!(err.contains("missing value"));
+    }
+
+    #[test]
+    fn parse_config_path_arg_rejects_empty_equals_value() {
+        let args = vec!["--config=".to_owned()];
+        let err = parse_config_path_arg(&args).expect_err("parse should fail");
+        assert!(err.contains("missing value"));
+    }
+
+    #[test]
+    fn parse_config_path_arg_last_flag_wins_and_preserves_other_args() {
+        let args = vec![
+            "--config=first.toml".to_owned(),
+            "rom.nes".to_owned(),
+            "--config".to_owned(),
+            "second.toml".to_owned(),
+            "--fullscreen".to_owned(),
+        ];
+        let (config, rest) = parse_config_path_arg(&args).expect("parse should succeed");
+        assert_eq!(config.as_deref(), Some(PathBuf::from("second.toml").as_path()));
+        assert_eq!(rest, vec!["rom.nes".to_owned(), "--fullscreen".to_owned()]);
     }
 }
