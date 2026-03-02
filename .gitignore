@@ -9,3 +9,4 @@ crates/nes-web/.trunk/
 crates/nes-test-harness/fuzz/target
 crates/nes-test-harness/fuzz/corpus
 crates/nes-test-harness/fuzz/artifacts
+/.claude/
