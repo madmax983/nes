@@ -31,6 +31,12 @@ cargo test --workspace --all-targets --all-features
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verus-check.ps1
 ```
 
+Coverage locally (same format uploaded in CI):
+
+```powershell
+cargo llvm-cov --workspace --all-features --all-targets --lcov --output-path lcov.info
+```
+
 ## Runtime And ROM Config
 
 Runtime and ROM paths are configured through `nes.toml` at the workspace root.
