@@ -1,5 +1,5 @@
 [desktop]
-rom_path = "C:\\path\\to\\roms\\Super Mario Bros. (World).nes"
+rom_path = "./roms/homebrew/homebrew.nes"
 window_scale = 3
 step_mode = "frame"
 cpu_steps_per_frame = 10000
@@ -11,11 +11,11 @@ capture_path_template = ""
 capture_every_frames = 1
 
 [roms]
-smb = "C:\\path\\to\\roms\\Super Mario Bros. (World).nes"
-nestest = "C:\\path\\to\\roms\\nestest.nes"
-blargg_cpu = "C:\\path\\to\\roms\\cpu.nes"
-bbbradsmith_audio_suite_dir = "C:\\path\\to\\roms\\nes-audio-tests\\build"
-bbbradsmith_audio_golden_dir = "C:\\path\\to\\roms\\nes-audio-tests\\golden"
+smb = "./roms/homebrew/homebrew.nes"
+nestest = "./roms/nestest.nes"
+blargg_cpu = "./roms/cpu.nes"
+bbbradsmith_audio_suite_dir = "./roms/nes-audio-tests/build"
+bbbradsmith_audio_golden_dir = "./roms/nes-audio-tests/golden"
 
 [netplay]
 enabled = false
