@@ -141,7 +141,10 @@ mod tests {
         let catalog = tool_catalog();
         assert_eq!(catalog.len(), 30);
         assert_eq!(catalog[0].name, "load_rom");
-        assert_eq!(catalog[0].description, "Load an iNES ROM into the emulator core");
+        assert_eq!(
+            catalog[0].description,
+            "Load an iNES ROM into the emulator core"
+        );
 
         let has_run_macro = catalog.iter().any(|t| t.name == "run_macro");
         assert!(has_run_macro);

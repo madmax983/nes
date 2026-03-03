@@ -115,3 +115,55 @@ fn expected_frame_len(width: u32, height: u32) -> Option<usize> {
     let height = usize::try_from(height).ok()?;
     width.checked_mul(height)?.checked_mul(4)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_expected_frame_len() {
+        assert_eq!(expected_frame_len(256, 240), Some(256 * 240 * 4));
+        assert_eq!(expected_frame_len(0, 0), Some(0));
+        assert_eq!(expected_frame_len(10, 10), Some(400));
+    }
+
+    #[test]
+    fn test_publish_and_chunk_audio() {
+        let initial = latest_output_metadata();
+        let samples = vec![42; 735];
+        publish_audio(samples.clone());
+
+        let meta = latest_output_metadata();
+        assert!(meta.audio_seq > initial.audio_seq);
+
+        let chunk = audio_chunk(meta.audio_seq).unwrap();
+        assert_eq!(chunk.seq, meta.audio_seq);
+        assert_eq!(chunk.samples, samples);
+    }
+
+    #[test]
+    fn test_publish_and_chunk_frame() {
+        let initial = latest_output_metadata();
+        let rgba = vec![128; 256 * 240 * 4];
+        publish_frame(256, 240, rgba.clone());
+
+        let meta = latest_output_metadata();
+        assert!(meta.frame_seq > initial.frame_seq);
+        assert_eq!(meta.width, 256);
+        assert_eq!(meta.height, 240);
+
+        let chunk = frame_chunk(meta.frame_seq).unwrap();
+        assert_eq!(chunk.seq, meta.frame_seq);
+        assert_eq!(chunk.rgba, rgba);
+    }
+
+    #[test]
+    fn test_publish_frame_invalid_len() {
+        let meta_before = latest_output_metadata();
+        let invalid_rgba = vec![0; 10]; // Too small
+        publish_frame(256, 240, invalid_rgba);
+
+        let meta_after = latest_output_metadata();
+        assert_eq!(meta_before.frame_seq, meta_after.frame_seq); // Should not have updated
+    }
+}
