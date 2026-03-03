@@ -746,7 +746,10 @@ mod tests {
         let prompts = call(&mut state, request("prompts/list", json!(12), json!({})));
         assert_eq!(prompts["result"], json!({ "prompts": [] }));
 
-        let logging = call(&mut state, request("logging/setLevel", json!(13), json!({})));
+        let logging = call(
+            &mut state,
+            request("logging/setLevel", json!(13), json!({})),
+        );
         assert_eq!(logging["result"], json!({}));
     }
 

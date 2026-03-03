@@ -1,4 +1,6 @@
-use nes_core::{AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
+use nes_core::{
+    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH,
+};
 use nes_web::WebRuntime;
 
 #[cfg(target_arch = "wasm32")]

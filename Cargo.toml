@@ -12,6 +12,7 @@ members = [
     "crates/nes-test-harness",
     "crates/nes-netplay",
     "crates/nes-relay",
+    "crates/nes-rewind",
 ]
 
 [profile.dev.package.nes-core]

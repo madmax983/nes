@@ -65,6 +65,8 @@ pub struct CpuSnapshot {
     pub sp: u8,
     /// Raw status flags.
     pub status: u8,
+    /// 2KB NES work RAM ($0000–$07FF).
+    pub work_ram: [u8; 2048],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -191,9 +193,11 @@ impl Cpu {
         self.memory[addr as usize] = value;
     }
 
-    /// Captures register snapshot.
+    /// Captures register snapshot including 2KB work RAM.
     #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
+        let mut work_ram = [0u8; 2048];
+        work_ram.copy_from_slice(&self.memory[0..2048]);
         CpuSnapshot {
             pc: self.pc,
             a: self.a,
@@ -201,10 +205,11 @@ impl Cpu {
             y: self.y,
             sp: self.sp,
             status: self.status.bits(),
+            work_ram,
         }
     }
 
-    /// Restores CPU registers and clears transient trace buffers.
+    /// Restores CPU registers and 2KB work RAM, clearing transient trace buffers.
     pub fn restore(&mut self, snapshot: CpuSnapshot) {
         self.pc = snapshot.pc;
         self.a = snapshot.a;
@@ -212,6 +217,7 @@ impl Cpu {
         self.y = snapshot.y;
         self.sp = snapshot.sp;
         self.status = Status::with_bits(snapshot.status);
+        self.memory[0..2048].copy_from_slice(&snapshot.work_ram);
         self.writes.clear();
         self.prg_writes.clear();
         self.bus_trace.borrow_mut().clear();
@@ -2408,4 +2414,27 @@ fn format_trace(snapshot: TraceSnapshot, bytes: &[u8], mnemonic: &str) -> String
         p = snapshot.p,
         sp = snapshot.sp
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpu_snapshot_roundtrips_work_ram() {
+        let mut cpu = Cpu::new(0xC000);
+        cpu.memory[0x0000] = 0xAB;
+        cpu.memory[0x00FF] = 0xCD;
+        cpu.memory[0x07FF] = 0xEF;
+
+        let snap = cpu.snapshot();
+        cpu.memory[0x0000] = 0x00;
+        cpu.memory[0x00FF] = 0x00;
+        cpu.memory[0x07FF] = 0x00;
+
+        cpu.restore(snap);
+        assert_eq!(cpu.memory[0x0000], 0xAB);
+        assert_eq!(cpu.memory[0x00FF], 0xCD);
+        assert_eq!(cpu.memory[0x07FF], 0xEF);
+    }
 }

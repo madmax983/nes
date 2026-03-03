@@ -1,0 +1,330 @@
+//! TimeMachine: host-facing rewind API backed by a background worker thread.
+//!
+//! The main emulation thread calls [`TimeMachine::record_frame`] each frame
+//! (non-blocking — drops if the channel is full) and [`TimeMachine::rewind_step`]
+//! during rewind. All timeline compression and reconstruction runs on a
+//! dedicated background thread so the audio/video loop is never stalled.
+
+use std::sync::mpsc::{self, Receiver, SyncSender};
+use std::thread;
+use std::time::Duration;
+
+use nes_core::{CoreSnapshot, NesCore};
+
+use crate::cursor::{RewindCursor, RewindSpeed};
+use crate::policy::KeyframePolicy;
+use crate::timeline::CompressedTimeline;
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+/// Configuration for the Time Machine rewind system.
+#[derive(Debug, Clone)]
+pub struct TimeMachineConfig {
+    /// How many seconds of history to retain (default: 30).
+    pub max_history_seconds: u32,
+    /// Minimum frames between forced keyframes (default: 60).
+    pub keyframe_base_interval: u64,
+    /// Delta byte threshold that, combined with 3× EMA, triggers early keyframe.
+    pub delta_spike_threshold: u32,
+}
+
+impl Default for TimeMachineConfig {
+    fn default() -> Self {
+        Self {
+            max_history_seconds: 30,
+            keyframe_base_interval: 60,
+            delta_spike_threshold: 2048,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+/// Observable state of the Time Machine.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimeMachineState {
+    /// Actively recording frames.
+    Recording,
+    /// Rewinding history.
+    Rewinding {
+        /// Approximate history time remaining (seconds from frame 0).
+        seconds_remaining: f32,
+    },
+    /// Rewind history exhausted.
+    Exhausted,
+}
+
+// ---------------------------------------------------------------------------
+// Worker protocol
+// ---------------------------------------------------------------------------
+
+enum WorkerMsg {
+    Record {
+        frame_id: u64,
+        snapshot: Box<CoreSnapshot>,
+    },
+    Reconstruct {
+        target_frame: u64,
+    },
+    Shutdown,
+}
+
+enum WorkerReply {
+    Reconstructed {
+        frame_id: u64,
+        snapshot: CoreSnapshot,
+    },
+}
+
+// ---------------------------------------------------------------------------
+// TimeMachine
+// ---------------------------------------------------------------------------
+
+/// Host-facing rewind controller.
+///
+/// # Usage
+///
+/// ```no_run
+/// use nes_core::{Command, NesCore};
+/// use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
+///
+/// let mut core = NesCore::new();
+/// let mut tm = TimeMachine::new(TimeMachineConfig::default());
+///
+/// // Each frame: advance then record.
+/// core.execute(Command::StepFrame).unwrap();
+/// tm.record_frame(&core);
+///
+/// // On rewind key: step backward.
+/// tm.rewind_step(&mut core);
+/// ```
+pub struct TimeMachine {
+    #[allow(dead_code)]
+    config: TimeMachineConfig,
+    state: TimeMachineState,
+    cursor: Option<RewindCursor>,
+    tx: SyncSender<WorkerMsg>,
+    rx: Receiver<WorkerReply>,
+    last_recorded_frame: u64,
+}
+
+impl TimeMachine {
+    /// Construct a new `TimeMachine` and spawn its background worker thread.
+    pub fn new(config: TimeMachineConfig) -> Self {
+        let max_frames = u64::from(config.max_history_seconds) * 60;
+        let policy =
+            KeyframePolicy::new(config.keyframe_base_interval, config.delta_spike_threshold);
+
+        // Channel capacities:
+        //   work_tx capacity 4  — small; emulation thread drops rather than blocks.
+        //   reply_tx capacity 64 — large enough for lookahead pre-fetch bursts.
+        let (work_tx, work_rx) = mpsc::sync_channel::<WorkerMsg>(4);
+        let (reply_tx, reply_rx) = mpsc::sync_channel::<WorkerReply>(64);
+
+        thread::spawn(move || {
+            let mut timeline = CompressedTimeline::new(max_frames, policy);
+            loop {
+                match work_rx.recv() {
+                    Ok(WorkerMsg::Record { frame_id, snapshot }) => {
+                        timeline.push(frame_id, *snapshot);
+                    }
+                    Ok(WorkerMsg::Reconstruct { target_frame }) => {
+                        if let Some(snapshot) = timeline.reconstruct(target_frame) {
+                            let _ = reply_tx.send(WorkerReply::Reconstructed {
+                                frame_id: target_frame,
+                                snapshot,
+                            });
+                        }
+                    }
+                    Ok(WorkerMsg::Shutdown) | Err(_) => break,
+                }
+            }
+        });
+
+        Self {
+            config,
+            state: TimeMachineState::Recording,
+            cursor: None,
+            tx: work_tx,
+            rx: reply_rx,
+            last_recorded_frame: 0,
+        }
+    }
+
+    /// Record the current emulator state. Non-blocking — drops if worker is busy.
+    ///
+    /// Call once per frame after advancing the core, only while [`TimeMachineState::Recording`].
+    pub fn record_frame(&mut self, core: &NesCore) {
+        if !matches!(self.state, TimeMachineState::Recording) {
+            return;
+        }
+        let frame_id = core.ppu_frame_counter();
+        let snapshot = core.save_state();
+        self.last_recorded_frame = frame_id;
+        // `try_send` — never block the emulation thread.
+        let _ = self.tx.try_send(WorkerMsg::Record {
+            frame_id,
+            snapshot: Box::new(snapshot),
+        });
+    }
+
+    /// Step backward one frame. Returns `Some(frame_id)` on success, `None` when history is exhausted.
+    ///
+    /// Blocks up to 16 ms waiting for the worker to reconstruct the target frame.
+    pub fn rewind_step(&mut self, core: &mut NesCore) -> Option<u64> {
+        // Initialise the cursor on first rewind call.
+        if self.cursor.is_none() {
+            self.state = TimeMachineState::Rewinding {
+                seconds_remaining: 0.0,
+            };
+            self.cursor = Some(RewindCursor::new(
+                self.last_recorded_frame,
+                RewindSpeed::Normal,
+            ));
+        }
+
+        let cursor = self.cursor.as_mut().unwrap();
+        let target = cursor.current_frame.checked_sub(1)?;
+
+        // Request the previous frame from the worker.
+        // Use blocking send here — during rewind the emulation loop is paused so
+        // it is acceptable to wait briefly for a slot (worker drains quickly).
+        let _ = self.tx.send(WorkerMsg::Reconstruct {
+            target_frame: target,
+        });
+
+        // Wait up to one frame-budget (16 ms) for the reply.
+        match self.rx.recv_timeout(Duration::from_millis(16)) {
+            Ok(WorkerReply::Reconstructed { frame_id, snapshot }) => {
+                cursor.current_frame = frame_id;
+                core.load_state(&snapshot);
+                self.state = TimeMachineState::Rewinding {
+                    seconds_remaining: frame_id as f32 / 60.0,
+                };
+                Some(frame_id)
+            }
+            _ => {
+                self.state = TimeMachineState::Exhausted;
+                None
+            }
+        }
+    }
+
+    /// Accelerate rewind (tap → Normal → Fast → Faster).
+    pub fn rewind_faster(&mut self) {
+        if let Some(cursor) = &mut self.cursor {
+            cursor.speed = match cursor.speed {
+                RewindSpeed::Single | RewindSpeed::Normal => RewindSpeed::Fast,
+                RewindSpeed::Fast => RewindSpeed::Faster,
+                RewindSpeed::Faster => RewindSpeed::Faster,
+            };
+        }
+    }
+
+    /// Resume recording from the current rewind position.
+    pub fn resume(&mut self) {
+        self.cursor = None;
+        self.state = TimeMachineState::Recording;
+    }
+
+    /// Current observable state.
+    pub fn state(&self) -> TimeMachineState {
+        self.state.clone()
+    }
+
+    /// Approximate seconds of history recorded so far.
+    pub fn history_seconds(&self) -> f32 {
+        self.last_recorded_frame as f32 / 60.0
+    }
+}
+
+impl Drop for TimeMachine {
+    fn drop(&mut self) {
+        // Best-effort graceful shutdown of the worker thread.
+        let _ = self.tx.send(WorkerMsg::Shutdown);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::{Command, NesCore};
+
+    fn make_core() -> NesCore {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
+        core
+    }
+
+    fn config() -> TimeMachineConfig {
+        TimeMachineConfig {
+            max_history_seconds: 10,
+            keyframe_base_interval: 30,
+            delta_spike_threshold: 2048,
+        }
+    }
+
+    #[test]
+    fn record_and_rewind_restores_earlier_frame() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(config());
+
+        // Record 60 frames.
+        for _ in 0..60 {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(&core);
+        }
+        let frame_before_rewind = core.ppu_frame_counter();
+
+        // Flush the worker channel: give it time to process all records.
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Rewind 30 frames.
+        for _ in 0..30 {
+            tm.rewind_step(&mut core);
+        }
+        let frame_after_rewind = core.ppu_frame_counter();
+
+        assert!(
+            frame_after_rewind < frame_before_rewind,
+            "Expected rewind to restore earlier frame, got {} >= {}",
+            frame_after_rewind,
+            frame_before_rewind
+        );
+    }
+
+    #[test]
+    fn rewind_returns_none_when_no_history() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        // No frames recorded — first rewind_step should return None.
+        let result = tm.rewind_step(&mut core);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn resume_after_rewind_puts_machine_back_in_recording_state() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        for _ in 0..10 {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(&core);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+
+        tm.rewind_step(&mut core);
+        tm.resume();
+
+        assert_eq!(tm.state(), TimeMachineState::Recording);
+    }
+}

@@ -14,6 +14,7 @@ nes-core = { path = "../nes-core" }
 comfy-table = "7.1"
 crossterm = "0.28"
 nes-netplay = { path = "../nes-netplay" }
+nes-rewind = { path = "../nes-rewind" }
 nes-mcp = { path = "../nes-mcp", optional = true }
 pixels = "0.13"
 rodio = "0.17"

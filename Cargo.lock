@@ -1729,6 +1729,7 @@ dependencies = [
  "nes-core",
  "nes-mcp",
  "nes-netplay",
+ "nes-rewind",
  "pixels",
  "rodio",
  "serde",
@@ -1775,6 +1776,15 @@ version = "0.1.0"
 dependencies = [
  "nes-netplay",
  "serde_json",
+]
+
+[[package]]
+name = "nes-rewind"
+version = "0.1.0"
+dependencies = [
+ "nes-core",
+ "proptest",
+ "smallvec",
 ]
 
 [[package]]

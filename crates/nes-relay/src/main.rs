@@ -584,7 +584,8 @@ mod tests {
 
     #[test]
     fn parse_args_help_flags_return_usage_text() {
-        let long_help = parse_args(vec!["--help".to_owned()]).expect_err("help should return usage");
+        let long_help =
+            parse_args(vec!["--help".to_owned()]).expect_err("help should return usage");
         assert!(long_help.contains("Usage:"));
         assert!(long_help.contains("Default bind:"));
         assert!(!long_help.contains("unknown argument"));
@@ -640,8 +641,11 @@ mod tests {
 
     #[test]
     fn parse_args_accepts_100_percent_values() {
-        let parsed = parse_args(vec!["--loss-pct=100".to_owned(), "--reorder-pct=100".to_owned()])
-            .expect("100 percent should parse");
+        let parsed = parse_args(vec![
+            "--loss-pct=100".to_owned(),
+            "--reorder-pct=100".to_owned(),
+        ])
+        .expect("100 percent should parse");
         assert_eq!(parsed.link.loss_pct, 100);
         assert_eq!(parsed.link.reorder_pct, 100);
     }
@@ -894,10 +898,10 @@ mod tests {
             assert_ne!(seed, 0);
             assert_ne!(seed, 1);
             assert_ne!(seed, 0xD1B5_4A32_D192_ED03);
-            if let Some(prev) = previous {
-                if prev != seed {
-                    saw_change = true;
-                }
+            if let Some(prev) = previous
+                && prev != seed
+            {
+                saw_change = true;
             }
             if seed & pid_component != pid_component {
                 saw_missing_pid_bit = true;

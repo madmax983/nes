@@ -10,12 +10,7 @@ use nes_mcp::macro_engine::execute_macro_script;
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
-        eprintln!(
-            "{}",
-            "Usage: nes-mcp-run-macro <rom_path> <script_path>"
-                .with(Color::Red)
-                .bold()
-        );
+        eprintln!("Usage: nes-mcp-run-macro <rom_path> <script_path>");
         std::process::exit(1);
     }
 
