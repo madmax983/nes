@@ -162,3 +162,179 @@ impl Status {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_status_is_empty() {
+        let status = Status::default();
+        assert_eq!(status.bits(), 0);
+        assert!(!status.carry());
+        assert!(!status.zero());
+        assert!(!status.interrupt_disable());
+        assert!(!status.overflow());
+        assert!(!status.negative());
+    }
+
+    #[test]
+    fn construct_with_bits_retains_value() {
+        let status = Status::with_bits(0b1100_0101);
+        assert_eq!(status.bits(), 0b1100_0101);
+        assert!(status.carry());
+        assert!(status.interrupt_disable());
+        assert!(status.overflow());
+        assert!(status.negative());
+        assert!(!status.zero());
+    }
+
+    #[test]
+    fn individual_flags_can_be_set_and_cleared() {
+        let mut status = Status::default();
+
+        status.set_carry(true);
+        assert!(status.carry());
+        assert_eq!(status.bits(), Status::CARRY_BIT);
+        status.set_carry(false);
+        assert!(!status.carry());
+
+        status.set_interrupt_disable(true);
+        assert!(status.interrupt_disable());
+        assert_eq!(status.bits(), Status::INTERRUPT_DISABLE_BIT);
+        status.set_interrupt_disable(false);
+        assert!(!status.interrupt_disable());
+
+        status.set_decimal(true);
+        assert_eq!(status.bits(), Status::DECIMAL_BIT);
+        status.set_decimal(false);
+        assert_eq!(status.bits(), 0);
+
+        status.set_break(true);
+        assert_eq!(status.bits(), Status::BREAK_BIT);
+        status.set_break(false);
+        assert_eq!(status.bits(), 0);
+
+        status.set_overflow(true);
+        assert!(status.overflow());
+        assert_eq!(status.bits(), Status::OVERFLOW_BIT);
+        status.set_overflow(false);
+        assert!(!status.overflow());
+
+        status.set_negative(true);
+        assert!(status.negative());
+        assert_eq!(status.bits(), Status::NEGATIVE_BIT);
+        status.set_negative(false);
+        assert!(!status.negative());
+    }
+
+    #[test]
+    fn update_zn_sets_flags_based_on_value() {
+        let mut status = Status::default();
+
+        status.update_zn(0x00);
+        assert!(status.zero());
+        assert!(!status.negative());
+
+        status.update_zn(0x7F);
+        assert!(!status.zero());
+        assert!(!status.negative());
+
+        status.update_zn(0x80);
+        assert!(!status.zero());
+        assert!(status.negative());
+
+        status.update_zn(0xFF);
+        assert!(!status.zero());
+        assert!(status.negative());
+    }
+
+    #[test]
+    fn update_compare_sets_flags_correctly() {
+        let cases = [
+            // lhs, rhs, carry, zero, negative
+            (0x05, 0x05, true, true, false),  // Equal
+            (0x05, 0x03, true, false, false), // Greater than
+            (0x03, 0x05, false, false, true), // Less than (negative result 0xFE)
+            (0x80, 0x01, true, false, false), // Greater than (positive result 0x7F)
+            (0x01, 0x80, false, false, true), // Less than (negative result 0x81)
+            (0x7F, 0x80, false, false, true), // Less than (negative result 0xFF)
+            (0x80, 0x7F, true, false, false), // Greater than (positive result 0x01)
+        ];
+
+        for (lhs, rhs, expected_c, expected_z, expected_n) in cases {
+            let mut status = Status::default();
+            status.update_compare(lhs, rhs);
+            assert_eq!(
+                status.carry(),
+                expected_c,
+                "carry failed for {} >= {}",
+                lhs,
+                rhs
+            );
+            assert_eq!(
+                status.zero(),
+                expected_z,
+                "zero failed for {} - {}",
+                lhs,
+                rhs
+            );
+            assert_eq!(
+                status.negative(),
+                expected_n,
+                "negative failed for {} - {}",
+                lhs,
+                rhs
+            );
+        }
+    }
+
+    #[test]
+    fn update_bit_test_sets_flags_correctly() {
+        let mut status = Status::default();
+
+        // BIT uses mask, and sets N/V from memory value
+        let lhs = 0b0000_1111;
+        let rhs = 0b1100_0000;
+
+        status.update_bit_test(lhs, rhs);
+        assert!(status.zero()); // 0x0F & 0xC0 == 0
+        assert!(status.overflow()); // bit 6 of rhs is 1
+        assert!(status.negative()); // bit 7 of rhs is 1
+
+        let lhs = 0b1111_1111;
+        let rhs = 0b0011_1111;
+
+        status.update_bit_test(lhs, rhs);
+        assert!(!status.zero()); // 0xFF & 0x3F != 0
+        assert!(!status.overflow()); // bit 6 of rhs is 0
+        assert!(!status.negative()); // bit 7 of rhs is 0
+    }
+
+    #[test]
+    fn stack_push_pull_semantics() {
+        let mut status = Status::default();
+        status.set_carry(true);
+        status.set_negative(true);
+
+        // Push via BRK/IRQ pushes with B clear, U set
+        let irq_push = status.bits_for_stack_push();
+        assert_eq!(irq_push & Status::BREAK_BIT, 0);
+        assert_ne!(irq_push & Status::UNUSED_BIT, 0);
+
+        // Push via PHP pushes with B set, U set
+        let php_push = status.bits_for_php();
+        assert_ne!(php_push & Status::BREAK_BIT, 0);
+        assert_ne!(php_push & Status::UNUSED_BIT, 0);
+
+        // Pull via PLP/RTI restores flags, ignores B and U
+        let mut restored = Status::default();
+        // Simulate pulling a byte with all bits set
+        restored.restore_from_stack(0xFF);
+        assert!(restored.carry());
+        assert!(restored.negative());
+        assert!(restored.overflow());
+        assert_eq!(restored.bits() & Status::BREAK_BIT, 0); // B flag should be cleared on restore
+        assert_ne!(restored.bits() & Status::UNUSED_BIT, 0); // U flag is always forced set
+    }
+}
