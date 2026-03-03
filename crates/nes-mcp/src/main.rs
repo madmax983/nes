@@ -1,5 +1,7 @@
 use std::io::{self, BufRead, BufReader, Write};
 
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use nes_core::NesCore;
 use nes_mcp::{DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 use serde::Deserialize;
@@ -101,6 +103,24 @@ fn run() -> Result<(), String> {
     let mut reader = BufReader::new(stdin.lock());
     let mut writer = stdout.lock();
     let mut state = ServerState::new();
+
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Protocol Version"),
+        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("Tools Loaded"),
+        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
+    ]);
+
+    eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
+    eprintln!("{table}\n");
 
     loop {
         let Some(payload) = read_stdio_message(&mut reader)? else {
