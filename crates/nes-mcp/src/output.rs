@@ -1,5 +1,5 @@
 use std::cmp;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use nes_core::{AUDIO_CHUNK_SAMPLES, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 
@@ -18,13 +18,18 @@ pub struct OutputMetadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameChunk {
     pub seq: u64,
-    pub rgba: Vec<u8>,
+    /// We use `Arc<Vec<u8>>` instead of `Vec<u8>` here to allow the MCP engine to
+    /// share a single read-only view of the framebuffer across threads without
+    /// performing a deep copy (approx ~245KB allocation) every time it's queried.
+    pub rgba: Arc<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudioChunk {
     pub seq: u64,
-    pub samples: Vec<i16>,
+    /// We use `Arc<Vec<i16>>` to share audio samples safely without incurring
+    /// per-query memory allocations or deep `.clone()` operations on the hot path.
+    pub samples: Arc<Vec<i16>>,
 }
 
 #[derive(Debug)]
@@ -33,8 +38,8 @@ struct OutputState {
     audio_seq: u64,
     width: u32,
     height: u32,
-    frame_rgba: Vec<u8>,
-    audio_samples: Vec<i16>,
+    frame_rgba: Arc<Vec<u8>>,
+    audio_samples: Arc<Vec<i16>>,
 }
 
 impl OutputState {
@@ -56,8 +61,8 @@ fn output_state() -> &'static Mutex<OutputState> {
             audio_seq: 0,
             width: DEFAULT_WIDTH,
             height: DEFAULT_HEIGHT,
-            frame_rgba: vec![0; FRAME_RGBA_BYTES],
-            audio_samples: vec![0; DEFAULT_AUDIO_SAMPLE_COUNT],
+            frame_rgba: Arc::new(vec![0; FRAME_RGBA_BYTES]),
+            audio_samples: Arc::new(vec![0; DEFAULT_AUDIO_SAMPLE_COUNT]),
         })
     })
 }
@@ -79,13 +84,13 @@ pub fn publish_frame(width: u32, height: u32, rgba: Vec<u8>) {
     state.frame_seq = state.frame_seq.saturating_add(1);
     state.width = width;
     state.height = height;
-    state.frame_rgba = rgba;
+    state.frame_rgba = Arc::new(rgba);
 }
 
 pub fn publish_audio(samples: Vec<i16>) {
     let mut state = output_state().lock().expect("output state lock");
     state.audio_seq = state.audio_seq.saturating_add(1);
-    state.audio_samples = samples;
+    state.audio_samples = Arc::new(samples);
 }
 
 #[must_use]
