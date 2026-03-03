@@ -4,6 +4,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "nova")]
+mod auto_player;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 mod netplay;
@@ -69,6 +71,8 @@ struct RuntimeConfig {
     mcp_enabled: bool,
     mcp_bind_addr: String,
     netplay: Option<NetplayRuntimeConfig>,
+    #[cfg(feature = "nova")]
+    auto_player_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +87,8 @@ struct RuntimeArgs {
     netplay_input_delay_frames: Option<u32>,
     netplay_max_rollback_frames: Option<u32>,
     netplay_hash_check_every_frames: Option<u64>,
+    #[cfg(feature = "nova")]
+    auto_player_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -437,6 +443,15 @@ fn run() -> Result<(), String> {
             )),
         ]);
     }
+    #[cfg(feature = "nova")]
+    {
+        if runtime.auto_player_enabled {
+            table.add_row(vec![
+                Cell::new("Nova"),
+                Cell::new("Auto Player Chaos Fuzzing Enabled"),
+            ]);
+        }
+    }
 
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
     println!("{table}\n");
@@ -557,6 +572,13 @@ fn run() -> Result<(), String> {
     let mut time_machine = TimeMachine::new(TimeMachineConfig::default());
     let mut rewind_held = false;
 
+    #[cfg(feature = "nova")]
+    let mut auto_player = if runtime.auto_player_enabled {
+        Some(crate::auto_player::AutoPlayer::new())
+    } else {
+        None
+    };
+
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CloseRequested => {
@@ -675,6 +697,11 @@ fn run() -> Result<(), String> {
             let missed_deadline = now > next_frame_deadline;
             next_frame_deadline = now + TARGET_FRAME_TIME;
             let step_start = Instant::now();
+
+            #[cfg(feature = "nova")]
+            if let Some(player) = auto_player.as_mut() {
+                player.step(&mut core);
+            }
 
             if let Some(rollback_engine) = rollback.as_mut() {
                 let local_slot = usize::from(netplay_local_player.saturating_sub(1));
@@ -1019,6 +1046,8 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         mcp_enabled: runtime_args.mcp_enabled,
         mcp_bind_addr: runtime_args.mcp_bind_addr,
         netplay,
+        #[cfg(feature = "nova")]
+        auto_player_enabled: runtime_args.auto_player_enabled,
     })
 }
 
@@ -1034,6 +1063,8 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         netplay_input_delay_frames: None,
         netplay_max_rollback_frames: None,
         netplay_hash_check_every_frames: None,
+        #[cfg(feature = "nova")]
+        auto_player_enabled: false,
     };
     let mut idx = 0_usize;
     while idx < args.len() {
@@ -1045,6 +1076,12 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         }
         if arg == "--mcp-host" {
             parsed.mcp_enabled = true;
+            idx += 1;
+            continue;
+        }
+        #[cfg(feature = "nova")]
+        if arg == "--auto-player" {
+            parsed.auto_player_enabled = true;
             idx += 1;
             continue;
         }
@@ -1538,6 +1575,8 @@ mod tests {
             netplay_input_delay_frames: Some(3),
             netplay_max_rollback_frames: Some(360),
             netplay_hash_check_every_frames: Some(90),
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
         };
         assert_eq!(parsed, expected);
     }

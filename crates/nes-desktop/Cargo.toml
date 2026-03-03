@@ -6,11 +6,13 @@ edition = "2024"
 [features]
 default = []
 mcp-host = ["dep:nes-mcp"]
+nova = ["dep:rand"]
 
 [dependencies]
 gilrs = "0.10"
 nes-config = { path = "../nes-config" }
 nes-core = { path = "../nes-core" }
+rand = { version = "0.8.5", optional = true }
 comfy-table = "7.1"
 crossterm = "0.28"
 nes-netplay = { path = "../nes-netplay" }
