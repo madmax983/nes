@@ -449,7 +449,7 @@ mod tests {
         assert_eq!(target.ppu.vram_addr, 0x2000);
         assert_eq!(target.ppu.temp_addr, 0x3FFF);
         assert_eq!(target.ppu.fine_x, 7);
-        assert_eq!(target.ppu.write_toggle, true);
+        assert!(target.ppu.write_toggle);
         assert_eq!(target.ppu.scroll_x, 120);
         assert_eq!(target.ppu.scroll_y, 30);
         assert_eq!(target.ppu.read_buffer, 0xAB);
