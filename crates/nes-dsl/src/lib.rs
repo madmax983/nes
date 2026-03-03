@@ -331,12 +331,16 @@ impl Assembler {
         match expr {
             Expr::Number(value) => Ok(*value),
             Expr::Symbol(name) => self
-                .constants
-                .get(name)
-                .copied()
-                .or_else(|| self.labels.get(name).copied().map(i64::from))
+                .resolve_symbol(name)
                 .ok_or_else(|| DslError::UnknownSymbol(name.clone())),
         }
+    }
+
+    fn resolve_symbol(&self, symbol: &str) -> Option<i64> {
+        self.constants
+            .get(symbol)
+            .copied()
+            .or_else(|| self.labels.get(symbol).copied().map(i64::from))
     }
     fn define_label(&mut self, name: &str) -> Result<(), DslError> {
         let normalized = normalize_symbol(name);
@@ -597,10 +601,7 @@ impl Assembler {
         match expr {
             Expr::Number(value) => (0..=255).contains(value),
             Expr::Symbol(symbol) => self
-                .constants
-                .get(symbol)
-                .copied()
-                .or_else(|| self.labels.get(symbol).copied().map(i64::from))
+                .resolve_symbol(symbol)
                 .is_some_and(|value| (0..=255).contains(&value)),
         }
     }
@@ -614,12 +615,7 @@ impl Assembler {
                 self.emit_u8(hi)
             }
             Expr::Symbol(symbol) => {
-                if let Some(value) = self
-                    .constants
-                    .get(&symbol)
-                    .copied()
-                    .or_else(|| self.labels.get(&symbol).copied().map(i64::from))
-                {
+                if let Some(value) = self.resolve_symbol(&symbol) {
                     let value = fit_u16(value, line_no)?;
                     let [lo, hi] = value.to_le_bytes();
                     self.emit_u8(lo)?;
@@ -662,12 +658,7 @@ impl Assembler {
                 self.emit_u8((delta as i8) as u8)
             }
             (Expr::Symbol(symbol), FixupKind::Byte) => {
-                if let Some(value) = self
-                    .constants
-                    .get(symbol)
-                    .copied()
-                    .or_else(|| self.labels.get(symbol).copied().map(i64::from))
-                {
+                if let Some(value) = self.resolve_symbol(symbol) {
                     self.emit_u8(fit_u8(value, line_no)?)
                 } else {
                     let fixup_addr = self.current_addr;
@@ -682,12 +673,7 @@ impl Assembler {
                 }
             }
             (Expr::Symbol(symbol), FixupKind::Relative) => {
-                if let Some(value) = self
-                    .constants
-                    .get(symbol)
-                    .copied()
-                    .or_else(|| self.labels.get(symbol).copied().map(i64::from))
-                {
+                if let Some(value) = self.resolve_symbol(symbol) {
                     let target = fit_u16(value, line_no)?;
                     let next_pc = self.current_addr.wrapping_add(1);
                     let delta = i32::from(target) - i32::from(next_pc);
