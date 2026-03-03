@@ -96,9 +96,37 @@ struct CaptureConfig {
     every_n_frames: u64,
 }
 
+trait AudioSinkControl {
+    fn queue_len(&self) -> usize;
+    fn append_i16(&self, samples: Vec<i16>);
+    fn stop(&self);
+}
+
+struct RodioSinkAdapter {
+    inner: Sink,
+}
+
+impl AudioSinkControl for RodioSinkAdapter {
+    fn queue_len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn append_i16(&self, samples: Vec<i16>) {
+        self.inner.append(SamplesBuffer::new(
+            AUDIO_CHANNELS,
+            AUDIO_SAMPLE_RATE,
+            samples,
+        ));
+    }
+
+    fn stop(&self) {
+        self.inner.stop();
+    }
+}
+
 struct AudioOutput {
-    sink: Sink,
-    _stream: OutputStream,
+    sink: Box<dyn AudioSinkControl>,
+    _stream: Option<OutputStream>,
 }
 
 struct NetplayRuntimeStats {
@@ -174,6 +202,37 @@ struct PerfMetrics {
     netplay_max_rollback_distance: u64,
     netplay_desyncs: u64,
     netplay_input_delay_frames: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MetricsSnapshot {
+    wall_fps: f64,
+    emu_fps: f64,
+    avg_step_ms: f64,
+    avg_render_ms: f64,
+}
+
+fn compute_metrics_snapshot(
+    report_frames: u64,
+    elapsed_secs: f64,
+    report_start_ppu_frame: u64,
+    ppu_now: u64,
+    step_work: Duration,
+    render_work: Duration,
+) -> Option<MetricsSnapshot> {
+    if report_frames == 0 || elapsed_secs <= f64::EPSILON {
+        return None;
+    }
+    let wall_fps = report_frames as f64 / elapsed_secs;
+    let emu_fps = ppu_now.saturating_sub(report_start_ppu_frame) as f64 / elapsed_secs;
+    let avg_step_ms = step_work.as_secs_f64() * 1_000.0 / report_frames as f64;
+    let avg_render_ms = render_work.as_secs_f64() * 1_000.0 / report_frames as f64;
+    Some(MetricsSnapshot {
+        wall_fps,
+        emu_fps,
+        avg_step_ms,
+        avg_render_ms,
+    })
 }
 
 impl PerfMetrics {
@@ -258,17 +317,24 @@ impl PerfMetrics {
             return;
         }
         let elapsed = self.report_start.elapsed().as_secs_f64();
-        if elapsed <= f64::EPSILON {
-            return;
-        }
-        let wall_fps = self.report_frames as f64 / elapsed;
         let ppu_now = core.ppu_frame_counter();
-        let emu_fps = ppu_now.saturating_sub(self.report_start_ppu_frame) as f64 / elapsed;
-        let avg_step_ms = self.step_work.as_secs_f64() * 1_000.0 / self.report_frames as f64;
-        let avg_render_ms = self.render_work.as_secs_f64() * 1_000.0 / self.report_frames as f64;
+        let Some(snapshot) = compute_metrics_snapshot(
+            self.report_frames,
+            elapsed,
+            self.report_start_ppu_frame,
+            ppu_now,
+            self.step_work,
+            self.render_work,
+        ) else {
+            return;
+        };
 
         println!(
-            "[metrics] wall_fps={wall_fps:.1} emu_fps={emu_fps:.1} avg_step_ms={avg_step_ms:.2} avg_render_ms={avg_render_ms:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
+            "[metrics] wall_fps={:.1} emu_fps={:.1} avg_step_ms={:.2} avg_render_ms={:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
+            snapshot.wall_fps,
+            snapshot.emu_fps,
+            snapshot.avg_step_ms,
+            snapshot.avg_render_ms,
             self.late_frames,
             self.pc_stall_frames,
             self.unchanged_frame_count,
@@ -319,31 +385,32 @@ impl PerfMetrics {
 }
 
 impl AudioOutput {
+    fn new_with_sink(sink: Box<dyn AudioSinkControl>, stream: Option<OutputStream>) -> Self {
+        Self {
+            sink,
+            _stream: stream,
+        }
+    }
+
     fn try_new() -> Result<Self, String> {
         let (stream, handle) = OutputStream::try_default()
             .map_err(|err| format!("Audio output init failed: {err}"))?;
         let sink =
             Sink::try_new(&handle).map_err(|err| format!("Audio sink init failed: {err}"))?;
-        Ok(Self {
-            sink,
-            _stream: stream,
-        })
+        let sink_adapter = RodioSinkAdapter { inner: sink };
+        Ok(Self::new_with_sink(Box::new(sink_adapter), Some(stream)))
     }
 
     fn queue_samples(&self, samples: Vec<i16>) -> bool {
-        if self.sink.len() >= MAX_AUDIO_QUEUE_CHUNKS {
+        if self.sink.queue_len() >= MAX_AUDIO_QUEUE_CHUNKS {
             return false;
         }
-        self.sink.append(SamplesBuffer::new(
-            AUDIO_CHANNELS,
-            AUDIO_SAMPLE_RATE,
-            samples,
-        ));
+        self.sink.append_i16(samples);
         true
     }
 
     fn queue_len(&self) -> usize {
-        self.sink.len()
+        self.sink.queue_len()
     }
 }
 
@@ -1578,20 +1645,23 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR, DEFAULT_METRICS_EVERY_FRAMES,
-        FrameDecision, KeyboardDecision, NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode,
+        AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
+        DEFAULT_METRICS_EVERY_FRAMES, FrameDecision, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
+        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode,
         TARGET_FRAME_TIME, advance_core_for_host_frame, apply_gamepad_delta_commands,
         capture_config_from_parts, capture_path_for_frame, classify_keyboard_input,
-        compute_local_netplay_bits, controller_state_delta_for_player, encode_bmp, encode_ppm,
-        evaluate_frame_deadline, frame_signature, handle_netplay_server_message,
-        map_virtual_keycode, parse_runtime_args, recommended_input_delay_frames,
-        should_send_netplay_hash, update_button_bits, write_frame_ppm,
+        compute_local_netplay_bits, compute_metrics_snapshot, controller_state_delta_for_player,
+        encode_bmp, encode_ppm, evaluate_frame_deadline, frame_signature,
+        handle_netplay_server_message, map_virtual_keycode, parse_runtime_args,
+        recommended_input_delay_frames, should_send_netplay_hash, update_button_bits,
+        write_frame_ppm,
     };
     use nes_core::{Button, Command, NesCore};
     use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
     use std::collections::BTreeMap;
     use std::fs;
     use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
     use winit::event::VirtualKeyCode;
 
@@ -1615,6 +1685,60 @@ mod tests {
         rom[6] = (mapper_id & 0x0F) << 4;
         rom[7] = mapper_id & 0xF0;
         rom
+    }
+
+    #[derive(Debug, Default)]
+    struct FakeAudioState {
+        queue_len: usize,
+        append_calls: usize,
+        appended_sample_count: usize,
+        stop_calls: usize,
+    }
+
+    struct FakeAudioSink {
+        state: Arc<Mutex<FakeAudioState>>,
+    }
+
+    impl FakeAudioSink {
+        fn with_len(initial_len: usize) -> (Self, Arc<Mutex<FakeAudioState>>) {
+            let state = Arc::new(Mutex::new(FakeAudioState {
+                queue_len: initial_len,
+                ..Default::default()
+            }));
+            (
+                Self {
+                    state: Arc::clone(&state),
+                },
+                state,
+            )
+        }
+    }
+
+    impl AudioSinkControl for FakeAudioSink {
+        fn queue_len(&self) -> usize {
+            self.state
+                .lock()
+                .expect("fake audio state lock should not poison")
+                .queue_len
+        }
+
+        fn append_i16(&self, samples: Vec<i16>) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.append_calls = state.append_calls.saturating_add(1);
+            state.appended_sample_count = state.appended_sample_count.saturating_add(samples.len());
+            state.queue_len = state.queue_len.saturating_add(1);
+        }
+
+        fn stop(&self) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.stop_calls = state.stop_calls.saturating_add(1);
+        }
     }
 
     #[test]
@@ -1727,6 +1851,83 @@ mod tests {
     fn adaptive_delay_returns_min_when_bounds_are_invalid() {
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_derives_expected_rates() {
+        let snapshot = compute_metrics_snapshot(
+            2,
+            0.25,
+            100,
+            130,
+            Duration::from_millis(10),
+            Duration::from_millis(8),
+        )
+        .expect("non-zero frames and elapsed should yield snapshot");
+        assert_eq!(
+            snapshot,
+            MetricsSnapshot {
+                wall_fps: 8.0,
+                emu_fps: 120.0,
+                avg_step_ms: 5.0,
+                avg_render_ms: 4.0,
+            }
+        );
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_handles_guard_conditions_and_saturating_ppu_delta() {
+        assert!(compute_metrics_snapshot(0, 1.0, 10, 20, Duration::ZERO, Duration::ZERO).is_none());
+        assert!(
+            compute_metrics_snapshot(1, f64::EPSILON, 10, 20, Duration::ZERO, Duration::ZERO)
+                .is_none()
+        );
+        let snapshot = compute_metrics_snapshot(
+            1,
+            1.0,
+            200,
+            100,
+            Duration::from_millis(3),
+            Duration::from_millis(2),
+        )
+        .expect("valid input should produce snapshot");
+        assert_eq!(snapshot.emu_fps, 0.0);
+    }
+
+    #[test]
+    fn audio_output_queue_and_drop_behave_with_fake_sink() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS - 1);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        assert!(output.queue_samples(vec![1_i16, 2, 3]));
+        assert_eq!(output.queue_len(), MAX_AUDIO_QUEUE_CHUNKS);
+
+        let state_after_queue = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state_after_queue.append_calls, 1);
+        assert_eq!(state_after_queue.appended_sample_count, 3);
+        drop(state_after_queue);
+
+        drop(output);
+        let state_after_drop = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state_after_drop.stop_calls, 1);
+    }
+
+    #[test]
+    fn audio_output_rejects_samples_when_queue_is_full() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        assert!(!output.queue_samples(vec![1_i16, 2, 3]));
+        assert_eq!(output.queue_len(), MAX_AUDIO_QUEUE_CHUNKS);
+
+        let state = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state.append_calls, 0);
     }
 
     #[test]
