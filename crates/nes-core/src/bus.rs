@@ -8,12 +8,19 @@
 /// Represents the distinct regions of the NES CPU memory map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BusRegion {
+    /// CPU RAM region (`0x0000..=0x1FFF`).
     CpuRam,
+    /// PPU Registers region (`0x2000..=0x3FFF`).
     PpuRegisters,
+    /// APU and I/O Registers region (`0x4000..=0x4017`).
     ApuIo,
+    /// Disabled APU and I/O Registers region (`0x4018..=0x401F`).
     DisabledIo,
+    /// Cartridge Expansion ROM region (`0x4020..=0x5FFF`).
     CartridgeExpansion,
+    /// Cartridge PRG RAM region (`0x6000..=0x7FFF`).
     CartridgePrgRam,
+    /// Cartridge PRG ROM region (`0x8000..=0xFFFF`).
     CartridgePrgRom,
 }
 
@@ -21,6 +28,14 @@ impl BusRegion {
     /// Returns `true` if this region is considered "legal" for normal access.
     /// This currently returns `true` for all regions, but could be used
     /// in the future to identify open bus or strictly-invalid access zones.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::bus::BusRegion;
+    ///
+    /// assert!(BusRegion::CpuRam.is_legal());
+    /// ```
     #[must_use]
     pub fn is_legal(self) -> bool {
         true
