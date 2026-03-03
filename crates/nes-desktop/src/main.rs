@@ -1467,12 +1467,39 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_MCP_BIND_ADDR, DEFAULT_METRICS_EVERY_FRAMES, NetplayRuntimeStats, PerfMetrics,
-        RuntimeArgs, controller_state_delta_for_player, parse_runtime_args,
-        recommended_input_delay_frames,
+        DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR, DEFAULT_METRICS_EVERY_FRAMES,
+        NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode, advance_core_for_host_frame,
+        capture_config_from_parts, capture_path_for_frame, controller_state_delta_for_player,
+        encode_bmp, encode_ppm, frame_signature, map_virtual_keycode, parse_runtime_args,
+        recommended_input_delay_frames, write_frame_ppm,
     };
     use nes_core::{Button, Command, NesCore};
-    use std::time::{Duration, Instant};
+    use std::fs;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    use winit::event::VirtualKeyCode;
+
+    fn parse_runtime_args_with_timeout(args: Vec<String>) -> Result<RuntimeArgs, String> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(parse_runtime_args(&args));
+        });
+        rx.recv_timeout(Duration::from_millis(250))
+            .expect("parse_runtime_args should complete without hanging")
+    }
+
+    fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
+        let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
+        rom[0] = 0x4E; // N
+        rom[1] = 0x45; // E
+        rom[2] = 0x53; // S
+        rom[3] = 0x1A;
+        rom[4] = prg_banks;
+        rom[5] = 0; // CHR RAM
+        rom[6] = (mapper_id & 0x0F) << 4;
+        rom[7] = mapper_id & 0xF0;
+        rom
+    }
 
     #[test]
     fn parse_runtime_args_accepts_mcp_host_and_bind_flags() {
@@ -1482,7 +1509,7 @@ mod tests {
             "127.0.0.1:7777".to_owned(),
             "game.nes".to_owned(),
         ];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
         assert!(parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
@@ -1491,7 +1518,7 @@ mod tests {
     #[test]
     fn parse_runtime_args_accepts_equals_bind_form() {
         let args = vec!["--mcp-bind=127.0.0.1:7000".to_owned()];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert!(parsed.rom_path.is_none());
         assert!(!parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7000");
@@ -1500,7 +1527,7 @@ mod tests {
     #[test]
     fn parse_runtime_args_defaults_bind_when_flag_absent() {
         let args = vec!["game.nes".to_owned()];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
         assert!(!parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, DEFAULT_MCP_BIND_ADDR);
@@ -1509,7 +1536,7 @@ mod tests {
     #[test]
     fn parse_runtime_args_rejects_unknown_flags() {
         let args = vec!["--bogus".to_owned()];
-        let err = parse_runtime_args(&args).expect_err("unknown flag should fail");
+        let err = parse_runtime_args_with_timeout(args).expect_err("unknown flag should fail");
         assert!(err.contains("unknown flag"));
     }
 
@@ -1528,7 +1555,7 @@ mod tests {
             "--netplay-hash-every".to_owned(),
             "90".to_owned(),
         ];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         let expected = RuntimeArgs {
             rom_path: None,
             mcp_enabled: false,
@@ -1566,6 +1593,46 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_delay_exact_targets_and_hysteresis_behave_as_expected() {
+        let raised = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+        assert_eq!(raised, 5);
+
+        let clamped = recommended_input_delay_frames(Some(400.0), 100.0, 1, 6, 2);
+        assert_eq!(clamped, 6);
+
+        let drops_by_one = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 6);
+        assert_eq!(drops_by_one, 5);
+
+        let holds_within_hysteresis = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 4);
+        assert_eq!(holds_within_hysteresis, 4);
+    }
+
+    #[test]
+    fn adaptive_delay_returns_min_when_bounds_are_invalid() {
+        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
+        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
+    }
+
+    #[test]
+    fn map_virtual_keycode_maps_all_supported_keys() {
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::RShift),
+            Some("ShiftRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::Right),
+            Some("ArrowRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+    }
+
+    #[test]
     fn controller_state_delta_emits_press_and_release() {
         let press = controller_state_delta_for_player(
             0,
@@ -1599,27 +1666,27 @@ mod tests {
 
     #[test]
     fn parse_runtime_args_help_and_validation_paths() {
-        let help = parse_runtime_args(&["--help".to_owned()]).expect_err("help returns usage");
+        let help = parse_runtime_args_with_timeout(vec!["--help".to_owned()])
+            .expect_err("help returns usage");
         assert!(help.contains("Usage: nes-desktop"));
         assert!(help.contains("Default config path"));
 
-        let missing_bind =
-            parse_runtime_args(&["--mcp-bind".to_owned()]).expect_err("missing mcp bind");
+        let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
+            .expect_err("missing mcp bind");
         assert!(missing_bind.contains("missing value after --mcp-bind"));
 
-        let missing_relay = parse_runtime_args(&["--netplay-relay".to_owned()])
+        let missing_relay = parse_runtime_args_with_timeout(vec!["--netplay-relay".to_owned()])
             .expect_err("missing netplay relay");
         assert!(missing_relay.contains("missing value after --netplay-relay"));
 
-        let invalid_player = parse_runtime_args(&[
-            "--netplay-player".to_owned(),
-            "bad".to_owned(),
-        ])
-        .expect_err("invalid player value");
+        let invalid_player =
+            parse_runtime_args_with_timeout(vec!["--netplay-player".to_owned(), "bad".to_owned()])
+                .expect_err("invalid player value");
         assert!(invalid_player.contains("--netplay-player"));
 
-        let multi_rom = parse_runtime_args(&["a.nes".to_owned(), "b.nes".to_owned()])
-            .expect_err("multiple roms should fail");
+        let multi_rom =
+            parse_runtime_args_with_timeout(vec!["a.nes".to_owned(), "b.nes".to_owned()])
+                .expect_err("multiple roms should fail");
         assert!(multi_rom.contains("multiple ROM paths"));
     }
 
@@ -1637,17 +1704,88 @@ mod tests {
             "--netplay-hash-every=90".to_owned(),
             "rom.nes".to_owned(),
         ];
-        let parsed = parse_runtime_args(&args).expect("equals forms should parse");
+        let parsed = parse_runtime_args_with_timeout(args).expect("equals forms should parse");
         assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
         assert!(parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
         assert!(parsed.netplay_enabled);
-        assert_eq!(parsed.netplay_relay_addr.as_deref(), Some("relay.example:4545"));
+        assert_eq!(
+            parsed.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
         assert_eq!(parsed.netplay_room.as_deref(), Some("arena"));
         assert_eq!(parsed.netplay_player, Some(2));
         assert_eq!(parsed.netplay_input_delay_frames, Some(3));
         assert_eq!(parsed.netplay_max_rollback_frames, Some(360));
         assert_eq!(parsed.netplay_hash_check_every_frames, Some(90));
+    }
+
+    #[test]
+    fn parse_runtime_args_control_flow_branches_do_not_hang() {
+        let mcp_host = parse_runtime_args_with_timeout(vec!["--mcp-host".to_owned()])
+            .expect("mcp host branch should parse");
+        assert!(mcp_host.mcp_enabled);
+
+        let netplay = parse_runtime_args_with_timeout(vec!["--netplay".to_owned()])
+            .expect("netplay branch should parse");
+        assert!(netplay.netplay_enabled);
+
+        let relay = parse_runtime_args_with_timeout(vec![
+            "--netplay-relay".to_owned(),
+            "relay.example:4545".to_owned(),
+        ])
+        .expect("netplay relay branch should parse");
+        assert_eq!(
+            relay.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+
+        let room =
+            parse_runtime_args_with_timeout(vec!["--netplay-room".to_owned(), "arena".to_owned()])
+                .expect("netplay room branch should parse");
+        assert_eq!(room.netplay_room.as_deref(), Some("arena"));
+
+        let player =
+            parse_runtime_args_with_timeout(vec!["--netplay-player".to_owned(), "2".to_owned()])
+                .expect("netplay player branch should parse");
+        assert_eq!(player.netplay_player, Some(2));
+
+        let delay =
+            parse_runtime_args_with_timeout(vec!["--netplay-delay".to_owned(), "3".to_owned()])
+                .expect("netplay delay branch should parse");
+        assert_eq!(delay.netplay_input_delay_frames, Some(3));
+
+        let hash_every = parse_runtime_args_with_timeout(vec![
+            "--netplay-hash-every".to_owned(),
+            "90".to_owned(),
+        ])
+        .expect("netplay hash-every branch should parse");
+        assert_eq!(hash_every.netplay_hash_check_every_frames, Some(90));
+
+        let bind_equals =
+            parse_runtime_args_with_timeout(vec!["--mcp-bind=127.0.0.1:7777".to_owned()])
+                .expect("mcp bind equals branch should parse");
+        assert_eq!(bind_equals.mcp_bind_addr, "127.0.0.1:7777");
+
+        let relay_equals =
+            parse_runtime_args_with_timeout(vec!["--netplay-relay=relay.example:4545".to_owned()])
+                .expect("netplay relay equals branch should parse");
+        assert_eq!(
+            relay_equals.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+
+        let room_equals = parse_runtime_args_with_timeout(vec!["--netplay-room=arena".to_owned()])
+            .expect("netplay room equals branch should parse");
+        assert_eq!(room_equals.netplay_room.as_deref(), Some("arena"));
+
+        let player_equals = parse_runtime_args_with_timeout(vec!["--netplay-player=2".to_owned()])
+            .expect("netplay player equals branch should parse");
+        assert_eq!(player_equals.netplay_player, Some(2));
+
+        let delay_equals = parse_runtime_args_with_timeout(vec!["--netplay-delay=3".to_owned()])
+            .expect("netplay delay equals branch should parse");
+        assert_eq!(delay_equals.netplay_input_delay_frames, Some(3));
     }
 
     #[test]
@@ -1778,6 +1916,27 @@ mod tests {
     }
 
     #[test]
+    fn perf_metrics_maybe_report_guard_paths_skip_when_disabled_or_under_threshold() {
+        let core = NesCore::new();
+
+        let mut disabled = PerfMetrics::new(false, 1, core.ppu_frame_counter());
+        disabled.report_frames = 1;
+        disabled.step_work = Duration::from_millis(4);
+        disabled.report_start = Instant::now() - Duration::from_millis(20);
+        disabled.maybe_report(&core);
+        assert_eq!(disabled.report_frames, 1);
+        assert_eq!(disabled.step_work, Duration::from_millis(4));
+
+        let mut under_threshold = PerfMetrics::new(true, 5, core.ppu_frame_counter());
+        under_threshold.report_frames = 2;
+        under_threshold.step_work = Duration::from_millis(6);
+        under_threshold.report_start = Instant::now() - Duration::from_millis(20);
+        under_threshold.maybe_report(&core);
+        assert_eq!(under_threshold.report_frames, 2);
+        assert_eq!(under_threshold.step_work, Duration::from_millis(6));
+    }
+
+    #[test]
     fn perf_metrics_disabled_mode_does_not_mutate_tracking_fields() {
         let core = NesCore::new();
         let frame = vec![0_u8; 256 * 240 * 4];
@@ -1801,5 +1960,96 @@ mod tests {
         assert_eq!(metrics.netplay_rtt_ms, 0.0);
         assert_eq!(metrics.netplay_rollbacks, 0);
         assert_eq!(metrics.netplay_desyncs, 0);
+    }
+
+    #[test]
+    fn advance_core_for_host_frame_steps_cpu_budget() {
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start] = 0xA9; // LDA #$42
+        rom[prg_start + 1] = 0x42;
+        rom[prg_start + 0x3FFC] = 0x00; // reset vector low
+        rom[prg_start + 0x3FFD] = 0x80; // reset vector high
+
+        let mut core = NesCore::new();
+        core.load_ines_rom(&rom).expect("sample rom should load");
+        assert_eq!(core.cpu_a(), 0x00);
+        assert_eq!(core.cpu_pc(), 0x8000);
+
+        advance_core_for_host_frame(&mut core, StepMode::CpuBudget(1))
+            .expect("cpu budget stepping should succeed");
+        assert_eq!(core.cpu_a(), 0x42);
+        assert_eq!(core.cpu_pc(), 0x8002);
+    }
+
+    #[test]
+    fn frame_signature_matches_reference_and_changes_on_sampled_byte() {
+        let mut frame = vec![0_u8; 256];
+        let signature_a = frame_signature(&frame);
+
+        let mut reference = 0xcbf2_9ce4_8422_2325_u64;
+        for idx in (0..frame.len()).step_by(64) {
+            reference ^= u64::from(frame[idx]);
+            reference = reference.wrapping_mul(0x0000_0001_0000_01b3);
+        }
+        assert_eq!(signature_a, reference);
+
+        frame[64] = 7;
+        let signature_b = frame_signature(&frame);
+        assert_ne!(signature_a, signature_b);
+    }
+
+    #[test]
+    fn capture_config_helpers_handle_placeholders_and_defaults() {
+        assert!(capture_config_from_parts(None, 10).is_none());
+        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
+
+        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
+            .expect("valid template should produce config");
+        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
+        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
+
+        assert_eq!(
+            capture_path_for_frame("snap-{frame}.ppm", 42),
+            "snap-000042.ppm"
+        );
+        assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
+    }
+
+    #[test]
+    fn ppm_and_bmp_encoders_emit_expected_headers_and_pixel_layout() {
+        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
+        assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
+        assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
+
+        let bmp = encode_bmp(1, 1, &[10, 20, 30, 255]).expect("bmp encoding should succeed");
+        assert_eq!(&bmp[0..2], b"BM");
+        assert_eq!(bmp.len(), 58);
+        assert_eq!(&bmp[54..58], &[30, 20, 10, 0]);
+    }
+
+    #[test]
+    fn write_frame_ppm_validates_frame_size_and_writes_output_files() {
+        let bad = write_frame_ppm("ignored.ppm", &[0_u8; 3]).expect_err("invalid size should fail");
+        assert!(bad.contains("frame length mismatch"));
+
+        let frame = vec![0_u8; 256 * 240 * 4];
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be monotonic")
+            .as_nanos();
+        let ppm_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.ppm"));
+        let bmp_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.bmp"));
+
+        write_frame_ppm(&ppm_path.to_string_lossy(), &frame).expect("ppm write should succeed");
+        write_frame_ppm(&bmp_path.to_string_lossy(), &frame).expect("bmp write should succeed");
+
+        let ppm_bytes = fs::read(&ppm_path).expect("ppm bytes should be readable");
+        let bmp_bytes = fs::read(&bmp_path).expect("bmp bytes should be readable");
+        assert!(ppm_bytes.starts_with(b"P6\n256 240\n255\n"));
+        assert_eq!(&bmp_bytes[0..2], b"BM");
+
+        let _ = fs::remove_file(ppm_path);
+        let _ = fs::remove_file(bmp_path);
     }
 }
