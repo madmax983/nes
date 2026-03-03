@@ -1467,10 +1467,12 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_MCP_BIND_ADDR, RuntimeArgs, controller_state_delta_for_player, parse_runtime_args,
+        DEFAULT_MCP_BIND_ADDR, DEFAULT_METRICS_EVERY_FRAMES, NetplayRuntimeStats, PerfMetrics,
+        RuntimeArgs, controller_state_delta_for_player, parse_runtime_args,
         recommended_input_delay_frames,
     };
-    use nes_core::{Button, Command};
+    use nes_core::{Button, Command, NesCore};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn parse_runtime_args_accepts_mcp_host_and_bind_flags() {
@@ -1593,5 +1595,211 @@ mod tests {
 
         let release = controller_state_delta_for_player(Button::Start.bit_mask(), 0, true);
         assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
+    }
+
+    #[test]
+    fn parse_runtime_args_help_and_validation_paths() {
+        let help = parse_runtime_args(&["--help".to_owned()]).expect_err("help returns usage");
+        assert!(help.contains("Usage: nes-desktop"));
+        assert!(help.contains("Default config path"));
+
+        let missing_bind =
+            parse_runtime_args(&["--mcp-bind".to_owned()]).expect_err("missing mcp bind");
+        assert!(missing_bind.contains("missing value after --mcp-bind"));
+
+        let missing_relay = parse_runtime_args(&["--netplay-relay".to_owned()])
+            .expect_err("missing netplay relay");
+        assert!(missing_relay.contains("missing value after --netplay-relay"));
+
+        let invalid_player = parse_runtime_args(&[
+            "--netplay-player".to_owned(),
+            "bad".to_owned(),
+        ])
+        .expect_err("invalid player value");
+        assert!(invalid_player.contains("--netplay-player"));
+
+        let multi_rom = parse_runtime_args(&["a.nes".to_owned(), "b.nes".to_owned()])
+            .expect_err("multiple roms should fail");
+        assert!(multi_rom.contains("multiple ROM paths"));
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_all_equals_forms_for_netplay_flags() {
+        let args = vec![
+            "--mcp-host".to_owned(),
+            "--mcp-bind=127.0.0.1:7777".to_owned(),
+            "--netplay".to_owned(),
+            "--netplay-relay=relay.example:4545".to_owned(),
+            "--netplay-room=arena".to_owned(),
+            "--netplay-player=2".to_owned(),
+            "--netplay-delay=3".to_owned(),
+            "--netplay-max-rollback=360".to_owned(),
+            "--netplay-hash-every=90".to_owned(),
+            "rom.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args(&args).expect("equals forms should parse");
+        assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
+        assert!(parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
+        assert!(parsed.netplay_enabled);
+        assert_eq!(parsed.netplay_relay_addr.as_deref(), Some("relay.example:4545"));
+        assert_eq!(parsed.netplay_room.as_deref(), Some("arena"));
+        assert_eq!(parsed.netplay_player, Some(2));
+        assert_eq!(parsed.netplay_input_delay_frames, Some(3));
+        assert_eq!(parsed.netplay_max_rollback_frames, Some(360));
+        assert_eq!(parsed.netplay_hash_check_every_frames, Some(90));
+    }
+
+    #[test]
+    fn netplay_runtime_stats_tracks_rtt_jitter_rollbacks_and_desyncs() {
+        let mut stats = NetplayRuntimeStats::new(2);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 0.0);
+        assert_eq!(stats.input_delay_frames, 2);
+        assert_eq!(stats.rollback_count, 0);
+        assert_eq!(stats.max_rollback_distance, 0);
+        assert_eq!(stats.desync_count, 0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(20.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 20.0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(28.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 28.0);
+        assert_eq!(stats.jitter_ms, 8.0);
+
+        stats.observe_rtt_ms(40.0);
+        assert!((stats.jitter_ms - 8.5).abs() < 1e-9);
+
+        stats.observe_rollback(0);
+        assert_eq!(stats.rollback_count, 0);
+        stats.observe_rollback(2);
+        stats.observe_rollback(5);
+        assert_eq!(stats.rollback_count, 2);
+        assert_eq!(stats.max_rollback_distance, 5);
+
+        stats.observe_desync();
+        stats.observe_desync();
+        assert_eq!(stats.desync_count, 2);
+    }
+
+    #[test]
+    fn perf_metrics_on_step_tracks_stalls_and_recovers_on_pc_change() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 0, 0);
+        assert_eq!(metrics.every_n_frames, DEFAULT_METRICS_EVERY_FRAMES);
+
+        metrics.on_step(&core, Duration::from_millis(4), true);
+        assert_eq!(metrics.report_frames, 1);
+        assert_eq!(metrics.step_work, Duration::from_millis(4));
+        assert_eq!(metrics.late_frames, 1);
+        assert_eq!(metrics.last_pc, Some(core.cpu_pc()));
+        assert_eq!(metrics.pc_stall_frames, 0);
+
+        metrics.on_step(&core, Duration::from_millis(2), false);
+        assert_eq!(metrics.report_frames, 2);
+        assert_eq!(metrics.step_work, Duration::from_millis(6));
+        assert_eq!(metrics.pc_stall_frames, 1);
+
+        metrics.pc_stall_frames = 239;
+        metrics.last_pc = Some(core.cpu_pc());
+        metrics.warned_stall = false;
+        metrics.on_step(&core, Duration::from_millis(1), false);
+        assert_eq!(metrics.pc_stall_frames, 240);
+        assert!(metrics.warned_stall);
+
+        metrics.last_pc = Some(core.cpu_pc().wrapping_add(1));
+        metrics.pc_stall_frames = 77;
+        metrics.warned_stall = true;
+        metrics.on_step(&core, Duration::from_millis(1), false);
+        assert_eq!(metrics.pc_stall_frames, 0);
+        assert!(!metrics.warned_stall);
+    }
+
+    #[test]
+    fn perf_metrics_render_audio_and_netplay_observation_update_fields() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
+        let frame = vec![0_u8; 256 * 240 * 4];
+
+        metrics.on_render(&frame, Duration::from_millis(3));
+        assert_eq!(metrics.render_work, Duration::from_millis(3));
+        assert_eq!(metrics.unchanged_frame_count, 0);
+
+        metrics.on_render(&frame, Duration::from_millis(2));
+        assert_eq!(metrics.render_work, Duration::from_millis(5));
+        assert_eq!(metrics.unchanged_frame_count, 1);
+
+        metrics.on_audio_queue(3, false);
+        metrics.on_audio_queue(2, true);
+        assert_eq!(metrics.audio_queue_peak, 3);
+        assert_eq!(metrics.audio_queue_drops, 1);
+
+        let mut net = NetplayRuntimeStats::new(4);
+        net.observe_rtt_ms(42.0);
+        net.observe_rtt_ms(46.0);
+        net.observe_rollback(3);
+        net.observe_desync();
+        metrics.on_netplay_stats(&net);
+        assert_eq!(metrics.netplay_rtt_ms, 46.0);
+        assert_eq!(metrics.netplay_jitter_ms, 4.0);
+        assert_eq!(metrics.netplay_rollbacks, 1);
+        assert_eq!(metrics.netplay_max_rollback_distance, 3);
+        assert_eq!(metrics.netplay_desyncs, 1);
+        assert_eq!(metrics.netplay_input_delay_frames, 4);
+    }
+
+    #[test]
+    fn perf_metrics_maybe_report_resets_window_after_threshold() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
+        metrics.report_frames = 2;
+        metrics.step_work = Duration::from_millis(8);
+        metrics.render_work = Duration::from_millis(6);
+        metrics.late_frames = 1;
+        metrics.audio_queue_peak = 4;
+        metrics.audio_queue_drops = 2;
+        metrics.netplay_rollbacks = 5;
+        metrics.netplay_max_rollback_distance = 7;
+        metrics.netplay_desyncs = 3;
+        metrics.report_start = Instant::now() - Duration::from_millis(20);
+
+        metrics.maybe_report(&core);
+
+        assert_eq!(metrics.report_frames, 0);
+        assert_eq!(metrics.step_work, Duration::ZERO);
+        assert_eq!(metrics.render_work, Duration::ZERO);
+        assert_eq!(metrics.late_frames, 0);
+        assert_eq!(metrics.audio_queue_peak, 0);
+        assert_eq!(metrics.audio_queue_drops, 0);
+        assert_eq!(metrics.netplay_rollbacks, 0);
+        assert_eq!(metrics.netplay_max_rollback_distance, 0);
+        assert_eq!(metrics.netplay_desyncs, 0);
+    }
+
+    #[test]
+    fn perf_metrics_disabled_mode_does_not_mutate_tracking_fields() {
+        let core = NesCore::new();
+        let frame = vec![0_u8; 256 * 240 * 4];
+        let mut metrics = PerfMetrics::new(false, 1, 0);
+
+        metrics.on_step(&core, Duration::from_millis(3), true);
+        metrics.on_render(&frame, Duration::from_millis(2));
+        metrics.on_audio_queue(10, true);
+        let mut net = NetplayRuntimeStats::new(3);
+        net.observe_rtt_ms(10.0);
+        net.observe_rollback(2);
+        net.observe_desync();
+        metrics.on_netplay_stats(&net);
+        metrics.maybe_report(&core);
+
+        assert_eq!(metrics.report_frames, 0);
+        assert_eq!(metrics.step_work, Duration::ZERO);
+        assert_eq!(metrics.render_work, Duration::ZERO);
+        assert_eq!(metrics.audio_queue_peak, 0);
+        assert_eq!(metrics.audio_queue_drops, 0);
+        assert_eq!(metrics.netplay_rtt_ms, 0.0);
+        assert_eq!(metrics.netplay_rollbacks, 0);
+        assert_eq!(metrics.netplay_desyncs, 0);
     }
 }
