@@ -1,9 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$verus = "C:\Users\markm\verus\verus.exe"
-if (-not (Test-Path $verus)) {
-    $verus = "verus"
-}
+$verus = "verus"
 
 try {
     Get-Command $verus -ErrorAction Stop > $null

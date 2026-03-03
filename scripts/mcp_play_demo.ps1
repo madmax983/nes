@@ -1,9 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
-$capture = 'C:\Users\markm\nes\target\mcp_play_demo.bmp'
+$capture = Join-Path (Get-Location) 'target\mcp_play_demo.bmp'
 $exe = Join-Path (Get-Location) 'target\debug\nes-desktop.exe'
-$stdoutLog = 'C:\Users\markm\nes\target\desktop_run_out.log'
-$stderrLog = 'C:\Users\markm\nes\target\desktop_run_err.log'
+$stdoutLog = Join-Path (Get-Location) 'target\desktop_run_out.log'
+$stderrLog = Join-Path (Get-Location) 'target\desktop_run_err.log'
 
 Remove-Item $stdoutLog, $stderrLog, $capture -ErrorAction SilentlyContinue
 
