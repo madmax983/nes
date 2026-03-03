@@ -63,13 +63,21 @@ pub enum TimeMachineState {
 // ---------------------------------------------------------------------------
 
 enum WorkerMsg {
-    Record { frame_id: u64, snapshot: CoreSnapshot },
-    Reconstruct { target_frame: u64 },
+    Record {
+        frame_id: u64,
+        snapshot: Box<CoreSnapshot>,
+    },
+    Reconstruct {
+        target_frame: u64,
+    },
     Shutdown,
 }
 
 enum WorkerReply {
-    Reconstructed { frame_id: u64, snapshot: CoreSnapshot },
+    Reconstructed {
+        frame_id: u64,
+        snapshot: CoreSnapshot,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +130,7 @@ impl TimeMachine {
             loop {
                 match work_rx.recv() {
                     Ok(WorkerMsg::Record { frame_id, snapshot }) => {
-                        timeline.push(frame_id, snapshot);
+                        timeline.push(frame_id, *snapshot);
                     }
                     Ok(WorkerMsg::Reconstruct { target_frame }) => {
                         if let Some(snapshot) = timeline.reconstruct(target_frame) {
@@ -158,7 +166,10 @@ impl TimeMachine {
         let snapshot = core.save_state();
         self.last_recorded_frame = frame_id;
         // `try_send` — never block the emulation thread.
-        let _ = self.tx.try_send(WorkerMsg::Record { frame_id, snapshot });
+        let _ = self.tx.try_send(WorkerMsg::Record {
+            frame_id,
+            snapshot: Box::new(snapshot),
+        });
     }
 
     /// Step backward one frame. Returns `Some(frame_id)` on success, `None` when history is exhausted.
@@ -167,7 +178,9 @@ impl TimeMachine {
     pub fn rewind_step(&mut self, core: &mut NesCore) -> Option<u64> {
         // Initialise the cursor on first rewind call.
         if self.cursor.is_none() {
-            self.state = TimeMachineState::Rewinding { seconds_remaining: 0.0 };
+            self.state = TimeMachineState::Rewinding {
+                seconds_remaining: 0.0,
+            };
             self.cursor = Some(RewindCursor::new(
                 self.last_recorded_frame,
                 RewindSpeed::Normal,
@@ -180,7 +193,9 @@ impl TimeMachine {
         // Request the previous frame from the worker.
         // Use blocking send here — during rewind the emulation loop is paused so
         // it is acceptable to wait briefly for a slot (worker drains quickly).
-        let _ = self.tx.send(WorkerMsg::Reconstruct { target_frame: target });
+        let _ = self.tx.send(WorkerMsg::Reconstruct {
+            target_frame: target,
+        });
 
         // Wait up to one frame-budget (16 ms) for the reply.
         match self.rx.recv_timeout(Duration::from_millis(16)) {

@@ -52,13 +52,19 @@ impl CompressedTimeline {
             let size = delta.compressed_size();
 
             if self.policy.should_promote(size) {
-                self.keyframes.push_back(Keyframe { frame_id, snapshot: snapshot.clone() });
+                self.keyframes.push_back(Keyframe {
+                    frame_id,
+                    snapshot: snapshot.clone(),
+                });
             } else {
                 self.deltas.push_back(delta);
             }
         } else {
             // First frame always anchors.
-            self.keyframes.push_back(Keyframe { frame_id, snapshot: snapshot.clone() });
+            self.keyframes.push_back(Keyframe {
+                frame_id,
+                snapshot: snapshot.clone(),
+            });
         }
 
         self.last_snapshot = Some(snapshot);
@@ -74,12 +80,16 @@ impl CompressedTimeline {
     #[must_use]
     pub fn reconstruct(&self, target_frame_id: u64) -> Option<CoreSnapshot> {
         // Reject frames we've never seen.
-        if self.last_frame_id.map_or(true, |last| target_frame_id > last) {
+        if self.last_frame_id.is_none_or(|last| target_frame_id > last) {
             return None;
         }
 
         // Latest keyframe at or before target.
-        let kf = self.keyframes.iter().rev().find(|kf| kf.frame_id <= target_frame_id)?;
+        let kf = self
+            .keyframes
+            .iter()
+            .rev()
+            .find(|kf| kf.frame_id <= target_frame_id)?;
         let mut snap = kf.snapshot.clone();
 
         if kf.frame_id == target_frame_id {
@@ -116,11 +126,7 @@ impl CompressedTimeline {
                 .map(|kf| kf.frame_id)
                 .unwrap_or(u64::MAX);
 
-            if self
-                .deltas
-                .front()
-                .is_some_and(|d| d.frame_id < next_kf_id)
-            {
+            if self.deltas.front().is_some_and(|d| d.frame_id < next_kf_id) {
                 // Advance the oldest keyframe by absorbing the first delta into
                 // it in-place. This removes one delta (net -1) without breaking
                 // the anchor chain.
@@ -133,11 +139,7 @@ impl CompressedTimeline {
                 // No deltas anchored to oldest keyframe — drop it and any
                 // orphaned deltas that preceded the next keyframe.
                 self.keyframes.pop_front();
-                while self
-                    .deltas
-                    .front()
-                    .is_some_and(|d| d.frame_id < next_kf_id)
-                {
+                while self.deltas.front().is_some_and(|d| d.frame_id < next_kf_id) {
                     self.deltas.pop_front();
                 }
             }

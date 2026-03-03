@@ -143,12 +143,12 @@ pub struct EmulatorState {
 }
 
 /// The result of executing a [`CoreQuery`] on the [`NesCore`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryResult {
     /// [`CoreQuery::EmulatorState`] response.
     EmulatorState(EmulatorState),
     /// [`CoreQuery::Registers`] response.
-    Registers(CpuSnapshot),
+    Registers(Box<CpuSnapshot>),
     /// [`CoreQuery::Memory`] response.
     Memory(u8),
     /// [`CoreQuery::FpsMilli`] response.
@@ -864,7 +864,7 @@ impl NesCore {
                 controller_bits: self.controller_bits,
                 controller2_bits: self.controller2_bits,
             }),
-            CoreQuery::Registers => QueryResult::Registers(self.cpu.snapshot()),
+            CoreQuery::Registers => QueryResult::Registers(Box::new(self.cpu.snapshot())),
             CoreQuery::Memory(addr) => QueryResult::Memory(self.read_memory(addr)),
             CoreQuery::FpsMilli => QueryResult::FpsMilli(self.fps_milli()),
             CoreQuery::PpuFrameCounter => QueryResult::PpuFrameCounter(self.ppu.frame_counter()),
