@@ -360,6 +360,79 @@ fn main() {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyboardDecision {
+    Exit,
+    SetRewindHeld(bool),
+    UpdateKeyboardBits { mask: u8, pressed: bool },
+    ExecuteCore(Command),
+    Noop,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrameDecision {
+    WaitUntil(Instant),
+    Step {
+        missed_deadline: bool,
+        next_deadline: Instant,
+    },
+}
+
+fn classify_keyboard_input(
+    key: VirtualKeyCode,
+    pressed: bool,
+    rollback_enabled: bool,
+) -> KeyboardDecision {
+    if key == VirtualKeyCode::Escape && pressed {
+        return KeyboardDecision::Exit;
+    }
+    if key == VirtualKeyCode::R {
+        return KeyboardDecision::SetRewindHeld(pressed);
+    }
+
+    let Some(key_code) = map_virtual_keycode(key) else {
+        return KeyboardDecision::Noop;
+    };
+
+    if rollback_enabled {
+        if let Some(mask) = map_key_event_to_button_bit(key_code) {
+            KeyboardDecision::UpdateKeyboardBits { mask, pressed }
+        } else {
+            KeyboardDecision::Noop
+        }
+    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed) {
+        KeyboardDecision::ExecuteCore(mapped.core)
+    } else {
+        KeyboardDecision::Noop
+    }
+}
+
+fn evaluate_frame_deadline(now: Instant, next_frame_deadline: Instant) -> FrameDecision {
+    if now < next_frame_deadline {
+        FrameDecision::WaitUntil(next_frame_deadline)
+    } else {
+        FrameDecision::Step {
+            missed_deadline: now > next_frame_deadline,
+            next_deadline: now + TARGET_FRAME_TIME,
+        }
+    }
+}
+
+fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
+    let local_slot = usize::from(local_player.saturating_sub(1));
+    gamepad_bits.get(local_slot).copied().unwrap_or_else(|| {
+        gamepad_bits
+            .iter()
+            .copied()
+            .find(|bits| *bits != 0)
+            .unwrap_or(0)
+    })
+}
+
+fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
+    hash_check_every > 0 && frame.is_multiple_of(hash_check_every)
+}
+
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
 
@@ -567,42 +640,39 @@ fn run() -> Result<(), String> {
                     return;
                 };
                 let pressed = input.state == ElementState::Pressed;
-
-                if key == VirtualKeyCode::Escape && pressed {
-                    *control_flow = ControlFlow::Exit;
-                    return;
-                }
-
-                // R: hold to rewind, release to resume.
-                if key == VirtualKeyCode::R {
-                    rewind_held = pressed;
-                    if !pressed {
-                        time_machine.resume();
-                        // The restored snapshot's controller_bits may reflect buttons
-                        // held at that historical frame. Release all buttons so the
-                        // core's latch matches the actual key state going forward.
-                        for &button in &CONTROLLER_BUTTONS {
-                            let _ = core.execute(Command::ReleaseButton(button));
-                        }
+                match classify_keyboard_input(key, pressed, rollback.is_some()) {
+                    KeyboardDecision::Exit => {
+                        *control_flow = ControlFlow::Exit;
+                        return;
                     }
-                    return;
-                }
-
-                if let Some(key_code) = map_virtual_keycode(key) {
-                    if rollback.is_some() {
-                        if let Some(button_mask) = map_key_event_to_button_bit(key_code) {
-                            if pressed {
-                                keyboard_bits |= button_mask;
-                            } else {
-                                keyboard_bits &= !button_mask;
+                    KeyboardDecision::SetRewindHeld(held) => {
+                        // R: hold to rewind, release to resume.
+                        rewind_held = held;
+                        if !held {
+                            time_machine.resume();
+                            // The restored snapshot's controller_bits may reflect buttons
+                            // held at that historical frame. Release all buttons so the
+                            // core's latch matches the actual key state going forward.
+                            for &button in &CONTROLLER_BUTTONS {
+                                let _ = core.execute(Command::ReleaseButton(button));
                             }
                         }
-                    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed)
-                        && let Err(err) = core.execute(mapped.core)
-                    {
-                        eprintln!("Input command failed: {err}");
-                        *control_flow = ControlFlow::Exit;
+                        return;
                     }
+                    KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
+                        if pressed {
+                            keyboard_bits |= mask;
+                        } else {
+                            keyboard_bits &= !mask;
+                        }
+                    }
+                    KeyboardDecision::ExecuteCore(command) => {
+                        if let Err(err) = core.execute(command) {
+                            eprintln!("Input command failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
+                    KeyboardDecision::Noop => {}
                 }
             }
             WindowEvent::Resized(size) => {
@@ -668,20 +738,24 @@ fn run() -> Result<(), String> {
             }
 
             let now = Instant::now();
-            if now < next_frame_deadline {
-                *control_flow = ControlFlow::WaitUntil(next_frame_deadline);
-                return;
-            }
-            let missed_deadline = now > next_frame_deadline;
-            next_frame_deadline = now + TARGET_FRAME_TIME;
+            let missed_deadline = match evaluate_frame_deadline(now, next_frame_deadline) {
+                FrameDecision::WaitUntil(deadline) => {
+                    *control_flow = ControlFlow::WaitUntil(deadline);
+                    return;
+                }
+                FrameDecision::Step {
+                    missed_deadline,
+                    next_deadline,
+                } => {
+                    next_frame_deadline = next_deadline;
+                    missed_deadline
+                }
+            };
             let step_start = Instant::now();
 
             if let Some(rollback_engine) = rollback.as_mut() {
-                let local_slot = usize::from(netplay_local_player.saturating_sub(1));
-                let local_gamepad_bits = gamepad_bits
-                    .get(local_slot)
-                    .copied()
-                    .unwrap_or_else(|| gamepad_bits.iter().copied().find(|bits| *bits != 0).unwrap_or(0));
+                let local_gamepad_bits =
+                    compute_local_netplay_bits(gamepad_bits, netplay_local_player);
                 let scheduled = rollback_engine.schedule_local_input(keyboard_bits | local_gamepad_bits);
                 if let Some(client) = netplay_client.as_ref()
                     && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
@@ -838,8 +912,7 @@ fn run() -> Result<(), String> {
                             stats.input_delay_frames = current_delay;
                         }
 
-                        if netplay_hash_check_every > 0
-                            && step.frame.is_multiple_of(netplay_hash_check_every)
+                        if should_send_netplay_hash(netplay_hash_check_every, step.frame)
                             && let Some(client) = netplay_client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
@@ -1468,10 +1541,12 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 mod tests {
     use super::{
         DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR, DEFAULT_METRICS_EVERY_FRAMES,
-        NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode, advance_core_for_host_frame,
-        capture_config_from_parts, capture_path_for_frame, controller_state_delta_for_player,
-        encode_bmp, encode_ppm, frame_signature, map_virtual_keycode, parse_runtime_args,
-        recommended_input_delay_frames, write_frame_ppm,
+        FrameDecision, KeyboardDecision, NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode,
+        TARGET_FRAME_TIME, advance_core_for_host_frame, capture_config_from_parts,
+        capture_path_for_frame, classify_keyboard_input, compute_local_netplay_bits,
+        controller_state_delta_for_player, encode_bmp, encode_ppm, evaluate_frame_deadline,
+        frame_signature, map_virtual_keycode, parse_runtime_args, recommended_input_delay_frames,
+        should_send_netplay_hash, write_frame_ppm,
     };
     use nes_core::{Button, Command, NesCore};
     use std::fs;
@@ -1630,6 +1705,84 @@ mod tests {
             Some("ArrowRight")
         );
         assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+    }
+
+    #[test]
+    fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Escape, true, false),
+            KeyboardDecision::Exit
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::R, true, false),
+            KeyboardDecision::SetRewindHeld(true)
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::R, false, true),
+            KeyboardDecision::SetRewindHeld(false)
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Z, true, true),
+            KeyboardDecision::UpdateKeyboardBits {
+                mask: Button::A.bit_mask(),
+                pressed: true
+            }
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::X, false, false),
+            KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Escape, false, false),
+            KeyboardDecision::Noop
+        );
+    }
+
+    #[test]
+    fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
+        let now = Instant::now();
+        let future = now + Duration::from_millis(2);
+        match evaluate_frame_deadline(now, future) {
+            FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
+            FrameDecision::Step { .. } => panic!("expected wait branch"),
+        }
+
+        match evaluate_frame_deadline(now, now) {
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                assert!(!missed_deadline);
+                assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
+            }
+            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+        }
+
+        match evaluate_frame_deadline(now + Duration::from_millis(1), now) {
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                assert!(missed_deadline);
+                assert_eq!(
+                    next_deadline,
+                    (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
+                );
+            }
+            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+        }
+    }
+
+    #[test]
+    fn netplay_helper_functions_choose_local_bits_and_hash_schedule() {
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 1), 0x12);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 2), 0x34);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 3), 0x12);
+        assert_eq!(compute_local_netplay_bits([0, 0], 9), 0);
+
+        assert!(!should_send_netplay_hash(0, 120));
+        assert!(should_send_netplay_hash(60, 120));
+        assert!(!should_send_netplay_hash(60, 121));
     }
 
     #[test]
