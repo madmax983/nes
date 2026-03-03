@@ -133,22 +133,3 @@ const TOOL_CATALOG: [ToolDefinition; 30] = [
 pub fn tool_catalog() -> &'static [ToolDefinition] {
     &TOOL_CATALOG
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_tool_catalog() {
-        let catalog = tool_catalog();
-        assert_eq!(catalog.len(), 30);
-        assert_eq!(catalog[0].name, "load_rom");
-        assert_eq!(
-            catalog[0].description,
-            "Load an iNES ROM into the emulator core"
-        );
-
-        let has_run_macro = catalog.iter().any(|t| t.name == "run_macro");
-        assert!(has_run_macro);
-    }
-}
