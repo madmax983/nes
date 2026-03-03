@@ -10,6 +10,3 @@ nes-core = { path = "../nes-core" }
 nes-dsl = { path = "../nes-dsl" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-[dev-dependencies]
-proptest = "1.0.0"
