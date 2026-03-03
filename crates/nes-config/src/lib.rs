@@ -185,9 +185,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use super::{
-        NesConfig, normalize_nonzero_u32, normalize_nonzero_u64, parse_config_path_arg,
-    };
+    use super::{NesConfig, normalize_nonzero_u32, normalize_nonzero_u64, parse_config_path_arg};
 
     fn temp_config_path(stem: &str) -> PathBuf {
         let nonce = std::time::SystemTime::now()
@@ -321,7 +319,10 @@ window_scale = 9
             "--fullscreen".to_owned(),
         ];
         let (config, rest) = parse_config_path_arg(&args).expect("parse should succeed");
-        assert_eq!(config.as_deref(), Some(PathBuf::from("second.toml").as_path()));
+        assert_eq!(
+            config.as_deref(),
+            Some(PathBuf::from("second.toml").as_path())
+        );
         assert_eq!(rest, vec!["rom.nes".to_owned(), "--fullscreen".to_owned()]);
     }
 }

@@ -826,7 +826,10 @@ mod tests {
         assert_eq!(parse_u64(&ToolParams::new(), "frame"), None);
         assert_eq!(parse_u64(&params(&[("frame", "42")]), "frame"), Some(42));
         assert_eq!(parse_u64(&params(&[("frame", "0x2A")]), "frame"), Some(42));
-        assert_eq!(parse_u64(&params(&[("frame", "not-a-number")]), "frame"), None);
+        assert_eq!(
+            parse_u64(&params(&[("frame", "not-a-number")]), "frame"),
+            None
+        );
     }
 
     #[test]
@@ -891,11 +894,9 @@ mod tests {
             .expect("horizontal options");
         assert_eq!(horizontal.mirroring, Mirroring::Horizontal);
 
-        let vertical = parse_dsl_rom_options(&params(&[
-            ("mirroring", "vertical"),
-            ("chr_hex", "AA 55"),
-        ]))
-        .expect("vertical options");
+        let vertical =
+            parse_dsl_rom_options(&params(&[("mirroring", "vertical"), ("chr_hex", "AA 55")]))
+                .expect("vertical options");
         assert_eq!(vertical.mirroring, Mirroring::Vertical);
         assert_eq!(vertical.chr_rom, vec![0xAA, 0x55]);
 

@@ -1611,7 +1611,10 @@ mod tests {
             mode: "indirect".to_owned(),
         }
         .to_string();
-        assert_eq!(unsupported, "line 9: addressing mode indirect not supported for LDA");
+        assert_eq!(
+            unsupported,
+            "line 9: addressing mode indirect not supported for LDA"
+        );
 
         let missing_reset = DslError::MissingResetVector.to_string();
         assert!(missing_reset.contains("missing reset vector"));
@@ -1819,14 +1822,20 @@ mod tests {
             },
         )
         .expect_err("256 CHR banks should exceed iNES header");
-        assert!(matches!(too_many, DslError::InvalidRomLayout(message) if message.contains("exceeds iNES header limit")));
+        assert!(
+            matches!(too_many, DslError::InvalidRomLayout(message) if message.contains("exceeds iNES header limit"))
+        );
     }
 
     #[test]
     fn unknown_or_mode_error_uses_mode_name_for_known_mnemonics() {
         let known = unknown_or_mode_error(3, "LDA", AddressingMode::Indirect);
         match known {
-            DslError::UnsupportedAddressing { line, mnemonic, mode } => {
+            DslError::UnsupportedAddressing {
+                line,
+                mnemonic,
+                mode,
+            } => {
                 assert_eq!(line, 3);
                 assert_eq!(mnemonic, "LDA");
                 assert_eq!(mode, "indirect");
@@ -1882,9 +1891,24 @@ mod tests {
             }
         }
 
-        assert_supported_modes("ADC", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
-        assert_supported_modes("AND", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
-        assert_supported_modes("ASL", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes(
+            "ADC",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
+        assert_supported_modes(
+            "AND",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
+        assert_supported_modes(
+            "ASL",
+            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+        );
         assert_supported_modes("BCC", &[Relative]);
         assert_supported_modes("BCS", &[Relative]);
         assert_supported_modes("BEQ", &[Relative]);
@@ -1899,37 +1923,87 @@ mod tests {
         assert_supported_modes("CLD", &[Implied]);
         assert_supported_modes("CLI", &[Implied]);
         assert_supported_modes("CLV", &[Implied]);
-        assert_supported_modes("CMP", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes(
+            "CMP",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
         assert_supported_modes("CPX", &[Immediate, ZeroPage, Absolute]);
         assert_supported_modes("CPY", &[Immediate, ZeroPage, Absolute]);
         assert_supported_modes("DEC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
         assert_supported_modes("DEX", &[Implied]);
         assert_supported_modes("DEY", &[Implied]);
-        assert_supported_modes("EOR", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes(
+            "EOR",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
         assert_supported_modes("INC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
         assert_supported_modes("INX", &[Implied]);
         assert_supported_modes("INY", &[Implied]);
         assert_supported_modes("JMP", &[Absolute, Indirect]);
         assert_supported_modes("JSR", &[Absolute]);
-        assert_supported_modes("LDA", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
-        assert_supported_modes("LDX", &[Immediate, ZeroPage, ZeroPageY, Absolute, AbsoluteY]);
-        assert_supported_modes("LDY", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
-        assert_supported_modes("LSR", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes(
+            "LDA",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
+        assert_supported_modes(
+            "LDX",
+            &[Immediate, ZeroPage, ZeroPageY, Absolute, AbsoluteY],
+        );
+        assert_supported_modes(
+            "LDY",
+            &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+        );
+        assert_supported_modes(
+            "LSR",
+            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+        );
         assert_supported_modes("NOP", &[Implied]);
-        assert_supported_modes("ORA", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes(
+            "ORA",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
         assert_supported_modes("PHA", &[Implied]);
         assert_supported_modes("PHP", &[Implied]);
         assert_supported_modes("PLA", &[Implied]);
         assert_supported_modes("PLP", &[Implied]);
-        assert_supported_modes("ROL", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
-        assert_supported_modes("ROR", &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
+        assert_supported_modes(
+            "ROL",
+            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+        );
+        assert_supported_modes(
+            "ROR",
+            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+        );
         assert_supported_modes("RTI", &[Implied]);
         assert_supported_modes("RTS", &[Implied]);
-        assert_supported_modes("SBC", &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes(
+            "SBC",
+            &[
+                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                IndirectY,
+            ],
+        );
         assert_supported_modes("SEC", &[Implied]);
         assert_supported_modes("SED", &[Implied]);
         assert_supported_modes("SEI", &[Implied]);
-        assert_supported_modes("STA", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY]);
+        assert_supported_modes(
+            "STA",
+            &[
+                ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY,
+            ],
+        );
         assert_supported_modes("STX", &[ZeroPage, ZeroPageY, Absolute]);
         assert_supported_modes("STY", &[ZeroPage, ZeroPageX, Absolute]);
         assert_supported_modes("TAX", &[Implied]);
@@ -1954,10 +2028,7 @@ mod tests {
             r#"LDA #"//" "#
         );
 
-        assert_eq!(
-            split_leading_label("loop: NOP"),
-            Some(("loop", " NOP"))
-        );
+        assert_eq!(split_leading_label("loop: NOP"), Some(("loop", " NOP")));
         assert_eq!(split_leading_label("bad label: NOP"), None);
 
         assert_eq!(
@@ -1974,8 +2045,14 @@ mod tests {
         assert!(validate_symbol("1bad").is_err());
         assert!(validate_symbol("bad-name").is_err());
 
-        assert_eq!(parse_expr("-$10", 1).expect("negative hex"), Expr::Number(-16));
-        assert_eq!(parse_expr("+0x20", 1).expect("positive hex"), Expr::Number(32));
+        assert_eq!(
+            parse_expr("-$10", 1).expect("negative hex"),
+            Expr::Number(-16)
+        );
+        assert_eq!(
+            parse_expr("+0x20", 1).expect("positive hex"),
+            Expr::Number(32)
+        );
         assert_eq!(
             parse_expr("label_name", 1).expect("symbol parse"),
             Expr::Symbol("LABEL_NAME".to_owned())
@@ -2029,7 +2106,9 @@ mod tests {
         });
         fixup.labels.insert("TARGET".to_owned(), 0xC003);
         fixup.vectors.reset = Some(Expr::Number(0xC000));
-        let finalized = fixup.finalize().expect("forward relative fixup should resolve");
+        let finalized = fixup
+            .finalize()
+            .expect("forward relative fixup should resolve");
         assert_eq!(finalized.bytes.get(&0xC001), Some(&0x01));
     }
 
@@ -2045,9 +2124,12 @@ mod tests {
         "#,
         )
         .expect("assembly should succeed");
-        let rom = emit_ines_nrom_rom(&program, &RomBuildOptions::default())
-            .expect("rom should emit");
-        assert_eq!(rom[4], 1, "program without <$C000 bytes should stay single-bank");
+        let rom =
+            emit_ines_nrom_rom(&program, &RomBuildOptions::default()).expect("rom should emit");
+        assert_eq!(
+            rom[4], 1,
+            "program without <$C000 bytes should stay single-bank"
+        );
     }
 
     #[test]
