@@ -16,6 +16,7 @@ use nes_tui::app::map_key_event_to_command;
 use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
 use ratatui::Frame;
 use ratatui::Terminal;
+use ratatui::backend::Backend;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -267,7 +268,7 @@ fn event_loop(
 }
 
 fn draw_frame(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut Terminal<impl Backend>,
     runtime: &mut TuiRuntime,
 ) -> Result<(), String> {
     terminal
@@ -743,17 +744,88 @@ fn key_is_pressed(kind: KeyEventKind) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        VideoBackendKind, fit_nes_viewport, frame_rgba_to_rgba_image, make_protocol_state,
-        parse_tui_args, protocol_image_resize, select_video_backend_kind,
-        should_refresh_protocol_frame, should_replace_protocol_state,
+        PROTOCOL_FRAME_INTERVAL, ProtocolRenderer, TuiRuntime, VideoBackend, VideoBackendKind,
+        drain_protocol_results, draw_frame, fit_nes_viewport, frame_rgba_to_rgba_image,
+        key_is_pressed, key_pressed_state, make_protocol_state, parse_tui_args,
+        protocol_image_resize, select_video_backend_kind, should_quit,
+        should_refresh_protocol_frame, should_replace_protocol_state, usage_line, usage_message,
     };
-    use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+    use image::Rgba;
+    use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui_image::{
         Resize,
         picker::{Picker, ProtocolType},
+        protocol::StatefulProtocolType,
     };
+    use std::sync::mpsc;
     use std::time::{Duration, Instant};
+
+    fn key_event(code: KeyCode, kind: KeyEventKind) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+            kind,
+            state: KeyEventState::NONE,
+        }
+    }
+
+    fn sample_runtime(show_hud: bool) -> TuiRuntime {
+        TuiRuntime {
+            core: NesCore::new(),
+            rom_name: "test.nes".to_owned(),
+            mapper_id: 0,
+            prg_rom_bytes: 32 * 1024,
+            frame_rgba: vec![0_u8; FRAME_RGBA_BYTES],
+            paused: false,
+            frames_rendered: 120,
+            frames_since_fps_sample: 0,
+            instant_fps: 59.5,
+            last_fps_sample_at: Instant::now(),
+            started_at: Instant::now() - Duration::from_secs(2),
+            show_hud,
+            video_backend: VideoBackend::Halfblocks,
+        }
+    }
+
+    fn terminal_text(terminal: &Terminal<TestBackend>) -> String {
+        let mut text = String::new();
+        for cell in terminal.backend().buffer().content() {
+            text.push_str(cell.symbol());
+        }
+        text
+    }
+
+    #[test]
+    fn protocol_frame_interval_matches_target_fps() {
+        assert_eq!(PROTOCOL_FRAME_INTERVAL, Duration::from_millis(33));
+    }
+
+    #[test]
+    fn video_backend_label_describes_halfblock_renderer() {
+        assert_eq!(
+            VideoBackend::Halfblocks.label(),
+            "filtered half-block renderer"
+        );
+    }
+
+    #[test]
+    fn usage_line_matches_cli_contract() {
+        assert_eq!(
+            usage_line(),
+            "Usage: nes-tui [--config <path>] [--hud|--high-res] [rom_path]"
+        );
+    }
+
+    #[test]
+    fn usage_message_includes_usage_line_and_default_path() {
+        let message = usage_message();
+        assert!(message.contains(usage_line()));
+        assert!(message.contains("Default config path:"));
+    }
 
     #[test]
     fn parse_tui_args_defaults_to_high_res_mode() {
@@ -778,11 +850,66 @@ mod tests {
     }
 
     #[test]
+    fn parse_tui_args_help_flags_return_usage_message() {
+        let long_help = parse_tui_args(vec!["--help".to_owned()]).expect_err("help should stop");
+        assert_eq!(long_help, usage_message());
+
+        let short_help = parse_tui_args(vec!["-h".to_owned()]).expect_err("help should stop");
+        assert_eq!(short_help, usage_message());
+    }
+
+    #[test]
+    fn parse_tui_args_high_res_can_disable_hud_after_enabling_it() {
+        let (rom_path, options) = parse_tui_args(vec![
+            "--hud".to_owned(),
+            "--high-res".to_owned(),
+            "rom.nes".to_owned(),
+        ])
+        .expect("parse should succeed");
+        assert_eq!(rom_path.as_deref(), Some("rom.nes"));
+        assert!(!options.show_hud);
+    }
+
+    #[test]
+    fn fit_nes_viewport_returns_none_when_width_is_zero() {
+        assert!(fit_nes_viewport(Rect::new(0, 0, 0, 20)).is_none());
+    }
+
+    #[test]
+    fn fit_nes_viewport_returns_none_when_height_is_zero() {
+        assert!(fit_nes_viewport(Rect::new(0, 0, 20, 0)).is_none());
+    }
+
+    #[test]
     fn fit_nes_viewport_uses_integer_scale_when_room_allows() {
         let area = Rect::new(0, 0, 800, 300);
         let viewport = fit_nes_viewport(area).expect("viewport should exist");
         assert_eq!(viewport.area, Rect::new(144, 30, 512, 240));
         assert_eq!(viewport.integer_scale, Some(2));
+    }
+
+    #[test]
+    fn fit_nes_viewport_does_not_use_integer_scale_when_only_one_axis_fits_source() {
+        let area = Rect::new(0, 0, 300, 100);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(43, 0, 213, 100));
+        assert_eq!(viewport.integer_scale, None);
+    }
+
+    #[test]
+    fn fit_nes_viewport_uses_width_limited_integer_scale_when_height_has_extra_room() {
+        let area = Rect::new(0, 0, 600, 500);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(44, 130, 512, 240));
+        assert_eq!(viewport.integer_scale, Some(2));
+    }
+
+    #[test]
+    fn fit_nes_viewport_uses_height_limited_aspect_fit_when_area_is_wide_and_short() {
+        let area = Rect::new(5, 7, 200, 50);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(52, 7, 106, 50));
+        assert_eq!(viewport.integer_scale, None);
     }
 
     #[test]
@@ -858,6 +985,37 @@ mod tests {
     }
 
     #[test]
+    fn should_quit_only_for_pressed_escape_or_q() {
+        assert!(should_quit(key_event(KeyCode::Esc, KeyEventKind::Press)));
+        assert!(should_quit(key_event(
+            KeyCode::Char('q'),
+            KeyEventKind::Repeat
+        )));
+        assert!(!should_quit(key_event(
+            KeyCode::Char('q'),
+            KeyEventKind::Release
+        )));
+        assert!(!should_quit(key_event(
+            KeyCode::Char('x'),
+            KeyEventKind::Press
+        )));
+    }
+
+    #[test]
+    fn key_pressed_state_maps_press_repeat_and_release() {
+        assert_eq!(key_pressed_state(KeyEventKind::Press), Some(true));
+        assert_eq!(key_pressed_state(KeyEventKind::Repeat), Some(true));
+        assert_eq!(key_pressed_state(KeyEventKind::Release), Some(false));
+    }
+
+    #[test]
+    fn key_is_pressed_only_for_press_or_repeat() {
+        assert!(key_is_pressed(KeyEventKind::Press));
+        assert!(key_is_pressed(KeyEventKind::Repeat));
+        assert!(!key_is_pressed(KeyEventKind::Release));
+    }
+
+    #[test]
     fn make_protocol_state_reuses_protocol_variant_from_previous_state() {
         let mut picker = Picker::from_fontsize((8, 16));
         picker.set_protocol_type(ProtocolType::Halfblocks);
@@ -878,6 +1036,27 @@ mod tests {
             second.protocol_type(),
             ratatui_image::protocol::StatefulProtocolType::Halfblocks(_)
         ));
+    }
+
+    #[test]
+    fn make_protocol_state_preserves_prior_background_when_reusing_protocol_type() {
+        let mut picker = Picker::from_fontsize((8, 16));
+        picker.set_protocol_type(ProtocolType::Halfblocks);
+        let frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let first = make_protocol_state(&picker, &frame, None, None).expect("state should build");
+        let forced_background = Rgba([1, 2, 3, 255]);
+        let second = make_protocol_state(
+            &picker,
+            &frame,
+            Some(first.protocol_type()),
+            Some(forced_background),
+        )
+        .expect("state should build");
+        assert!(matches!(
+            second.protocol_type(),
+            StatefulProtocolType::Halfblocks(_)
+        ));
+        assert_eq!(second.background_color(), forced_background);
     }
 
     #[test]
@@ -907,6 +1086,36 @@ mod tests {
     }
 
     #[test]
+    fn protocol_state_replace_stays_false_when_paused_even_if_refresh_due() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(33);
+        assert!(!should_replace_protocol_state(
+            true,
+            false,
+            false,
+            true,
+            Some(now - interval),
+            now,
+            interval
+        ));
+    }
+
+    #[test]
+    fn protocol_state_replace_stays_false_when_interval_has_not_elapsed() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(33);
+        assert!(!should_replace_protocol_state(
+            true,
+            false,
+            false,
+            false,
+            Some(now - Duration::from_millis(10)),
+            now,
+            interval
+        ));
+    }
+
+    #[test]
     fn protocol_state_replace_happens_when_area_needs_resize() {
         assert!(should_replace_protocol_state(
             true,
@@ -917,5 +1126,97 @@ mod tests {
             Instant::now(),
             Duration::from_millis(33)
         ));
+    }
+
+    #[test]
+    fn drain_protocol_results_returns_false_when_channel_is_empty() {
+        let (request_tx, _request_rx) = mpsc::channel();
+        let (results_tx, results_rx) = mpsc::channel();
+        let mut renderer = ProtocolRenderer {
+            current_state: None,
+            request_tx,
+            results_rx,
+            pending_resize: true,
+        };
+
+        assert!(!drain_protocol_results(&mut renderer));
+        assert!(renderer.pending_resize);
+
+        drop(results_tx);
+    }
+
+    #[test]
+    fn drain_protocol_results_returns_true_when_worker_channel_disconnects() {
+        let (request_tx, _request_rx) = mpsc::channel();
+        let (results_tx, results_rx) = mpsc::channel();
+        drop(results_tx);
+        let mut renderer = ProtocolRenderer {
+            current_state: None,
+            request_tx,
+            results_rx,
+            pending_resize: true,
+        };
+
+        assert!(drain_protocol_results(&mut renderer));
+    }
+
+    #[test]
+    fn drain_protocol_results_applies_state_and_clears_pending_resize() {
+        let mut picker = Picker::from_fontsize((8, 16));
+        picker.set_protocol_type(ProtocolType::Halfblocks);
+        let frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let state = make_protocol_state(&picker, &frame, None, None).expect("state should build");
+
+        let (request_tx, _request_rx) = mpsc::channel();
+        let (results_tx, results_rx) = mpsc::channel();
+        results_tx
+            .send(Ok(state))
+            .expect("sending synthetic state should succeed");
+
+        let mut renderer = ProtocolRenderer {
+            current_state: None,
+            request_tx,
+            results_rx,
+            pending_resize: true,
+        };
+
+        assert!(!drain_protocol_results(&mut renderer));
+        assert!(renderer.current_state.is_some());
+        assert!(!renderer.pending_resize);
+    }
+
+    #[test]
+    fn draw_frame_renders_video_glyphs_when_hud_is_hidden() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 40)).expect("terminal should build");
+        let mut runtime = sample_runtime(false);
+        draw_frame(&mut terminal, &mut runtime).expect("draw should succeed");
+
+        let has_halfblock_glyph = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.symbol() == "\u{2580}");
+        assert!(has_halfblock_glyph);
+    }
+
+    #[test]
+    fn draw_frame_hud_path_contains_header_controls_and_expected_avg_band() {
+        let mut terminal =
+            Terminal::new(TestBackend::new(140, 50)).expect("terminal should initialize");
+        let mut runtime = sample_runtime(true);
+        runtime.rom_name = "zelda.nes".to_owned();
+        runtime.frames_rendered = 120;
+        runtime.started_at = Instant::now() - Duration::from_secs(2);
+
+        draw_frame(&mut terminal, &mut runtime).expect("draw should succeed");
+        let text = terminal_text(&terminal);
+        assert!(text.contains("NES-TUI"));
+        assert!(text.contains("zelda.nes"));
+        assert!(text.contains("P=Pause  R=Reset  Q/Esc=Quit"));
+        assert!(
+            text.contains("avg 59.") || text.contains("avg 60.") || text.contains("avg 61."),
+            "expected avg fps near 60.0, got: {text}"
+        );
     }
 }

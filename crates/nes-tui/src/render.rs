@@ -311,8 +311,9 @@ fn quarter_block_glyph(mask: u8) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        downsample_frame_rgb, frame_lines_from_rgb, frame_lines_half_blocks,
-        frame_lines_quarter_blocks,
+        average_region_rgb, bucket_bounds, downsample_frame_rgb, frame_lines_from_rgb,
+        frame_lines_half_blocks, frame_lines_quarter_blocks, map_index, mini_palette_spans,
+        quarter_block_glyph, rgb_error_sq,
     };
     use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
     use ratatui::style::Color;
@@ -322,6 +323,20 @@ mod tests {
         let frame = vec![0_u8; FRAME_RGBA_BYTES];
         let cells = downsample_frame_rgb(&frame, 64, 60);
         assert_eq!(cells.len(), 64 * 60);
+    }
+
+    #[test]
+    fn downsample_returns_empty_for_invalid_frame_length() {
+        let frame = vec![0_u8; FRAME_RGBA_BYTES - 1];
+        let cells = downsample_frame_rgb(&frame, 1, 1);
+        assert!(cells.is_empty());
+    }
+
+    #[test]
+    fn downsample_returns_empty_when_target_dimensions_are_zero() {
+        let frame = vec![0_u8; FRAME_RGBA_BYTES];
+        assert!(downsample_frame_rgb(&frame, 0, 10).is_empty());
+        assert!(downsample_frame_rgb(&frame, 10, 0).is_empty());
     }
 
     #[test]
@@ -340,6 +355,107 @@ mod tests {
     }
 
     #[test]
+    fn downsample_height_one_samples_vertical_center_row() {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let center_y = FRAME_HEIGHT / 2;
+        write_px(&mut frame, 0, center_y, 12, 34, 56);
+        write_px(&mut frame, FRAME_WIDTH - 1, center_y, 65, 43, 21);
+
+        let cells = downsample_frame_rgb(&frame, 2, 1);
+        assert_eq!(cells, vec![(12, 34, 56), (65, 43, 21)]);
+    }
+
+    #[test]
+    fn downsample_width_one_samples_horizontal_center_column() {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let center_x = FRAME_WIDTH / 2;
+        write_px(&mut frame, center_x, 0, 10, 20, 30);
+        write_px(&mut frame, center_x, FRAME_HEIGHT - 1, 210, 220, 230);
+
+        let cells = downsample_frame_rgb(&frame, 1, 2);
+        assert_eq!(cells, vec![(10, 20, 30), (210, 220, 230)]);
+    }
+
+    #[test]
+    fn mini_palette_spans_samples_expected_pixels() {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let y = FRAME_HEIGHT / 2;
+        write_px(&mut frame, 0, y, 10, 11, 12);
+        write_px(&mut frame, 85, y, 20, 21, 22);
+        write_px(&mut frame, 170, y, 30, 31, 32);
+        write_px(&mut frame, FRAME_WIDTH - 1, y, 40, 41, 42);
+
+        let spans = mini_palette_spans(&frame, 4);
+        assert_eq!(spans.len(), 4);
+        assert_eq!(spans[0].style.bg, Some(Color::Rgb(10, 11, 12)));
+        assert_eq!(spans[1].style.bg, Some(Color::Rgb(20, 21, 22)));
+        assert_eq!(spans[2].style.bg, Some(Color::Rgb(30, 31, 32)));
+        assert_eq!(spans[3].style.bg, Some(Color::Rgb(40, 41, 42)));
+    }
+
+    #[test]
+    fn mini_palette_spans_supports_single_swatch_without_panicking() {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let y = FRAME_HEIGHT / 2;
+        write_px(&mut frame, 0, y, 77, 88, 99);
+
+        let spans = mini_palette_spans(&frame, 1);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].style.bg, Some(Color::Rgb(77, 88, 99)));
+    }
+
+    #[test]
+    fn mini_palette_spans_returns_empty_for_invalid_inputs() {
+        assert!(mini_palette_spans(&vec![0_u8; FRAME_RGBA_BYTES - 1], 8).is_empty());
+        assert!(mini_palette_spans(&vec![0_u8; FRAME_RGBA_BYTES], 0).is_empty());
+    }
+
+    #[test]
+    fn map_index_returns_zero_for_degenerate_lengths() {
+        assert_eq!(map_index(5, 1, FRAME_WIDTH), 0);
+        assert_eq!(map_index(5, 10, 1), 0);
+    }
+
+    #[test]
+    fn bucket_bounds_handles_zero_bucket_or_source_lengths() {
+        assert_eq!(bucket_bounds(0, 0, FRAME_WIDTH), (0, 0));
+        assert_eq!(bucket_bounds(0, 4, 0), (0, 0));
+    }
+
+    #[test]
+    fn bucket_bounds_scales_evenly_for_regular_partitions() {
+        assert_eq!(bucket_bounds(1, 4, 16), (4, 8));
+        assert_eq!(bucket_bounds(3, 4, 16), (12, 16));
+    }
+
+    #[test]
+    fn average_region_rgb_uses_independent_rgb_channels() {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        write_px(&mut frame, 0, 0, 10, 200, 30);
+        write_px(&mut frame, 1, 0, 40, 50, 60);
+        assert_eq!(average_region_rgb(&frame, 0, 2, 0, 1), (25, 125, 45));
+    }
+
+    #[test]
+    fn rgb_error_sq_matches_expected_distance() {
+        assert_eq!(rgb_error_sq((10, 20, 30), (13, 16, 40)), 125);
+        assert_eq!(rgb_error_sq((13, 16, 40), (10, 20, 30)), 125);
+    }
+
+    #[test]
+    fn quarter_block_glyph_maps_all_masks_to_expected_symbols() {
+        let expected = [
+            " ", "\u{2598}", "\u{259D}", "\u{2580}", "\u{2596}", "\u{258C}", "\u{259E}",
+            "\u{259B}", "\u{2597}", "\u{259A}", "\u{2590}", "\u{259C}", "\u{2584}", "\u{2599}",
+            "\u{259F}", "\u{2588}",
+        ];
+
+        for (mask, glyph) in expected.iter().enumerate() {
+            assert_eq!(quarter_block_glyph(mask as u8), *glyph);
+        }
+    }
+
+    #[test]
     fn frame_lines_match_row_count() {
         let cells = vec![(0_u8, 0_u8, 0_u8); 32 * 16];
         let lines = frame_lines_from_rgb(&cells, 32);
@@ -351,6 +467,13 @@ mod tests {
         let frame = vec![0_u8; FRAME_RGBA_BYTES];
         let lines = frame_lines_half_blocks(&frame, 64, 24);
         assert_eq!(lines.len(), 24);
+    }
+
+    #[test]
+    fn half_block_lines_return_empty_for_invalid_input_guards() {
+        assert!(frame_lines_half_blocks(&vec![0_u8; FRAME_RGBA_BYTES - 1], 8, 8).is_empty());
+        assert!(frame_lines_half_blocks(&vec![0_u8; FRAME_RGBA_BYTES], 0, 8).is_empty());
+        assert!(frame_lines_half_blocks(&vec![0_u8; FRAME_RGBA_BYTES], 8, 0).is_empty());
     }
 
     #[test]
@@ -381,6 +504,13 @@ mod tests {
         let frame = vec![0_u8; FRAME_RGBA_BYTES];
         let lines = frame_lines_quarter_blocks(&frame, 64, 24);
         assert_eq!(lines.len(), 24);
+    }
+
+    #[test]
+    fn quarter_block_lines_return_empty_for_invalid_input_guards() {
+        assert!(frame_lines_quarter_blocks(&vec![0_u8; FRAME_RGBA_BYTES - 1], 8, 8).is_empty());
+        assert!(frame_lines_quarter_blocks(&vec![0_u8; FRAME_RGBA_BYTES], 0, 8).is_empty());
+        assert!(frame_lines_quarter_blocks(&vec![0_u8; FRAME_RGBA_BYTES], 8, 0).is_empty());
     }
 
     #[test]
