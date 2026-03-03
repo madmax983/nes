@@ -19,6 +19,22 @@ pub use uxrom::Uxrom;
 /// Common PRG read/write contract for cartridge mappers.
 ///
 /// Addresses are CPU PRG-space addresses (`0x8000..=0xFFFF`).
+///
+/// Mappers intercept CPU reads and writes to provide bank switching and external hardware logic.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::mapper::Mapper;
+///
+/// struct DummyMapper { prg: Vec<u8> }
+/// impl Mapper for DummyMapper {
+///     fn read_prg(&self, addr: u16) -> u8 {
+///         self.prg[(addr - 0x8000) as usize % self.prg.len()]
+///     }
+///     fn write_prg(&mut self, _addr: u16, _value: u8) {}
+/// }
+/// ```
 pub trait Mapper {
     /// Reads a byte from mapped PRG space.
     fn read_prg(&self, addr: u16) -> u8;

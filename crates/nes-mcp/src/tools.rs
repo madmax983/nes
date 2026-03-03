@@ -1,3 +1,5 @@
+//! Defines the available tools for the Model Context Protocol (MCP) server.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolDefinition {
     pub name: &'static str,
