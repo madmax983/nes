@@ -899,9 +899,10 @@ mod tests {
             assert_ne!(seed, 1);
             assert_ne!(seed, 0xD1B5_4A32_D192_ED03);
             if let Some(prev) = previous
-                && prev != seed {
-                    saw_change = true;
-                }
+                && prev != seed
+            {
+                saw_change = true;
+            }
             if seed & pid_component != pid_component {
                 saw_missing_pid_bit = true;
             }
