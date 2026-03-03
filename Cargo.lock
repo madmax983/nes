@@ -1752,7 +1752,6 @@ dependencies = [
  "crossterm 0.28.1",
  "nes-core",
  "nes-dsl",
- "proptest",
  "serde",
  "serde_json",
 ]
