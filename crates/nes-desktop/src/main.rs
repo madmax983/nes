@@ -433,6 +433,102 @@ fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
     hash_check_every > 0 && frame.is_multiple_of(hash_check_every)
 }
 
+fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
+    if pressed {
+        current | mask
+    } else {
+        current & !mask
+    }
+}
+
+fn apply_gamepad_delta_commands(
+    core: &mut NesCore,
+    previous_bits: u8,
+    next_bits: u8,
+    player2: bool,
+) -> Result<(), String> {
+    for command in controller_state_delta_for_player(previous_bits, next_bits, player2) {
+        core.execute(command)
+            .map_err(|err| format!("Gamepad command failed: {err}"))?;
+    }
+    Ok(())
+}
+
+fn handle_netplay_server_message(
+    message: ServerMessage,
+    rollback_engine: &mut RollbackEngine,
+    netplay_local_player: u8,
+    netplay_stats: &mut Option<NetplayRuntimeStats>,
+    netplay_pending_pings: &mut BTreeMap<u64, Instant>,
+) -> Result<(), String> {
+    match message {
+        ServerMessage::PeerInput {
+            player,
+            frame,
+            bits,
+        } => {
+            if player != netplay_local_player {
+                let ingest = rollback_engine.ingest_remote_input(frame, bits);
+                if ingest.rollback_queued {
+                    eprintln!(
+                        "[netplay] queued rollback from frame {} due to late remote input",
+                        frame
+                    );
+                }
+            }
+        }
+        ServerMessage::PeerHash {
+            player,
+            frame,
+            state_hash,
+        } => {
+            if player != netplay_local_player {
+                match rollback_engine.compare_remote_hash(frame, state_hash) {
+                    HashComparison::Match => {}
+                    HashComparison::Mismatch => {
+                        eprintln!(
+                            "[netplay] desync detected at frame {} (remote hash {:016X})",
+                            frame, state_hash
+                        );
+                        if let Some(stats) = netplay_stats.as_mut() {
+                            stats.observe_desync();
+                        }
+                    }
+                    HashComparison::PendingLocalFrame => {}
+                }
+            }
+        }
+        ServerMessage::Joined {
+            room,
+            player,
+            peer_present,
+        } => {
+            println!(
+                "[netplay] joined room '{}' as P{} (peer_present={})",
+                room, player, peer_present
+            );
+        }
+        ServerMessage::PeerJoined { player } => {
+            println!("[netplay] peer joined as P{}", player);
+        }
+        ServerMessage::PeerLeft { player } => {
+            println!("[netplay] peer left (P{})", player);
+        }
+        ServerMessage::Error { message } => {
+            return Err(format!("[netplay] relay error: {message}"));
+        }
+        ServerMessage::Pong { nonce } => {
+            if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
+                let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
+                if let Some(stats) = netplay_stats.as_mut() {
+                    stats.observe_rtt_ms(rtt_ms);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
 
@@ -660,11 +756,7 @@ fn run() -> Result<(), String> {
                         return;
                     }
                     KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
-                        if pressed {
-                            keyboard_bits |= mask;
-                        } else {
-                            keyboard_bits &= !mask;
-                        }
+                        keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
                     }
                     KeyboardDecision::ExecuteCore(command) => {
                         if let Err(err) = core.execute(command) {
@@ -721,16 +813,15 @@ fn run() -> Result<(), String> {
                         .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
                         .unwrap_or_default();
                     if rollback.is_none() {
-                        for command in controller_state_delta_for_player(
+                        if let Err(err) = apply_gamepad_delta_commands(
+                            &mut core,
                             gamepad_bits[player],
                             next_gamepad_bits,
                             player == 1,
                         ) {
-                            if let Err(err) = core.execute(command) {
-                                eprintln!("Gamepad command failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
+                            eprintln!("{err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
                         }
                     }
                     gamepad_bits[player] = next_gamepad_bits;
@@ -797,69 +888,16 @@ fn run() -> Result<(), String> {
                         let Some(message) = message else {
                             break;
                         };
-                        match message {
-                            ServerMessage::PeerInput { player, frame, bits } => {
-                                if player != netplay_local_player {
-                                    let ingest = rollback_engine.ingest_remote_input(frame, bits);
-                                    if ingest.rollback_queued {
-                                        eprintln!(
-                                            "[netplay] queued rollback from frame {} due to late remote input",
-                                            frame
-                                        );
-                                    }
-                                }
-                            }
-                            ServerMessage::PeerHash {
-                                player,
-                                frame,
-                                state_hash,
-                            } => {
-                                if player != netplay_local_player {
-                                    match rollback_engine.compare_remote_hash(frame, state_hash) {
-                                        HashComparison::Match => {}
-                                        HashComparison::Mismatch => {
-                                            eprintln!(
-                                                "[netplay] desync detected at frame {} (remote hash {:016X})",
-                                                frame,
-                                                state_hash
-                                            );
-                                            if let Some(stats) = netplay_stats.as_mut() {
-                                                stats.observe_desync();
-                                            }
-                                        }
-                                        HashComparison::PendingLocalFrame => {}
-                                    }
-                                }
-                            }
-                            ServerMessage::Joined {
-                                room,
-                                player,
-                                peer_present,
-                            } => {
-                                println!(
-                                    "[netplay] joined room '{}' as P{} (peer_present={})",
-                                    room, player, peer_present
-                                );
-                            }
-                            ServerMessage::PeerJoined { player } => {
-                                println!("[netplay] peer joined as P{}", player);
-                            }
-                            ServerMessage::PeerLeft { player } => {
-                                println!("[netplay] peer left (P{})", player);
-                            }
-                            ServerMessage::Error { message } => {
-                                eprintln!("[netplay] relay error: {message}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                            ServerMessage::Pong { nonce } => {
-                                if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
-                                    let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
-                                    if let Some(stats) = netplay_stats.as_mut() {
-                                        stats.observe_rtt_ms(rtt_ms);
-                                    }
-                                }
-                            }
+                        if let Err(err) = handle_netplay_server_message(
+                            message,
+                            rollback_engine,
+                            netplay_local_player,
+                            &mut netplay_stats,
+                            &mut netplay_pending_pings,
+                        ) {
+                            eprintln!("{err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
                         }
                     }
                 }
@@ -1542,13 +1580,16 @@ mod tests {
     use super::{
         DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR, DEFAULT_METRICS_EVERY_FRAMES,
         FrameDecision, KeyboardDecision, NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode,
-        TARGET_FRAME_TIME, advance_core_for_host_frame, capture_config_from_parts,
-        capture_path_for_frame, classify_keyboard_input, compute_local_netplay_bits,
-        controller_state_delta_for_player, encode_bmp, encode_ppm, evaluate_frame_deadline,
-        frame_signature, map_virtual_keycode, parse_runtime_args, recommended_input_delay_frames,
-        should_send_netplay_hash, write_frame_ppm,
+        TARGET_FRAME_TIME, advance_core_for_host_frame, apply_gamepad_delta_commands,
+        capture_config_from_parts, capture_path_for_frame, classify_keyboard_input,
+        compute_local_netplay_bits, controller_state_delta_for_player, encode_bmp, encode_ppm,
+        evaluate_frame_deadline, frame_signature, handle_netplay_server_message,
+        map_virtual_keycode, parse_runtime_args, recommended_input_delay_frames,
+        should_send_netplay_hash, update_button_bits, write_frame_ppm,
     };
     use nes_core::{Button, Command, NesCore};
+    use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
+    use std::collections::BTreeMap;
     use std::fs;
     use std::sync::mpsc;
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -1783,6 +1824,135 @@ mod tests {
         assert!(!should_send_netplay_hash(0, 120));
         assert!(should_send_netplay_hash(60, 120));
         assert!(!should_send_netplay_hash(60, 121));
+    }
+
+    #[test]
+    fn update_button_bits_sets_and_clears_masks() {
+        let with_a = update_button_bits(0, Button::A.bit_mask(), true);
+        assert_eq!(with_a, Button::A.bit_mask());
+        // Pressing an already-set bit should be idempotent.
+        assert_eq!(
+            update_button_bits(with_a, Button::A.bit_mask(), true),
+            Button::A.bit_mask()
+        );
+        let with_ab = update_button_bits(with_a, Button::B.bit_mask(), true);
+        assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
+        let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
+        assert_eq!(cleared_a, Button::B.bit_mask());
+    }
+
+    #[test]
+    fn apply_gamepad_delta_commands_updates_controller_bits() {
+        let mut core = NesCore::new();
+        apply_gamepad_delta_commands(
+            &mut core,
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            false,
+        )
+        .expect("applying player-1 gamepad delta should succeed");
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask() | Button::Right.bit_mask()
+        );
+
+        apply_gamepad_delta_commands(
+            &mut core,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            Button::Right.bit_mask(),
+            false,
+        )
+        .expect("releasing one player-1 button should succeed");
+        assert_eq!(core.controller_bits(), Button::Right.bit_mask());
+
+        apply_gamepad_delta_commands(&mut core, 0, Button::Start.bit_mask(), true)
+            .expect("applying player-2 gamepad delta should succeed");
+        assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
+    }
+
+    #[test]
+    fn handle_netplay_server_message_updates_stats_and_errors() {
+        let mut core = NesCore::new();
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start + 0x3FFC] = 0x00;
+        rom[prg_start + 0x3FFD] = 0x80;
+        core.load_ines_rom(&rom).expect("sample rom should load");
+
+        let mut rollback_engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 2,
+            max_rollback_frames: 16,
+        })
+        .expect("rollback config should be valid");
+        let first_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("initial rollback step should succeed");
+
+        let mut stats = Some(NetplayRuntimeStats::new(2));
+        let mut pending = BTreeMap::<u64, Instant>::new();
+        pending.insert(7, Instant::now() - Duration::from_millis(10));
+
+        handle_netplay_server_message(
+            ServerMessage::Pong { nonce: 7 },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("pong message should process");
+        assert!(pending.is_empty());
+        let rtt_ms = stats.as_ref().and_then(|s| s.latest_rtt_ms).unwrap_or(0.0);
+        assert!(
+            (1.0..=500.0).contains(&rtt_ms),
+            "expected plausible RTT ms value, got {rtt_ms}"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerInput {
+                player: 2,
+                frame: first_step.frame,
+                bits: 0x01,
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer input should process");
+        let rollback_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("post-input rollback step should succeed");
+        assert!(
+            rollback_step.rollback_distance > 0,
+            "late remote input should queue rollback"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerHash {
+                player: 2,
+                frame: rollback_step.frame,
+                state_hash: rollback_step.state_hash.wrapping_add(1),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer hash should process");
+        assert_eq!(stats.as_ref().map_or(0, |s| s.desync_count), 1);
+
+        let err = handle_netplay_server_message(
+            ServerMessage::Error {
+                message: "boom".to_owned(),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect_err("relay errors should propagate");
+        assert!(err.contains("relay error"));
     }
 
     #[test]
