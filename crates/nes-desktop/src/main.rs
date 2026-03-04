@@ -102,9 +102,37 @@ struct CaptureConfig {
     every_n_frames: u64,
 }
 
+trait AudioSinkControl {
+    fn queue_len(&self) -> usize;
+    fn append_i16(&self, samples: Vec<i16>);
+    fn stop(&self);
+}
+
+struct RodioSinkAdapter {
+    inner: Sink,
+}
+
+impl AudioSinkControl for RodioSinkAdapter {
+    fn queue_len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn append_i16(&self, samples: Vec<i16>) {
+        self.inner.append(SamplesBuffer::new(
+            AUDIO_CHANNELS,
+            AUDIO_SAMPLE_RATE,
+            samples,
+        ));
+    }
+
+    fn stop(&self) {
+        self.inner.stop();
+    }
+}
+
 struct AudioOutput {
-    sink: Sink,
-    _stream: OutputStream,
+    sink: Box<dyn AudioSinkControl>,
+    _stream: Option<OutputStream>,
 }
 
 struct NetplayRuntimeStats {
@@ -180,6 +208,37 @@ struct PerfMetrics {
     netplay_max_rollback_distance: u64,
     netplay_desyncs: u64,
     netplay_input_delay_frames: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MetricsSnapshot {
+    wall_fps: f64,
+    emu_fps: f64,
+    avg_step_ms: f64,
+    avg_render_ms: f64,
+}
+
+fn compute_metrics_snapshot(
+    report_frames: u64,
+    elapsed_secs: f64,
+    report_start_ppu_frame: u64,
+    ppu_now: u64,
+    step_work: Duration,
+    render_work: Duration,
+) -> Option<MetricsSnapshot> {
+    if report_frames == 0 || elapsed_secs <= f64::EPSILON {
+        return None;
+    }
+    let wall_fps = report_frames as f64 / elapsed_secs;
+    let emu_fps = ppu_now.saturating_sub(report_start_ppu_frame) as f64 / elapsed_secs;
+    let avg_step_ms = step_work.as_secs_f64() * 1_000.0 / report_frames as f64;
+    let avg_render_ms = render_work.as_secs_f64() * 1_000.0 / report_frames as f64;
+    Some(MetricsSnapshot {
+        wall_fps,
+        emu_fps,
+        avg_step_ms,
+        avg_render_ms,
+    })
 }
 
 impl PerfMetrics {
@@ -264,17 +323,24 @@ impl PerfMetrics {
             return;
         }
         let elapsed = self.report_start.elapsed().as_secs_f64();
-        if elapsed <= f64::EPSILON {
-            return;
-        }
-        let wall_fps = self.report_frames as f64 / elapsed;
         let ppu_now = core.ppu_frame_counter();
-        let emu_fps = ppu_now.saturating_sub(self.report_start_ppu_frame) as f64 / elapsed;
-        let avg_step_ms = self.step_work.as_secs_f64() * 1_000.0 / self.report_frames as f64;
-        let avg_render_ms = self.render_work.as_secs_f64() * 1_000.0 / self.report_frames as f64;
+        let Some(snapshot) = compute_metrics_snapshot(
+            self.report_frames,
+            elapsed,
+            self.report_start_ppu_frame,
+            ppu_now,
+            self.step_work,
+            self.render_work,
+        ) else {
+            return;
+        };
 
         println!(
-            "[metrics] wall_fps={wall_fps:.1} emu_fps={emu_fps:.1} avg_step_ms={avg_step_ms:.2} avg_render_ms={avg_render_ms:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
+            "[metrics] wall_fps={:.1} emu_fps={:.1} avg_step_ms={:.2} avg_render_ms={:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
+            snapshot.wall_fps,
+            snapshot.emu_fps,
+            snapshot.avg_step_ms,
+            snapshot.avg_render_ms,
             self.late_frames,
             self.pc_stall_frames,
             self.unchanged_frame_count,
@@ -325,31 +391,32 @@ impl PerfMetrics {
 }
 
 impl AudioOutput {
+    fn new_with_sink(sink: Box<dyn AudioSinkControl>, stream: Option<OutputStream>) -> Self {
+        Self {
+            sink,
+            _stream: stream,
+        }
+    }
+
     fn try_new() -> Result<Self, String> {
         let (stream, handle) = OutputStream::try_default()
             .map_err(|err| format!("Audio output init failed: {err}"))?;
         let sink =
             Sink::try_new(&handle).map_err(|err| format!("Audio sink init failed: {err}"))?;
-        Ok(Self {
-            sink,
-            _stream: stream,
-        })
+        let sink_adapter = RodioSinkAdapter { inner: sink };
+        Ok(Self::new_with_sink(Box::new(sink_adapter), Some(stream)))
     }
 
     fn queue_samples(&self, samples: Vec<i16>) -> bool {
-        if self.sink.len() >= MAX_AUDIO_QUEUE_CHUNKS {
+        if self.sink.queue_len() >= MAX_AUDIO_QUEUE_CHUNKS {
             return false;
         }
-        self.sink.append(SamplesBuffer::new(
-            AUDIO_CHANNELS,
-            AUDIO_SAMPLE_RATE,
-            samples,
-        ));
+        self.sink.append_i16(samples);
         true
     }
 
     fn queue_len(&self) -> usize {
-        self.sink.len()
+        self.sink.queue_len()
     }
 }
 
@@ -364,6 +431,300 @@ fn main() {
     if let Err(err) = run() {
         eprintln!("{err}");
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KeyboardDecision {
+    Exit,
+    SetRewindHeld(bool),
+    UpdateKeyboardBits { mask: u8, pressed: bool },
+    ExecuteCore(Command),
+    Noop,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum FrameDecision {
+    WaitUntil(Instant),
+    Step {
+        missed_deadline: bool,
+        next_deadline: Instant,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowEventDecision {
+    CloseRequested,
+    KeyboardInput {
+        key: Option<VirtualKeyCode>,
+        pressed: bool,
+    },
+    Resized {
+        width: u32,
+        height: u32,
+    },
+    ScaleFactorChanged {
+        width: u32,
+        height: u32,
+    },
+    Ignore,
+}
+
+fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
+    match event {
+        WindowEvent::CloseRequested => WindowEventDecision::CloseRequested,
+        WindowEvent::KeyboardInput { input, .. } => WindowEventDecision::KeyboardInput {
+            key: input.virtual_keycode,
+            pressed: element_state_pressed(input.state),
+        },
+        WindowEvent::Resized(size) => WindowEventDecision::Resized {
+            width: size.width,
+            height: size.height,
+        },
+        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+            WindowEventDecision::ScaleFactorChanged {
+                width: new_inner_size.width,
+                height: new_inner_size.height,
+            }
+        }
+        _ => WindowEventDecision::Ignore,
+    }
+}
+
+fn classify_keyboard_input(
+    key: VirtualKeyCode,
+    pressed: bool,
+    rollback_enabled: bool,
+) -> KeyboardDecision {
+    if key == VirtualKeyCode::Escape && pressed {
+        return KeyboardDecision::Exit;
+    }
+    if key == VirtualKeyCode::R {
+        return KeyboardDecision::SetRewindHeld(pressed);
+    }
+
+    let Some(key_code) = map_virtual_keycode(key) else {
+        return KeyboardDecision::Noop;
+    };
+
+    if rollback_enabled {
+        if let Some(mask) = map_key_event_to_button_bit(key_code) {
+            KeyboardDecision::UpdateKeyboardBits { mask, pressed }
+        } else {
+            KeyboardDecision::Noop
+        }
+    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed) {
+        KeyboardDecision::ExecuteCore(mapped.core)
+    } else {
+        KeyboardDecision::Noop
+    }
+}
+
+fn evaluate_frame_deadline(now: Instant, next_frame_deadline: Instant) -> FrameDecision {
+    if now < next_frame_deadline {
+        FrameDecision::WaitUntil(next_frame_deadline)
+    } else {
+        FrameDecision::Step {
+            missed_deadline: now > next_frame_deadline,
+            next_deadline: now + TARGET_FRAME_TIME,
+        }
+    }
+}
+
+fn scaled_window_dimensions(window_scale: u32) -> (f64, f64) {
+    (
+        f64::from(FRAME_WIDTH as u32 * window_scale),
+        f64::from(FRAME_HEIGHT as u32 * window_scale),
+    )
+}
+
+fn gamepad_assignments_changed(
+    next: [Option<GamepadId>; 2],
+    current: [Option<GamepadId>; 2],
+) -> bool {
+    next != current
+}
+
+fn gamepad_slot_changed(
+    next: [Option<GamepadId>; 2],
+    current: [Option<GamepadId>; 2],
+    player: usize,
+) -> bool {
+    next[player] != current[player]
+}
+
+fn element_state_pressed(state: ElementState) -> bool {
+    state == ElementState::Pressed
+}
+
+fn should_resume_after_rewind_hold(held: bool) -> bool {
+    !held
+}
+
+fn is_player_two_slot(player_index: usize) -> bool {
+    player_index == 1
+}
+
+fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
+    keyboard_bits | local_gamepad_bits
+}
+
+fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
+    runtime_flag || config_flag
+}
+
+fn should_log_rollback(distance: u64) -> bool {
+    distance > 0
+}
+
+fn should_update_input_delay(target_delay: u32, current_delay: u32) -> bool {
+    target_delay != current_delay
+}
+
+fn should_trace_frame(trace_every_frames: u64, frame_index: u64) -> bool {
+    trace_every_frames != 0 && frame_index != 0 && frame_index.is_multiple_of(trace_every_frames)
+}
+
+fn audio_queue_dropped(queued: bool) -> bool {
+    !queued
+}
+
+fn should_capture_frame(every_n_frames: u64, frame_index: u64) -> bool {
+    every_n_frames != 0 && frame_index.is_multiple_of(every_n_frames)
+}
+
+fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
+    let local_slot = usize::from(local_player.saturating_sub(1));
+    gamepad_bits.get(local_slot).copied().unwrap_or_else(|| {
+        gamepad_bits
+            .iter()
+            .copied()
+            .find(|bits| *bits != 0)
+            .unwrap_or(0)
+    })
+}
+
+fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
+    hash_check_every != 0 && frame != 0 && frame.is_multiple_of(hash_check_every)
+}
+
+fn schedule_netplay_ping(
+    now: Instant,
+    next_ping_at: &mut Instant,
+    ping_nonce: &mut u64,
+    pending_pings: &mut BTreeMap<u64, Instant>,
+    ping_interval: Duration,
+    max_pending: usize,
+) -> Option<u64> {
+    if now < *next_ping_at {
+        return None;
+    }
+
+    let nonce = *ping_nonce;
+    *ping_nonce = ping_nonce.wrapping_add(1);
+    pending_pings.insert(nonce, now);
+    while pending_pings.len() > max_pending {
+        if let Some(oldest_nonce) = pending_pings.keys().next().copied() {
+            pending_pings.remove(&oldest_nonce);
+        }
+    }
+    *next_ping_at = now + ping_interval;
+    Some(nonce)
+}
+
+fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
+    if pressed {
+        current | mask
+    } else {
+        current & !mask
+    }
+}
+
+fn apply_gamepad_delta_commands(
+    core: &mut NesCore,
+    previous_bits: u8,
+    next_bits: u8,
+    player2: bool,
+) -> Result<(), String> {
+    for command in controller_state_delta_for_player(previous_bits, next_bits, player2) {
+        core.execute(command)
+            .map_err(|err| format!("Gamepad command failed: {err}"))?;
+    }
+    Ok(())
+}
+
+fn handle_netplay_server_message(
+    message: ServerMessage,
+    rollback_engine: &mut RollbackEngine,
+    netplay_local_player: u8,
+    netplay_stats: &mut Option<NetplayRuntimeStats>,
+    netplay_pending_pings: &mut BTreeMap<u64, Instant>,
+) -> Result<(), String> {
+    match message {
+        ServerMessage::PeerInput {
+            player,
+            frame,
+            bits,
+        } => {
+            if player != netplay_local_player {
+                let ingest = rollback_engine.ingest_remote_input(frame, bits);
+                if ingest.rollback_queued {
+                    eprintln!(
+                        "[netplay] queued rollback from frame {} due to late remote input",
+                        frame
+                    );
+                }
+            }
+        }
+        ServerMessage::PeerHash {
+            player,
+            frame,
+            state_hash,
+        } => {
+            if player != netplay_local_player {
+                match rollback_engine.compare_remote_hash(frame, state_hash) {
+                    HashComparison::Match => {}
+                    HashComparison::Mismatch => {
+                        eprintln!(
+                            "[netplay] desync detected at frame {} (remote hash {:016X})",
+                            frame, state_hash
+                        );
+                        if let Some(stats) = netplay_stats.as_mut() {
+                            stats.observe_desync();
+                        }
+                    }
+                    HashComparison::PendingLocalFrame => {}
+                }
+            }
+        }
+        ServerMessage::Joined {
+            room,
+            player,
+            peer_present,
+        } => {
+            println!(
+                "[netplay] joined room '{}' as P{} (peer_present={})",
+                room, player, peer_present
+            );
+        }
+        ServerMessage::PeerJoined { player } => {
+            println!("[netplay] peer joined as P{}", player);
+        }
+        ServerMessage::PeerLeft { player } => {
+            println!("[netplay] peer left (P{})", player);
+        }
+        ServerMessage::Error { message } => {
+            return Err(format!("[netplay] relay error: {message}"));
+        }
+        ServerMessage::Pong { nonce } => {
+            if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
+                let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
+                if let Some(stats) = netplay_stats.as_mut() {
+                    stats.observe_rtt_ms(rtt_ms);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn run() -> Result<(), String> {
@@ -501,12 +862,10 @@ fn run() -> Result<(), String> {
     let mut netplay_pending_pings = BTreeMap::<u64, Instant>::new();
 
     let event_loop = EventLoop::new();
+    let (window_width, window_height) = scaled_window_dimensions(runtime.window_scale);
     let window = WindowBuilder::new()
         .with_title("nes-desktop")
-        .with_inner_size(LogicalSize::new(
-            f64::from(FRAME_WIDTH as u32 * runtime.window_scale),
-            f64::from(FRAME_HEIGHT as u32 * runtime.window_scale),
-        ))
+        .with_inner_size(LogicalSize::new(window_width, window_height))
         .with_min_inner_size(LogicalSize::new(FRAME_WIDTH as f64, FRAME_HEIGHT as f64))
         .build(&event_loop)
         .map_err(|err| format!("Failed to create window: {err}"))?;
@@ -538,7 +897,11 @@ fn run() -> Result<(), String> {
     };
     let mut active_gamepads = [None::<GamepadId>; 2];
     if let Some(gilrs_state) = gilrs.as_ref() {
-        let connected = connected_gamepad_ids(gilrs_state);
+        let connected = connected_gamepad_ids(
+            gilrs_state
+                .gamepads()
+                .map(|(id, gamepad)| (id, gamepad.is_connected())),
+        );
         for (player, slot) in active_gamepads.iter_mut().enumerate() {
             *slot = connected.get(player).copied();
             if let Some(gamepad_id) = *slot {
@@ -580,67 +943,56 @@ fn run() -> Result<(), String> {
     };
 
     event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent { event, .. } => match event {
-            WindowEvent::CloseRequested => {
+        Event::WindowEvent { event, .. } => match classify_window_event(&event) {
+            WindowEventDecision::CloseRequested => {
                 *control_flow = ControlFlow::Exit;
             }
-            WindowEvent::KeyboardInput { input, .. } => {
-                let Some(key) = input.virtual_keycode else {
+            WindowEventDecision::KeyboardInput { key, pressed } => {
+                let Some(key) = key else {
                     return;
                 };
-                let pressed = input.state == ElementState::Pressed;
-
-                if key == VirtualKeyCode::Escape && pressed {
-                    *control_flow = ControlFlow::Exit;
-                    return;
-                }
-
-                // R: hold to rewind, release to resume.
-                if key == VirtualKeyCode::R {
-                    rewind_held = pressed;
-                    if !pressed {
-                        time_machine.resume();
-                        // The restored snapshot's controller_bits may reflect buttons
-                        // held at that historical frame. Release all buttons so the
-                        // core's latch matches the actual key state going forward.
-                        for &button in &CONTROLLER_BUTTONS {
-                            let _ = core.execute(Command::ReleaseButton(button));
-                        }
-                    }
-                    return;
-                }
-
-                if let Some(key_code) = map_virtual_keycode(key) {
-                    if rollback.is_some() {
-                        if let Some(button_mask) = map_key_event_to_button_bit(key_code) {
-                            if pressed {
-                                keyboard_bits |= button_mask;
-                            } else {
-                                keyboard_bits &= !button_mask;
-                            }
-                        }
-                    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed)
-                        && let Err(err) = core.execute(mapped.core)
-                    {
-                        eprintln!("Input command failed: {err}");
+                match classify_keyboard_input(key, pressed, rollback.is_some()) {
+                    KeyboardDecision::Exit => {
                         *control_flow = ControlFlow::Exit;
                     }
+                    KeyboardDecision::SetRewindHeld(held) => {
+                        // R: hold to rewind, release to resume.
+                        rewind_held = held;
+                        if should_resume_after_rewind_hold(held) {
+                            time_machine.resume();
+                            // The restored snapshot's controller_bits may reflect buttons
+                            // held at that historical frame. Release all buttons so the
+                            // core's latch matches the actual key state going forward.
+                            for &button in &CONTROLLER_BUTTONS {
+                                let _ = core.execute(Command::ReleaseButton(button));
+                            }
+                        }
+                    }
+                    KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
+                        keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
+                    }
+                    KeyboardDecision::ExecuteCore(command) => {
+                        if let Err(err) = core.execute(command) {
+                            eprintln!("Input command failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
+                    KeyboardDecision::Noop => {}
                 }
             }
-            WindowEvent::Resized(size) => {
-                if let Err(err) = pixels.resize_surface(size.width, size.height) {
+            WindowEventDecision::Resized { width, height } => {
+                if let Err(err) = pixels.resize_surface(width, height) {
                     eprintln!("Surface resize failed: {err}");
                     *control_flow = ControlFlow::Exit;
                 }
             }
-            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                if let Err(err) = pixels.resize_surface(new_inner_size.width, new_inner_size.height)
-                {
+            WindowEventDecision::ScaleFactorChanged { width, height } => {
+                if let Err(err) = pixels.resize_surface(width, height) {
                     eprintln!("Scale-factor resize failed: {err}");
                     *control_flow = ControlFlow::Exit;
                 }
             }
-            _ => {}
+            WindowEventDecision::Ignore => {}
         },
         Event::MainEventsCleared => {
             #[cfg(feature = "mcp-host")]
@@ -650,10 +1002,15 @@ fn run() -> Result<(), String> {
 
             if let Some(gilrs_state) = gilrs.as_mut() {
                 while gilrs_state.next_event().is_some() {}
-                let next_active = select_active_gamepad_ids(gilrs_state, active_gamepads);
-                if next_active != active_gamepads {
+                let connected = connected_gamepad_ids(
+                    gilrs_state
+                        .gamepads()
+                        .map(|(id, gamepad)| (id, gamepad.is_connected())),
+                );
+                let next_active = select_active_gamepad_ids(&connected, active_gamepads);
+                if gamepad_assignments_changed(next_active, active_gamepads) {
                     for player in 0..active_gamepads.len() {
-                        if next_active[player] != active_gamepads[player] {
+                        if gamepad_slot_changed(next_active, active_gamepads, player) {
                             if let Some(gamepad_id) = next_active[player] {
                                 println!(
                                     "Gamepad P{} active: {}",
@@ -670,32 +1027,55 @@ fn run() -> Result<(), String> {
 
                 for player in 0..gamepad_bits.len() {
                     let next_gamepad_bits = active_gamepads[player]
-                        .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
+                        .map(|gamepad_id| {
+                            let gamepad = gilrs_state.gamepad(gamepad_id);
+                            gamepad_snapshot_to_bits(GamepadSnapshot {
+                                connected: gamepad.is_connected(),
+                                south_pressed: gamepad.is_pressed(GamepadButton::South),
+                                east_pressed: gamepad.is_pressed(GamepadButton::East),
+                                west_pressed: gamepad.is_pressed(GamepadButton::West),
+                                north_pressed: gamepad.is_pressed(GamepadButton::North),
+                                select_pressed: gamepad.is_pressed(GamepadButton::Select),
+                                start_pressed: gamepad.is_pressed(GamepadButton::Start),
+                                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
+                                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
+                                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
+                                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
+                                left_x: gamepad.value(GamepadAxis::LeftStickX),
+                                left_y: gamepad.value(GamepadAxis::LeftStickY),
+                            })
+                        })
                         .unwrap_or_default();
-                    if rollback.is_none() {
-                        for command in controller_state_delta_for_player(
+                    if rollback.is_none()
+                        && let Err(err) = apply_gamepad_delta_commands(
+                            &mut core,
                             gamepad_bits[player],
                             next_gamepad_bits,
-                            player == 1,
-                        ) {
-                            if let Err(err) = core.execute(command) {
-                                eprintln!("Gamepad command failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                        }
+                            is_player_two_slot(player),
+                        )
+                    {
+                        eprintln!("{err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
                     }
                     gamepad_bits[player] = next_gamepad_bits;
                 }
             }
 
             let now = Instant::now();
-            if now < next_frame_deadline {
-                *control_flow = ControlFlow::WaitUntil(next_frame_deadline);
-                return;
-            }
-            let missed_deadline = now > next_frame_deadline;
-            next_frame_deadline = now + TARGET_FRAME_TIME;
+            let missed_deadline = match evaluate_frame_deadline(now, next_frame_deadline) {
+                FrameDecision::WaitUntil(deadline) => {
+                    *control_flow = ControlFlow::WaitUntil(deadline);
+                    return;
+                }
+                FrameDecision::Step {
+                    missed_deadline,
+                    next_deadline,
+                } => {
+                    next_frame_deadline = next_deadline;
+                    missed_deadline
+                }
+            };
             let step_start = Instant::now();
 
             #[cfg(feature = "nova")]
@@ -704,12 +1084,10 @@ fn run() -> Result<(), String> {
             }
 
             if let Some(rollback_engine) = rollback.as_mut() {
-                let local_slot = usize::from(netplay_local_player.saturating_sub(1));
-                let local_gamepad_bits = gamepad_bits
-                    .get(local_slot)
-                    .copied()
-                    .unwrap_or_else(|| gamepad_bits.iter().copied().find(|bits| *bits != 0).unwrap_or(0));
-                let scheduled = rollback_engine.schedule_local_input(keyboard_bits | local_gamepad_bits);
+                let local_gamepad_bits =
+                    compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+                let scheduled = rollback_engine
+                    .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
                 if let Some(client) = netplay_client.as_ref()
                     && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
                 {
@@ -718,24 +1096,18 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 if let Some(client) = netplay_client.as_ref() {
-                    if now >= netplay_next_ping_at {
-                        let nonce = netplay_ping_nonce;
-                        netplay_ping_nonce = netplay_ping_nonce.wrapping_add(1);
-                        netplay_pending_pings.insert(nonce, now);
-                        // Bound growth in case a peer vanishes without replying.
-                        while netplay_pending_pings.len() > 128 {
-                            if let Some(oldest_nonce) =
-                                netplay_pending_pings.keys().next().copied()
-                            {
-                                netplay_pending_pings.remove(&oldest_nonce);
-                            }
-                        }
-                        if let Err(err) = client.send_ping(nonce) {
-                            eprintln!("Netplay send ping failed: {err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
-                        netplay_next_ping_at = now + NETPLAY_PING_INTERVAL;
+                    if let Some(nonce) = schedule_netplay_ping(
+                        now,
+                        &mut netplay_next_ping_at,
+                        &mut netplay_ping_nonce,
+                        &mut netplay_pending_pings,
+                        NETPLAY_PING_INTERVAL,
+                        128,
+                    ) && let Err(err) = client.send_ping(nonce)
+                    {
+                        eprintln!("Netplay send ping failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
                     }
 
                     loop {
@@ -750,76 +1122,23 @@ fn run() -> Result<(), String> {
                         let Some(message) = message else {
                             break;
                         };
-                        match message {
-                            ServerMessage::PeerInput { player, frame, bits } => {
-                                if player != netplay_local_player {
-                                    let ingest = rollback_engine.ingest_remote_input(frame, bits);
-                                    if ingest.rollback_queued {
-                                        eprintln!(
-                                            "[netplay] queued rollback from frame {} due to late remote input",
-                                            frame
-                                        );
-                                    }
-                                }
-                            }
-                            ServerMessage::PeerHash {
-                                player,
-                                frame,
-                                state_hash,
-                            } => {
-                                if player != netplay_local_player {
-                                    match rollback_engine.compare_remote_hash(frame, state_hash) {
-                                        HashComparison::Match => {}
-                                        HashComparison::Mismatch => {
-                                            eprintln!(
-                                                "[netplay] desync detected at frame {} (remote hash {:016X})",
-                                                frame,
-                                                state_hash
-                                            );
-                                            if let Some(stats) = netplay_stats.as_mut() {
-                                                stats.observe_desync();
-                                            }
-                                        }
-                                        HashComparison::PendingLocalFrame => {}
-                                    }
-                                }
-                            }
-                            ServerMessage::Joined {
-                                room,
-                                player,
-                                peer_present,
-                            } => {
-                                println!(
-                                    "[netplay] joined room '{}' as P{} (peer_present={})",
-                                    room, player, peer_present
-                                );
-                            }
-                            ServerMessage::PeerJoined { player } => {
-                                println!("[netplay] peer joined as P{}", player);
-                            }
-                            ServerMessage::PeerLeft { player } => {
-                                println!("[netplay] peer left (P{})", player);
-                            }
-                            ServerMessage::Error { message } => {
-                                eprintln!("[netplay] relay error: {message}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                            ServerMessage::Pong { nonce } => {
-                                if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
-                                    let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
-                                    if let Some(stats) = netplay_stats.as_mut() {
-                                        stats.observe_rtt_ms(rtt_ms);
-                                    }
-                                }
-                            }
+                        if let Err(err) = handle_netplay_server_message(
+                            message,
+                            rollback_engine,
+                            netplay_local_player,
+                            &mut netplay_stats,
+                            &mut netplay_pending_pings,
+                        ) {
+                            eprintln!("{err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
                         }
                     }
                 }
 
                 match rollback_engine.advance_frame(&mut core) {
                     Ok(step) => {
-                        if step.rollback_distance > 0 {
+                        if should_log_rollback(step.rollback_distance) {
                             eprintln!(
                                 "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
                                 step.rollback_distance, step.frame, step.local_bits, step.remote_bits
@@ -845,7 +1164,7 @@ fn run() -> Result<(), String> {
                         } else {
                             current_delay
                         };
-                        if target_delay != current_delay {
+                        if should_update_input_delay(target_delay, current_delay) {
                             if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
                                 eprintln!("Netplay adaptive delay update failed: {err}");
                                 *control_flow = ControlFlow::Exit;
@@ -865,8 +1184,7 @@ fn run() -> Result<(), String> {
                             stats.input_delay_frames = current_delay;
                         }
 
-                        if netplay_hash_check_every > 0
-                            && step.frame.is_multiple_of(netplay_hash_check_every)
+                        if should_send_netplay_hash(netplay_hash_check_every, step.frame)
                             && let Some(client) = netplay_client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
@@ -897,7 +1215,7 @@ fn run() -> Result<(), String> {
             if let Some(stats) = netplay_stats.as_ref() {
                 metrics.on_netplay_stats(stats);
             }
-            if trace_every_frames > 0 && frame_index.is_multiple_of(trace_every_frames) {
+            if should_trace_frame(trace_every_frames, frame_index) {
                 let regs = core.cpu_snapshot();
                 println!(
                     "frame={} ppu_frame={} pc=${:04X} a={:02X} x={:02X} y={:02X} ctrl1={:02X} ctrl2={:02X}",
@@ -914,7 +1232,7 @@ fn run() -> Result<(), String> {
 
             if let Some(audio_output) = audio_output.as_ref() {
                 let queued = audio_output.queue_samples(core.audio_chunk_i16());
-                metrics.on_audio_queue(audio_output.queue_len(), !queued);
+                metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
             }
 
             window.request_redraw();
@@ -925,8 +1243,7 @@ fn run() -> Result<(), String> {
             core.fill_framebuffer_rgba(&mut frame_rgba);
             pixels.frame_mut().copy_from_slice(&frame_rgba);
             if let Some(config) = capture.as_ref()
-                && config.every_n_frames != 0
-                && frame_index.is_multiple_of(config.every_n_frames)
+                && should_capture_frame(config.every_n_frames, frame_index)
             {
                 let path = capture_path_for_frame(&config.path_template, frame_index);
                 if let Err(err) = write_frame_ppm(&path, &frame_rgba) {
@@ -989,7 +1306,8 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         config.desktop.capture_path_template,
         config.desktop.capture_every_frames,
     );
-    let netplay_enabled = runtime_args.netplay_enabled || config.netplay.enabled;
+    let netplay_enabled =
+        netplay_feature_enabled(runtime_args.netplay_enabled, config.netplay.enabled);
     let step_mode = if netplay_enabled {
         StepMode::Frame
     } else {
@@ -1260,7 +1578,7 @@ fn recommended_input_delay_frames(
     let target = raw_target.clamp(min_delay_frames, max_delay_frames);
 
     if target > current_delay_frames {
-        target
+        target.max(current_delay_frames.saturating_add(1))
     } else if target + 1 < current_delay_frames {
         current_delay_frames - 1
     } else {
@@ -1282,18 +1600,34 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
     }
 }
 
-fn connected_gamepad_ids(gilrs: &Gilrs) -> Vec<GamepadId> {
-    gilrs
-        .gamepads()
-        .filter_map(|(id, gamepad)| gamepad.is_connected().then_some(id))
+#[derive(Debug, Clone, Copy, Default)]
+struct GamepadSnapshot {
+    connected: bool,
+    south_pressed: bool,
+    east_pressed: bool,
+    west_pressed: bool,
+    north_pressed: bool,
+    select_pressed: bool,
+    start_pressed: bool,
+    dpad_up_pressed: bool,
+    dpad_down_pressed: bool,
+    dpad_left_pressed: bool,
+    dpad_right_pressed: bool,
+    left_x: f32,
+    left_y: f32,
+}
+
+fn connected_gamepad_ids(gamepads: impl IntoIterator<Item = (GamepadId, bool)>) -> Vec<GamepadId> {
+    gamepads
+        .into_iter()
+        .filter_map(|(id, connected)| connected.then_some(id))
         .collect()
 }
 
 fn select_active_gamepad_ids(
-    gilrs: &Gilrs,
+    connected: &[GamepadId],
     current: [Option<GamepadId>; 2],
 ) -> [Option<GamepadId>; 2] {
-    let connected = connected_gamepad_ids(gilrs);
     let mut next = [None::<GamepadId>; 2];
 
     for player in 0..next.len() {
@@ -1305,7 +1639,7 @@ fn select_active_gamepad_ids(
         }
     }
 
-    for gamepad_id in connected {
+    for &gamepad_id in connected {
         if next.iter().all(|slot| *slot != Some(gamepad_id))
             && let Some(slot) = next.iter_mut().find(|slot| slot.is_none())
         {
@@ -1316,39 +1650,36 @@ fn select_active_gamepad_ids(
     next
 }
 
-fn sample_gamepad_bits(gilrs: &Gilrs, gamepad_id: GamepadId) -> u8 {
-    let gamepad = gilrs.gamepad(gamepad_id);
-    if !gamepad.is_connected() {
+fn gamepad_snapshot_to_bits(snapshot: GamepadSnapshot) -> u8 {
+    if !snapshot.connected {
         return 0;
     }
 
     let mut bits = 0_u8;
     // Keep both common face layouts usable across Xbox/Switch-style controllers.
-    if gamepad.is_pressed(GamepadButton::South) || gamepad.is_pressed(GamepadButton::East) {
+    if snapshot.south_pressed || snapshot.east_pressed {
         bits |= Button::A.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::West) || gamepad.is_pressed(GamepadButton::North) {
+    if snapshot.west_pressed || snapshot.north_pressed {
         bits |= Button::B.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::Select) {
+    if snapshot.select_pressed {
         bits |= Button::Select.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::Start) {
+    if snapshot.start_pressed {
         bits |= Button::Start.bit_mask();
     }
 
-    let left_x = gamepad.value(GamepadAxis::LeftStickX);
-    let left_y = gamepad.value(GamepadAxis::LeftStickY);
-    if gamepad.is_pressed(GamepadButton::DPadUp) || left_y <= -GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_up_pressed || snapshot.left_y <= -GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Up.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::DPadDown) || left_y >= GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_down_pressed || snapshot.left_y >= GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Down.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::DPadLeft) || left_x <= -GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_left_pressed || snapshot.left_x <= -GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Left.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::DPadRight) || left_x >= GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_right_pressed || snapshot.left_x >= GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Right.bit_mask();
     }
 
@@ -1504,10 +1835,117 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_MCP_BIND_ADDR, RuntimeArgs, controller_state_delta_for_player, parse_runtime_args,
-        recommended_input_delay_frames,
+        AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
+        DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
+        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
+        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs, StepMode,
+        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
+        apply_gamepad_delta_commands, audio_queue_dropped, capture_config_from_parts,
+        capture_path_for_frame, classify_keyboard_input, classify_window_event,
+        compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
+        controller_state_delta_for_player, element_state_pressed, encode_bmp, encode_ppm,
+        evaluate_frame_deadline, frame_signature, gamepad_assignments_changed,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, handle_netplay_server_message,
+        is_player_two_slot, map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
+        parse_runtime_args, recommended_input_delay_frames, scaled_window_dimensions,
+        schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
+        should_trace_frame, should_update_input_delay, update_button_bits, write_frame_ppm,
     };
-    use nes_core::{Button, Command};
+    use gilrs::GamepadId;
+    use nes_core::{Button, Command, NesCore};
+    use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
+    use rodio::Sink;
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    use winit::dpi::PhysicalSize;
+    use winit::event::{
+        DeviceId, ElementState, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
+    };
+
+    fn parse_runtime_args_with_timeout(args: Vec<String>) -> Result<RuntimeArgs, String> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(parse_runtime_args(&args));
+        });
+        rx.recv_timeout(Duration::from_millis(250))
+            .expect("parse_runtime_args should complete without hanging")
+    }
+
+    fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
+        let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
+        rom[0] = 0x4E; // N
+        rom[1] = 0x45; // E
+        rom[2] = 0x53; // S
+        rom[3] = 0x1A;
+        rom[4] = prg_banks;
+        rom[5] = 0; // CHR RAM
+        rom[6] = (mapper_id & 0x0F) << 4;
+        rom[7] = mapper_id & 0xF0;
+        rom
+    }
+
+    fn fake_gamepad_id(raw: usize) -> GamepadId {
+        // SAFETY: Test-only helper to synthesize opaque identifiers for equality checks.
+        unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
+    }
+
+    #[derive(Debug, Default)]
+    struct FakeAudioState {
+        queue_len: usize,
+        append_calls: usize,
+        appended_sample_count: usize,
+        stop_calls: usize,
+    }
+
+    struct FakeAudioSink {
+        state: Arc<Mutex<FakeAudioState>>,
+    }
+
+    impl FakeAudioSink {
+        fn with_len(initial_len: usize) -> (Self, Arc<Mutex<FakeAudioState>>) {
+            let state = Arc::new(Mutex::new(FakeAudioState {
+                queue_len: initial_len,
+                ..Default::default()
+            }));
+            (
+                Self {
+                    state: Arc::clone(&state),
+                },
+                state,
+            )
+        }
+    }
+
+    impl AudioSinkControl for FakeAudioSink {
+        fn queue_len(&self) -> usize {
+            self.state
+                .lock()
+                .expect("fake audio state lock should not poison")
+                .queue_len
+        }
+
+        fn append_i16(&self, samples: Vec<i16>) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.append_calls = state.append_calls.saturating_add(1);
+            state.appended_sample_count = state.appended_sample_count.saturating_add(samples.len());
+            state.queue_len = state.queue_len.saturating_add(1);
+        }
+
+        fn stop(&self) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.stop_calls = state.stop_calls.saturating_add(1);
+        }
+    }
 
     #[test]
     fn parse_runtime_args_accepts_mcp_host_and_bind_flags() {
@@ -1517,7 +1955,7 @@ mod tests {
             "127.0.0.1:7777".to_owned(),
             "game.nes".to_owned(),
         ];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
         assert!(parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
@@ -1526,7 +1964,7 @@ mod tests {
     #[test]
     fn parse_runtime_args_accepts_equals_bind_form() {
         let args = vec!["--mcp-bind=127.0.0.1:7000".to_owned()];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert!(parsed.rom_path.is_none());
         assert!(!parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7000");
@@ -1535,7 +1973,7 @@ mod tests {
     #[test]
     fn parse_runtime_args_defaults_bind_when_flag_absent() {
         let args = vec!["game.nes".to_owned()];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
         assert!(!parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, DEFAULT_MCP_BIND_ADDR);
@@ -1544,7 +1982,7 @@ mod tests {
     #[test]
     fn parse_runtime_args_rejects_unknown_flags() {
         let args = vec!["--bogus".to_owned()];
-        let err = parse_runtime_args(&args).expect_err("unknown flag should fail");
+        let err = parse_runtime_args_with_timeout(args).expect_err("unknown flag should fail");
         assert!(err.contains("unknown flag"));
     }
 
@@ -1563,7 +2001,7 @@ mod tests {
             "--netplay-hash-every".to_owned(),
             "90".to_owned(),
         ];
-        let parsed = parse_runtime_args(&args).expect("parse args");
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         let expected = RuntimeArgs {
             rom_path: None,
             mcp_enabled: false,
@@ -1603,6 +2041,595 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_delay_exact_targets_and_hysteresis_behave_as_expected() {
+        let raised = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+        assert_eq!(raised, 5);
+
+        let clamped = recommended_input_delay_frames(Some(400.0), 100.0, 1, 6, 2);
+        assert_eq!(clamped, 6);
+
+        let drops_by_one = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 6);
+        assert_eq!(drops_by_one, 5);
+
+        let holds_within_hysteresis = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 4);
+        assert_eq!(holds_within_hysteresis, 4);
+
+        let jitter_weighted = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 1);
+        assert_eq!(jitter_weighted, 3);
+
+        let equal_target_holds_current = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 3);
+        assert_eq!(equal_target_holds_current, 3);
+    }
+
+    #[test]
+    fn adaptive_delay_returns_min_when_bounds_are_invalid() {
+        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
+        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_derives_expected_rates() {
+        let snapshot = compute_metrics_snapshot(
+            2,
+            0.25,
+            100,
+            130,
+            Duration::from_millis(10),
+            Duration::from_millis(8),
+        )
+        .expect("non-zero frames and elapsed should yield snapshot");
+        assert_eq!(
+            snapshot,
+            MetricsSnapshot {
+                wall_fps: 8.0,
+                emu_fps: 120.0,
+                avg_step_ms: 5.0,
+                avg_render_ms: 4.0,
+            }
+        );
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_handles_guard_conditions_and_saturating_ppu_delta() {
+        assert!(compute_metrics_snapshot(0, 1.0, 10, 20, Duration::ZERO, Duration::ZERO).is_none());
+        assert!(
+            compute_metrics_snapshot(1, f64::EPSILON, 10, 20, Duration::ZERO, Duration::ZERO)
+                .is_none()
+        );
+        let snapshot = compute_metrics_snapshot(
+            1,
+            1.0,
+            200,
+            100,
+            Duration::from_millis(3),
+            Duration::from_millis(2),
+        )
+        .expect("valid input should produce snapshot");
+        assert_eq!(snapshot.emu_fps, 0.0);
+    }
+
+    #[test]
+    fn audio_output_queue_and_drop_behave_with_fake_sink() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS - 1);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        assert!(output.queue_samples(vec![1_i16, 2, 3]));
+        assert_eq!(output.queue_len(), MAX_AUDIO_QUEUE_CHUNKS);
+
+        let state_after_queue = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state_after_queue.append_calls, 1);
+        assert_eq!(state_after_queue.appended_sample_count, 3);
+        drop(state_after_queue);
+
+        drop(output);
+        let state_after_drop = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state_after_drop.stop_calls, 1);
+    }
+
+    #[test]
+    fn audio_output_rejects_samples_when_queue_is_full() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        assert!(!output.queue_samples(vec![1_i16, 2, 3]));
+        assert_eq!(output.queue_len(), MAX_AUDIO_QUEUE_CHUNKS);
+
+        let state = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state.append_calls, 0);
+    }
+
+    #[test]
+    fn rodio_sink_adapter_forwards_append_and_queue_len() {
+        let (sink, _queue_rx) = Sink::new_idle();
+        let adapter = RodioSinkAdapter { inner: sink };
+
+        assert_eq!(adapter.queue_len(), 0);
+        adapter.append_i16(vec![1_i16, 2, 3, 4]);
+        assert_eq!(adapter.queue_len(), 1);
+        adapter.append_i16(vec![5_i16, 6, 7, 8]);
+        assert_eq!(adapter.queue_len(), 2);
+    }
+
+    #[test]
+    fn rodio_sink_adapter_stop_mutes_idle_queue_output() {
+        let (sink, mut queue_rx) = Sink::new_idle();
+        let adapter = RodioSinkAdapter { inner: sink };
+
+        adapter.append_i16(vec![i16::MAX; 5_000]);
+        assert_eq!(
+            queue_rx.next(),
+            Some(0.999_969_5),
+            "i16::MAX should map to a non-zero sample before stop"
+        );
+
+        adapter.stop();
+
+        let saw_silence = (0..600).any(|_| queue_rx.next() == Some(0.0));
+        assert!(saw_silence, "stop should silence the queued source");
+    }
+
+    #[test]
+    fn map_virtual_keycode_maps_all_supported_keys() {
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::RShift),
+            Some("ShiftRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::Right),
+            Some("ArrowRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn classify_window_event_maps_window_variants_to_decisions() {
+        assert_eq!(
+            classify_window_event(&WindowEvent::CloseRequested),
+            WindowEventDecision::CloseRequested
+        );
+
+        let key_event = WindowEvent::KeyboardInput {
+            // SAFETY: winit explicitly exposes dummy IDs for unit testing.
+            device_id: unsafe { DeviceId::dummy() },
+            input: KeyboardInput {
+                scancode: 0,
+                state: ElementState::Pressed,
+                virtual_keycode: Some(VirtualKeyCode::Z),
+                modifiers: ModifiersState::empty(),
+            },
+            is_synthetic: false,
+        };
+        assert_eq!(
+            classify_window_event(&key_event),
+            WindowEventDecision::KeyboardInput {
+                key: Some(VirtualKeyCode::Z),
+                pressed: true
+            }
+        );
+
+        let resized = WindowEvent::Resized(PhysicalSize::new(640, 480));
+        assert_eq!(
+            classify_window_event(&resized),
+            WindowEventDecision::Resized {
+                width: 640,
+                height: 480
+            }
+        );
+
+        let mut scale_size = PhysicalSize::new(800, 600);
+        let scale_changed = WindowEvent::ScaleFactorChanged {
+            scale_factor: 1.25,
+            new_inner_size: &mut scale_size,
+        };
+        assert_eq!(
+            classify_window_event(&scale_changed),
+            WindowEventDecision::ScaleFactorChanged {
+                width: 800,
+                height: 600
+            }
+        );
+
+        let ignored = WindowEvent::Focused(true);
+        assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
+    }
+
+    #[test]
+    fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Escape, true, false),
+            KeyboardDecision::Exit
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::R, true, false),
+            KeyboardDecision::SetRewindHeld(true)
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::R, false, true),
+            KeyboardDecision::SetRewindHeld(false)
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Z, true, true),
+            KeyboardDecision::UpdateKeyboardBits {
+                mask: Button::A.bit_mask(),
+                pressed: true
+            }
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::X, false, false),
+            KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Escape, false, false),
+            KeyboardDecision::Noop
+        );
+    }
+
+    #[test]
+    fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
+        let now = Instant::now();
+        let future = now + Duration::from_millis(2);
+        match evaluate_frame_deadline(now, future) {
+            FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
+            FrameDecision::Step { .. } => panic!("expected wait branch"),
+        }
+
+        match evaluate_frame_deadline(now, now) {
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                assert!(!missed_deadline);
+                assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
+            }
+            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+        }
+
+        match evaluate_frame_deadline(now + Duration::from_millis(1), now) {
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                assert!(missed_deadline);
+                assert_eq!(
+                    next_deadline,
+                    (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
+                );
+            }
+            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+        }
+    }
+
+    #[test]
+    fn netplay_helper_functions_choose_local_bits_and_hash_schedule() {
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 1), 0x12);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 2), 0x34);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 3), 0x12);
+        assert_eq!(compute_local_netplay_bits([0, 0], 9), 0);
+
+        assert!(!should_send_netplay_hash(0, 120));
+        assert!(!should_send_netplay_hash(60, 0));
+        assert!(should_send_netplay_hash(60, 120));
+        assert!(!should_send_netplay_hash(60, 121));
+    }
+
+    #[test]
+    fn desktop_loop_helper_primitives_cover_window_scale_and_player_flags() {
+        assert_eq!(
+            scaled_window_dimensions(1),
+            (FRAME_WIDTH as f64, FRAME_HEIGHT as f64)
+        );
+        assert_eq!(
+            scaled_window_dimensions(3),
+            (
+                f64::from(FRAME_WIDTH as u32 * 3),
+                f64::from(FRAME_HEIGHT as u32 * 3)
+            )
+        );
+
+        assert!(element_state_pressed(ElementState::Pressed));
+        assert!(!element_state_pressed(ElementState::Released));
+        assert!(should_resume_after_rewind_hold(false));
+        assert!(!should_resume_after_rewind_hold(true));
+
+        assert!(!is_player_two_slot(0));
+        assert!(is_player_two_slot(1));
+        assert_eq!(
+            merge_local_input_bits(0b0000_0011, 0b0000_0101),
+            0b0000_0111
+        );
+
+        assert!(netplay_feature_enabled(true, false));
+        assert!(netplay_feature_enabled(false, true));
+        assert!(!netplay_feature_enabled(false, false));
+
+        assert!(!should_log_rollback(0));
+        assert!(should_log_rollback(1));
+        assert!(!should_update_input_delay(2, 2));
+        assert!(should_update_input_delay(3, 2));
+
+        assert!(!should_trace_frame(0, 120));
+        assert!(!should_trace_frame(60, 0));
+        assert!(should_trace_frame(60, 120));
+        assert!(!should_trace_frame(60, 121));
+
+        assert!(!audio_queue_dropped(true));
+        assert!(audio_queue_dropped(false));
+
+        assert!(!should_capture_frame(0, 120));
+        assert!(should_capture_frame(60, 120));
+        assert!(!should_capture_frame(60, 121));
+    }
+
+    #[test]
+    fn gamepad_assignment_helpers_detect_global_and_slot_level_changes() {
+        let none = [None, None];
+        assert!(!gamepad_assignments_changed(none, none));
+        assert!(!gamepad_slot_changed(none, none, 0));
+        assert!(!gamepad_slot_changed(none, none, 1));
+
+        let next = [Some(fake_gamepad_id(1)), None];
+        let current = [None, Some(fake_gamepad_id(2))];
+        assert!(gamepad_assignments_changed(next, current));
+        assert!(gamepad_slot_changed(next, current, 0));
+        assert!(gamepad_slot_changed(next, current, 1));
+    }
+
+    #[test]
+    fn gamepad_source_helpers_select_connected_ids_without_duplicates() {
+        let id1 = fake_gamepad_id(1);
+        let id2 = fake_gamepad_id(2);
+        let id3 = fake_gamepad_id(3);
+        let connected = connected_gamepad_ids(vec![(id1, true), (id2, false), (id3, true)]);
+        assert_eq!(connected, vec![id1, id3]);
+
+        let next = select_active_gamepad_ids(&connected, [Some(id1), Some(id2)]);
+        assert_eq!(next, [Some(id1), Some(id3)]);
+
+        let deduped = select_active_gamepad_ids(&connected, [Some(id3), Some(id3)]);
+        assert_eq!(deduped, [Some(id3), Some(id1)]);
+    }
+
+    #[test]
+    fn gamepad_sampling_helpers_map_buttons_and_axis_thresholds() {
+        let bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            east_pressed: true,
+            north_pressed: true,
+            select_pressed: true,
+            start_pressed: true,
+            dpad_down_pressed: true,
+            dpad_right_pressed: true,
+            left_x: -0.75,
+            left_y: -0.75,
+            ..GamepadSnapshot::default()
+        });
+        let expected = Button::A.bit_mask()
+            | Button::B.bit_mask()
+            | Button::Select.bit_mask()
+            | Button::Start.bit_mask()
+            | Button::Up.bit_mask()
+            | Button::Down.bit_mask()
+            | Button::Left.bit_mask()
+            | Button::Right.bit_mask();
+        assert_eq!(bits, expected);
+
+        let boundary_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            left_x: GAMEPAD_AXIS_THRESHOLD,
+            left_y: -GAMEPAD_AXIS_THRESHOLD,
+            ..GamepadSnapshot::default()
+        });
+        assert_eq!(
+            boundary_bits,
+            Button::Up.bit_mask() | Button::Right.bit_mask()
+        );
+
+        let neutral_axis_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            left_x: 0.0,
+            left_y: GAMEPAD_AXIS_THRESHOLD * 0.5,
+            ..GamepadSnapshot::default()
+        });
+        assert_eq!(neutral_axis_bits, 0);
+
+        assert_eq!(
+            gamepad_snapshot_to_bits(GamepadSnapshot {
+                connected: false,
+                east_pressed: true,
+                left_x: 1.0,
+                left_y: -1.0,
+                ..GamepadSnapshot::default()
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn schedule_netplay_ping_enforces_deadline_nonce_and_pending_cap() {
+        let now = Instant::now();
+        let mut next_ping_at = now + Duration::from_millis(10);
+        let mut nonce = 5_u64;
+        let mut pending = BTreeMap::<u64, Instant>::new();
+        pending.insert(1, now - Duration::from_millis(20));
+        pending.insert(2, now - Duration::from_millis(10));
+
+        assert_eq!(
+            schedule_netplay_ping(
+                now,
+                &mut next_ping_at,
+                &mut nonce,
+                &mut pending,
+                Duration::from_millis(500),
+                2
+            ),
+            None
+        );
+        assert_eq!(nonce, 5);
+        assert_eq!(pending.len(), 2);
+
+        let due_now = now + Duration::from_millis(10);
+        let scheduled = schedule_netplay_ping(
+            due_now,
+            &mut next_ping_at,
+            &mut nonce,
+            &mut pending,
+            Duration::from_millis(500),
+            2,
+        );
+        assert_eq!(scheduled, Some(5));
+        assert_eq!(nonce, 6);
+        assert_eq!(next_ping_at, due_now + Duration::from_millis(500));
+        assert_eq!(pending.len(), 2, "pending set should be capped to max");
+        assert!(
+            !pending.contains_key(&1),
+            "oldest nonce should be evicted first"
+        );
+        assert!(pending.contains_key(&5), "new nonce should be tracked");
+    }
+
+    #[test]
+    fn update_button_bits_sets_and_clears_masks() {
+        let with_a = update_button_bits(0, Button::A.bit_mask(), true);
+        assert_eq!(with_a, Button::A.bit_mask());
+        // Pressing an already-set bit should be idempotent.
+        assert_eq!(
+            update_button_bits(with_a, Button::A.bit_mask(), true),
+            Button::A.bit_mask()
+        );
+        let with_ab = update_button_bits(with_a, Button::B.bit_mask(), true);
+        assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
+        let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
+        assert_eq!(cleared_a, Button::B.bit_mask());
+    }
+
+    #[test]
+    fn apply_gamepad_delta_commands_updates_controller_bits() {
+        let mut core = NesCore::new();
+        apply_gamepad_delta_commands(
+            &mut core,
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            false,
+        )
+        .expect("applying player-1 gamepad delta should succeed");
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask() | Button::Right.bit_mask()
+        );
+
+        apply_gamepad_delta_commands(
+            &mut core,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            Button::Right.bit_mask(),
+            false,
+        )
+        .expect("releasing one player-1 button should succeed");
+        assert_eq!(core.controller_bits(), Button::Right.bit_mask());
+
+        apply_gamepad_delta_commands(&mut core, 0, Button::Start.bit_mask(), true)
+            .expect("applying player-2 gamepad delta should succeed");
+        assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
+    }
+
+    #[test]
+    fn handle_netplay_server_message_updates_stats_and_errors() {
+        let mut core = NesCore::new();
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start + 0x3FFC] = 0x00;
+        rom[prg_start + 0x3FFD] = 0x80;
+        core.load_ines_rom(&rom).expect("sample rom should load");
+
+        let mut rollback_engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 2,
+            max_rollback_frames: 16,
+        })
+        .expect("rollback config should be valid");
+        let first_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("initial rollback step should succeed");
+
+        let mut stats = Some(NetplayRuntimeStats::new(2));
+        let mut pending = BTreeMap::<u64, Instant>::new();
+        pending.insert(7, Instant::now() - Duration::from_millis(10));
+
+        handle_netplay_server_message(
+            ServerMessage::Pong { nonce: 7 },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("pong message should process");
+        assert!(pending.is_empty());
+        let rtt_ms = stats.as_ref().and_then(|s| s.latest_rtt_ms).unwrap_or(0.0);
+        assert!(
+            (1.0..=500.0).contains(&rtt_ms),
+            "expected plausible RTT ms value, got {rtt_ms}"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerInput {
+                player: 2,
+                frame: first_step.frame,
+                bits: 0x01,
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer input should process");
+        let rollback_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("post-input rollback step should succeed");
+        assert!(
+            rollback_step.rollback_distance > 0,
+            "late remote input should queue rollback"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerHash {
+                player: 2,
+                frame: rollback_step.frame,
+                state_hash: rollback_step.state_hash.wrapping_add(1),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer hash should process");
+        assert_eq!(stats.as_ref().map_or(0, |s| s.desync_count), 1);
+
+        let err = handle_netplay_server_message(
+            ServerMessage::Error {
+                message: "boom".to_owned(),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect_err("relay errors should propagate");
+        assert!(err.contains("relay error"));
+    }
+
+    #[test]
     fn controller_state_delta_emits_press_and_release() {
         let press = controller_state_delta_for_player(
             0,
@@ -1632,5 +2659,409 @@ mod tests {
 
         let release = controller_state_delta_for_player(Button::Start.bit_mask(), 0, true);
         assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
+    }
+
+    #[test]
+    fn parse_runtime_args_help_and_validation_paths() {
+        let help = parse_runtime_args_with_timeout(vec!["--help".to_owned()])
+            .expect_err("help returns usage");
+        assert!(help.contains("Usage: nes-desktop"));
+        assert!(help.contains("Default config path"));
+
+        let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
+            .expect_err("missing mcp bind");
+        assert!(missing_bind.contains("missing value after --mcp-bind"));
+
+        let missing_relay = parse_runtime_args_with_timeout(vec!["--netplay-relay".to_owned()])
+            .expect_err("missing netplay relay");
+        assert!(missing_relay.contains("missing value after --netplay-relay"));
+
+        let invalid_player =
+            parse_runtime_args_with_timeout(vec!["--netplay-player".to_owned(), "bad".to_owned()])
+                .expect_err("invalid player value");
+        assert!(invalid_player.contains("--netplay-player"));
+
+        let multi_rom =
+            parse_runtime_args_with_timeout(vec!["a.nes".to_owned(), "b.nes".to_owned()])
+                .expect_err("multiple roms should fail");
+        assert!(multi_rom.contains("multiple ROM paths"));
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_all_equals_forms_for_netplay_flags() {
+        let args = vec![
+            "--mcp-host".to_owned(),
+            "--mcp-bind=127.0.0.1:7777".to_owned(),
+            "--netplay".to_owned(),
+            "--netplay-relay=relay.example:4545".to_owned(),
+            "--netplay-room=arena".to_owned(),
+            "--netplay-player=2".to_owned(),
+            "--netplay-delay=3".to_owned(),
+            "--netplay-max-rollback=360".to_owned(),
+            "--netplay-hash-every=90".to_owned(),
+            "rom.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("equals forms should parse");
+        assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
+        assert!(parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
+        assert!(parsed.netplay_enabled);
+        assert_eq!(
+            parsed.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+        assert_eq!(parsed.netplay_room.as_deref(), Some("arena"));
+        assert_eq!(parsed.netplay_player, Some(2));
+        assert_eq!(parsed.netplay_input_delay_frames, Some(3));
+        assert_eq!(parsed.netplay_max_rollback_frames, Some(360));
+        assert_eq!(parsed.netplay_hash_check_every_frames, Some(90));
+    }
+
+    #[test]
+    fn parse_runtime_args_control_flow_branches_do_not_hang() {
+        let mcp_host = parse_runtime_args_with_timeout(vec!["--mcp-host".to_owned()])
+            .expect("mcp host branch should parse");
+        assert!(mcp_host.mcp_enabled);
+
+        let netplay = parse_runtime_args_with_timeout(vec!["--netplay".to_owned()])
+            .expect("netplay branch should parse");
+        assert!(netplay.netplay_enabled);
+
+        let relay = parse_runtime_args_with_timeout(vec![
+            "--netplay-relay".to_owned(),
+            "relay.example:4545".to_owned(),
+        ])
+        .expect("netplay relay branch should parse");
+        assert_eq!(
+            relay.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+
+        let room =
+            parse_runtime_args_with_timeout(vec!["--netplay-room".to_owned(), "arena".to_owned()])
+                .expect("netplay room branch should parse");
+        assert_eq!(room.netplay_room.as_deref(), Some("arena"));
+
+        let player =
+            parse_runtime_args_with_timeout(vec!["--netplay-player".to_owned(), "2".to_owned()])
+                .expect("netplay player branch should parse");
+        assert_eq!(player.netplay_player, Some(2));
+
+        let delay =
+            parse_runtime_args_with_timeout(vec!["--netplay-delay".to_owned(), "3".to_owned()])
+                .expect("netplay delay branch should parse");
+        assert_eq!(delay.netplay_input_delay_frames, Some(3));
+
+        let hash_every = parse_runtime_args_with_timeout(vec![
+            "--netplay-hash-every".to_owned(),
+            "90".to_owned(),
+        ])
+        .expect("netplay hash-every branch should parse");
+        assert_eq!(hash_every.netplay_hash_check_every_frames, Some(90));
+
+        let bind_equals =
+            parse_runtime_args_with_timeout(vec!["--mcp-bind=127.0.0.1:7777".to_owned()])
+                .expect("mcp bind equals branch should parse");
+        assert_eq!(bind_equals.mcp_bind_addr, "127.0.0.1:7777");
+
+        let relay_equals =
+            parse_runtime_args_with_timeout(vec!["--netplay-relay=relay.example:4545".to_owned()])
+                .expect("netplay relay equals branch should parse");
+        assert_eq!(
+            relay_equals.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+
+        let room_equals = parse_runtime_args_with_timeout(vec!["--netplay-room=arena".to_owned()])
+            .expect("netplay room equals branch should parse");
+        assert_eq!(room_equals.netplay_room.as_deref(), Some("arena"));
+
+        let player_equals = parse_runtime_args_with_timeout(vec!["--netplay-player=2".to_owned()])
+            .expect("netplay player equals branch should parse");
+        assert_eq!(player_equals.netplay_player, Some(2));
+
+        let delay_equals = parse_runtime_args_with_timeout(vec!["--netplay-delay=3".to_owned()])
+            .expect("netplay delay equals branch should parse");
+        assert_eq!(delay_equals.netplay_input_delay_frames, Some(3));
+    }
+
+    #[test]
+    fn netplay_runtime_stats_tracks_rtt_jitter_rollbacks_and_desyncs() {
+        let mut stats = NetplayRuntimeStats::new(2);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 0.0);
+        assert_eq!(stats.input_delay_frames, 2);
+        assert_eq!(stats.rollback_count, 0);
+        assert_eq!(stats.max_rollback_distance, 0);
+        assert_eq!(stats.desync_count, 0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(20.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 20.0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(28.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 28.0);
+        assert_eq!(stats.jitter_ms, 8.0);
+
+        stats.observe_rtt_ms(40.0);
+        assert!((stats.jitter_ms - 8.5).abs() < 1e-9);
+
+        stats.observe_rollback(0);
+        assert_eq!(stats.rollback_count, 0);
+        stats.observe_rollback(2);
+        stats.observe_rollback(5);
+        assert_eq!(stats.rollback_count, 2);
+        assert_eq!(stats.max_rollback_distance, 5);
+
+        stats.observe_desync();
+        stats.observe_desync();
+        assert_eq!(stats.desync_count, 2);
+    }
+
+    #[test]
+    fn perf_metrics_on_step_tracks_stalls_and_recovers_on_pc_change() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 0, 0);
+        assert_eq!(metrics.every_n_frames, DEFAULT_METRICS_EVERY_FRAMES);
+
+        metrics.on_step(&core, Duration::from_millis(4), true);
+        assert_eq!(metrics.report_frames, 1);
+        assert_eq!(metrics.step_work, Duration::from_millis(4));
+        assert_eq!(metrics.late_frames, 1);
+        assert_eq!(metrics.last_pc, Some(core.cpu_pc()));
+        assert_eq!(metrics.pc_stall_frames, 0);
+
+        metrics.on_step(&core, Duration::from_millis(2), false);
+        assert_eq!(metrics.report_frames, 2);
+        assert_eq!(metrics.step_work, Duration::from_millis(6));
+        assert_eq!(metrics.pc_stall_frames, 1);
+
+        metrics.pc_stall_frames = 239;
+        metrics.last_pc = Some(core.cpu_pc());
+        metrics.warned_stall = false;
+        metrics.on_step(&core, Duration::from_millis(1), false);
+        assert_eq!(metrics.pc_stall_frames, 240);
+        assert!(metrics.warned_stall);
+
+        metrics.last_pc = Some(core.cpu_pc().wrapping_add(1));
+        metrics.pc_stall_frames = 77;
+        metrics.warned_stall = true;
+        metrics.on_step(&core, Duration::from_millis(1), false);
+        assert_eq!(metrics.pc_stall_frames, 0);
+        assert!(!metrics.warned_stall);
+    }
+
+    #[test]
+    fn perf_metrics_render_audio_and_netplay_observation_update_fields() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
+        let frame = vec![0_u8; 256 * 240 * 4];
+
+        metrics.on_render(&frame, Duration::from_millis(3));
+        assert_eq!(metrics.render_work, Duration::from_millis(3));
+        assert_eq!(metrics.unchanged_frame_count, 0);
+
+        metrics.on_render(&frame, Duration::from_millis(2));
+        assert_eq!(metrics.render_work, Duration::from_millis(5));
+        assert_eq!(metrics.unchanged_frame_count, 1);
+
+        metrics.on_audio_queue(3, false);
+        metrics.on_audio_queue(2, true);
+        assert_eq!(metrics.audio_queue_peak, 3);
+        assert_eq!(metrics.audio_queue_drops, 1);
+
+        let mut net = NetplayRuntimeStats::new(4);
+        net.observe_rtt_ms(42.0);
+        net.observe_rtt_ms(46.0);
+        net.observe_rollback(3);
+        net.observe_desync();
+        metrics.on_netplay_stats(&net);
+        assert_eq!(metrics.netplay_rtt_ms, 46.0);
+        assert_eq!(metrics.netplay_jitter_ms, 4.0);
+        assert_eq!(metrics.netplay_rollbacks, 1);
+        assert_eq!(metrics.netplay_max_rollback_distance, 3);
+        assert_eq!(metrics.netplay_desyncs, 1);
+        assert_eq!(metrics.netplay_input_delay_frames, 4);
+    }
+
+    #[test]
+    fn perf_metrics_maybe_report_resets_window_after_threshold() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
+        metrics.report_frames = 2;
+        metrics.step_work = Duration::from_millis(8);
+        metrics.render_work = Duration::from_millis(6);
+        metrics.late_frames = 1;
+        metrics.audio_queue_peak = 4;
+        metrics.audio_queue_drops = 2;
+        metrics.netplay_rollbacks = 5;
+        metrics.netplay_max_rollback_distance = 7;
+        metrics.netplay_desyncs = 3;
+        metrics.report_start = Instant::now() - Duration::from_millis(20);
+
+        metrics.maybe_report(&core);
+
+        assert_eq!(metrics.report_frames, 0);
+        assert_eq!(metrics.step_work, Duration::ZERO);
+        assert_eq!(metrics.render_work, Duration::ZERO);
+        assert_eq!(metrics.late_frames, 0);
+        assert_eq!(metrics.audio_queue_peak, 0);
+        assert_eq!(metrics.audio_queue_drops, 0);
+        assert_eq!(metrics.netplay_rollbacks, 0);
+        assert_eq!(metrics.netplay_max_rollback_distance, 0);
+        assert_eq!(metrics.netplay_desyncs, 0);
+    }
+
+    #[test]
+    fn perf_metrics_maybe_report_guard_paths_skip_when_disabled_or_under_threshold() {
+        let core = NesCore::new();
+
+        let mut disabled = PerfMetrics::new(false, 1, core.ppu_frame_counter());
+        disabled.report_frames = 1;
+        disabled.step_work = Duration::from_millis(4);
+        disabled.report_start = Instant::now() - Duration::from_millis(20);
+        disabled.maybe_report(&core);
+        assert_eq!(disabled.report_frames, 1);
+        assert_eq!(disabled.step_work, Duration::from_millis(4));
+
+        let mut under_threshold = PerfMetrics::new(true, 5, core.ppu_frame_counter());
+        under_threshold.report_frames = 2;
+        under_threshold.step_work = Duration::from_millis(6);
+        under_threshold.report_start = Instant::now() - Duration::from_millis(20);
+        under_threshold.maybe_report(&core);
+        assert_eq!(under_threshold.report_frames, 2);
+        assert_eq!(under_threshold.step_work, Duration::from_millis(6));
+    }
+
+    #[test]
+    fn perf_metrics_disabled_mode_does_not_mutate_tracking_fields() {
+        let core = NesCore::new();
+        let frame = vec![0_u8; 256 * 240 * 4];
+        let mut metrics = PerfMetrics::new(false, 1, 0);
+
+        metrics.on_step(&core, Duration::from_millis(3), true);
+        metrics.on_render(&frame, Duration::from_millis(2));
+        metrics.on_audio_queue(10, true);
+        let mut net = NetplayRuntimeStats::new(3);
+        net.observe_rtt_ms(10.0);
+        net.observe_rollback(2);
+        net.observe_desync();
+        metrics.on_netplay_stats(&net);
+        metrics.maybe_report(&core);
+
+        assert_eq!(metrics.report_frames, 0);
+        assert_eq!(metrics.step_work, Duration::ZERO);
+        assert_eq!(metrics.render_work, Duration::ZERO);
+        assert_eq!(metrics.audio_queue_peak, 0);
+        assert_eq!(metrics.audio_queue_drops, 0);
+        assert_eq!(metrics.netplay_rtt_ms, 0.0);
+        assert_eq!(metrics.netplay_rollbacks, 0);
+        assert_eq!(metrics.netplay_desyncs, 0);
+    }
+
+    #[test]
+    fn advance_core_for_host_frame_steps_cpu_budget() {
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start] = 0xA9; // LDA #$42
+        rom[prg_start + 1] = 0x42;
+        rom[prg_start + 0x3FFC] = 0x00; // reset vector low
+        rom[prg_start + 0x3FFD] = 0x80; // reset vector high
+
+        let mut core = NesCore::new();
+        core.load_ines_rom(&rom).expect("sample rom should load");
+        assert_eq!(core.cpu_a(), 0x00);
+        assert_eq!(core.cpu_pc(), 0x8000);
+
+        advance_core_for_host_frame(&mut core, StepMode::CpuBudget(1))
+            .expect("cpu budget stepping should succeed");
+        assert_eq!(core.cpu_a(), 0x42);
+        assert_eq!(core.cpu_pc(), 0x8002);
+    }
+
+    #[test]
+    fn frame_signature_matches_reference_and_changes_on_sampled_byte() {
+        let mut frame = vec![0_u8; 256];
+        let signature_a = frame_signature(&frame);
+
+        let mut reference = 0xcbf2_9ce4_8422_2325_u64;
+        for idx in (0..frame.len()).step_by(64) {
+            reference ^= u64::from(frame[idx]);
+            reference = reference.wrapping_mul(0x0000_0001_0000_01b3);
+        }
+        assert_eq!(signature_a, reference);
+
+        frame[64] = 7;
+        let signature_b = frame_signature(&frame);
+        assert_ne!(signature_a, signature_b);
+    }
+
+    #[test]
+    fn capture_config_helpers_handle_placeholders_and_defaults() {
+        assert!(capture_config_from_parts(None, 10).is_none());
+        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
+
+        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
+            .expect("valid template should produce config");
+        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
+        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
+
+        assert_eq!(
+            capture_path_for_frame("snap-{frame}.ppm", 42),
+            "snap-000042.ppm"
+        );
+        assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
+    }
+
+    #[test]
+    fn ppm_and_bmp_encoders_emit_expected_headers_and_pixel_layout() {
+        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
+        assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
+        assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
+
+        let bmp = encode_bmp(1, 1, &[10, 20, 30, 255]).expect("bmp encoding should succeed");
+        assert_eq!(&bmp[0..2], b"BM");
+        assert_eq!(bmp.len(), 58);
+        assert_eq!(&bmp[54..58], &[30, 20, 10, 0]);
+    }
+
+    #[test]
+    fn encode_bmp_multiplies_row_and_column_indices_for_bottom_up_bgr_layout() {
+        let rgba = vec![
+            // Top row.
+            255, 0, 0, 255, 0, 255, 0, 255, // Bottom row.
+            0, 0, 255, 255, 255, 255, 255, 255,
+        ];
+        let bmp = encode_bmp(2, 2, &rgba).expect("bmp encoding should succeed");
+        assert_eq!(bmp.len(), 70);
+
+        // BMP stores rows bottom-up and colors as B,G,R with row padding.
+        assert_eq!(&bmp[54..62], &[255, 0, 0, 255, 255, 255, 0, 0]);
+        assert_eq!(&bmp[62..70], &[0, 0, 255, 0, 255, 0, 0, 0]);
+    }
+
+    #[test]
+    fn write_frame_ppm_validates_frame_size_and_writes_output_files() {
+        let bad = write_frame_ppm("ignored.ppm", &[0_u8; 3]).expect_err("invalid size should fail");
+        assert!(bad.contains("frame length mismatch"));
+
+        let frame = vec![0_u8; 256 * 240 * 4];
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be monotonic")
+            .as_nanos();
+        let ppm_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.ppm"));
+        let bmp_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.bmp"));
+
+        write_frame_ppm(&ppm_path.to_string_lossy(), &frame).expect("ppm write should succeed");
+        write_frame_ppm(&bmp_path.to_string_lossy(), &frame).expect("bmp write should succeed");
+
+        let ppm_bytes = fs::read(&ppm_path).expect("ppm bytes should be readable");
+        let bmp_bytes = fs::read(&bmp_path).expect("bmp bytes should be readable");
+        assert!(ppm_bytes.starts_with(b"P6\n256 240\n255\n"));
+        assert_eq!(&bmp_bytes[0..2], b"BM");
+
+        let _ = fs::remove_file(ppm_path);
+        let _ = fs::remove_file(bmp_path);
     }
 }

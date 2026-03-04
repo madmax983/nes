@@ -16,6 +16,7 @@ use nes_tui::app::map_key_event_to_command;
 use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
 use ratatui::Frame;
 use ratatui::Terminal;
+use ratatui::backend::Backend;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -56,6 +57,104 @@ enum VideoBackend {
         renderer: Box<ProtocolRenderer>,
         last_frame_update: Option<Instant>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoopAction {
+    Continue,
+    Exit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrameTick {
+    WaitUntil(Instant),
+    Step { next_deadline: Instant },
+}
+
+trait EventSource {
+    fn poll_event(&mut self, timeout: Duration) -> Result<bool, String>;
+    fn read_event(&mut self) -> Result<Event, String>;
+}
+
+trait LoopTimer {
+    fn now(&mut self) -> Instant;
+    fn sleep(&mut self, duration: Duration);
+}
+
+type PollEventFn = dyn FnMut(Duration) -> io::Result<bool>;
+type ReadEventFn = dyn FnMut() -> io::Result<Event>;
+
+struct CrosstermEventSource {
+    poll_fn: Box<PollEventFn>,
+    read_fn: Box<ReadEventFn>,
+}
+
+impl CrosstermEventSource {
+    fn new() -> Self {
+        Self {
+            poll_fn: Box::new(event::poll),
+            read_fn: Box::new(event::read),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_handlers(
+        poll_fn: impl FnMut(Duration) -> io::Result<bool> + 'static,
+        read_fn: impl FnMut() -> io::Result<Event> + 'static,
+    ) -> Self {
+        Self {
+            poll_fn: Box::new(poll_fn),
+            read_fn: Box::new(read_fn),
+        }
+    }
+}
+
+impl EventSource for CrosstermEventSource {
+    fn poll_event(&mut self, timeout: Duration) -> Result<bool, String> {
+        (self.poll_fn)(timeout).map_err(|err| format!("Input poll failed: {err}"))
+    }
+
+    fn read_event(&mut self) -> Result<Event, String> {
+        (self.read_fn)().map_err(|err| format!("Input read failed: {err}"))
+    }
+}
+
+type NowFn = dyn FnMut() -> Instant;
+type SleepFn = dyn FnMut(Duration);
+
+struct SystemLoopTimer {
+    now_fn: Box<NowFn>,
+    sleep_fn: Box<SleepFn>,
+}
+
+impl SystemLoopTimer {
+    fn new() -> Self {
+        Self {
+            now_fn: Box::new(Instant::now),
+            sleep_fn: Box::new(std::thread::sleep),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_handlers(
+        now_fn: impl FnMut() -> Instant + 'static,
+        sleep_fn: impl FnMut(Duration) + 'static,
+    ) -> Self {
+        Self {
+            now_fn: Box::new(now_fn),
+            sleep_fn: Box::new(sleep_fn),
+        }
+    }
+}
+
+impl LoopTimer for SystemLoopTimer {
+    fn now(&mut self) -> Instant {
+        (self.now_fn)()
+    }
+
+    fn sleep(&mut self, duration: Duration) {
+        (self.sleep_fn)(duration);
+    }
 }
 
 struct ProtocolRenderer {
@@ -177,7 +276,14 @@ fn run() -> Result<(), String> {
     runtime.video_backend = detect_video_backend();
     eprintln!("Video backend: {}", runtime.video_backend.label());
 
-    let loop_result = event_loop(&mut terminal, &mut runtime);
+    let mut event_source = CrosstermEventSource::new();
+    let mut loop_timer = SystemLoopTimer::new();
+    let loop_result = event_loop(
+        &mut terminal,
+        &mut runtime,
+        &mut event_source,
+        &mut loop_timer,
+    );
 
     disable_raw_mode().ok();
     execute!(terminal.backend_mut(), LeaveAlternateScreen).ok();
@@ -187,87 +293,116 @@ fn run() -> Result<(), String> {
 }
 
 fn event_loop(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut Terminal<impl Backend>,
     runtime: &mut TuiRuntime,
+    event_source: &mut impl EventSource,
+    loop_timer: &mut impl LoopTimer,
 ) -> Result<(), String> {
-    let mut next_frame_deadline = Instant::now();
+    let mut next_frame_deadline = loop_timer.now();
 
     loop {
-        while event::poll(Duration::from_millis(0))
-            .map_err(|err| format!("Input poll failed: {err}"))?
-        {
-            let ev = event::read().map_err(|err| format!("Input read failed: {err}"))?;
-            if let Event::Key(key) = ev {
-                if should_quit(key) {
-                    return Ok(());
-                }
-
-                if key_is_pressed(key.kind) && key.code == KeyCode::Char('p') {
-                    runtime.paused = !runtime.paused;
-                    let cmd = if runtime.paused {
-                        Command::Pause
-                    } else {
-                        Command::Resume
-                    };
-                    runtime
-                        .core
-                        .execute(cmd)
-                        .map_err(|err| format!("Pause toggle failed: {err}"))?;
-                } else if key_is_pressed(key.kind) && key.code == KeyCode::Char('r') {
-                    runtime
-                        .core
-                        .execute(Command::Reset)
-                        .map_err(|err| format!("Reset failed: {err}"))?;
-                } else if key_is_pressed(key.kind)
-                    && matches!(key.code, KeyCode::Char('i') | KeyCode::Char('I'))
-                {
-                    runtime.show_hud = !runtime.show_hud;
-                }
-
-                if let Some(pressed) = key_pressed_state(key.kind)
-                    && let Some(mapped) = map_key_event_to_command(key.code, pressed)
-                {
-                    runtime
-                        .core
-                        .execute(mapped.core)
-                        .map_err(|err| format!("Controller input failed: {err}"))?;
-                }
+        while event_source.poll_event(Duration::from_millis(0))? {
+            let ev = event_source.read_event()?;
+            if let Event::Key(key) = ev
+                && handle_runtime_key_event(runtime, key)? == LoopAction::Exit
+            {
+                return Ok(());
             }
         }
 
-        let now = Instant::now();
-        if now < next_frame_deadline {
-            std::thread::sleep(Duration::from_millis(1));
-            continue;
-        }
-        next_frame_deadline = now + TARGET_FRAME_TIME;
-
-        if !runtime.paused {
-            runtime.core.execute(Command::StepFrame).map_err(|err| {
-                format!(
-                    "Frame step failed at PC ${:04X}: {err}",
-                    runtime.core.cpu_pc()
-                )
-            })?;
-            runtime.frames_rendered = runtime.frames_rendered.saturating_add(1);
-            runtime.frames_since_fps_sample = runtime.frames_since_fps_sample.saturating_add(1);
+        let now = loop_timer.now();
+        match evaluate_frame_tick(now, next_frame_deadline) {
+            FrameTick::WaitUntil(_) => {
+                loop_timer.sleep(Duration::from_millis(1));
+                continue;
+            }
+            FrameTick::Step { next_deadline } => {
+                next_frame_deadline = next_deadline;
+            }
         }
 
-        let sample_elapsed = now.duration_since(runtime.last_fps_sample_at);
-        if sample_elapsed >= Duration::from_millis(250) {
-            runtime.instant_fps =
-                runtime.frames_since_fps_sample as f64 / sample_elapsed.as_secs_f64();
-            runtime.frames_since_fps_sample = 0;
-            runtime.last_fps_sample_at = now;
-        }
+        maybe_step_runtime_frame(runtime)?;
+        refresh_runtime_fps(runtime, now);
 
         runtime.core.fill_framebuffer_rgba(&mut runtime.frame_rgba);
         draw_frame(terminal, runtime)?;
     }
 }
 
+fn handle_runtime_key_event(runtime: &mut TuiRuntime, key: KeyEvent) -> Result<LoopAction, String> {
+    if should_quit(key) {
+        return Ok(LoopAction::Exit);
+    }
+
+    if key_is_pressed(key.kind) && key.code == KeyCode::Char('p') {
+        runtime.paused = !runtime.paused;
+        let cmd = if runtime.paused {
+            Command::Pause
+        } else {
+            Command::Resume
+        };
+        runtime
+            .core
+            .execute(cmd)
+            .map_err(|err| format!("Pause toggle failed: {err}"))?;
+    } else if key_is_pressed(key.kind) && key.code == KeyCode::Char('r') {
+        runtime
+            .core
+            .execute(Command::Reset)
+            .map_err(|err| format!("Reset failed: {err}"))?;
+    } else if key_is_pressed(key.kind)
+        && matches!(key.code, KeyCode::Char('i') | KeyCode::Char('I'))
+    {
+        runtime.show_hud = !runtime.show_hud;
+    }
+
+    if let Some(pressed) = key_pressed_state(key.kind)
+        && let Some(mapped) = map_key_event_to_command(key.code, pressed)
+    {
+        runtime
+            .core
+            .execute(mapped.core)
+            .map_err(|err| format!("Controller input failed: {err}"))?;
+    }
+
+    Ok(LoopAction::Continue)
+}
+
+fn evaluate_frame_tick(now: Instant, next_frame_deadline: Instant) -> FrameTick {
+    if now < next_frame_deadline {
+        FrameTick::WaitUntil(next_frame_deadline)
+    } else {
+        FrameTick::Step {
+            next_deadline: now + TARGET_FRAME_TIME,
+        }
+    }
+}
+
+fn maybe_step_runtime_frame(runtime: &mut TuiRuntime) -> Result<(), String> {
+    if !runtime.paused {
+        runtime.core.execute(Command::StepFrame).map_err(|err| {
+            format!(
+                "Frame step failed at PC ${:04X}: {err}",
+                runtime.core.cpu_pc()
+            )
+        })?;
+        runtime.frames_rendered = runtime.frames_rendered.saturating_add(1);
+        runtime.frames_since_fps_sample = runtime.frames_since_fps_sample.saturating_add(1);
+    }
+    Ok(())
+}
+
+fn refresh_runtime_fps(runtime: &mut TuiRuntime, now: Instant) {
+    let sample_elapsed = now.duration_since(runtime.last_fps_sample_at);
+    if sample_elapsed >= Duration::from_millis(250) {
+        runtime.instant_fps = runtime.frames_since_fps_sample as f64 / sample_elapsed.as_secs_f64();
+        runtime.frames_since_fps_sample = 0;
+        runtime.last_fps_sample_at = now;
+    }
+}
+
 fn draw_frame(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    terminal: &mut Terminal<impl Backend>,
     runtime: &mut TuiRuntime,
 ) -> Result<(), String> {
     terminal
@@ -743,17 +878,187 @@ fn key_is_pressed(kind: KeyEventKind) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        VideoBackendKind, fit_nes_viewport, frame_rgba_to_rgba_image, make_protocol_state,
-        parse_tui_args, protocol_image_resize, select_video_backend_kind,
-        should_refresh_protocol_frame, should_replace_protocol_state,
+        CrosstermEventSource, EventSource, FrameTick, LoopAction, LoopTimer,
+        PROTOCOL_FRAME_INTERVAL, ProtocolRenderer, SystemLoopTimer, TARGET_FRAME_TIME, TuiRuntime,
+        VideoBackend, VideoBackendKind, drain_protocol_results, draw_frame, evaluate_frame_tick,
+        event_loop, fit_nes_viewport, frame_rgba_to_rgba_image, handle_runtime_key_event,
+        key_is_pressed, key_pressed_state, make_protocol_state, maybe_step_runtime_frame,
+        parse_tui_args, protocol_image_resize, refresh_runtime_fps, select_video_backend_kind,
+        should_quit, should_refresh_protocol_frame, should_replace_protocol_state, usage_line,
+        usage_message,
     };
-    use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+    use image::Rgba;
+    use nes_core::{Button, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui_image::{
         Resize,
         picker::{Picker, ProtocolType},
+        protocol::StatefulProtocolType,
     };
+    use std::collections::VecDeque;
+    use std::io;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
     use std::time::{Duration, Instant};
+
+    fn key_event(code: KeyCode, kind: KeyEventKind) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+            kind,
+            state: KeyEventState::NONE,
+        }
+    }
+
+    fn sample_runtime(show_hud: bool) -> TuiRuntime {
+        TuiRuntime {
+            core: NesCore::new(),
+            rom_name: "test.nes".to_owned(),
+            mapper_id: 0,
+            prg_rom_bytes: 32 * 1024,
+            frame_rgba: vec![0_u8; FRAME_RGBA_BYTES],
+            paused: false,
+            frames_rendered: 120,
+            frames_since_fps_sample: 0,
+            instant_fps: 59.5,
+            last_fps_sample_at: Instant::now(),
+            started_at: Instant::now() - Duration::from_secs(2),
+            show_hud,
+            video_backend: VideoBackend::Halfblocks,
+        }
+    }
+
+    fn sample_ines(prg_banks: u8) -> Vec<u8> {
+        let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
+        rom[0] = 0x4E; // N
+        rom[1] = 0x45; // E
+        rom[2] = 0x53; // S
+        rom[3] = 0x1A;
+        rom[4] = prg_banks;
+        rom[5] = 0; // CHR RAM
+        rom[6] = 0;
+        rom[7] = 0;
+        rom
+    }
+
+    fn sample_runtime_with_rom(show_hud: bool) -> TuiRuntime {
+        let mut runtime = sample_runtime(show_hud);
+        let mut rom = sample_ines(1);
+        let prg_start = 16;
+        rom[prg_start + 0x3FFC] = 0x00; // reset vector low
+        rom[prg_start + 0x3FFD] = 0x80; // reset vector high
+        runtime
+            .core
+            .load_ines_rom(&rom)
+            .expect("sample rom should load");
+        runtime
+    }
+
+    struct ScriptedEventSource {
+        polls: VecDeque<bool>,
+        reads: VecDeque<Event>,
+        poll_calls: usize,
+        read_calls: usize,
+    }
+
+    impl ScriptedEventSource {
+        fn new(polls: Vec<bool>, reads: Vec<Event>) -> Self {
+            Self {
+                polls: polls.into(),
+                reads: reads.into(),
+                poll_calls: 0,
+                read_calls: 0,
+            }
+        }
+    }
+
+    impl EventSource for ScriptedEventSource {
+        fn poll_event(&mut self, _timeout: Duration) -> Result<bool, String> {
+            self.poll_calls = self.poll_calls.saturating_add(1);
+            self.polls
+                .pop_front()
+                .ok_or_else(|| "missing scripted poll result".to_owned())
+        }
+
+        fn read_event(&mut self) -> Result<Event, String> {
+            self.read_calls = self.read_calls.saturating_add(1);
+            self.reads
+                .pop_front()
+                .ok_or_else(|| "missing scripted event".to_owned())
+        }
+    }
+
+    struct ScriptedLoopTimer {
+        now_values: VecDeque<Instant>,
+        last_now: Instant,
+        sleep_calls: Vec<Duration>,
+    }
+
+    impl ScriptedLoopTimer {
+        fn new(now_values: Vec<Instant>) -> Self {
+            let last_now = now_values.first().copied().unwrap_or_else(Instant::now);
+            Self {
+                now_values: now_values.into(),
+                last_now,
+                sleep_calls: Vec::new(),
+            }
+        }
+    }
+
+    impl LoopTimer for ScriptedLoopTimer {
+        fn now(&mut self) -> Instant {
+            if let Some(next) = self.now_values.pop_front() {
+                self.last_now = next;
+                next
+            } else {
+                self.last_now
+            }
+        }
+
+        fn sleep(&mut self, duration: Duration) {
+            self.sleep_calls.push(duration);
+        }
+    }
+
+    fn terminal_text(terminal: &Terminal<TestBackend>) -> String {
+        let mut text = String::new();
+        for cell in terminal.backend().buffer().content() {
+            text.push_str(cell.symbol());
+        }
+        text
+    }
+
+    #[test]
+    fn protocol_frame_interval_matches_target_fps() {
+        assert_eq!(PROTOCOL_FRAME_INTERVAL, Duration::from_millis(33));
+    }
+
+    #[test]
+    fn video_backend_label_describes_halfblock_renderer() {
+        assert_eq!(
+            VideoBackend::Halfblocks.label(),
+            "filtered half-block renderer"
+        );
+    }
+
+    #[test]
+    fn usage_line_matches_cli_contract() {
+        assert_eq!(
+            usage_line(),
+            "Usage: nes-tui [--config <path>] [--hud|--high-res] [rom_path]"
+        );
+    }
+
+    #[test]
+    fn usage_message_includes_usage_line_and_default_path() {
+        let message = usage_message();
+        assert!(message.contains(usage_line()));
+        assert!(message.contains("Default config path:"));
+    }
 
     #[test]
     fn parse_tui_args_defaults_to_high_res_mode() {
@@ -778,11 +1083,66 @@ mod tests {
     }
 
     #[test]
+    fn parse_tui_args_help_flags_return_usage_message() {
+        let long_help = parse_tui_args(vec!["--help".to_owned()]).expect_err("help should stop");
+        assert_eq!(long_help, usage_message());
+
+        let short_help = parse_tui_args(vec!["-h".to_owned()]).expect_err("help should stop");
+        assert_eq!(short_help, usage_message());
+    }
+
+    #[test]
+    fn parse_tui_args_high_res_can_disable_hud_after_enabling_it() {
+        let (rom_path, options) = parse_tui_args(vec![
+            "--hud".to_owned(),
+            "--high-res".to_owned(),
+            "rom.nes".to_owned(),
+        ])
+        .expect("parse should succeed");
+        assert_eq!(rom_path.as_deref(), Some("rom.nes"));
+        assert!(!options.show_hud);
+    }
+
+    #[test]
+    fn fit_nes_viewport_returns_none_when_width_is_zero() {
+        assert!(fit_nes_viewport(Rect::new(0, 0, 0, 20)).is_none());
+    }
+
+    #[test]
+    fn fit_nes_viewport_returns_none_when_height_is_zero() {
+        assert!(fit_nes_viewport(Rect::new(0, 0, 20, 0)).is_none());
+    }
+
+    #[test]
     fn fit_nes_viewport_uses_integer_scale_when_room_allows() {
         let area = Rect::new(0, 0, 800, 300);
         let viewport = fit_nes_viewport(area).expect("viewport should exist");
         assert_eq!(viewport.area, Rect::new(144, 30, 512, 240));
         assert_eq!(viewport.integer_scale, Some(2));
+    }
+
+    #[test]
+    fn fit_nes_viewport_does_not_use_integer_scale_when_only_one_axis_fits_source() {
+        let area = Rect::new(0, 0, 300, 100);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(43, 0, 213, 100));
+        assert_eq!(viewport.integer_scale, None);
+    }
+
+    #[test]
+    fn fit_nes_viewport_uses_width_limited_integer_scale_when_height_has_extra_room() {
+        let area = Rect::new(0, 0, 600, 500);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(44, 130, 512, 240));
+        assert_eq!(viewport.integer_scale, Some(2));
+    }
+
+    #[test]
+    fn fit_nes_viewport_uses_height_limited_aspect_fit_when_area_is_wide_and_short() {
+        let area = Rect::new(5, 7, 200, 50);
+        let viewport = fit_nes_viewport(area).expect("viewport should exist");
+        assert_eq!(viewport.area, Rect::new(52, 7, 106, 50));
+        assert_eq!(viewport.integer_scale, None);
     }
 
     #[test]
@@ -858,6 +1218,323 @@ mod tests {
     }
 
     #[test]
+    fn should_quit_only_for_pressed_escape_or_q() {
+        assert!(should_quit(key_event(KeyCode::Esc, KeyEventKind::Press)));
+        assert!(should_quit(key_event(
+            KeyCode::Char('q'),
+            KeyEventKind::Repeat
+        )));
+        assert!(!should_quit(key_event(
+            KeyCode::Char('q'),
+            KeyEventKind::Release
+        )));
+        assert!(!should_quit(key_event(
+            KeyCode::Char('x'),
+            KeyEventKind::Press
+        )));
+    }
+
+    #[test]
+    fn key_pressed_state_maps_press_repeat_and_release() {
+        assert_eq!(key_pressed_state(KeyEventKind::Press), Some(true));
+        assert_eq!(key_pressed_state(KeyEventKind::Repeat), Some(true));
+        assert_eq!(key_pressed_state(KeyEventKind::Release), Some(false));
+    }
+
+    #[test]
+    fn key_is_pressed_only_for_press_or_repeat() {
+        assert!(key_is_pressed(KeyEventKind::Press));
+        assert!(key_is_pressed(KeyEventKind::Repeat));
+        assert!(!key_is_pressed(KeyEventKind::Release));
+    }
+
+    #[test]
+    fn crossterm_event_source_forwards_poll_and_read_results() {
+        let mut source_true =
+            CrosstermEventSource::with_handlers(|_| Ok(true), || Ok(Event::Resize(3, 2)));
+        assert!(
+            source_true
+                .poll_event(Duration::ZERO)
+                .expect("poll true should pass")
+        );
+
+        let mut source_false =
+            CrosstermEventSource::with_handlers(|_| Ok(false), || Ok(Event::Resize(1, 1)));
+        assert!(
+            !source_false
+                .poll_event(Duration::ZERO)
+                .expect("poll false should pass")
+        );
+
+        let event = source_false.read_event().expect("read should pass");
+        assert!(matches!(event, Event::Resize(1, 1)));
+    }
+
+    #[test]
+    fn crossterm_event_source_wraps_poll_and_read_errors() {
+        let mut source = CrosstermEventSource::with_handlers(
+            |_| Err(io::Error::other("poll failed")),
+            || Err(io::Error::other("read failed")),
+        );
+
+        let poll_err = source
+            .poll_event(Duration::ZERO)
+            .expect_err("poll errors should be wrapped");
+        assert!(poll_err.contains("Input poll failed"));
+
+        let read_err = source
+            .read_event()
+            .expect_err("read errors should be wrapped");
+        assert!(read_err.contains("Input read failed"));
+    }
+
+    #[test]
+    fn system_loop_timer_forwards_now_and_sleep_handlers() {
+        let base = Instant::now();
+        let mut tick = 0_u64;
+        let sleep_calls = Arc::new(AtomicUsize::new(0));
+        let sleep_calls_for_handler = Arc::clone(&sleep_calls);
+        let mut timer = SystemLoopTimer::with_handlers(
+            move || {
+                let now = base + Duration::from_millis(tick);
+                tick = tick.saturating_add(1);
+                now
+            },
+            move |_| {
+                sleep_calls_for_handler.fetch_add(1, Ordering::SeqCst);
+            },
+        );
+
+        let first = timer.now();
+        let second = timer.now();
+        assert!(second > first);
+
+        timer.sleep(Duration::from_millis(5));
+        assert_eq!(sleep_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn handle_runtime_key_event_recognizes_quit_inputs() {
+        let mut runtime = sample_runtime(false);
+        let esc =
+            handle_runtime_key_event(&mut runtime, key_event(KeyCode::Esc, KeyEventKind::Press))
+                .expect("escape should not error");
+        assert_eq!(esc, LoopAction::Exit);
+
+        let q_repeat = handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('q'), KeyEventKind::Repeat),
+        )
+        .expect("q repeat should not error");
+        assert_eq!(q_repeat, LoopAction::Exit);
+    }
+
+    #[test]
+    fn handle_runtime_key_event_toggles_pause_only_for_pressed_p() {
+        let mut runtime = sample_runtime(false);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('p'), KeyEventKind::Release),
+        )
+        .expect("release should not fail");
+        assert!(!runtime.paused);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('x'), KeyEventKind::Press),
+        )
+        .expect("other key should not fail");
+        assert!(!runtime.paused);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('p'), KeyEventKind::Press),
+        )
+        .expect("press should toggle pause on");
+        assert!(runtime.paused);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('p'), KeyEventKind::Repeat),
+        )
+        .expect("repeat should toggle pause off");
+        assert!(!runtime.paused);
+    }
+
+    #[test]
+    fn handle_runtime_key_event_resets_only_for_pressed_r() {
+        let mut runtime = sample_runtime_with_rom(false);
+        runtime.paused = false;
+        maybe_step_runtime_frame(&mut runtime).expect("step should succeed");
+        let stepped_pc = runtime.core.cpu_pc();
+        assert_ne!(stepped_pc, 0x8000);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('x'), KeyEventKind::Press),
+        )
+        .expect("unrelated key should not error");
+        assert_eq!(runtime.core.cpu_pc(), stepped_pc);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('r'), KeyEventKind::Press),
+        )
+        .expect("reset key should not error");
+        assert_eq!(runtime.core.cpu_pc(), 0x8000);
+    }
+
+    #[test]
+    fn handle_runtime_key_event_toggles_hud_only_for_pressed_i() {
+        let mut runtime = sample_runtime(false);
+        assert!(!runtime.show_hud);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('i'), KeyEventKind::Release),
+        )
+        .expect("release should not toggle");
+        assert!(!runtime.show_hud);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('x'), KeyEventKind::Press),
+        )
+        .expect("other key should not toggle");
+        assert!(!runtime.show_hud);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('i'), KeyEventKind::Press),
+        )
+        .expect("lowercase i should toggle on");
+        assert!(runtime.show_hud);
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('I'), KeyEventKind::Press),
+        )
+        .expect("uppercase I should toggle off");
+        assert!(!runtime.show_hud);
+    }
+
+    #[test]
+    fn handle_runtime_key_event_applies_controller_mapping_for_press_and_release() {
+        let mut runtime = sample_runtime(false);
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('z'), KeyEventKind::Press),
+        )
+        .expect("controller press should succeed");
+        assert_eq!(runtime.core.controller_bits(), Button::A.bit_mask());
+
+        handle_runtime_key_event(
+            &mut runtime,
+            key_event(KeyCode::Char('z'), KeyEventKind::Release),
+        )
+        .expect("controller release should succeed");
+        assert_eq!(runtime.core.controller_bits(), 0);
+    }
+
+    #[test]
+    fn evaluate_frame_tick_covers_wait_and_step_paths() {
+        let now = Instant::now();
+        let future = now + Duration::from_millis(2);
+        assert_eq!(
+            evaluate_frame_tick(now, future),
+            FrameTick::WaitUntil(future)
+        );
+
+        match evaluate_frame_tick(now, now) {
+            FrameTick::Step { next_deadline } => assert_eq!(next_deadline, now + TARGET_FRAME_TIME),
+            FrameTick::WaitUntil(_) => panic!("expected step for now==deadline"),
+        }
+
+        let late_now = now + Duration::from_millis(1);
+        match evaluate_frame_tick(late_now, now) {
+            FrameTick::Step { next_deadline } => {
+                assert_eq!(next_deadline, late_now + TARGET_FRAME_TIME)
+            }
+            FrameTick::WaitUntil(_) => panic!("expected step for late frame"),
+        }
+    }
+
+    #[test]
+    fn maybe_step_runtime_frame_respects_paused_state_and_counts() {
+        let mut paused_runtime = sample_runtime(false);
+        paused_runtime.paused = true;
+        let paused_frames = paused_runtime.frames_rendered;
+        maybe_step_runtime_frame(&mut paused_runtime).expect("paused branch should be a no-op");
+        assert_eq!(paused_runtime.frames_rendered, paused_frames);
+        assert_eq!(paused_runtime.frames_since_fps_sample, 0);
+
+        let mut running_runtime = sample_runtime_with_rom(false);
+        running_runtime.paused = false;
+        running_runtime.frames_rendered = 0;
+        running_runtime.frames_since_fps_sample = 0;
+        maybe_step_runtime_frame(&mut running_runtime).expect("running branch should step frame");
+        assert_eq!(running_runtime.frames_rendered, 1);
+        assert_eq!(running_runtime.frames_since_fps_sample, 1);
+    }
+
+    #[test]
+    fn refresh_runtime_fps_updates_only_after_sampling_interval() {
+        let now = Instant::now();
+        let mut runtime = sample_runtime(false);
+        runtime.frames_since_fps_sample = 120;
+        runtime.last_fps_sample_at = now - Duration::from_millis(300);
+
+        refresh_runtime_fps(&mut runtime, now);
+        assert!((runtime.instant_fps - 400.0).abs() < 0.000_001);
+        assert_eq!(runtime.frames_since_fps_sample, 0);
+        assert_eq!(runtime.last_fps_sample_at, now);
+
+        runtime.frames_since_fps_sample = 60;
+        runtime.last_fps_sample_at = now;
+        let fps_before = runtime.instant_fps;
+        let not_yet = now + Duration::from_millis(100);
+        refresh_runtime_fps(&mut runtime, not_yet);
+        assert_eq!(runtime.instant_fps, fps_before);
+        assert_eq!(runtime.frames_since_fps_sample, 60);
+        assert_eq!(runtime.last_fps_sample_at, now);
+    }
+
+    #[test]
+    fn event_loop_processes_frame_then_exits_on_scripted_quit_event() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 40)).expect("terminal should build");
+        let mut runtime = sample_runtime(false);
+        runtime.paused = true;
+
+        let mut event_source = ScriptedEventSource::new(
+            vec![false, true, true],
+            vec![
+                Event::Key(key_event(KeyCode::Char('x'), KeyEventKind::Press)),
+                Event::Key(key_event(KeyCode::Char('q'), KeyEventKind::Press)),
+            ],
+        );
+        let now = Instant::now();
+        let mut loop_timer = ScriptedLoopTimer::new(vec![now, now]);
+
+        event_loop(
+            &mut terminal,
+            &mut runtime,
+            &mut event_source,
+            &mut loop_timer,
+        )
+        .expect("event loop should exit cleanly");
+        assert!(
+            event_source.poll_calls >= 3,
+            "event loop should poll once for frame and twice for scripted keys"
+        );
+        assert_eq!(event_source.read_calls, 2);
+        assert!(
+            loop_timer.sleep_calls.is_empty(),
+            "now==deadline should step instead of sleeping"
+        );
+    }
+
+    #[test]
     fn make_protocol_state_reuses_protocol_variant_from_previous_state() {
         let mut picker = Picker::from_fontsize((8, 16));
         picker.set_protocol_type(ProtocolType::Halfblocks);
@@ -878,6 +1555,27 @@ mod tests {
             second.protocol_type(),
             ratatui_image::protocol::StatefulProtocolType::Halfblocks(_)
         ));
+    }
+
+    #[test]
+    fn make_protocol_state_preserves_prior_background_when_reusing_protocol_type() {
+        let mut picker = Picker::from_fontsize((8, 16));
+        picker.set_protocol_type(ProtocolType::Halfblocks);
+        let frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let first = make_protocol_state(&picker, &frame, None, None).expect("state should build");
+        let forced_background = Rgba([1, 2, 3, 255]);
+        let second = make_protocol_state(
+            &picker,
+            &frame,
+            Some(first.protocol_type()),
+            Some(forced_background),
+        )
+        .expect("state should build");
+        assert!(matches!(
+            second.protocol_type(),
+            StatefulProtocolType::Halfblocks(_)
+        ));
+        assert_eq!(second.background_color(), forced_background);
     }
 
     #[test]
@@ -907,6 +1605,36 @@ mod tests {
     }
 
     #[test]
+    fn protocol_state_replace_stays_false_when_paused_even_if_refresh_due() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(33);
+        assert!(!should_replace_protocol_state(
+            true,
+            false,
+            false,
+            true,
+            Some(now - interval),
+            now,
+            interval
+        ));
+    }
+
+    #[test]
+    fn protocol_state_replace_stays_false_when_interval_has_not_elapsed() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(33);
+        assert!(!should_replace_protocol_state(
+            true,
+            false,
+            false,
+            false,
+            Some(now - Duration::from_millis(10)),
+            now,
+            interval
+        ));
+    }
+
+    #[test]
     fn protocol_state_replace_happens_when_area_needs_resize() {
         assert!(should_replace_protocol_state(
             true,
@@ -917,5 +1645,97 @@ mod tests {
             Instant::now(),
             Duration::from_millis(33)
         ));
+    }
+
+    #[test]
+    fn drain_protocol_results_returns_false_when_channel_is_empty() {
+        let (request_tx, _request_rx) = mpsc::channel();
+        let (results_tx, results_rx) = mpsc::channel();
+        let mut renderer = ProtocolRenderer {
+            current_state: None,
+            request_tx,
+            results_rx,
+            pending_resize: true,
+        };
+
+        assert!(!drain_protocol_results(&mut renderer));
+        assert!(renderer.pending_resize);
+
+        drop(results_tx);
+    }
+
+    #[test]
+    fn drain_protocol_results_returns_true_when_worker_channel_disconnects() {
+        let (request_tx, _request_rx) = mpsc::channel();
+        let (results_tx, results_rx) = mpsc::channel();
+        drop(results_tx);
+        let mut renderer = ProtocolRenderer {
+            current_state: None,
+            request_tx,
+            results_rx,
+            pending_resize: true,
+        };
+
+        assert!(drain_protocol_results(&mut renderer));
+    }
+
+    #[test]
+    fn drain_protocol_results_applies_state_and_clears_pending_resize() {
+        let mut picker = Picker::from_fontsize((8, 16));
+        picker.set_protocol_type(ProtocolType::Halfblocks);
+        let frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let state = make_protocol_state(&picker, &frame, None, None).expect("state should build");
+
+        let (request_tx, _request_rx) = mpsc::channel();
+        let (results_tx, results_rx) = mpsc::channel();
+        results_tx
+            .send(Ok(state))
+            .expect("sending synthetic state should succeed");
+
+        let mut renderer = ProtocolRenderer {
+            current_state: None,
+            request_tx,
+            results_rx,
+            pending_resize: true,
+        };
+
+        assert!(!drain_protocol_results(&mut renderer));
+        assert!(renderer.current_state.is_some());
+        assert!(!renderer.pending_resize);
+    }
+
+    #[test]
+    fn draw_frame_renders_video_glyphs_when_hud_is_hidden() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 40)).expect("terminal should build");
+        let mut runtime = sample_runtime(false);
+        draw_frame(&mut terminal, &mut runtime).expect("draw should succeed");
+
+        let has_halfblock_glyph = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.symbol() == "\u{2580}");
+        assert!(has_halfblock_glyph);
+    }
+
+    #[test]
+    fn draw_frame_hud_path_contains_header_controls_and_expected_avg_band() {
+        let mut terminal =
+            Terminal::new(TestBackend::new(140, 50)).expect("terminal should initialize");
+        let mut runtime = sample_runtime(true);
+        runtime.rom_name = "zelda.nes".to_owned();
+        runtime.frames_rendered = 120;
+        runtime.started_at = Instant::now() - Duration::from_secs(2);
+
+        draw_frame(&mut terminal, &mut runtime).expect("draw should succeed");
+        let text = terminal_text(&terminal);
+        assert!(text.contains("NES-TUI"));
+        assert!(text.contains("zelda.nes"));
+        assert!(text.contains("P=Pause  R=Reset  Q/Esc=Quit"));
+        assert!(
+            text.contains("avg 59.") || text.contains("avg 60.") || text.contains("avg 61."),
+            "expected avg fps near 60.0, got: {text}"
+        );
     }
 }
