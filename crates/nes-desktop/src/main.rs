@@ -575,9 +575,7 @@ fn should_update_input_delay(target_delay: u32, current_delay: u32) -> bool {
 }
 
 fn should_trace_frame(trace_every_frames: u64, frame_index: u64) -> bool {
-    trace_every_frames != 0
-        && frame_index != 0
-        && frame_index.is_multiple_of(trace_every_frames)
+    trace_every_frames != 0 && frame_index != 0 && frame_index.is_multiple_of(trace_every_frames)
 }
 
 fn audio_queue_dropped(queued: bool) -> bool {
