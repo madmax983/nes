@@ -1715,6 +1715,7 @@ dependencies = [
 name = "nes-core"
 version = "0.1.0"
 dependencies = [
+ "itoa",
  "proptest",
 ]
 
