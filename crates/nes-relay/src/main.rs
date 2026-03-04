@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use nes_netplay::{ClientMessage, ServerMessage};
 
 const DEFAULT_BIND_ADDR: &str = "127.0.0.1:4545";
@@ -123,14 +125,36 @@ fn run() -> Result<(), String> {
     let args = parse_args(std::env::args().skip(1).collect())?;
     let listener = TcpListener::bind(&args.bind_addr)
         .map_err(|err| format!("failed to bind {}: {err}", args.bind_addr))?;
-    println!(
-        "nes-relay listening on {} (latency={}ms jitter={}ms loss={}%% reorder={}%%)",
-        args.bind_addr,
-        args.link.latency_ms,
-        args.link.jitter_ms,
-        args.link.loss_pct,
-        args.link.reorder_pct
-    );
+
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Bind Address"),
+        Cell::new(&args.bind_addr).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("Latency (ms)"),
+        Cell::new(args.link.latency_ms.to_string()).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("Jitter (ms)"),
+        Cell::new(args.link.jitter_ms.to_string()).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("Loss (%)"),
+        Cell::new(args.link.loss_pct.to_string()).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("Reorder (%)"),
+        Cell::new(args.link.reorder_pct.to_string()).fg(TableColor::Yellow),
+    ]);
+
+    println!("{}", "nes-relay".with(Color::Cyan).bold());
+    println!("{table}\n");
 
     let state = Arc::new(Mutex::new(RelayState::default()));
     let net_sim = Arc::new(RelayNetSim::new(args.link));
