@@ -1,3 +1,5 @@
+//! Maps MCP tool invocations to NES core execution and output queries.
+
 use core::fmt;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -12,102 +14,195 @@ use crate::output::{
     audio_chunk, frame_chunk, latest_output_metadata, publish_audio, publish_frame,
 };
 
+/// Type alias for key-value pair strings passed as arguments to an MCP tool.
 pub type ToolParams = BTreeMap<String, String>;
 
+/// Represents the strongly typed response from a successful tool invocation.
+///
+/// Converts the internal emulator state or query results into a structured format
+/// that the MCP server can format as JSON.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::DispatchOutput;
+///
+/// let ack = DispatchOutput::Ack;
+/// let regs = DispatchOutput::Registers {
+///     pc: 0x8000,
+///     a: 0,
+///     x: 0,
+///     y: 0,
+///     sp: 0xFD,
+///     status: 0x24,
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DispatchOutput {
+    /// Action completed successfully with no return data.
     Ack,
+    /// Result of a single CPU step.
     CpuStep {
+        /// Trace output of the instruction executed, if any.
         trace: Option<String>,
+        /// The new total CPU cycle count.
         cpu_cycles: u64,
     },
+    /// Result returning a cycle count.
     CycleCount {
+        /// The new total CPU cycle count.
         cpu_cycles: u64,
     },
+    /// Result returning the current state of controller inputs.
     ControllerState {
+        /// Current state of the controller.
         controller_bits: u8,
     },
+    /// Result returning high-level emulator metrics.
     EmulatorState {
+        /// True if execution is paused.
         paused: bool,
+        /// Current speed setting in permille.
         speed_permille: u16,
+        /// Current state of the controller.
         controller_bits: u8,
     },
+    /// Result returning CPU registers.
     Registers {
+        /// Program Counter.
         pc: u16,
+        /// Accumulator.
         a: u8,
+        /// X index register.
         x: u8,
+        /// Y index register.
         y: u8,
+        /// Stack Pointer.
         sp: u8,
+        /// Status flags.
         status: u8,
     },
+    /// Result of memory inspection.
     Memory {
+        /// The address that was inspected.
         address: u16,
+        /// The value retrieved at the address.
         value: u8,
     },
+    /// Result returning emulator framerate.
     Fps {
+        /// Milliseconds of emulation time.
         fps_milli: u32,
     },
+    /// Result returning PPU cycles.
     PpuFrameCounter {
+        /// The total number of rendered frames.
         frame_counter: u64,
     },
+    /// Result referencing a published video frame.
     Frame {
+        /// The sequence identifier for the frame payload.
         seq: u64,
+        /// Size of the frame payload in bytes.
         bytes: usize,
     },
+    /// Result of rendering a frame out to disk.
     FrameCaptured {
+        /// Path the frame was written to.
         path: String,
+        /// Size of the payload written.
         bytes: usize,
     },
+    /// Result referencing a published audio block.
     Audio {
+        /// Sequence identifier.
         seq: u64,
+        /// Count of individual samples.
         samples: usize,
     },
+    /// Save-state related result.
     StateSlot {
+        /// Identifier for the saved state slot.
         slot: String,
     },
+    /// Loaded cart configuration.
     RomLoaded {
+        /// Inferred iNES mapper id.
         mapper_id: u8,
+        /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
+        /// The PC reset vector.
         reset_pc: u16,
     },
+    /// Result of executing a script of input sequences.
     MacroExecuted {
+        /// Number of PPU frames processed.
         frames_elapsed: u64,
+        /// Final controller bitfield.
         final_controller_bits: u8,
     },
+    /// Statistics of assembled 6502 code.
     DslAssembled {
+        /// Length of code bytes.
         bytes_written: usize,
+        /// Total recognized labels.
         label_count: usize,
+        /// Parsed NMI vector.
         nmi_vector: u16,
+        /// Parsed Reset vector.
         reset_vector: u16,
+        /// Parsed IRQ vector.
         irq_vector: u16,
     },
+    /// Cart metadata after building from a 6502 text block.
     DslRomLoaded {
+        /// Inferred iNES mapper id.
         mapper_id: u8,
+        /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
+        /// The PC reset vector.
         reset_pc: u16,
+        /// The resulting `.nes` bytes size.
         rom_bytes: usize,
     },
+    /// Path metrics for exported 6502 script build.
     DslRomExported {
+        /// Output disk path.
         path: String,
+        /// Output file size in bytes.
         bytes: usize,
+        /// Inferred iNES mapper id.
         mapper_id: u8,
+        /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
+    /// Memory metrics for exported 6502 script build.
     DslRomExportedBase64 {
+        /// The output encoded payload.
         rom_base64: String,
+        /// Real file size in bytes.
         bytes: usize,
+        /// Inferred iNES mapper id.
         mapper_id: u8,
+        /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
 }
 
+/// Errors raised when parsing or executing MCP tools.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DispatchError {
+    /// The specified tool name was not recognized.
     UnknownTool(String),
+    /// The specified tool name exists but is disabled or unimplemented.
     UnsupportedTool(String),
+    /// Required parameters for the tool were missing or invalid.
     InvalidParams(String),
+    /// An attempt to load from a save slot that does not exist.
     StateSlotNotFound(String),
+    /// Subsystem error originating inside the NES emulator.
     Core(String),
+    /// Panic, unexpected bounds checking, or IO subsystem error.
     Internal(String),
 }
 
@@ -131,6 +226,22 @@ fn saved_states() -> &'static Mutex<HashMap<String, CoreSnapshot>> {
     STATE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Dispatches an MCP tool call to the provided `NesCore` instance.
+///
+/// This function is the primary translation boundary between dynamic string maps
+/// and strict type-checked emulator API interactions.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::NesCore;
+/// use nes_mcp::{dispatch_tool, DispatchOutput, ToolParams};
+///
+/// let mut core = NesCore::new();
+/// let mut params = ToolParams::new();
+/// let result = dispatch_tool(&mut core, "pause", &params).unwrap();
+/// assert_eq!(result, DispatchOutput::Ack);
+/// ```
 pub fn dispatch_tool(
     core: &mut NesCore,
     tool_name: &str,
