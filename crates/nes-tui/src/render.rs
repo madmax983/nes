@@ -14,6 +14,10 @@ pub fn downsample_frame_rgb(
 
     let width = usize::from(target_width);
     let height = usize::from(target_height);
+    assert!(
+        width > 0 && height > 0,
+        "downsample dimensions must be non-zero after guard validation"
+    );
     let mut out = Vec::with_capacity(width * height);
 
     for y in 0..height {

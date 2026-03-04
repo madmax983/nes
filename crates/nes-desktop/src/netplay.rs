@@ -149,6 +149,7 @@ fn write_message(stream: &mut TcpStream, message: &ClientMessage) -> Result<(), 
 mod tests {
     use super::*;
     use std::net::TcpListener;
+    use std::sync::mpsc;
     use std::time::Duration;
 
     #[test]
@@ -202,5 +203,126 @@ mod tests {
         drop(tx);
         let result = writer_thread.join().expect("join writer thread");
         assert!(result.is_ok(), "writer loop should exit cleanly");
+    }
+
+    #[test]
+    fn connect_rejects_invalid_player_before_attempting_socket_connect() {
+        let config = NetplayRuntimeConfig {
+            relay_addr: "127.0.0.1:1".to_owned(),
+            room: "test-room".to_owned(),
+            player: 3,
+            input_delay_frames: 2,
+            max_rollback_frames: 16,
+            hash_check_every_frames: 60,
+        };
+        let err = NetplayClient::connect(&config)
+            .err()
+            .expect("invalid player should fail fast");
+        assert!(err.contains("player must be 1 or 2"));
+    }
+
+    #[test]
+    fn send_methods_report_channel_disconnect_errors() {
+        let (tx, rx) = mpsc::channel::<ClientMessage>();
+        drop(rx);
+        let (_server_tx, server_rx) = mpsc::channel::<ServerMessage>();
+        let (_err_tx, err_rx) = mpsc::channel::<String>();
+        let client = NetplayClient {
+            tx,
+            rx: server_rx,
+            err_rx,
+        };
+
+        let input_err = client
+            .send_input(10, 0x12)
+            .expect_err("send_input should report disconnected writer");
+        assert!(input_err.contains("failed to queue netplay input"));
+
+        let hash_err = client
+            .send_hash(20, 0xDEADBEEF)
+            .expect_err("send_hash should report disconnected writer");
+        assert!(hash_err.contains("failed to queue netplay hash"));
+
+        let ping_err = client
+            .send_ping(42)
+            .expect_err("send_ping should report disconnected writer");
+        assert!(ping_err.contains("failed to queue netplay ping"));
+    }
+
+    #[test]
+    fn try_recv_returns_messages_and_prioritizes_error_channel() {
+        let (tx, _write_rx) = mpsc::channel::<ClientMessage>();
+        let (server_tx, server_rx) = mpsc::channel::<ServerMessage>();
+        let (_err_tx, err_rx) = mpsc::channel::<String>();
+        let client = NetplayClient {
+            tx,
+            rx: server_rx,
+            err_rx,
+        };
+
+        server_tx
+            .send(ServerMessage::Pong { nonce: 7 })
+            .expect("sending pong should succeed");
+        assert_eq!(
+            client.try_recv().expect("try_recv should read message"),
+            Some(ServerMessage::Pong { nonce: 7 })
+        );
+        assert_eq!(
+            client.try_recv().expect("empty queue should return none"),
+            None
+        );
+        drop(server_tx);
+        let disconnected = client
+            .try_recv()
+            .expect_err("disconnected queue should propagate error");
+        assert!(disconnected.contains("reader disconnected"));
+
+        let (tx2, _write_rx2) = mpsc::channel::<ClientMessage>();
+        let (_server_tx2, server_rx2) = mpsc::channel::<ServerMessage>();
+        let (err_tx2, err_rx2) = mpsc::channel::<String>();
+        err_tx2
+            .send("relay-side failure".to_owned())
+            .expect("error send should succeed");
+        let client_with_err = NetplayClient {
+            tx: tx2,
+            rx: server_rx2,
+            err_rx: err_rx2,
+        };
+        let err = client_with_err
+            .try_recv()
+            .expect_err("queued relay error should take precedence");
+        assert_eq!(err, "relay-side failure");
+        assert_eq!(client_with_err.take_error(), None);
+    }
+
+    #[test]
+    fn reader_loop_forwards_messages_and_reports_relay_close() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let client_stream = TcpStream::connect(addr).expect("connect client");
+        let (mut server_stream, _) = listener.accept().expect("accept server stream");
+        let (tx, rx) = mpsc::channel::<ServerMessage>();
+
+        let reader_thread = thread::spawn(move || reader_loop(client_stream, tx));
+
+        let payload =
+            serde_json::to_string(&ServerMessage::Pong { nonce: 99 }).expect("serialize message");
+        server_stream
+            .write_all(payload.as_bytes())
+            .and_then(|_| server_stream.write_all(b"\n"))
+            .expect("write framed relay line");
+        server_stream.flush().expect("flush relay line");
+        drop(server_stream);
+
+        let received = rx
+            .recv_timeout(Duration::from_millis(250))
+            .expect("reader should forward server message");
+        assert_eq!(received, ServerMessage::Pong { nonce: 99 });
+
+        let close_err = reader_thread
+            .join()
+            .expect("join reader thread")
+            .expect_err("reader loop should report EOF as an error");
+        assert!(close_err.contains("relay closed connection"));
     }
 }

@@ -445,6 +445,45 @@ enum FrameDecision {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowEventDecision {
+    CloseRequested,
+    KeyboardInput {
+        key: Option<VirtualKeyCode>,
+        pressed: bool,
+    },
+    Resized {
+        width: u32,
+        height: u32,
+    },
+    ScaleFactorChanged {
+        width: u32,
+        height: u32,
+    },
+    Ignore,
+}
+
+fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
+    match event {
+        WindowEvent::CloseRequested => WindowEventDecision::CloseRequested,
+        WindowEvent::KeyboardInput { input, .. } => WindowEventDecision::KeyboardInput {
+            key: input.virtual_keycode,
+            pressed: element_state_pressed(input.state),
+        },
+        WindowEvent::Resized(size) => WindowEventDecision::Resized {
+            width: size.width,
+            height: size.height,
+        },
+        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+            WindowEventDecision::ScaleFactorChanged {
+                width: new_inner_size.width,
+                height: new_inner_size.height,
+            }
+        }
+        _ => WindowEventDecision::Ignore,
+    }
+}
+
 fn classify_keyboard_input(
     key: VirtualKeyCode,
     pressed: bool,
@@ -485,6 +524,68 @@ fn evaluate_frame_deadline(now: Instant, next_frame_deadline: Instant) -> FrameD
     }
 }
 
+fn scaled_window_dimensions(window_scale: u32) -> (f64, f64) {
+    (
+        f64::from(FRAME_WIDTH as u32 * window_scale),
+        f64::from(FRAME_HEIGHT as u32 * window_scale),
+    )
+}
+
+fn gamepad_assignments_changed(
+    next: [Option<GamepadId>; 2],
+    current: [Option<GamepadId>; 2],
+) -> bool {
+    next != current
+}
+
+fn gamepad_slot_changed(
+    next: [Option<GamepadId>; 2],
+    current: [Option<GamepadId>; 2],
+    player: usize,
+) -> bool {
+    next[player] != current[player]
+}
+
+fn element_state_pressed(state: ElementState) -> bool {
+    state == ElementState::Pressed
+}
+
+fn should_resume_after_rewind_hold(held: bool) -> bool {
+    !held
+}
+
+fn is_player_two_slot(player_index: usize) -> bool {
+    player_index == 1
+}
+
+fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
+    keyboard_bits | local_gamepad_bits
+}
+
+fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
+    runtime_flag || config_flag
+}
+
+fn should_log_rollback(distance: u64) -> bool {
+    distance > 0
+}
+
+fn should_update_input_delay(target_delay: u32, current_delay: u32) -> bool {
+    target_delay != current_delay
+}
+
+fn should_trace_frame(trace_every_frames: u64, frame_index: u64) -> bool {
+    trace_every_frames > 0 && frame_index > 0 && frame_index % trace_every_frames == 0
+}
+
+fn audio_queue_dropped(queued: bool) -> bool {
+    !queued
+}
+
+fn should_capture_frame(every_n_frames: u64, frame_index: u64) -> bool {
+    every_n_frames != 0 && frame_index.is_multiple_of(every_n_frames)
+}
+
 fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
     let local_slot = usize::from(local_player.saturating_sub(1));
     gamepad_bits.get(local_slot).copied().unwrap_or_else(|| {
@@ -497,7 +598,31 @@ fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
 }
 
 fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
-    hash_check_every > 0 && frame.is_multiple_of(hash_check_every)
+    hash_check_every > 0 && frame > 0 && frame % hash_check_every == 0
+}
+
+fn schedule_netplay_ping(
+    now: Instant,
+    next_ping_at: &mut Instant,
+    ping_nonce: &mut u64,
+    pending_pings: &mut BTreeMap<u64, Instant>,
+    ping_interval: Duration,
+    max_pending: usize,
+) -> Option<u64> {
+    if now < *next_ping_at {
+        return None;
+    }
+
+    let nonce = *ping_nonce;
+    *ping_nonce = ping_nonce.wrapping_add(1);
+    pending_pings.insert(nonce, now);
+    while pending_pings.len() > max_pending {
+        if let Some(oldest_nonce) = pending_pings.keys().next().copied() {
+            pending_pings.remove(&oldest_nonce);
+        }
+    }
+    *next_ping_at = now + ping_interval;
+    Some(nonce)
 }
 
 fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
@@ -722,12 +847,10 @@ fn run() -> Result<(), String> {
     let mut netplay_pending_pings = BTreeMap::<u64, Instant>::new();
 
     let event_loop = EventLoop::new();
+    let (window_width, window_height) = scaled_window_dimensions(runtime.window_scale);
     let window = WindowBuilder::new()
         .with_title("nes-desktop")
-        .with_inner_size(LogicalSize::new(
-            f64::from(FRAME_WIDTH as u32 * runtime.window_scale),
-            f64::from(FRAME_HEIGHT as u32 * runtime.window_scale),
-        ))
+        .with_inner_size(LogicalSize::new(window_width, window_height))
         .with_min_inner_size(LogicalSize::new(FRAME_WIDTH as f64, FRAME_HEIGHT as f64))
         .build(&event_loop)
         .map_err(|err| format!("Failed to create window: {err}"))?;
@@ -759,7 +882,11 @@ fn run() -> Result<(), String> {
     };
     let mut active_gamepads = [None::<GamepadId>; 2];
     if let Some(gilrs_state) = gilrs.as_ref() {
-        let connected = connected_gamepad_ids(gilrs_state);
+        let connected = connected_gamepad_ids(
+            gilrs_state
+                .gamepads()
+                .map(|(id, gamepad)| (id, gamepad.is_connected())),
+        );
         for (player, slot) in active_gamepads.iter_mut().enumerate() {
             *slot = connected.get(player).copied();
             if let Some(gamepad_id) = *slot {
@@ -794,15 +921,14 @@ fn run() -> Result<(), String> {
     let mut rewind_held = false;
 
     event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent { event, .. } => match event {
-            WindowEvent::CloseRequested => {
+        Event::WindowEvent { event, .. } => match classify_window_event(&event) {
+            WindowEventDecision::CloseRequested => {
                 *control_flow = ControlFlow::Exit;
             }
-            WindowEvent::KeyboardInput { input, .. } => {
-                let Some(key) = input.virtual_keycode else {
+            WindowEventDecision::KeyboardInput { key, pressed } => {
+                let Some(key) = key else {
                     return;
                 };
-                let pressed = input.state == ElementState::Pressed;
                 match classify_keyboard_input(key, pressed, rollback.is_some()) {
                     KeyboardDecision::Exit => {
                         *control_flow = ControlFlow::Exit;
@@ -811,7 +937,7 @@ fn run() -> Result<(), String> {
                     KeyboardDecision::SetRewindHeld(held) => {
                         // R: hold to rewind, release to resume.
                         rewind_held = held;
-                        if !held {
+                        if should_resume_after_rewind_hold(held) {
                             time_machine.resume();
                             // The restored snapshot's controller_bits may reflect buttons
                             // held at that historical frame. Release all buttons so the
@@ -834,20 +960,19 @@ fn run() -> Result<(), String> {
                     KeyboardDecision::Noop => {}
                 }
             }
-            WindowEvent::Resized(size) => {
-                if let Err(err) = pixels.resize_surface(size.width, size.height) {
+            WindowEventDecision::Resized { width, height } => {
+                if let Err(err) = pixels.resize_surface(width, height) {
                     eprintln!("Surface resize failed: {err}");
                     *control_flow = ControlFlow::Exit;
                 }
             }
-            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                if let Err(err) = pixels.resize_surface(new_inner_size.width, new_inner_size.height)
-                {
+            WindowEventDecision::ScaleFactorChanged { width, height } => {
+                if let Err(err) = pixels.resize_surface(width, height) {
                     eprintln!("Scale-factor resize failed: {err}");
                     *control_flow = ControlFlow::Exit;
                 }
             }
-            _ => {}
+            WindowEventDecision::Ignore => {}
         },
         Event::MainEventsCleared => {
             #[cfg(feature = "mcp-host")]
@@ -857,10 +982,15 @@ fn run() -> Result<(), String> {
 
             if let Some(gilrs_state) = gilrs.as_mut() {
                 while gilrs_state.next_event().is_some() {}
-                let next_active = select_active_gamepad_ids(gilrs_state, active_gamepads);
-                if next_active != active_gamepads {
+                let connected = connected_gamepad_ids(
+                    gilrs_state
+                        .gamepads()
+                        .map(|(id, gamepad)| (id, gamepad.is_connected())),
+                );
+                let next_active = select_active_gamepad_ids(&connected, active_gamepads);
+                if gamepad_assignments_changed(next_active, active_gamepads) {
                     for player in 0..active_gamepads.len() {
-                        if next_active[player] != active_gamepads[player] {
+                        if gamepad_slot_changed(next_active, active_gamepads, player) {
                             if let Some(gamepad_id) = next_active[player] {
                                 println!(
                                     "Gamepad P{} active: {}",
@@ -877,14 +1007,31 @@ fn run() -> Result<(), String> {
 
                 for player in 0..gamepad_bits.len() {
                     let next_gamepad_bits = active_gamepads[player]
-                        .map(|gamepad_id| sample_gamepad_bits(gilrs_state, gamepad_id))
+                        .map(|gamepad_id| {
+                            let gamepad = gilrs_state.gamepad(gamepad_id);
+                            gamepad_snapshot_to_bits(GamepadSnapshot {
+                                connected: gamepad.is_connected(),
+                                south_pressed: gamepad.is_pressed(GamepadButton::South),
+                                east_pressed: gamepad.is_pressed(GamepadButton::East),
+                                west_pressed: gamepad.is_pressed(GamepadButton::West),
+                                north_pressed: gamepad.is_pressed(GamepadButton::North),
+                                select_pressed: gamepad.is_pressed(GamepadButton::Select),
+                                start_pressed: gamepad.is_pressed(GamepadButton::Start),
+                                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
+                                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
+                                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
+                                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
+                                left_x: gamepad.value(GamepadAxis::LeftStickX),
+                                left_y: gamepad.value(GamepadAxis::LeftStickY),
+                            })
+                        })
                         .unwrap_or_default();
                     if rollback.is_none() {
                         if let Err(err) = apply_gamepad_delta_commands(
                             &mut core,
                             gamepad_bits[player],
                             next_gamepad_bits,
-                            player == 1,
+                            is_player_two_slot(player),
                         ) {
                             eprintln!("{err}");
                             *control_flow = ControlFlow::Exit;
@@ -914,7 +1061,8 @@ fn run() -> Result<(), String> {
             if let Some(rollback_engine) = rollback.as_mut() {
                 let local_gamepad_bits =
                     compute_local_netplay_bits(gamepad_bits, netplay_local_player);
-                let scheduled = rollback_engine.schedule_local_input(keyboard_bits | local_gamepad_bits);
+                let scheduled = rollback_engine
+                    .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
                 if let Some(client) = netplay_client.as_ref()
                     && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
                 {
@@ -923,24 +1071,19 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 if let Some(client) = netplay_client.as_ref() {
-                    if now >= netplay_next_ping_at {
-                        let nonce = netplay_ping_nonce;
-                        netplay_ping_nonce = netplay_ping_nonce.wrapping_add(1);
-                        netplay_pending_pings.insert(nonce, now);
-                        // Bound growth in case a peer vanishes without replying.
-                        while netplay_pending_pings.len() > 128 {
-                            if let Some(oldest_nonce) =
-                                netplay_pending_pings.keys().next().copied()
-                            {
-                                netplay_pending_pings.remove(&oldest_nonce);
-                            }
-                        }
+                    if let Some(nonce) = schedule_netplay_ping(
+                        now,
+                        &mut netplay_next_ping_at,
+                        &mut netplay_ping_nonce,
+                        &mut netplay_pending_pings,
+                        NETPLAY_PING_INTERVAL,
+                        128,
+                    ) {
                         if let Err(err) = client.send_ping(nonce) {
                             eprintln!("Netplay send ping failed: {err}");
                             *control_flow = ControlFlow::Exit;
                             return;
                         }
-                        netplay_next_ping_at = now + NETPLAY_PING_INTERVAL;
                     }
 
                     loop {
@@ -971,7 +1114,7 @@ fn run() -> Result<(), String> {
 
                 match rollback_engine.advance_frame(&mut core) {
                     Ok(step) => {
-                        if step.rollback_distance > 0 {
+                        if should_log_rollback(step.rollback_distance) {
                             eprintln!(
                                 "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
                                 step.rollback_distance, step.frame, step.local_bits, step.remote_bits
@@ -997,7 +1140,7 @@ fn run() -> Result<(), String> {
                         } else {
                             current_delay
                         };
-                        if target_delay != current_delay {
+                        if should_update_input_delay(target_delay, current_delay) {
                             if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
                                 eprintln!("Netplay adaptive delay update failed: {err}");
                                 *control_flow = ControlFlow::Exit;
@@ -1048,7 +1191,7 @@ fn run() -> Result<(), String> {
             if let Some(stats) = netplay_stats.as_ref() {
                 metrics.on_netplay_stats(stats);
             }
-            if trace_every_frames > 0 && frame_index.is_multiple_of(trace_every_frames) {
+            if should_trace_frame(trace_every_frames, frame_index) {
                 let regs = core.cpu_snapshot();
                 println!(
                     "frame={} ppu_frame={} pc=${:04X} a={:02X} x={:02X} y={:02X} ctrl1={:02X} ctrl2={:02X}",
@@ -1065,7 +1208,7 @@ fn run() -> Result<(), String> {
 
             if let Some(audio_output) = audio_output.as_ref() {
                 let queued = audio_output.queue_samples(core.audio_chunk_i16());
-                metrics.on_audio_queue(audio_output.queue_len(), !queued);
+                metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
             }
 
             window.request_redraw();
@@ -1076,8 +1219,7 @@ fn run() -> Result<(), String> {
             core.fill_framebuffer_rgba(&mut frame_rgba);
             pixels.frame_mut().copy_from_slice(&frame_rgba);
             if let Some(config) = capture.as_ref()
-                && config.every_n_frames != 0
-                && frame_index.is_multiple_of(config.every_n_frames)
+                && should_capture_frame(config.every_n_frames, frame_index)
             {
                 let path = capture_path_for_frame(&config.path_template, frame_index);
                 if let Err(err) = write_frame_ppm(&path, &frame_rgba) {
@@ -1140,7 +1282,8 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         config.desktop.capture_path_template,
         config.desktop.capture_every_frames,
     );
-    let netplay_enabled = runtime_args.netplay_enabled || config.netplay.enabled;
+    let netplay_enabled =
+        netplay_feature_enabled(runtime_args.netplay_enabled, config.netplay.enabled);
     let step_mode = if netplay_enabled {
         StepMode::Frame
     } else {
@@ -1401,7 +1544,7 @@ fn recommended_input_delay_frames(
     let target = raw_target.clamp(min_delay_frames, max_delay_frames);
 
     if target > current_delay_frames {
-        target
+        target.max(current_delay_frames.saturating_add(1))
     } else if target + 1 < current_delay_frames {
         current_delay_frames - 1
     } else {
@@ -1423,18 +1566,34 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
     }
 }
 
-fn connected_gamepad_ids(gilrs: &Gilrs) -> Vec<GamepadId> {
-    gilrs
-        .gamepads()
-        .filter_map(|(id, gamepad)| gamepad.is_connected().then_some(id))
+#[derive(Debug, Clone, Copy, Default)]
+struct GamepadSnapshot {
+    connected: bool,
+    south_pressed: bool,
+    east_pressed: bool,
+    west_pressed: bool,
+    north_pressed: bool,
+    select_pressed: bool,
+    start_pressed: bool,
+    dpad_up_pressed: bool,
+    dpad_down_pressed: bool,
+    dpad_left_pressed: bool,
+    dpad_right_pressed: bool,
+    left_x: f32,
+    left_y: f32,
+}
+
+fn connected_gamepad_ids(gamepads: impl IntoIterator<Item = (GamepadId, bool)>) -> Vec<GamepadId> {
+    gamepads
+        .into_iter()
+        .filter_map(|(id, connected)| connected.then_some(id))
         .collect()
 }
 
 fn select_active_gamepad_ids(
-    gilrs: &Gilrs,
+    connected: &[GamepadId],
     current: [Option<GamepadId>; 2],
 ) -> [Option<GamepadId>; 2] {
-    let connected = connected_gamepad_ids(gilrs);
     let mut next = [None::<GamepadId>; 2];
 
     for player in 0..next.len() {
@@ -1446,7 +1605,7 @@ fn select_active_gamepad_ids(
         }
     }
 
-    for gamepad_id in connected {
+    for &gamepad_id in connected {
         if next.iter().all(|slot| *slot != Some(gamepad_id))
             && let Some(slot) = next.iter_mut().find(|slot| slot.is_none())
         {
@@ -1457,39 +1616,36 @@ fn select_active_gamepad_ids(
     next
 }
 
-fn sample_gamepad_bits(gilrs: &Gilrs, gamepad_id: GamepadId) -> u8 {
-    let gamepad = gilrs.gamepad(gamepad_id);
-    if !gamepad.is_connected() {
+fn gamepad_snapshot_to_bits(snapshot: GamepadSnapshot) -> u8 {
+    if !snapshot.connected {
         return 0;
     }
 
     let mut bits = 0_u8;
     // Keep both common face layouts usable across Xbox/Switch-style controllers.
-    if gamepad.is_pressed(GamepadButton::South) || gamepad.is_pressed(GamepadButton::East) {
+    if snapshot.south_pressed || snapshot.east_pressed {
         bits |= Button::A.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::West) || gamepad.is_pressed(GamepadButton::North) {
+    if snapshot.west_pressed || snapshot.north_pressed {
         bits |= Button::B.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::Select) {
+    if snapshot.select_pressed {
         bits |= Button::Select.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::Start) {
+    if snapshot.start_pressed {
         bits |= Button::Start.bit_mask();
     }
 
-    let left_x = gamepad.value(GamepadAxis::LeftStickX);
-    let left_y = gamepad.value(GamepadAxis::LeftStickY);
-    if gamepad.is_pressed(GamepadButton::DPadUp) || left_y <= -GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_up_pressed || snapshot.left_y <= -GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Up.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::DPadDown) || left_y >= GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_down_pressed || snapshot.left_y >= GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Down.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::DPadLeft) || left_x <= -GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_left_pressed || snapshot.left_x <= -GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Left.bit_mask();
     }
-    if gamepad.is_pressed(GamepadButton::DPadRight) || left_x >= GAMEPAD_AXIS_THRESHOLD {
+    if snapshot.dpad_right_pressed || snapshot.left_x >= GAMEPAD_AXIS_THRESHOLD {
         bits |= Button::Right.bit_mask();
     }
 
@@ -1646,24 +1802,35 @@ fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, Strin
 mod tests {
     use super::{
         AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
-        DEFAULT_METRICS_EVERY_FRAMES, FrameDecision, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
-        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RuntimeArgs, StepMode,
-        TARGET_FRAME_TIME, advance_core_for_host_frame, apply_gamepad_delta_commands,
-        capture_config_from_parts, capture_path_for_frame, classify_keyboard_input,
-        compute_local_netplay_bits, compute_metrics_snapshot, controller_state_delta_for_player,
-        encode_bmp, encode_ppm, evaluate_frame_deadline, frame_signature,
-        handle_netplay_server_message, map_virtual_keycode, parse_runtime_args,
-        recommended_input_delay_frames, should_send_netplay_hash, update_button_bits,
-        write_frame_ppm,
+        DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
+        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
+        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs, StepMode,
+        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
+        apply_gamepad_delta_commands, audio_queue_dropped, capture_config_from_parts,
+        capture_path_for_frame, classify_keyboard_input, classify_window_event,
+        compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
+        controller_state_delta_for_player, element_state_pressed, encode_bmp, encode_ppm,
+        evaluate_frame_deadline, frame_signature, gamepad_assignments_changed,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, handle_netplay_server_message,
+        is_player_two_slot, map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
+        parse_runtime_args, recommended_input_delay_frames, scaled_window_dimensions,
+        schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
+        should_trace_frame, should_update_input_delay, update_button_bits, write_frame_ppm,
     };
+    use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
     use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
+    use rodio::Sink;
     use std::collections::BTreeMap;
     use std::fs;
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-    use winit::event::VirtualKeyCode;
+    use winit::dpi::PhysicalSize;
+    use winit::event::{
+        DeviceId, ElementState, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
+    };
 
     fn parse_runtime_args_with_timeout(args: Vec<String>) -> Result<RuntimeArgs, String> {
         let (tx, rx) = mpsc::channel();
@@ -1685,6 +1852,11 @@ mod tests {
         rom[6] = (mapper_id & 0x0F) << 4;
         rom[7] = mapper_id & 0xF0;
         rom
+    }
+
+    fn fake_gamepad_id(raw: usize) -> GamepadId {
+        // SAFETY: Test-only helper to synthesize opaque identifiers for equality checks.
+        unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
     }
 
     #[derive(Debug, Default)]
@@ -1845,6 +2017,12 @@ mod tests {
 
         let holds_within_hysteresis = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 4);
         assert_eq!(holds_within_hysteresis, 4);
+
+        let jitter_weighted = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 1);
+        assert_eq!(jitter_weighted, 3);
+
+        let equal_target_holds_current = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 3);
+        assert_eq!(equal_target_holds_current, 3);
     }
 
     #[test]
@@ -1931,6 +2109,36 @@ mod tests {
     }
 
     #[test]
+    fn rodio_sink_adapter_forwards_append_and_queue_len() {
+        let (sink, _queue_rx) = Sink::new_idle();
+        let adapter = RodioSinkAdapter { inner: sink };
+
+        assert_eq!(adapter.queue_len(), 0);
+        adapter.append_i16(vec![1_i16, 2, 3, 4]);
+        assert_eq!(adapter.queue_len(), 1);
+        adapter.append_i16(vec![5_i16, 6, 7, 8]);
+        assert_eq!(adapter.queue_len(), 2);
+    }
+
+    #[test]
+    fn rodio_sink_adapter_stop_mutes_idle_queue_output() {
+        let (sink, mut queue_rx) = Sink::new_idle();
+        let adapter = RodioSinkAdapter { inner: sink };
+
+        adapter.append_i16(vec![i16::MAX; 5_000]);
+        assert_eq!(
+            queue_rx.next(),
+            Some(0.999_969_5),
+            "i16::MAX should map to a non-zero sample before stop"
+        );
+
+        adapter.stop();
+
+        let saw_silence = (0..600).any(|_| queue_rx.next() == Some(0.0));
+        assert!(saw_silence, "stop should silence the queued source");
+    }
+
+    #[test]
     fn map_virtual_keycode_maps_all_supported_keys() {
         assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
         assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
@@ -1947,6 +2155,59 @@ mod tests {
             Some("ArrowRight")
         );
         assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn classify_window_event_maps_window_variants_to_decisions() {
+        assert_eq!(
+            classify_window_event(&WindowEvent::CloseRequested),
+            WindowEventDecision::CloseRequested
+        );
+
+        let key_event = WindowEvent::KeyboardInput {
+            // SAFETY: winit explicitly exposes dummy IDs for unit testing.
+            device_id: unsafe { DeviceId::dummy() },
+            input: KeyboardInput {
+                scancode: 0,
+                state: ElementState::Pressed,
+                virtual_keycode: Some(VirtualKeyCode::Z),
+                modifiers: ModifiersState::empty(),
+            },
+            is_synthetic: false,
+        };
+        assert_eq!(
+            classify_window_event(&key_event),
+            WindowEventDecision::KeyboardInput {
+                key: Some(VirtualKeyCode::Z),
+                pressed: true
+            }
+        );
+
+        let resized = WindowEvent::Resized(PhysicalSize::new(640, 480));
+        assert_eq!(
+            classify_window_event(&resized),
+            WindowEventDecision::Resized {
+                width: 640,
+                height: 480
+            }
+        );
+
+        let mut scale_size = PhysicalSize::new(800, 600);
+        let scale_changed = WindowEvent::ScaleFactorChanged {
+            scale_factor: 1.25,
+            new_inner_size: &mut scale_size,
+        };
+        assert_eq!(
+            classify_window_event(&scale_changed),
+            WindowEventDecision::ScaleFactorChanged {
+                width: 800,
+                height: 600
+            }
+        );
+
+        let ignored = WindowEvent::Focused(true);
+        assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
     }
 
     #[test]
@@ -2023,8 +2284,184 @@ mod tests {
         assert_eq!(compute_local_netplay_bits([0, 0], 9), 0);
 
         assert!(!should_send_netplay_hash(0, 120));
+        assert!(!should_send_netplay_hash(60, 0));
         assert!(should_send_netplay_hash(60, 120));
         assert!(!should_send_netplay_hash(60, 121));
+    }
+
+    #[test]
+    fn desktop_loop_helper_primitives_cover_window_scale_and_player_flags() {
+        assert_eq!(
+            scaled_window_dimensions(1),
+            (FRAME_WIDTH as f64, FRAME_HEIGHT as f64)
+        );
+        assert_eq!(
+            scaled_window_dimensions(3),
+            (
+                f64::from(FRAME_WIDTH as u32 * 3),
+                f64::from(FRAME_HEIGHT as u32 * 3)
+            )
+        );
+
+        assert!(element_state_pressed(ElementState::Pressed));
+        assert!(!element_state_pressed(ElementState::Released));
+        assert!(should_resume_after_rewind_hold(false));
+        assert!(!should_resume_after_rewind_hold(true));
+
+        assert!(!is_player_two_slot(0));
+        assert!(is_player_two_slot(1));
+        assert_eq!(
+            merge_local_input_bits(0b0000_0011, 0b0000_0101),
+            0b0000_0111
+        );
+
+        assert!(netplay_feature_enabled(true, false));
+        assert!(netplay_feature_enabled(false, true));
+        assert!(!netplay_feature_enabled(false, false));
+
+        assert!(!should_log_rollback(0));
+        assert!(should_log_rollback(1));
+        assert!(!should_update_input_delay(2, 2));
+        assert!(should_update_input_delay(3, 2));
+
+        assert!(!should_trace_frame(0, 120));
+        assert!(!should_trace_frame(60, 0));
+        assert!(should_trace_frame(60, 120));
+        assert!(!should_trace_frame(60, 121));
+
+        assert!(!audio_queue_dropped(true));
+        assert!(audio_queue_dropped(false));
+
+        assert!(!should_capture_frame(0, 120));
+        assert!(should_capture_frame(60, 120));
+        assert!(!should_capture_frame(60, 121));
+    }
+
+    #[test]
+    fn gamepad_assignment_helpers_detect_global_and_slot_level_changes() {
+        let none = [None, None];
+        assert!(!gamepad_assignments_changed(none, none));
+        assert!(!gamepad_slot_changed(none, none, 0));
+        assert!(!gamepad_slot_changed(none, none, 1));
+
+        let next = [Some(fake_gamepad_id(1)), None];
+        let current = [None, Some(fake_gamepad_id(2))];
+        assert!(gamepad_assignments_changed(next, current));
+        assert!(gamepad_slot_changed(next, current, 0));
+        assert!(gamepad_slot_changed(next, current, 1));
+    }
+
+    #[test]
+    fn gamepad_source_helpers_select_connected_ids_without_duplicates() {
+        let id1 = fake_gamepad_id(1);
+        let id2 = fake_gamepad_id(2);
+        let id3 = fake_gamepad_id(3);
+        let connected = connected_gamepad_ids(vec![(id1, true), (id2, false), (id3, true)]);
+        assert_eq!(connected, vec![id1, id3]);
+
+        let next = select_active_gamepad_ids(&connected, [Some(id1), Some(id2)]);
+        assert_eq!(next, [Some(id1), Some(id3)]);
+
+        let deduped = select_active_gamepad_ids(&connected, [Some(id3), Some(id3)]);
+        assert_eq!(deduped, [Some(id3), Some(id1)]);
+    }
+
+    #[test]
+    fn gamepad_sampling_helpers_map_buttons_and_axis_thresholds() {
+        let bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            east_pressed: true,
+            north_pressed: true,
+            select_pressed: true,
+            start_pressed: true,
+            dpad_down_pressed: true,
+            dpad_right_pressed: true,
+            left_x: -0.75,
+            left_y: -0.75,
+            ..GamepadSnapshot::default()
+        });
+        let expected = Button::A.bit_mask()
+            | Button::B.bit_mask()
+            | Button::Select.bit_mask()
+            | Button::Start.bit_mask()
+            | Button::Up.bit_mask()
+            | Button::Down.bit_mask()
+            | Button::Left.bit_mask()
+            | Button::Right.bit_mask();
+        assert_eq!(bits, expected);
+
+        let boundary_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            left_x: GAMEPAD_AXIS_THRESHOLD,
+            left_y: -GAMEPAD_AXIS_THRESHOLD,
+            ..GamepadSnapshot::default()
+        });
+        assert_eq!(
+            boundary_bits,
+            Button::Up.bit_mask() | Button::Right.bit_mask()
+        );
+
+        let neutral_axis_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            left_x: 0.0,
+            left_y: GAMEPAD_AXIS_THRESHOLD * 0.5,
+            ..GamepadSnapshot::default()
+        });
+        assert_eq!(neutral_axis_bits, 0);
+
+        assert_eq!(
+            gamepad_snapshot_to_bits(GamepadSnapshot {
+                connected: false,
+                east_pressed: true,
+                left_x: 1.0,
+                left_y: -1.0,
+                ..GamepadSnapshot::default()
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn schedule_netplay_ping_enforces_deadline_nonce_and_pending_cap() {
+        let now = Instant::now();
+        let mut next_ping_at = now + Duration::from_millis(10);
+        let mut nonce = 5_u64;
+        let mut pending = BTreeMap::<u64, Instant>::new();
+        pending.insert(1, now - Duration::from_millis(20));
+        pending.insert(2, now - Duration::from_millis(10));
+
+        assert_eq!(
+            schedule_netplay_ping(
+                now,
+                &mut next_ping_at,
+                &mut nonce,
+                &mut pending,
+                Duration::from_millis(500),
+                2
+            ),
+            None
+        );
+        assert_eq!(nonce, 5);
+        assert_eq!(pending.len(), 2);
+
+        let due_now = now + Duration::from_millis(10);
+        let scheduled = schedule_netplay_ping(
+            due_now,
+            &mut next_ping_at,
+            &mut nonce,
+            &mut pending,
+            Duration::from_millis(500),
+            2,
+        );
+        assert_eq!(scheduled, Some(5));
+        assert_eq!(nonce, 6);
+        assert_eq!(next_ping_at, due_now + Duration::from_millis(500));
+        assert_eq!(pending.len(), 2, "pending set should be capped to max");
+        assert!(
+            !pending.contains_key(&1),
+            "oldest nonce should be evicted first"
+        );
+        assert!(pending.contains_key(&5), "new nonce should be tracked");
     }
 
     #[test]
@@ -2550,6 +2987,21 @@ mod tests {
         assert_eq!(&bmp[0..2], b"BM");
         assert_eq!(bmp.len(), 58);
         assert_eq!(&bmp[54..58], &[30, 20, 10, 0]);
+    }
+
+    #[test]
+    fn encode_bmp_multiplies_row_and_column_indices_for_bottom_up_bgr_layout() {
+        let rgba = vec![
+            // Top row.
+            255, 0, 0, 255, 0, 255, 0, 255, // Bottom row.
+            0, 0, 255, 255, 255, 255, 255, 255,
+        ];
+        let bmp = encode_bmp(2, 2, &rgba).expect("bmp encoding should succeed");
+        assert_eq!(bmp.len(), 70);
+
+        // BMP stores rows bottom-up and colors as B,G,R with row padding.
+        assert_eq!(&bmp[54..62], &[255, 0, 0, 255, 255, 255, 0, 0]);
+        assert_eq!(&bmp[62..70], &[0, 0, 255, 0, 255, 0, 0, 0]);
     }
 
     #[test]

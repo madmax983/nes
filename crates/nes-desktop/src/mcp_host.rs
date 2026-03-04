@@ -311,9 +311,6 @@ fn map_tool_arguments(arguments: &Map<String, Value>) -> ToolParams {
 fn json_arg_to_string(value: &Value) -> String {
     match value {
         Value::String(v) => v.clone(),
-        Value::Number(v) => v.to_string(),
-        Value::Bool(v) => v.to_string(),
-        Value::Null => "null".to_owned(),
         _ => value.to_string(),
     }
 }
@@ -639,4 +636,314 @@ fn jsonrpc_error(id: Value, err: RpcError) -> Value {
         "id": id,
         "error": err.as_json()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::NesCore;
+    use std::io::{BufReader, Cursor};
+    use std::net::TcpStream;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    #[test]
+    fn rpc_error_constructors_use_jsonrpc_standard_codes() {
+        let parse = RpcError::parse_error("bad json");
+        assert_eq!(parse.code, -32700);
+        assert_eq!(parse.message, "bad json");
+
+        let invalid_request = RpcError::invalid_request("missing id");
+        assert_eq!(invalid_request.code, -32600);
+        assert_eq!(invalid_request.message, "missing id");
+
+        let method_not_found = RpcError::method_not_found("unknown method");
+        assert_eq!(method_not_found.code, -32601);
+        assert_eq!(method_not_found.message, "unknown method");
+
+        let invalid_params = RpcError::invalid_params("bad args");
+        assert_eq!(invalid_params.code, -32602);
+        assert_eq!(invalid_params.message, "bad args");
+
+        let internal = RpcError::internal_error("boom");
+        assert_eq!(internal.code, -32603);
+        assert_eq!(internal.message, "boom");
+
+        let json = internal.as_json();
+        assert_eq!(json["code"], -32603);
+        assert_eq!(json["message"], "boom");
+    }
+
+    #[test]
+    fn jsonrpc_helper_envelopes_include_version_ids_and_payloads() {
+        let result = jsonrpc_result(json!(7), json!({"ok": true}));
+        assert_eq!(result["jsonrpc"], JSONRPC_VERSION);
+        assert_eq!(result["id"], 7);
+        assert_eq!(result["result"]["ok"], true);
+
+        let error = jsonrpc_error(json!("abc"), RpcError::invalid_request("bad request"));
+        assert_eq!(error["jsonrpc"], JSONRPC_VERSION);
+        assert_eq!(error["id"], "abc");
+        assert_eq!(error["error"]["code"], -32600);
+        assert_eq!(error["error"]["message"], "bad request");
+    }
+
+    #[test]
+    fn json_arg_and_tool_argument_mapping_stringify_scalars_and_structures() {
+        assert_eq!(json_arg_to_string(&json!("x")), "x");
+        assert_eq!(json_arg_to_string(&json!(42)), "42");
+        assert_eq!(json_arg_to_string(&json!(true)), "true");
+        assert_eq!(json_arg_to_string(&Value::Null), "null");
+        assert_eq!(json_arg_to_string(&json!({"k": "v"})), "{\"k\":\"v\"}");
+
+        let mut args = Map::<String, Value>::new();
+        args.insert("a".to_owned(), json!(5));
+        args.insert("b".to_owned(), json!(false));
+        let mapped = map_tool_arguments(&args);
+        assert_eq!(mapped.get("a").map(String::as_str), Some("5"));
+        assert_eq!(mapped.get("b").map(String::as_str), Some("false"));
+    }
+
+    #[test]
+    fn handle_initialize_and_message_routes_cover_core_jsonrpc_paths() {
+        let init_err = handle_initialize(None).expect_err("missing params should fail");
+        assert_eq!(init_err.code, -32602);
+
+        let init = handle_initialize(Some(&json!({"protocolVersion": "2025-01-01"})))
+            .expect("valid initialize should succeed")
+            .expect("initialize should return a response");
+        assert_eq!(init["protocolVersion"], "2025-01-01");
+        assert_eq!(init["serverInfo"]["name"], "nes-desktop-mcp-host");
+
+        let (request_tx, _request_rx) = mpsc::channel::<ToolRequest>();
+        let parse = handle_message(b"{", &request_tx).expect("parse errors should respond");
+        assert_eq!(parse["error"]["code"], -32700);
+
+        let wrong_version_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "1.0",
+            "id": 1,
+            "method": "ping"
+        }))
+        .expect("serialize wrong version request");
+        let wrong_version = handle_message(&wrong_version_payload, &request_tx)
+            .expect("invalid version should respond");
+        assert_eq!(wrong_version["error"]["code"], -32600);
+
+        let ping_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "ping"
+        }))
+        .expect("serialize ping request");
+        let ping = handle_message(&ping_payload, &request_tx).expect("ping should respond");
+        assert_eq!(ping["result"], json!({}));
+
+        let init_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "initialize",
+            "params": { "protocolVersion": "2025-06-18" }
+        }))
+        .expect("serialize initialize request");
+        let init_response =
+            handle_message(&init_payload, &request_tx).expect("initialize should respond");
+        assert_eq!(init_response["id"], 10);
+        assert_eq!(init_response["result"]["protocolVersion"], "2025-06-18");
+
+        let initialized_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "notifications/initialized"
+        }))
+        .expect("serialize initialized notification");
+        let initialized_response = handle_message(&initialized_payload, &request_tx)
+            .expect("initialized notification with id should respond");
+        assert_eq!(initialized_response["result"], json!({}));
+
+        let resources_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "resources/list"
+        }))
+        .expect("serialize resources/list request");
+        let resources_response =
+            handle_message(&resources_payload, &request_tx).expect("resources/list should respond");
+        assert!(resources_response["result"]["resources"].is_array());
+
+        let prompts_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "prompts/list"
+        }))
+        .expect("serialize prompts/list request");
+        let prompts_response =
+            handle_message(&prompts_payload, &request_tx).expect("prompts/list should respond");
+        assert!(prompts_response["result"]["prompts"].is_array());
+
+        let logging_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "id": 14,
+            "method": "logging/setLevel"
+        }))
+        .expect("serialize logging request");
+        let logging_response =
+            handle_message(&logging_payload, &request_tx).expect("logging request should respond");
+        assert_eq!(logging_response["result"], json!({}));
+
+        let notification_payload = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+        }))
+        .expect("serialize notification");
+        assert_eq!(handle_message(&notification_payload, &request_tx), None);
+    }
+
+    #[test]
+    fn handle_tools_call_dispatches_requests_and_wraps_dispatch_output() {
+        let (request_tx, request_rx) = mpsc::channel::<ToolRequest>();
+        let worker = std::thread::spawn(move || {
+            let req = request_rx.recv().expect("request should be delivered");
+            assert_eq!(req.name, "pause");
+            let _ = req.respond_to.send(Ok(DispatchOutput::Ack));
+        });
+
+        let params = json!({
+            "name": "pause",
+            "arguments": {
+                "speed": 2
+            }
+        });
+        let response = handle_tools_call(Some(&params), &request_tx)
+            .expect("tools/call should succeed")
+            .expect("tools/call should return payload");
+        assert_eq!(response["isError"], false);
+        assert_eq!(response["structuredContent"]["kind"], "ack");
+        worker.join().expect("worker join should succeed");
+
+        let missing_name = handle_tools_call(Some(&json!({ "arguments": {} })), &request_tx)
+            .expect_err("missing name should fail");
+        assert_eq!(missing_name.code, -32602);
+    }
+
+    #[test]
+    fn framed_message_io_round_trips_payload_and_validates_headers() {
+        let value = json!({"kind":"ping","nonce":7});
+        let mut wire = Vec::<u8>::new();
+        write_framed_message(&mut wire, &value).expect("framed write should succeed");
+
+        let mut reader = BufReader::new(Cursor::new(wire));
+        let payload = read_framed_message(&mut reader)
+            .expect("framed read should succeed")
+            .expect("payload should exist");
+        let parsed: Value = serde_json::from_slice(&payload).expect("payload JSON should decode");
+        assert_eq!(parsed, value);
+
+        let mut bad_reader = BufReader::new(Cursor::new(b"{}\r\n\r\n".to_vec()));
+        let err =
+            read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
+        assert!(err.contains("missing Content-Length"));
+    }
+
+    #[test]
+    fn tool_input_schema_covers_all_specialized_method_shapes() {
+        let methods_with_property = [
+            ("set_controller_state", "bits"),
+            ("press_button", "button"),
+            ("release_button", "button"),
+            ("set_speed", "multiplier"),
+            ("read_memory", "address"),
+            ("set_breakpoint", "address"),
+            ("clear_breakpoint", "address"),
+            ("disassemble_at", "address"),
+            ("get_frame", "seq"),
+            ("get_audio_chunk", "seq"),
+            ("capture_frame", "path"),
+            ("save_state", "slot"),
+            ("load_state", "slot"),
+            ("load_rom", "rom_path"),
+            ("assemble_6502_dsl", "source"),
+            ("load_6502_dsl", "source"),
+            ("export_6502_dsl_rom", "output_path"),
+            ("export_6502_dsl_rom_base64", "source"),
+        ];
+
+        for (method, property) in methods_with_property {
+            let schema = tool_input_schema(method);
+            assert_eq!(schema["type"], "object", "schema type for {method}");
+            assert!(schema["properties"][property].is_object());
+        }
+        let fallback = tool_input_schema("unknown");
+        assert_eq!(fallback["type"], "object");
+        assert!(fallback["properties"].is_object());
+    }
+
+    #[test]
+    fn host_start_and_client_round_trip_cover_bind_addr_drain_and_dispatch() {
+        let host = McpHost::start("127.0.0.1:0").expect("host should start");
+        let bind_addr = host.bind_addr().to_owned();
+        assert!(
+            bind_addr.starts_with("127.0.0.1:"),
+            "bind addr should include localhost endpoint"
+        );
+
+        let mut stream = TcpStream::connect(&bind_addr).expect("client should connect to host");
+        stream
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .expect("set read timeout");
+        let mut reader = BufReader::new(
+            stream
+                .try_clone()
+                .expect("client stream clone for reader should succeed"),
+        );
+
+        let ping_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "ping"
+        });
+        write_framed_message(&mut stream, &ping_request).expect("write ping");
+        let ping_payload = read_framed_message(&mut reader)
+            .expect("read ping response")
+            .expect("ping payload");
+        let ping_response: Value =
+            serde_json::from_slice(&ping_payload).expect("decode ping response");
+        assert_eq!(ping_response["id"], 1);
+        assert_eq!(ping_response["result"], json!({}));
+
+        let tools_list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/list"
+        });
+        write_framed_message(&mut stream, &tools_list_request).expect("write tools/list");
+        let list_payload = read_framed_message(&mut reader)
+            .expect("read tools/list response")
+            .expect("tools/list payload");
+        let list_response: Value =
+            serde_json::from_slice(&list_payload).expect("decode tools/list response");
+        assert!(list_response["result"]["tools"].is_array());
+
+        let tools_call_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "pause",
+                "arguments": {}
+            }
+        });
+        write_framed_message(&mut stream, &tools_call_request).expect("write tools/call");
+
+        let mut core = NesCore::new();
+        host.drain(&mut core);
+
+        let call_payload = read_framed_message(&mut reader)
+            .expect("read tools/call response")
+            .expect("tools/call payload");
+        let call_response: Value =
+            serde_json::from_slice(&call_payload).expect("decode tools/call response");
+        assert_eq!(call_response["id"], 3);
+        assert_eq!(call_response["result"]["isError"], false);
+        assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
+    }
 }
