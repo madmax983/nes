@@ -6,3 +6,7 @@ edition = "2024"
 [dependencies]
 nes-netplay = { path = "../nes-netplay" }
 serde_json = "1"
+
+[dev-dependencies]
+loom = "0.7.2"
+proptest = "1.10.0"
