@@ -270,13 +270,13 @@ impl Assembler {
             match fixup.kind {
                 FixupKind::Byte => {
                     let byte = fit_u8(value, fixup.line)?;
-                    self.write_resolved_byte(fixup.addr, byte)?;
+                    self.bytes.insert(fixup.addr, byte);
                 }
                 FixupKind::Word => {
                     let word = fit_u16(value, fixup.line)?;
                     let [lo, hi] = word.to_le_bytes();
-                    self.write_resolved_byte(fixup.addr, lo)?;
-                    self.write_resolved_byte(fixup.addr.wrapping_add(1), hi)?;
+                    self.bytes.insert(fixup.addr, lo);
+                    self.bytes.insert(fixup.addr.wrapping_add(1), hi);
                 }
                 FixupKind::Relative => {
                     let target = fit_u16(value, fixup.line)?;
@@ -289,7 +289,7 @@ impl Assembler {
                             to: target,
                         });
                     }
-                    self.write_resolved_byte(fixup.addr, (delta as i8) as u8)?;
+                    self.bytes.insert(fixup.addr, (delta as i8) as u8);
                 }
             }
         }
