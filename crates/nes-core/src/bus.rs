@@ -69,3 +69,39 @@ pub fn map_region(addr: u16) -> BusRegion {
         _ => BusRegion::CartridgePrgRom,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_region_returns_correct_region() {
+        // CpuRam: 0x0000..=0x1FFF
+        assert_eq!(map_region(0x0000), BusRegion::CpuRam);
+        assert_eq!(map_region(0x1FFF), BusRegion::CpuRam);
+
+        // PpuRegisters: 0x2000..=0x3FFF
+        assert_eq!(map_region(0x2000), BusRegion::PpuRegisters);
+        assert_eq!(map_region(0x3FFF), BusRegion::PpuRegisters);
+
+        // ApuIo: 0x4000..=0x4017
+        assert_eq!(map_region(0x4000), BusRegion::ApuIo);
+        assert_eq!(map_region(0x4017), BusRegion::ApuIo);
+
+        // DisabledIo: 0x4018..=0x401F
+        assert_eq!(map_region(0x4018), BusRegion::DisabledIo);
+        assert_eq!(map_region(0x401F), BusRegion::DisabledIo);
+
+        // CartridgeExpansion: 0x4020..=0x5FFF
+        assert_eq!(map_region(0x4020), BusRegion::CartridgeExpansion);
+        assert_eq!(map_region(0x5FFF), BusRegion::CartridgeExpansion);
+
+        // CartridgePrgRam: 0x6000..=0x7FFF
+        assert_eq!(map_region(0x6000), BusRegion::CartridgePrgRam);
+        assert_eq!(map_region(0x7FFF), BusRegion::CartridgePrgRam);
+
+        // CartridgePrgRom: _
+        assert_eq!(map_region(0x8000), BusRegion::CartridgePrgRom);
+        assert_eq!(map_region(0xFFFF), BusRegion::CartridgePrgRom);
+    }
+}
