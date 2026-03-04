@@ -575,7 +575,9 @@ fn should_update_input_delay(target_delay: u32, current_delay: u32) -> bool {
 }
 
 fn should_trace_frame(trace_every_frames: u64, frame_index: u64) -> bool {
-    trace_every_frames > 0 && frame_index > 0 && frame_index % trace_every_frames == 0
+    trace_every_frames != 0
+        && frame_index != 0
+        && frame_index.is_multiple_of(trace_every_frames)
 }
 
 fn audio_queue_dropped(queued: bool) -> bool {
@@ -598,7 +600,7 @@ fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
 }
 
 fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
-    hash_check_every > 0 && frame > 0 && frame % hash_check_every == 0
+    hash_check_every != 0 && frame != 0 && frame.is_multiple_of(hash_check_every)
 }
 
 fn schedule_netplay_ping(
@@ -932,7 +934,6 @@ fn run() -> Result<(), String> {
                 match classify_keyboard_input(key, pressed, rollback.is_some()) {
                     KeyboardDecision::Exit => {
                         *control_flow = ControlFlow::Exit;
-                        return;
                     }
                     KeyboardDecision::SetRewindHeld(held) => {
                         // R: hold to rewind, release to resume.
@@ -946,7 +947,6 @@ fn run() -> Result<(), String> {
                                 let _ = core.execute(Command::ReleaseButton(button));
                             }
                         }
-                        return;
                     }
                     KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
                         keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
@@ -1026,17 +1026,17 @@ fn run() -> Result<(), String> {
                             })
                         })
                         .unwrap_or_default();
-                    if rollback.is_none() {
-                        if let Err(err) = apply_gamepad_delta_commands(
+                    if rollback.is_none()
+                        && let Err(err) = apply_gamepad_delta_commands(
                             &mut core,
                             gamepad_bits[player],
                             next_gamepad_bits,
                             is_player_two_slot(player),
-                        ) {
-                            eprintln!("{err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
+                        )
+                    {
+                        eprintln!("{err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
                     }
                     gamepad_bits[player] = next_gamepad_bits;
                 }
@@ -1078,12 +1078,11 @@ fn run() -> Result<(), String> {
                         &mut netplay_pending_pings,
                         NETPLAY_PING_INTERVAL,
                         128,
-                    ) {
-                        if let Err(err) = client.send_ping(nonce) {
-                            eprintln!("Netplay send ping failed: {err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
+                    ) && let Err(err) = client.send_ping(nonce)
+                    {
+                        eprintln!("Netplay send ping failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
                     }
 
                     loop {
