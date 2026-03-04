@@ -344,4 +344,35 @@ mod tests {
         m.write_prg(0xC000, 0x01);
         assert!(m.shift_is_reset());
     }
+
+    #[test]
+    fn mmc1_from_prg_rom_initializes_correctly() {
+        let prg_rom = vec![0_u8; 16 * 1024]; // 1 bank
+        let m = Mmc1::from_prg_rom(prg_rom, 8);
+        assert_eq!(m.prg_bank_count, 1);
+        assert_eq!(m._chr_bank_count, 8);
+        assert!(m.shift_is_reset());
+        assert_eq!(m.control, Mmc1::CONTROL_RESET);
+        assert_eq!(m.selected_prg_bank, 0);
+
+        // Test with empty ROM, should default to 1
+        let m2 = Mmc1::from_prg_rom(vec![], 0);
+        assert_eq!(m2.prg_bank_count, 1);
+        assert_eq!(m2._chr_bank_count, 1);
+    }
+
+    #[test]
+    fn mmc1_write_prg_with_bit7_set_resets_shift_and_updates_control() {
+        let mut m = Mmc1::new(16, 8);
+        // Push a bit to take shift register out of reset state
+        m.write_prg(0x8000, 0x01);
+        assert!(!m.shift_is_reset());
+        assert_eq!(m.shift_count, 1);
+
+        // Write value with bit 7 set
+        m.write_prg(0x8000, 0x80);
+        assert!(m.shift_is_reset());
+        assert_eq!(m.shift_count, 0);
+        assert_eq!(m.control & Mmc1::CONTROL_RESET, Mmc1::CONTROL_RESET);
+    }
 }
