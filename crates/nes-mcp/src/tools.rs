@@ -1,8 +1,26 @@
 //! Defines the available tools for the Model Context Protocol (MCP) server.
 
+/// Describes a single tool that can be invoked via the MCP.
+///
+/// These definitions match the exact names and descriptions returned to the
+/// MCP client during the `tools/list` initialization phase.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::tools::ToolDefinition;
+///
+/// let tool = ToolDefinition {
+///     name: "echo",
+///     description: "Echoes back the input",
+/// };
+/// assert_eq!(tool.name, "echo");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ToolDefinition {
+    /// The exact string identifier sent in the tool invocation.
     pub name: &'static str,
+    /// A human-readable description for LLMs to understand the tool's purpose.
     pub description: &'static str,
 }
 
@@ -129,6 +147,19 @@ const TOOL_CATALOG: [ToolDefinition; 30] = [
     },
 ];
 
+/// Returns the static catalog of all registered MCP tools.
+///
+/// Use this list to register capabilities with the MCP client.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::tools::tool_catalog;
+///
+/// let tools = tool_catalog();
+/// assert!(!tools.is_empty());
+/// assert!(tools.iter().any(|t| t.name == "load_rom"));
+/// ```
 #[must_use]
 pub fn tool_catalog() -> &'static [ToolDefinition] {
     &TOOL_CATALOG
