@@ -28,7 +28,7 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verus-check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/verus-check.ps1
 ```
 
 Coverage locally (same format uploaded in CI):
@@ -45,9 +45,9 @@ Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 Desktop/TUI launch commands:
 
 ```powershell
-cargo run -p nes-desktop --release -- .\roms\homebrew\homebrew.nes
-cargo run -p nes-desktop --release -- --config .\nes.toml
-cargo run -p nes-tui -- --config .\nes.toml
+cargo run -p nes-desktop --release -- ./roms/homebrew/homebrew.nes
+cargo run -p nes-desktop --release -- --config ./nes.toml
+cargo run -p nes-tui -- --config ./nes.toml
 ```
 
 Rollback netplay (across-town) flow:
@@ -57,10 +57,10 @@ Rollback netplay (across-town) flow:
 cargo run -p nes-relay -- --bind 0.0.0.0:4545
 
 # Terminal 2: player 1
-cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 1 .\roms\homebrew\homebrew.nes
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 1 ./roms/homebrew/homebrew.nes
 
 # Terminal 3: player 2
-cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 .\roms\homebrew\homebrew.nes
+cargo run -p nes-desktop --release -- --netplay --netplay-relay <relay-host>:4545 --netplay-room river-city --netplay-player 2 ./roms/homebrew/homebrew.nes
 ```
 
 Relay can inject controlled network faults for rollback testing:
@@ -80,7 +80,7 @@ cargo build -p nes-web --target wasm32-unknown-unknown
 Web demo build + local serve (Trunk):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run_web_demo.ps1 -OpenBrowser
 ```
 
 Web host ROM persistence:
@@ -107,10 +107,10 @@ Automation scripts:
 
 ```powershell
 # Deterministic demo sequence + one capture
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mcp_play_demo.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_play_demo.ps1
 
 # Hybrid controller: macro segments + deterministic micro-control + savestate retries
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mcp_hybrid_autoplay.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_hybrid_autoplay.ps1
 ```
 
 ROM harness tests read from:
@@ -143,13 +143,13 @@ cargo test -p nes-test-harness --test rom_bbbradsmith_audio -- --ignored --nocap
 Generate/update golden PCM captures for supported mapper ROMs (0/1/2/4):
 
 ```powershell
-cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config .\nes.toml
+cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config ./nes.toml
 ```
 
 Force overwrite existing golden files:
 
 ```powershell
-cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config .\nes.toml --force
+cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config ./nes.toml --force
 ```
 
 ## Homebrew ROM
@@ -163,11 +163,11 @@ cargo run -p nes-test-harness --bin build_homebrew_rom
 Run it:
 
 ```powershell
-cargo run -p nes-desktop --release -- .\roms\homebrew\homebrew.nes
+cargo run -p nes-desktop --release -- ./roms/homebrew/homebrew.nes
 ```
 
 Or build and run in one command:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_homebrew.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run_homebrew.ps1
 ```
