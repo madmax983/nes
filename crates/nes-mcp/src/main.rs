@@ -830,4 +830,16 @@ mod tests {
         assert_eq!(response["error"]["code"], json!(-32602));
         assert_eq!(response["error"]["message"], json!("bad input"));
     }
+
+    #[test]
+    fn dispatch_output_value_formats_basic_variants() {
+        let ack_val = dispatch_output_value(DispatchOutput::Ack);
+        assert_eq!(ack_val, json!({ "kind": "ack" }));
+
+        let cycle_val = dispatch_output_value(DispatchOutput::CycleCount { cpu_cycles: 42 });
+        assert_eq!(
+            cycle_val,
+            json!({ "kind": "cycle_count", "cpu_cycles": 42 })
+        );
+    }
 }
