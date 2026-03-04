@@ -645,7 +645,36 @@ mod tests {
     use std::io::{BufReader, Cursor};
     use std::net::TcpStream;
     use std::sync::mpsc;
-    use std::time::Duration;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    fn is_retryable_read_error(message: &str) -> bool {
+        let lowered = message.to_ascii_lowercase();
+        lowered.contains("temporarily unavailable")
+            || lowered.contains("would block")
+            || lowered.contains("timed out")
+            || lowered.contains("non-blocking socket operation")
+    }
+
+    fn read_response_with_host_drain(
+        host: &McpHost,
+        core: &mut NesCore,
+        reader: &mut BufReader<TcpStream>,
+        context: &str,
+    ) -> Vec<u8> {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            host.drain(core);
+            match read_framed_message(reader) {
+                Ok(Some(payload)) => return payload,
+                Ok(None) => panic!("{context}: connection closed before response"),
+                Err(err) if Instant::now() < deadline && is_retryable_read_error(&err) => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(err) => panic!("{context}: {err}"),
+            }
+        }
+    }
 
     #[test]
     fn rpc_error_constructors_use_jsonrpc_standard_codes() {
@@ -935,11 +964,12 @@ mod tests {
         write_framed_message(&mut stream, &tools_call_request).expect("write tools/call");
 
         let mut core = NesCore::new();
-        host.drain(&mut core);
-
-        let call_payload = read_framed_message(&mut reader)
-            .expect("read tools/call response")
-            .expect("tools/call payload");
+        let call_payload = read_response_with_host_drain(
+            &host,
+            &mut core,
+            &mut reader,
+            "read tools/call response",
+        );
         let call_response: Value =
             serde_json::from_slice(&call_payload).expect("decode tools/call response");
         assert_eq!(call_response["id"], 3);
