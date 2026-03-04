@@ -303,10 +303,10 @@ fn event_loop(
     loop {
         while event_source.poll_event(Duration::from_millis(0))? {
             let ev = event_source.read_event()?;
-            if let Event::Key(key) = ev {
-                if handle_runtime_key_event(runtime, key)? == LoopAction::Exit {
-                    return Ok(());
-                }
+            if let Event::Key(key) = ev
+                && handle_runtime_key_event(runtime, key)? == LoopAction::Exit
+            {
+                return Ok(());
             }
         }
 
@@ -1273,8 +1273,8 @@ mod tests {
     #[test]
     fn crossterm_event_source_wraps_poll_and_read_errors() {
         let mut source = CrosstermEventSource::with_handlers(
-            |_| Err(io::Error::new(io::ErrorKind::Other, "poll failed")),
-            || Err(io::Error::new(io::ErrorKind::Other, "read failed")),
+            |_| Err(io::Error::other("poll failed")),
+            || Err(io::Error::other("read failed")),
         );
 
         let poll_err = source
