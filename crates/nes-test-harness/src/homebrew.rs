@@ -215,6 +215,8 @@ fn assemble_homebrew_program() -> Result<Program, String> {
         0x21, 0x06, 0x16, 0x26, // BG palette 2
         0x21, 0x30, 0x16, 0x0F, // sprite palette 0
     ];
+    // Game Design Theory: Increased base speed from 1 to 2. A speed of 1 felt too sluggish ("Friction"). Moving faster feels "Juicier" and more responsive.
+    const PLAYER_SPEED: u8 = 2;
 
     asm.label("reset")?;
     asm.op(0x78); // SEI
@@ -291,28 +293,40 @@ fn assemble_homebrew_program() -> Result<Program, String> {
     asm.abs(0xAD, 0x4016); // LDA $4016
     asm.imm(0x29, 0x01); // AND #$01
     asm.rel_label(0xF0, "not_up"); // BEQ not_up
-    asm.zp(0xC6, 0x00); // DEC $00
+    asm.zp(0xA5, 0x00); // LDA $00
+    asm.op(0x38); // SEC
+    asm.imm(0xE9, PLAYER_SPEED); // SBC #PLAYER_SPEED
+    asm.zp(0x85, 0x00); // STA $00
     asm.label("not_up")?;
 
     // Down
     asm.abs(0xAD, 0x4016); // LDA $4016
     asm.imm(0x29, 0x01); // AND #$01
     asm.rel_label(0xF0, "not_down"); // BEQ not_down
-    asm.zp(0xE6, 0x00); // INC $00
+    asm.zp(0xA5, 0x00); // LDA $00
+    asm.op(0x18); // CLC
+    asm.imm(0x69, PLAYER_SPEED); // ADC #PLAYER_SPEED
+    asm.zp(0x85, 0x00); // STA $00
     asm.label("not_down")?;
 
     // Left
     asm.abs(0xAD, 0x4016); // LDA $4016
     asm.imm(0x29, 0x01); // AND #$01
     asm.rel_label(0xF0, "not_left"); // BEQ not_left
-    asm.zp(0xC6, 0x01); // DEC $01
+    asm.zp(0xA5, 0x01); // LDA $01
+    asm.op(0x38); // SEC
+    asm.imm(0xE9, PLAYER_SPEED); // SBC #PLAYER_SPEED
+    asm.zp(0x85, 0x01); // STA $01
     asm.label("not_left")?;
 
     // Right
     asm.abs(0xAD, 0x4016); // LDA $4016
     asm.imm(0x29, 0x01); // AND #$01
     asm.rel_label(0xF0, "not_right"); // BEQ not_right
-    asm.zp(0xE6, 0x01); // INC $01
+    asm.zp(0xA5, 0x01); // LDA $01
+    asm.op(0x18); // CLC
+    asm.imm(0x69, PLAYER_SPEED); // ADC #PLAYER_SPEED
+    asm.zp(0x85, 0x01); // STA $01
     asm.label("not_right")?;
 
     asm.zp(0xA5, 0x00); // LDA $00
