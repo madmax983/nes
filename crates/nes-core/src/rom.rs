@@ -177,3 +177,141 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
         mirroring,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rom_error_display() {
+        assert_eq!(
+            RomError::InvalidMagic.to_string(),
+            "invalid iNES magic header"
+        );
+        assert_eq!(
+            RomError::UnsupportedFourScreenMirroring.to_string(),
+            "four-screen nametable mirroring is not supported"
+        );
+        assert_eq!(
+            RomError::UnsupportedNes2SizeEncoding.to_string(),
+            "NES 2.0 exponent/multiplier size encoding is not supported"
+        );
+        assert_eq!(
+            RomError::UnsupportedNes2ExtendedMapper(42).to_string(),
+            "NES 2.0 extended mapper id 42 is not supported"
+        );
+        assert_eq!(RomError::MissingPrgRom.to_string(), "ROM has no PRG banks");
+        assert_eq!(
+            RomError::UnsupportedMapper(99).to_string(),
+            "unsupported mapper id 99"
+        );
+        assert_eq!(
+            RomError::UnsupportedPrgLayout(8192).to_string(),
+            "unsupported PRG layout size 8192"
+        );
+        assert_eq!(
+            RomError::Truncated {
+                expected_min: 100,
+                actual: 50,
+            }
+            .to_string(),
+            "truncated ROM: expected at least 100 bytes, got 50"
+        );
+    }
+
+    #[test]
+    fn test_parse_ines_truncated_header() {
+        let err = parse_ines(&[0; 15]).unwrap_err();
+        assert_eq!(
+            err,
+            RomError::Truncated {
+                expected_min: 16,
+                actual: 15
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_ines_invalid_magic() {
+        let mut bytes = [0; 32];
+        bytes[0..4].copy_from_slice(b"BAD!");
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::InvalidMagic);
+    }
+
+    #[test]
+    fn test_parse_ines_four_screen_mirroring() {
+        let mut bytes = [0; 32];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[6] = 0b0000_1000;
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::UnsupportedFourScreenMirroring);
+    }
+
+    #[test]
+    fn test_parse_ines_mirroring() {
+        let mut bytes = [0; 32];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank
+
+        // Vertical mirroring
+        bytes[6] = 0b0000_0001;
+        let mut rom_bytes = vec![0; 16 + 16 * 1024];
+        rom_bytes[0..16].copy_from_slice(&bytes[0..16]);
+        let rom = parse_ines(&rom_bytes).unwrap();
+        assert_eq!(rom.mirroring, NametableMirroring::Vertical);
+
+        // Horizontal mirroring
+        bytes[6] = 0b0000_0000;
+        rom_bytes[0..16].copy_from_slice(&bytes[0..16]);
+        let rom = parse_ines(&rom_bytes).unwrap();
+        assert_eq!(rom.mirroring, NametableMirroring::Horizontal);
+    }
+
+    #[test]
+    fn test_parse_ines_missing_prg() {
+        let mut bytes = [0; 32];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 0; // 0 PRG banks
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::MissingPrgRom);
+    }
+
+    #[test]
+    fn test_parse_ines_nes2_extended_mapper() {
+        let mut bytes = [0; 32];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[7] = 0b0000_1000; // NES 2.0 marker
+        bytes[8] = 0x01; // Extended mapper > 0
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::UnsupportedNes2ExtendedMapper(0x0100));
+    }
+
+    #[test]
+    fn test_parse_ines_nes2_size_encoding() {
+        let mut bytes = [0; 32];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[7] = 0b0000_1000; // NES 2.0 marker
+        bytes[9] = 0x0F; // PRG MSB == 0x0F
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::UnsupportedNes2SizeEncoding);
+
+        bytes[9] = 0xF0; // CHR MSB == 0x0F
+        let err2 = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err2, RomError::UnsupportedNes2SizeEncoding);
+    }
+
+    #[test]
+    fn test_parse_ines_trainer() {
+        let mut bytes = vec![0; 16 + 512 + 16384];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank
+        bytes[6] = 0b0000_0100; // Has trainer
+        let rom = parse_ines(&bytes).unwrap();
+        assert_eq!(rom.prg_rom.len(), 16384);
+        assert_eq!(
+            rom.prg_rom.as_ptr() as usize - bytes.as_ptr() as usize,
+            16 + 512
+        );
+    }
+}
