@@ -1005,4 +1005,25 @@ mod tests {
             }
         );
     }
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_sample_delay_ms_does_not_panic(
+            latency in any::<u64>(),
+            jitter in any::<u64>(),
+            loss in any::<u8>(),
+            reorder in any::<u8>()
+        ) {
+            let link = LinkCondition {
+                latency_ms: latency,
+                jitter_ms: jitter,
+                loss_pct: loss,
+                reorder_pct: reorder,
+            };
+            let net_sim = make_net_sim(link, 42);
+            net_sim.sample_delay_ms();
+        }
+    }
 }
