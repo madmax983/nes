@@ -29,7 +29,7 @@ pub enum StepModeConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct DesktopConfig {
     pub rom_path: Option<String>,
     pub window_scale: u32,
@@ -61,7 +61,7 @@ impl Default for DesktopConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct RomPathsConfig {
     pub smb: Option<String>,
     pub nestest: Option<String>,
@@ -71,7 +71,7 @@ pub struct RomPathsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct NetplayConfig {
     pub enabled: bool,
     pub relay_addr: String,
@@ -97,7 +97,7 @@ impl Default for NetplayConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct TimeMachineConfig {
     pub enabled: bool,
     pub max_history_seconds: u32,
@@ -117,7 +117,7 @@ impl Default for TimeMachineConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct NesConfig {
     pub desktop: DesktopConfig,
     pub roms: RomPathsConfig,
@@ -165,6 +165,9 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
             let Some(path) = arg_iter.next() else {
                 return Err("missing value after --config".to_owned());
             };
+            if path.starts_with("--") {
+                return Err("missing value after --config".to_owned());
+            }
             config_path = Some(PathBuf::from(path));
             continue;
         }
@@ -303,6 +306,13 @@ window_scale = 9
     }
 
     #[test]
+    fn parse_config_path_arg_rejects_flag_as_split_value() {
+        let args = vec!["--config".to_owned(), "--netplay".to_owned()];
+        let err = parse_config_path_arg(&args).expect_err("parse should fail");
+        assert!(err.contains("missing value"));
+    }
+
+    #[test]
     fn parse_config_path_arg_rejects_empty_equals_value() {
         let args = vec!["--config=".to_owned()];
         let err = parse_config_path_arg(&args).expect_err("parse should fail");
@@ -324,5 +334,37 @@ window_scale = 9
             Some(PathBuf::from("second.toml").as_path())
         );
         assert_eq!(rest, vec!["rom.nes".to_owned(), "--fullscreen".to_owned()]);
+    }
+
+    #[test]
+    fn load_rejects_unknown_top_level_field() {
+        let path = write_temp_config(
+            r#"
+unknown_top_level = true
+"#,
+            "load-unknown-top-level",
+        );
+        let err = NesConfig::load(&path).expect_err("unknown top-level field should fail");
+        remove_if_exists(&path);
+
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("unknown_top_level"));
+    }
+
+    #[test]
+    fn load_rejects_unknown_nested_field() {
+        let path = write_temp_config(
+            r#"
+[desktop]
+window_scale = 4
+window_scal = 7
+"#,
+            "load-unknown-nested",
+        );
+        let err = NesConfig::load(&path).expect_err("unknown nested field should fail");
+        remove_if_exists(&path);
+
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("window_scal"));
     }
 }
