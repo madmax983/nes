@@ -875,4 +875,42 @@ mod tests {
         assert_eq!(response["error"]["code"], json!(-32602));
         assert_eq!(response["error"]["message"], json!("bad input"));
     }
+
+    #[test]
+    fn mcp_error_formatting_and_conversions() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let mcp_io: McpError = io_err.into();
+        assert_eq!(mcp_io.to_string(), "IO error: file missing");
+
+        let mcp_proto: McpError = "bad format".into();
+        assert_eq!(mcp_proto.to_string(), "Protocol error: bad format");
+
+        let mcp_proto_string: McpError = "bad format".to_owned().into();
+        assert_eq!(mcp_proto_string.to_string(), "Protocol error: bad format");
+    }
+
+    #[test]
+    fn read_stdio_message_handles_errors() {
+        let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("invalid Content-Length value 'abc'")
+        );
+
+        let mut reader = b"Something else\r\n\r\n".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(err.to_string().contains("missing Content-Length header"));
+
+        let mut reader = b"Content-Length: 100\r\nEOF".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("unexpected EOF while reading MCP headers")
+        );
+
+        let mut reader = b"Content-Length: 100\r\n\r\nshort".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(err.to_string().contains("failed reading payload body"));
+    }
 }
