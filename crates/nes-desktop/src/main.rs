@@ -749,6 +749,7 @@ fn run() -> Result<(), String> {
     let step_mode = runtime.step_mode;
 
     let mut table = Table::new();
+    table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
@@ -814,8 +815,8 @@ fn run() -> Result<(), String> {
         }
     }
 
-    println!("{}", "nes-desktop".with(Color::Cyan).bold());
-    println!("{table}\n");
+    eprintln!("{}", "nes-desktop".with(Color::Cyan).bold());
+    eprintln!("{table}\n");
     if cfg!(debug_assertions) {
         eprintln!(
             "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"

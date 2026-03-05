@@ -105,6 +105,7 @@ fn run() -> Result<(), String> {
     let mut state = ServerState::new();
 
     let mut table = Table::new();
+    table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
