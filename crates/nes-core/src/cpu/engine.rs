@@ -2563,3 +2563,30 @@ mod tests {
         assert_eq!(cpu.memory[0x07FF], 0xEF);
     }
 }
+
+#[cfg(test)]
+mod tests_format {
+    use super::*;
+
+    #[test]
+    fn format_trace_covers_padding_paths() {
+        let snapshot = TraceSnapshot {
+            pc: 0x8000,
+            a: 0x01,
+            x: 0x02,
+            y: 0x03,
+            p: 0x24,
+            sp: 0xFD,
+        };
+
+        // Short mnemonic to test padding loop
+        let out = format_trace(snapshot, &[0xEA], format_args!("NOP"));
+        assert!(out.contains("8000"));
+        assert!(out.contains("NOP"));
+
+        // Very long mnemonic to test loop
+        let long = "THIS_IS_VERY_LONG_MNEMONIC_THAT_WILL_EXCEED_THIRTY_ONE_CHARS";
+        let out2 = format_trace(snapshot, &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], format_args!("{}", long));
+        assert!(out2.contains(long));
+    }
+}
