@@ -136,6 +136,14 @@ pub struct Cpu {
 
 impl Cpu {
     /// Creates a CPU with canonical power-on register defaults.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let cpu = Cpu::new(0xC000);
+    /// assert_eq!(cpu.pc(), 0xC000);
+    /// ```
     #[must_use]
     pub fn new(start_pc: u16) -> Self {
         Self {
@@ -194,6 +202,15 @@ impl Cpu {
     }
 
     /// Captures register snapshot including 2KB work RAM.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let cpu = Cpu::new(0xC000);
+    /// let snap = cpu.snapshot();
+    /// assert_eq!(snap.pc, 0xC000);
+    /// ```
     #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
         let mut work_ram = [0u8; 2048];
@@ -210,6 +227,17 @@ impl Cpu {
     }
 
     /// Restores CPU registers and 2KB work RAM, clearing transient trace buffers.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let mut cpu = Cpu::new(0xC000);
+    /// let snap = cpu.snapshot();
+    /// cpu.reset(0x8000);
+    /// cpu.restore(snap);
+    /// assert_eq!(cpu.pc(), 0xC000);
+    /// ```
     pub fn restore(&mut self, snapshot: CpuSnapshot) {
         self.pc = snapshot.pc;
         self.a = snapshot.a;
@@ -224,6 +252,15 @@ impl Cpu {
     }
 
     /// Resets CPU registers and clears transient trace buffers.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let mut cpu = Cpu::new(0xC000);
+    /// cpu.reset(0x8000);
+    /// assert_eq!(cpu.pc(), 0x8000);
+    /// ```
     pub fn reset(&mut self, start_pc: u16) {
         self.pc = start_pc;
         self.a = 0;
@@ -237,6 +274,15 @@ impl Cpu {
     }
 
     /// Copies raw bytes into CPU memory image at `start`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let mut cpu = Cpu::new(0xC000);
+    /// cpu.load_bytes(0x2000, &[0xA9, 0xFF]);
+    /// assert_eq!(cpu.read_byte(0x2000), 0xA9);
+    /// ```
     pub fn load_bytes(&mut self, start: u16, bytes: &[u8]) {
         let start = start as usize;
         let end = start.saturating_add(bytes.len()).min(self.memory.len());
@@ -245,6 +291,16 @@ impl Cpu {
     }
 
     /// Services an NMI interrupt.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let mut cpu = Cpu::new(0xC000);
+    /// cpu.load_bytes(0xFFFA, &[0x00, 0x80]); // NMI vector to 0x8000
+    /// cpu.service_nmi();
+    /// assert_eq!(cpu.pc(), 0x8000);
+    /// ```
     pub fn service_nmi(&mut self) {
         let pc = self.pc;
         self.push((pc >> 8) as u8);
@@ -257,6 +313,16 @@ impl Cpu {
     /// Services an IRQ interrupt if not masked.
     ///
     /// Returns `true` when the IRQ was taken.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let mut cpu = Cpu::new(0xC000);
+    /// cpu.load_bytes(0xFFFE, &[0x00, 0x80]); // IRQ vector to 0x8000
+    /// // Interrupts are disabled by default on power-up (I flag set)
+    /// assert!(!cpu.service_irq());
+    /// ```
     pub fn service_irq(&mut self) -> bool {
         if self.status.interrupt_disable() {
             return false;
@@ -276,6 +342,17 @@ impl Cpu {
     /// # Errors
     ///
     /// Returns [`CpuError`] when opcode decoding/execution fails.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::cpu::Cpu;
+    /// let mut cpu = Cpu::new(0xC000);
+    /// cpu.load_bytes(0xC000, &[0xEA]); // NOP
+    /// let trace = cpu.step_with_trace().unwrap();
+    /// assert!(trace.contains("NOP"));
+    /// assert_eq!(cpu.pc(), 0xC001);
+    /// ```
     pub fn step_with_trace(&mut self) -> Result<String, CpuError> {
         self.step_with_trace_and_cycles().map(|(trace, _)| trace)
     }
