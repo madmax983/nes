@@ -68,15 +68,21 @@ impl RelayNetSim {
     }
 
     fn sample_delay_ms(&self) -> u64 {
-        let mut delay_ms = self.link.latency_ms as i64;
+        let latency_i64 = i64::try_from(self.link.latency_ms).unwrap_or(i64::MAX);
+        let mut delay_ms = latency_i64;
         if self.link.jitter_ms > 0 {
             let span = self.link.jitter_ms.saturating_mul(2).saturating_add(1);
-            let offset = (self.next_u64() % span) as i64 - self.link.jitter_ms as i64;
+            let span_val = self.next_u64() % span;
+            let jitter_i64 = i64::try_from(self.link.jitter_ms).unwrap_or(i64::MAX);
+            let span_i64 = i64::try_from(span_val).unwrap_or(i64::MAX);
+            let offset = span_i64.saturating_sub(jitter_i64);
             delay_ms = delay_ms.saturating_add(offset);
         }
         if self.percent_hit(self.link.reorder_pct) {
             // Reordering is modeled by adding additional variable delay to a subset of packets.
-            let extra = self.link.latency_ms.max(1) + (self.next_u64() % (self.link.jitter_ms + 1));
+            let jitter_range = self.link.jitter_ms.saturating_add(1);
+            let random_extra = self.next_u64() % jitter_range;
+            let extra = self.link.latency_ms.max(1).saturating_add(random_extra);
             let extra_i64 = i64::try_from(extra).unwrap_or(i64::MAX);
             delay_ms = delay_ms.saturating_add(extra_i64);
         }
@@ -1004,5 +1010,26 @@ mod tests {
                 peer_present: true,
             }
         );
+    }
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_sample_delay_ms_does_not_panic(
+            latency in any::<u64>(),
+            jitter in any::<u64>(),
+            loss in any::<u8>(),
+            reorder in any::<u8>()
+        ) {
+            let link = LinkCondition {
+                latency_ms: latency,
+                jitter_ms: jitter,
+                loss_pct: loss,
+                reorder_pct: reorder,
+            };
+            let net_sim = make_net_sim(link, 42);
+            net_sim.sample_delay_ms();
+        }
     }
 }
