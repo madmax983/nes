@@ -13,3 +13,8 @@
 - `refresh_frame_rgba()` generates the frame buffer internally, but `frame_rgba()` fetches the latest one, and the underlying implementation of `refresh_frame_rgba()` only sets the buffer when the emulator runs. In tests, we are stepping the emulator directly, which updates the buffer via `step_frame()` anyways, masking the mutation.
 - `to_js_error` mapping string to JsValue.
 **Kill Shot:** Mark as equivalent/untestable from Rust, since they exist solely to bridge with the external JS auto-run loop.
+
+## YYYY-MM-DD - Equivalent Mutants in NROM `write_prg`
+**Mutant:** `replace Nrom::write_prg with ()`
+**Diagnosis:** `Nrom::write_prg` delegates to `<Self as Mapper>::write_prg`, which is documented as doing nothing ("NROM has fixed PRG bank mapping and ignores bank-select writes"). Replacing a do-nothing function with `()` is mathematically equivalent and cannot be caught by any test observing state changes, because no state changes occur.
+**Kill Shot:** Identified as EQUIVALENT_MUTANT.
