@@ -271,63 +271,9 @@ pub fn dispatch_tool(
                 cpu_cycles: core.total_cycles(),
             })
         }
-        "set_controller_state" => {
-            let bits = parse_u8(params, "bits")?;
-            let player2 = parse_player2(params)?;
-            execute_command(
-                core,
-                if player2 {
-                    Command::SetController2State(bits)
-                } else {
-                    Command::SetControllerState(bits)
-                },
-            )?;
-            Ok(DispatchOutput::ControllerState {
-                controller_bits: if player2 {
-                    core.controller2_bits()
-                } else {
-                    core.controller_bits()
-                },
-            })
-        }
-        "press_button" => {
-            let button = parse_button(params)?;
-            let player2 = parse_player2(params)?;
-            execute_command(
-                core,
-                if player2 {
-                    Command::PressButton2(button)
-                } else {
-                    Command::PressButton(button)
-                },
-            )?;
-            Ok(DispatchOutput::ControllerState {
-                controller_bits: if player2 {
-                    core.controller2_bits()
-                } else {
-                    core.controller_bits()
-                },
-            })
-        }
-        "release_button" => {
-            let button = parse_button(params)?;
-            let player2 = parse_player2(params)?;
-            execute_command(
-                core,
-                if player2 {
-                    Command::ReleaseButton2(button)
-                } else {
-                    Command::ReleaseButton(button)
-                },
-            )?;
-            Ok(DispatchOutput::ControllerState {
-                controller_bits: if player2 {
-                    core.controller2_bits()
-                } else {
-                    core.controller_bits()
-                },
-            })
-        }
+        "set_controller_state" => handle_set_controller_state(core, params),
+        "press_button" => handle_press_button(core, params),
+        "release_button" => handle_release_button(core, params),
         "set_speed" => {
             let speed = parse_speed_permille(params)?;
             execute_command(core, Command::SetSpeed(speed))?;
@@ -394,19 +340,7 @@ pub fn dispatch_tool(
                 bytes: chunk.rgba.len(),
             })
         }
-        "capture_frame" => {
-            let Some(path) = params.get("path").cloned() else {
-                return Err(DispatchError::InvalidParams(
-                    "path must be provided".to_owned(),
-                ));
-            };
-            let rgba = core.framebuffer_rgba();
-            write_frame_image(&path, FRAME_WIDTH, FRAME_HEIGHT, &rgba)?;
-            Ok(DispatchOutput::FrameCaptured {
-                path,
-                bytes: rgba.len(),
-            })
-        }
+        "capture_frame" => handle_capture_frame(core, params),
         "get_audio_chunk" => {
             sync_audio_output(core);
             let default_seq = latest_output_metadata().audio_seq.saturating_add(1);
@@ -418,40 +352,9 @@ pub fn dispatch_tool(
                 samples: chunk.samples.len(),
             })
         }
-        "save_state" => {
-            let slot = parse_slot(params);
-            let mut slots = saved_states()
-                .lock()
-                .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-            slots.insert(slot.clone(), core.save_state());
-            Ok(DispatchOutput::StateSlot { slot })
-        }
-        "load_state" => {
-            let slot = parse_slot(params);
-            let snapshot = {
-                let slots = saved_states()
-                    .lock()
-                    .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-                slots.get(&slot).cloned()
-            };
-            if let Some(snapshot) = snapshot {
-                core.load_state(&snapshot);
-                Ok(DispatchOutput::StateSlot { slot })
-            } else {
-                Err(DispatchError::StateSlotNotFound(slot))
-            }
-        }
-        "load_rom" => {
-            let rom_bytes = parse_rom_payload(params)?;
-            let info = core
-                .load_ines_rom(&rom_bytes)
-                .map_err(|err| DispatchError::Core(err.to_string()))?;
-            Ok(DispatchOutput::RomLoaded {
-                mapper_id: info.mapper_id,
-                prg_rom_bytes: info.prg_rom_bytes,
-                reset_pc: info.reset_pc,
-            })
-        }
+        "save_state" => handle_save_state(core, params),
+        "load_state" => handle_load_state(core, params),
+        "load_rom" => handle_load_rom(core, params),
         "run_macro" => {
             let Some(script) = params.get("script") else {
                 return Err(DispatchError::InvalidParams(
@@ -541,6 +444,138 @@ pub fn dispatch_tool(
         }
         _ => Err(DispatchError::UnknownTool(tool_name.to_owned())),
     }
+}
+
+fn handle_set_controller_state(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let bits = parse_u8(params, "bits")?;
+    let player2 = parse_player2(params)?;
+    execute_command(
+        core,
+        if player2 {
+            Command::SetController2State(bits)
+        } else {
+            Command::SetControllerState(bits)
+        },
+    )?;
+    Ok(DispatchOutput::ControllerState {
+        controller_bits: if player2 {
+            core.controller2_bits()
+        } else {
+            core.controller_bits()
+        },
+    })
+}
+
+fn handle_press_button(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let button = parse_button(params)?;
+    let player2 = parse_player2(params)?;
+    execute_command(
+        core,
+        if player2 {
+            Command::PressButton2(button)
+        } else {
+            Command::PressButton(button)
+        },
+    )?;
+    Ok(DispatchOutput::ControllerState {
+        controller_bits: if player2 {
+            core.controller2_bits()
+        } else {
+            core.controller_bits()
+        },
+    })
+}
+
+fn handle_release_button(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let button = parse_button(params)?;
+    let player2 = parse_player2(params)?;
+    execute_command(
+        core,
+        if player2 {
+            Command::ReleaseButton2(button)
+        } else {
+            Command::ReleaseButton(button)
+        },
+    )?;
+    Ok(DispatchOutput::ControllerState {
+        controller_bits: if player2 {
+            core.controller2_bits()
+        } else {
+            core.controller_bits()
+        },
+    })
+}
+
+fn handle_capture_frame(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let Some(path) = params.get("path").cloned() else {
+        return Err(DispatchError::InvalidParams(
+            "path must be provided".to_owned(),
+        ));
+    };
+    let rgba = core.framebuffer_rgba();
+    write_frame_image(&path, FRAME_WIDTH, FRAME_HEIGHT, &rgba)?;
+    Ok(DispatchOutput::FrameCaptured {
+        path,
+        bytes: rgba.len(),
+    })
+}
+
+fn handle_save_state(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let slot = parse_slot(params);
+    let mut slots = saved_states()
+        .lock()
+        .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
+    slots.insert(slot.clone(), core.save_state());
+    Ok(DispatchOutput::StateSlot { slot })
+}
+
+fn handle_load_state(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let slot = parse_slot(params);
+    let snapshot = {
+        let slots = saved_states()
+            .lock()
+            .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
+        slots.get(&slot).cloned()
+    };
+    if let Some(snapshot) = snapshot {
+        core.load_state(&snapshot);
+        Ok(DispatchOutput::StateSlot { slot })
+    } else {
+        Err(DispatchError::StateSlotNotFound(slot))
+    }
+}
+
+fn handle_load_rom(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let rom_bytes = parse_rom_payload(params)?;
+    let info = core
+        .load_ines_rom(&rom_bytes)
+        .map_err(|err| DispatchError::Core(err.to_string()))?;
+    Ok(DispatchOutput::RomLoaded {
+        mapper_id: info.mapper_id,
+        prg_rom_bytes: info.prg_rom_bytes,
+        reset_pc: info.reset_pc,
+    })
 }
 
 fn execute_command(core: &mut NesCore, command: Command) -> Result<(), DispatchError> {
