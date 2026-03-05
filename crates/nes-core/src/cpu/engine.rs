@@ -303,7 +303,7 @@ impl Cpu {
         let cycles = self.instruction_cycles(snapshot, opcode);
         let step = match opcode {
             0x00 => {
-                let trace = format_trace(snapshot, &[opcode], "BRK");
+                let trace = format_trace(snapshot, &[opcode], format_args!("BRK"));
                 let return_pc = snapshot.pc.wrapping_add(2);
                 self.push((return_pc >> 8) as u8);
                 self.push(return_pc as u8);
@@ -317,7 +317,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("ORA (${zp:02X},X)"));
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -325,7 +326,7 @@ impl Cpu {
             0x05 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ORA ${zp:02X}"));
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -335,28 +336,28 @@ impl Cpu {
                 let addr = zp as u16;
                 let value = self.read(addr);
                 let next = self.asl_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ASL ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ASL ${zp:02X}"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x09 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("ORA #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("ORA #${imm:02X}"));
                 self.ora_value(imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x0B => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("ANC #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("ANC #${imm:02X}"));
                 self.and_value(imm);
                 self.status.set_carry(self.status.negative());
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x0A => {
-                let trace = format_trace(snapshot, &[opcode], "ASL A");
+                let trace = format_trace(snapshot, &[opcode], format_args!("ASL A"));
                 self.a = self.asl_value(self.a);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -366,8 +367,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("ORA ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("ORA ${addr:04X}"),
+                );
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -378,8 +382,11 @@ impl Cpu {
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
                 let next = self.asl_value(value);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("ASL ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("ASL ${addr:04X}"),
+                );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -389,7 +396,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("ORA (${zp:02X}),Y"));
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -398,7 +406,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ORA ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ORA ${zp:02X},X"));
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -408,7 +416,7 @@ impl Cpu {
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
                 let next = self.asl_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ASL ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ASL ${zp:02X},X"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -422,7 +430,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ORA ${base:04X},Y"),
+                    format_args!("ORA ${base:04X},Y"),
                 );
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -437,7 +445,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ORA ${base:04X},X"),
+                    format_args!("ORA ${base:04X},X"),
                 );
                 self.ora_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -453,7 +461,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ASL ${base:04X},X"),
+                    format_args!("ASL ${base:04X},X"),
                 );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
@@ -462,7 +470,7 @@ impl Cpu {
             0x03 | 0x07 | 0x0F | 0x13 | 0x17 | 0x1B | 0x1F => {
                 let (addr, bytes, mnemonic) =
                     self.decode_unofficial_rmw_addressing(snapshot, opcode, "SLO");
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let value = self.read(addr);
                 let next = self.asl_value(value);
                 self.write_and_track(addr, next);
@@ -473,7 +481,7 @@ impl Cpu {
             0x23 | 0x27 | 0x2F | 0x33 | 0x37 | 0x3B | 0x3F => {
                 let (addr, bytes, mnemonic) =
                     self.decode_unofficial_rmw_addressing(snapshot, opcode, "RLA");
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let value = self.read(addr);
                 let next = self.rol_value(value);
                 self.write_and_track(addr, next);
@@ -484,7 +492,7 @@ impl Cpu {
             0x43 | 0x47 | 0x4F | 0x53 | 0x57 | 0x5B | 0x5F => {
                 let (addr, bytes, mnemonic) =
                     self.decode_unofficial_rmw_addressing(snapshot, opcode, "SRE");
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let value = self.read(addr);
                 let next = self.lsr_value(value);
                 self.write_and_track(addr, next);
@@ -495,7 +503,7 @@ impl Cpu {
             0x63 | 0x67 | 0x6F | 0x73 | 0x77 | 0x7B | 0x7F => {
                 let (addr, bytes, mnemonic) =
                     self.decode_unofficial_rmw_addressing(snapshot, opcode, "RRA");
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let value = self.read(addr);
                 let next = self.ror_value(value);
                 self.write_and_track(addr, next);
@@ -506,7 +514,7 @@ impl Cpu {
             0xC3 | 0xC7 | 0xCF | 0xD3 | 0xD7 | 0xDB | 0xDF => {
                 let (addr, bytes, mnemonic) =
                     self.decode_unofficial_rmw_addressing(snapshot, opcode, "DCP");
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let next = self.read(addr).wrapping_sub(1);
                 self.write_and_track(addr, next);
                 self.status.update_compare(self.a, next);
@@ -516,7 +524,7 @@ impl Cpu {
             0xE3 | 0xE7 | 0xEF | 0xF3 | 0xF7 | 0xFB | 0xFF => {
                 let (addr, bytes, mnemonic) =
                     self.decode_unofficial_rmw_addressing(snapshot, opcode, "ISC");
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let next = self.read(addr).wrapping_add(1);
                 self.write_and_track(addr, next);
                 self.sbc_value(next);
@@ -563,7 +571,7 @@ impl Cpu {
                         (addr, vec![opcode, low, high], format!("LAX ${base:04X},Y"))
                     }
                 };
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 let value = self.read(addr);
                 self.a = value;
                 self.x = value;
@@ -598,7 +606,7 @@ impl Cpu {
                         (addr, vec![opcode, zp], format!("SAX ${zp:02X},Y"))
                     }
                 };
-                let trace = format_trace(snapshot, &bytes, &mnemonic);
+                let trace = format_trace(snapshot, &bytes, format_args!("{mnemonic}"));
                 self.write_and_track(addr, self.a & self.x);
                 self.pc = self.pc.wrapping_add(bytes.len() as u16);
                 Ok(trace)
@@ -608,7 +616,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("AND (${zp:02X},X)"));
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -616,14 +625,14 @@ impl Cpu {
             0x25 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("AND ${zp:02X}"));
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x29 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("AND #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("AND #${imm:02X}"));
                 self.and_value(imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -633,15 +642,18 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("AND ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("AND ${addr:04X}"),
+                );
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x2B => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("ANC #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("ANC #${imm:02X}"));
                 self.and_value(imm);
                 self.status.set_carry(self.status.negative());
                 self.pc = self.pc.wrapping_add(2);
@@ -652,7 +664,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("AND (${zp:02X}),Y"));
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -661,7 +674,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("AND ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("AND ${zp:02X},X"));
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -675,7 +688,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("AND ${base:04X},Y"),
+                    format_args!("AND ${base:04X},Y"),
                 );
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -690,7 +703,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("AND ${base:04X},X"),
+                    format_args!("AND ${base:04X},X"),
                 );
                 self.and_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -701,7 +714,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("EOR (${zp:02X},X)"));
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -709,21 +723,21 @@ impl Cpu {
             0x45 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("EOR ${zp:02X}"));
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x49 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("EOR #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("EOR #${imm:02X}"));
                 self.eor_value(imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x4B => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("ALR #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("ALR #${imm:02X}"));
                 self.and_value(imm);
                 self.a = self.lsr_value(self.a);
                 self.pc = self.pc.wrapping_add(2);
@@ -734,8 +748,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("EOR ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("EOR ${addr:04X}"),
+                );
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -745,7 +762,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("EOR (${zp:02X}),Y"));
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -754,7 +772,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("EOR ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("EOR ${zp:02X},X"));
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -768,7 +786,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("EOR ${base:04X},Y"),
+                    format_args!("EOR ${base:04X},Y"),
                 );
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -783,7 +801,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("EOR ${base:04X},X"),
+                    format_args!("EOR ${base:04X},X"),
                 );
                 self.eor_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -796,7 +814,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("JSR ${target:04X}"),
+                    format_args!("JSR ${target:04X}"),
                 );
 
                 let return_addr = snapshot.pc.wrapping_add(2);
@@ -808,7 +826,7 @@ impl Cpu {
             0x24 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let operand = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("BIT ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("BIT ${zp:02X}"));
                 self.status.update_bit_test(self.a, operand);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -818,13 +836,13 @@ impl Cpu {
                 let addr = zp as u16;
                 let value = self.read(addr);
                 let next = self.rol_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROL ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ROL ${zp:02X}"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x2A => {
-                let trace = format_trace(snapshot, &[opcode], "ROL A");
+                let trace = format_trace(snapshot, &[opcode], format_args!("ROL A"));
                 self.a = self.rol_value(self.a);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -834,8 +852,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let operand = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("BIT ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("BIT ${addr:04X}"),
+                );
                 self.status.update_bit_test(self.a, operand);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -846,14 +867,17 @@ impl Cpu {
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
                 let next = self.rol_value(value);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("ROL ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("ROL ${addr:04X}"),
+                );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x28 => {
-                let trace = format_trace(snapshot, &[opcode], "PLP");
+                let trace = format_trace(snapshot, &[opcode], format_args!("PLP"));
                 let bits = self.pull();
                 self.status.restore_from_stack(bits);
                 self.pc = self.pc.wrapping_add(1);
@@ -866,7 +890,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("JMP ${target:04X}"),
+                    format_args!("JMP ${target:04X}"),
                 );
                 self.pc = target;
                 Ok(trace)
@@ -876,13 +900,13 @@ impl Cpu {
                 let addr = zp as u16;
                 let value = self.read(addr);
                 let next = self.lsr_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LSR ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LSR ${zp:02X}"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x4A => {
-                let trace = format_trace(snapshot, &[opcode], "LSR A");
+                let trace = format_trace(snapshot, &[opcode], format_args!("LSR A"));
                 self.a = self.lsr_value(self.a);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -893,14 +917,17 @@ impl Cpu {
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
                 let next = self.lsr_value(value);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("LSR ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("LSR ${addr:04X}"),
+                );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x40 => {
-                let trace = format_trace(snapshot, &[opcode], "RTI");
+                let trace = format_trace(snapshot, &[opcode], format_args!("RTI"));
                 let bits = self.pull();
                 self.status.restore_from_stack(bits);
                 let low = self.pull();
@@ -909,13 +936,13 @@ impl Cpu {
                 Ok(trace)
             }
             0x48 => {
-                let trace = format_trace(snapshot, &[opcode], "PHA");
+                let trace = format_trace(snapshot, &[opcode], format_args!("PHA"));
                 self.push(self.a);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0x60 => {
-                let trace = format_trace(snapshot, &[opcode], "RTS");
+                let trace = format_trace(snapshot, &[opcode], format_args!("RTS"));
 
                 let low = self.pull();
                 let high = self.pull();
@@ -928,7 +955,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("ADC (${zp:02X},X)"));
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -941,8 +969,11 @@ impl Cpu {
                 let hi_addr = (ptr & 0xFF00) | (ptr.wrapping_add(1) & 0x00FF);
                 let hi = self.read(hi_addr);
                 let target = u16::from_le_bytes([lo, hi]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("JMP (${ptr:04X})"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("JMP (${ptr:04X})"),
+                );
                 self.pc = target;
                 Ok(trace)
             }
@@ -951,7 +982,7 @@ impl Cpu {
                 let addr = zp as u16;
                 let value = self.read(addr);
                 let next = self.ror_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROR ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ROR ${zp:02X}"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -959,27 +990,27 @@ impl Cpu {
             0x65 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ADC ${zp:02X}"));
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x69 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("ADC #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("ADC #${imm:02X}"));
                 self.adc_value(imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x6A => {
-                let trace = format_trace(snapshot, &[opcode], "ROR A");
+                let trace = format_trace(snapshot, &[opcode], format_args!("ROR A"));
                 self.a = self.ror_value(self.a);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0x6B => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("ARR #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("ARR #${imm:02X}"));
                 self.and_value(imm);
                 self.a = self.ror_value(self.a);
                 self.status.set_carry(self.a & 0x40 != 0);
@@ -994,8 +1025,11 @@ impl Cpu {
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
                 let next = self.ror_value(value);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("ROR ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("ROR ${addr:04X}"),
+                );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1005,14 +1039,17 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("ADC ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("ADC ${addr:04X}"),
+                );
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x68 => {
-                let trace = format_trace(snapshot, &[opcode], "PLA");
+                let trace = format_trace(snapshot, &[opcode], format_args!("PLA"));
                 self.a = self.pull();
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(1);
@@ -1023,7 +1060,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("ADC (${zp:02X}),Y"));
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1032,13 +1070,13 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ADC ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ADC ${zp:02X},X"));
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x78 => {
-                let trace = format_trace(snapshot, &[opcode], "SEI");
+                let trace = format_trace(snapshot, &[opcode], format_args!("SEI"));
                 self.status.set_interrupt_disable(true);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -1052,7 +1090,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ADC ${base:04X},Y"),
+                    format_args!("ADC ${base:04X},Y"),
                 );
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1067,7 +1105,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ADC ${base:04X},X"),
+                    format_args!("ADC ${base:04X},X"),
                 );
                 self.adc_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1075,7 +1113,7 @@ impl Cpu {
             }
             0x85 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STA ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("STA ${zp:02X}"));
                 self.write_and_track(zp as u16, self.a);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1084,34 +1122,35 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STA (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("STA (${zp:02X},X)"));
                 self.write_and_track(addr, self.a);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x84 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STY ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("STY ${zp:02X}"));
                 self.write_and_track(zp as u16, self.y);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x86 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STX ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("STX ${zp:02X}"));
                 self.write_and_track(zp as u16, self.x);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x88 => {
-                let trace = format_trace(snapshot, &[opcode], "DEY");
+                let trace = format_trace(snapshot, &[opcode], format_args!("DEY"));
                 self.y = self.y.wrapping_sub(1);
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0x8A => {
-                let trace = format_trace(snapshot, &[opcode], "TXA");
+                let trace = format_trace(snapshot, &[opcode], format_args!("TXA"));
                 self.a = self.x;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(1);
@@ -1121,8 +1160,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("STA ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("STA ${addr:04X}"),
+                );
                 self.write_and_track(addr, self.a);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1131,8 +1173,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("STY ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("STY ${addr:04X}"),
+                );
                 self.write_and_track(addr, self.y);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1141,8 +1186,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("STX ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("STX ${addr:04X}"),
+                );
                 self.write_and_track(addr, self.x);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1151,8 +1199,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BCC ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BCC ${target:04X}"),
+                );
                 self.pc = if !self.status.carry() {
                     target
                 } else {
@@ -1164,7 +1215,8 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STA (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("STA (${zp:02X}),Y"));
                 self.write_and_track(addr, self.a);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1172,7 +1224,7 @@ impl Cpu {
             0x95 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STA ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("STA ${zp:02X},X"));
                 self.write_and_track(addr, self.a);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1180,7 +1232,7 @@ impl Cpu {
             0x94 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STY ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("STY ${zp:02X},X"));
                 self.write_and_track(addr, self.y);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1190,7 +1242,7 @@ impl Cpu {
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
                 let next = self.lsr_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LSR ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LSR ${zp:02X},X"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1198,7 +1250,7 @@ impl Cpu {
             0x96 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.y) as u16;
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("STX ${zp:02X},Y"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("STX ${zp:02X},Y"));
                 self.write_and_track(addr, self.x);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1208,13 +1260,13 @@ impl Cpu {
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
                 let next = self.rol_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROL ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ROL ${zp:02X},X"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0x98 => {
-                let trace = format_trace(snapshot, &[opcode], "TYA");
+                let trace = format_trace(snapshot, &[opcode], format_args!("TYA"));
                 self.a = self.y;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(1);
@@ -1228,14 +1280,14 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("STA ${base:04X},Y"),
+                    format_args!("STA ${base:04X},Y"),
                 );
                 self.write_and_track(addr, self.a);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x9A => {
-                let trace = format_trace(snapshot, &[opcode], "TXS");
+                let trace = format_trace(snapshot, &[opcode], format_args!("TXS"));
                 self.sp = self.x;
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -1248,7 +1300,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("STA ${base:04X},X"),
+                    format_args!("STA ${base:04X},X"),
                 );
                 self.write_and_track(addr, self.a);
                 self.pc = self.pc.wrapping_add(3);
@@ -1264,7 +1316,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("LSR ${base:04X},X"),
+                    format_args!("LSR ${base:04X},X"),
                 );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
@@ -1280,7 +1332,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ROL ${base:04X},X"),
+                    format_args!("ROL ${base:04X},X"),
                 );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
@@ -1291,7 +1343,7 @@ impl Cpu {
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
                 let next = self.ror_value(value);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("ROR ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("ROR ${zp:02X},X"));
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1306,21 +1358,21 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("ROR ${base:04X},X"),
+                    format_args!("ROR ${base:04X},X"),
                 );
                 self.write_and_track(addr, next);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0x08 => {
-                let trace = format_trace(snapshot, &[opcode], "PHP");
+                let trace = format_trace(snapshot, &[opcode], format_args!("PHP"));
                 self.push(self.status.bits_for_php());
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0xA0 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("LDY #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("LDY #${imm:02X}"));
                 self.y = imm;
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(2);
@@ -1331,7 +1383,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("LDA (${zp:02X},X)"));
                 self.a = value;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
@@ -1339,7 +1392,7 @@ impl Cpu {
             }
             0xA2 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("LDX #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("LDX #${imm:02X}"));
                 self.x = imm;
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(2);
@@ -1348,7 +1401,7 @@ impl Cpu {
             0xA4 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDY ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LDY ${zp:02X}"));
                 self.y = value;
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(2);
@@ -1357,7 +1410,7 @@ impl Cpu {
             0xA5 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LDA ${zp:02X}"));
                 self.a = value;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
@@ -1366,14 +1419,14 @@ impl Cpu {
             0xA6 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDX ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LDX ${zp:02X}"));
                 self.x = value;
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xA8 => {
-                let trace = format_trace(snapshot, &[opcode], "TAY");
+                let trace = format_trace(snapshot, &[opcode], format_args!("TAY"));
                 self.y = self.a;
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(1);
@@ -1381,14 +1434,14 @@ impl Cpu {
             }
             0xA9 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("LDA #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("LDA #${imm:02X}"));
                 self.a = imm;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xAA => {
-                let trace = format_trace(snapshot, &[opcode], "TAX");
+                let trace = format_trace(snapshot, &[opcode], format_args!("TAX"));
                 self.x = self.a;
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(1);
@@ -1396,7 +1449,7 @@ impl Cpu {
             }
             0xAB => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("LAX #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("LAX #${imm:02X}"));
                 self.a = imm;
                 self.x = imm;
                 self.status.update_zn(self.a);
@@ -1407,8 +1460,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("LDY ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("LDY ${addr:04X}"),
+                );
                 self.y = self.read(addr);
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(3);
@@ -1418,8 +1474,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("LDA ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("LDA ${addr:04X}"),
+                );
                 self.a = self.read(addr);
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(3);
@@ -1429,8 +1488,11 @@ impl Cpu {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("LDX ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("LDX ${addr:04X}"),
+                );
                 self.x = self.read(addr);
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(3);
@@ -1440,13 +1502,16 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BCS ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BCS ${target:04X}"),
+                );
                 self.pc = if self.status.carry() { target } else { next_pc };
                 Ok(trace)
             }
             0xBA => {
-                let trace = format_trace(snapshot, &[opcode], "TSX");
+                let trace = format_trace(snapshot, &[opcode], format_args!("TSX"));
                 self.x = self.sp;
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(1);
@@ -1457,7 +1522,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("LDA (${zp:02X}),Y"));
                 self.a = value;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
@@ -1467,7 +1533,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDY ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LDY ${zp:02X},X"));
                 self.y = value;
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(2);
@@ -1477,7 +1543,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDA ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LDA ${zp:02X},X"));
                 self.a = value;
                 self.status.update_zn(self.a);
                 self.pc = self.pc.wrapping_add(2);
@@ -1487,7 +1553,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.y) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("LDX ${zp:02X},Y"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("LDX ${zp:02X},Y"));
                 self.x = value;
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(2);
@@ -1502,7 +1568,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("LDA ${base:04X},Y"),
+                    format_args!("LDA ${base:04X},Y"),
                 );
                 self.a = value;
                 self.status.update_zn(self.a);
@@ -1517,7 +1583,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("LDA ${base:04X},X"),
+                    format_args!("LDA ${base:04X},X"),
                 );
                 self.a = self.read(addr);
                 self.status.update_zn(self.a);
@@ -1533,7 +1599,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("LDY ${base:04X},X"),
+                    format_args!("LDY ${base:04X},X"),
                 );
                 self.y = value;
                 self.status.update_zn(self.y);
@@ -1549,7 +1615,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("LDX ${base:04X},Y"),
+                    format_args!("LDX ${base:04X},Y"),
                 );
                 self.x = value;
                 self.status.update_zn(self.x);
@@ -1558,7 +1624,7 @@ impl Cpu {
             }
             0xC0 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("CPY #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("CPY #${imm:02X}"));
                 self.status.update_compare(self.y, imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1568,7 +1634,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("CMP (${zp:02X},X)"));
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1576,7 +1643,7 @@ impl Cpu {
             0xC4 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("CPY ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("CPY ${zp:02X}"));
                 self.status.update_compare(self.y, value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1584,7 +1651,7 @@ impl Cpu {
             0xC5 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("CMP ${zp:02X}"));
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1593,14 +1660,14 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp as u16;
                 let value = self.read(addr).wrapping_sub(1);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("DEC ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("DEC ${zp:02X}"));
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xC8 => {
-                let trace = format_trace(snapshot, &[opcode], "INY");
+                let trace = format_trace(snapshot, &[opcode], format_args!("INY"));
                 self.y = self.y.wrapping_add(1);
                 self.status.update_zn(self.y);
                 self.pc = self.pc.wrapping_add(1);
@@ -1608,7 +1675,7 @@ impl Cpu {
             }
             0xC9 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("CMP #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("CMP #${imm:02X}"));
                 self.status.update_compare(self.a, imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1618,8 +1685,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("CPY ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("CPY ${addr:04X}"),
+                );
                 self.status.update_compare(self.y, value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1629,14 +1699,17 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("CMP ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("CMP ${addr:04X}"),
+                );
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0xCA => {
-                let trace = format_trace(snapshot, &[opcode], "DEX");
+                let trace = format_trace(snapshot, &[opcode], format_args!("DEX"));
                 self.x = self.x.wrapping_sub(1);
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(1);
@@ -1644,7 +1717,7 @@ impl Cpu {
             }
             0xCB => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("AXS #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("AXS #${imm:02X}"));
                 let anded = self.a & self.x;
                 self.x = anded.wrapping_sub(imm);
                 self.status.set_carry(anded >= imm);
@@ -1656,8 +1729,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BNE ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BNE ${target:04X}"),
+                );
                 self.pc = if !self.status.zero() { target } else { next_pc };
                 Ok(trace)
             }
@@ -1666,7 +1742,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("CMP (${zp:02X}),Y"));
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1675,7 +1752,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("CMP ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("CMP ${zp:02X},X"));
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1684,14 +1761,14 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr).wrapping_sub(1);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("DEC ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("DEC ${zp:02X},X"));
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xD8 => {
-                let trace = format_trace(snapshot, &[opcode], "CLD");
+                let trace = format_trace(snapshot, &[opcode], format_args!("CLD"));
                 self.status.set_decimal(false);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -1705,7 +1782,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("CMP ${base:04X},Y"),
+                    format_args!("CMP ${base:04X},Y"),
                 );
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1720,7 +1797,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("CMP ${base:04X},X"),
+                    format_args!("CMP ${base:04X},X"),
                 );
                 self.status.update_compare(self.a, value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1735,7 +1812,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("DEC ${base:04X},X"),
+                    format_args!("DEC ${base:04X},X"),
                 );
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
@@ -1744,7 +1821,7 @@ impl Cpu {
             }
             0xE0 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("CPX #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("CPX #${imm:02X}"));
                 self.status.update_compare(self.x, imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1754,7 +1831,8 @@ impl Cpu {
                 let ptr = zp.wrapping_add(self.x);
                 let addr = self.read_u16_zp(ptr);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC (${zp:02X},X)"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("SBC (${zp:02X},X)"));
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1762,7 +1840,7 @@ impl Cpu {
             0xE4 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("CPX ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("CPX ${zp:02X}"));
                 self.status.update_compare(self.x, value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1770,7 +1848,7 @@ impl Cpu {
             0xE5 => {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let value = self.read(zp as u16);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("SBC ${zp:02X}"));
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1779,14 +1857,14 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp as u16;
                 let value = self.read(addr).wrapping_add(1);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("INC ${zp:02X}"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("INC ${zp:02X}"));
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xE8 => {
-                let trace = format_trace(snapshot, &[opcode], "INX");
+                let trace = format_trace(snapshot, &[opcode], format_args!("INX"));
                 self.x = self.x.wrapping_add(1);
                 self.status.update_zn(self.x);
                 self.pc = self.pc.wrapping_add(1);
@@ -1794,20 +1872,20 @@ impl Cpu {
             }
             0xE9 => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("SBC #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("SBC #${imm:02X}"));
                 self.sbc_value(imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xEB => {
                 let imm = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, imm], &format!("SBC #${imm:02X}"));
+                let trace = format_trace(snapshot, &[opcode, imm], format_args!("SBC #${imm:02X}"));
                 self.sbc_value(imm);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xEA => {
-                let trace = format_trace(snapshot, &[opcode], "NOP");
+                let trace = format_trace(snapshot, &[opcode], format_args!("NOP"));
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
@@ -1816,8 +1894,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr).wrapping_add(1);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("INC ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("INC ${addr:04X}"),
+                );
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1828,8 +1909,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("CPX ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("CPX ${addr:04X}"),
+                );
                 self.status.update_compare(self.x, value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1839,8 +1923,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("SBC ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("SBC ${addr:04X}"),
+                );
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -1849,8 +1936,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BEQ ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BEQ ${target:04X}"),
+                );
                 self.pc = if self.status.zero() { target } else { next_pc };
                 Ok(trace)
             }
@@ -1859,7 +1949,8 @@ impl Cpu {
                 let base = self.read_u16_zp(zp);
                 let addr = base.wrapping_add(self.y as u16);
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC (${zp:02X}),Y"));
+                let trace =
+                    format_trace(snapshot, &[opcode, zp], format_args!("SBC (${zp:02X}),Y"));
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1868,7 +1959,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("SBC ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("SBC ${zp:02X},X"));
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
@@ -1877,7 +1968,7 @@ impl Cpu {
                 let zp = self.read(snapshot.pc.wrapping_add(1));
                 let addr = zp.wrapping_add(self.x) as u16;
                 let value = self.read(addr).wrapping_add(1);
-                let trace = format_trace(snapshot, &[opcode, zp], &format!("INC ${zp:02X},X"));
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("INC ${zp:02X},X"));
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(2);
@@ -1892,7 +1983,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("SBC ${base:04X},Y"),
+                    format_args!("SBC ${base:04X},Y"),
                 );
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1903,8 +1994,11 @@ impl Cpu {
                 let high = self.read(snapshot.pc.wrapping_add(2));
                 let addr = u16::from_le_bytes([low, high]);
                 let value = self.read(addr).wrapping_sub(1);
-                let trace =
-                    format_trace(snapshot, &[opcode, low, high], &format!("DEC ${addr:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, low, high],
+                    format_args!("DEC ${addr:04X}"),
+                );
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1919,7 +2013,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("INC ${base:04X},X"),
+                    format_args!("INC ${base:04X},X"),
                 );
                 self.write_and_track(addr, value);
                 self.status.update_zn(value);
@@ -1935,7 +2029,7 @@ impl Cpu {
                 let trace = format_trace(
                     snapshot,
                     &[opcode, low, high],
-                    &format!("SBC ${base:04X},X"),
+                    format_args!("SBC ${base:04X},X"),
                 );
                 self.sbc_value(value);
                 self.pc = self.pc.wrapping_add(3);
@@ -1945,8 +2039,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BPL ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BPL ${target:04X}"),
+                );
                 self.pc = if !self.status.negative() {
                     target
                 } else {
@@ -1955,12 +2052,12 @@ impl Cpu {
                 Ok(trace)
             }
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => {
-                let trace = format_trace(snapshot, &[opcode], "NOP");
+                let trace = format_trace(snapshot, &[opcode], format_args!("NOP"));
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0x18 => {
-                let trace = format_trace(snapshot, &[opcode], "CLC");
+                let trace = format_trace(snapshot, &[opcode], format_args!("CLC"));
                 self.status.set_carry(false);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -1969,8 +2066,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BMI ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BMI ${target:04X}"),
+                );
                 self.pc = if self.status.negative() {
                     target
                 } else {
@@ -1979,13 +2079,13 @@ impl Cpu {
                 Ok(trace)
             }
             0x38 => {
-                let trace = format_trace(snapshot, &[opcode], "SEC");
+                let trace = format_trace(snapshot, &[opcode], format_args!("SEC"));
                 self.status.set_carry(true);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
             }
             0x58 => {
-                let trace = format_trace(snapshot, &[opcode], "CLI");
+                let trace = format_trace(snapshot, &[opcode], format_args!("CLI"));
                 self.status.set_interrupt_disable(false);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -1994,8 +2094,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BVC ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BVC ${target:04X}"),
+                );
                 self.pc = if !self.status.overflow() {
                     target
                 } else {
@@ -2006,12 +2109,12 @@ impl Cpu {
             0x04 | 0x44 | 0x64 | 0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 | 0x14 | 0x34 | 0x54 | 0x74
             | 0xD4 | 0xF4 => {
                 let operand = self.read(snapshot.pc.wrapping_add(1));
-                let trace = format_trace(snapshot, &[opcode, operand], "NOP");
+                let trace = format_trace(snapshot, &[opcode, operand], format_args!("NOP"));
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
             0xB8 => {
-                let trace = format_trace(snapshot, &[opcode], "CLV");
+                let trace = format_trace(snapshot, &[opcode], format_args!("CLV"));
                 self.status.set_overflow(false);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -2020,8 +2123,11 @@ impl Cpu {
                 let offset = self.read(snapshot.pc.wrapping_add(1));
                 let next_pc = snapshot.pc.wrapping_add(2);
                 let target = branch_target(next_pc, offset);
-                let trace =
-                    format_trace(snapshot, &[opcode, offset], &format!("BVS ${target:04X}"));
+                let trace = format_trace(
+                    snapshot,
+                    &[opcode, offset],
+                    format_args!("BVS ${target:04X}"),
+                );
                 self.pc = if self.status.overflow() {
                     target
                 } else {
@@ -2032,12 +2138,12 @@ impl Cpu {
             0x0C | 0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
-                let trace = format_trace(snapshot, &[opcode, low, high], "NOP");
+                let trace = format_trace(snapshot, &[opcode, low, high], format_args!("NOP"));
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
             }
             0xF8 => {
-                let trace = format_trace(snapshot, &[opcode], "SED");
+                let trace = format_trace(snapshot, &[opcode], format_args!("SED"));
                 self.status.set_decimal(true);
                 self.pc = self.pc.wrapping_add(1);
                 Ok(trace)
@@ -2396,24 +2502,43 @@ fn page_crossed(base: u16, indexed: u16) -> bool {
     (base & 0xFF00) != (indexed & 0xFF00)
 }
 
-fn format_trace(snapshot: TraceSnapshot, bytes: &[u8], mnemonic: &str) -> String {
-    let mut byte_col = String::new();
+/// Formats a CPU trace string.
+///
+/// **Optimization:** Accepts `fmt::Arguments` directly (via `format_args!()`)
+/// instead of a pre-formatted string or `&str`. This eliminates intermediate
+/// string heap allocations per frame by pre-allocating the required capacity
+/// and writing directly into it using `std::fmt::Write`. Manual padding is
+/// used to avoid triggering Clippy's `unused_format_specs` lint.
+fn format_trace(snapshot: TraceSnapshot, bytes: &[u8], mnemonic: std::fmt::Arguments) -> String {
+    use std::fmt::Write;
+    let mut result = String::with_capacity(75);
+    let _ = write!(&mut result, "{:04X}  ", snapshot.pc);
+
+    let byte_col_start = result.len();
     for (index, byte) in bytes.iter().enumerate() {
         if index > 0 {
-            byte_col.push(' ');
+            let _ = result.write_char(' ');
         }
-        byte_col.push_str(&format!("{byte:02X}"));
+        let _ = write!(&mut result, "{:02X}", byte);
+    }
+    while result.len() - byte_col_start < 9 {
+        let _ = result.write_char(' ');
+    }
+    let _ = result.write_char(' ');
+
+    let mnemonic_start = result.len();
+    let _ = write!(&mut result, "{}", mnemonic);
+    while result.len() - mnemonic_start < 31 {
+        let _ = result.write_char(' ');
     }
 
-    format!(
-        "{pc:04X}  {byte_col:<9} {mnemonic:<31} A:{a:02X} X:{x:02X} Y:{y:02X} P:{p:02X} SP:{sp:02X}",
-        pc = snapshot.pc,
-        a = snapshot.a,
-        x = snapshot.x,
-        y = snapshot.y,
-        p = snapshot.p,
-        sp = snapshot.sp
-    )
+    let _ = write!(
+        &mut result,
+        " A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+        snapshot.a, snapshot.x, snapshot.y, snapshot.p, snapshot.sp
+    );
+
+    result
 }
 
 #[cfg(test)]
