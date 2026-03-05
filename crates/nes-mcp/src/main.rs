@@ -10,6 +10,41 @@ use serde_json::{Map, Value, json};
 const JSONRPC_VERSION: &str = "2.0";
 const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 
+#[derive(Debug)]
+pub enum McpError {
+    Io(std::io::Error),
+    Protocol(String),
+}
+
+impl std::fmt::Display for McpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "IO error: {err}"),
+            Self::Protocol(err) => write!(f, "Protocol error: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for McpError {}
+
+impl From<std::io::Error> for McpError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl From<String> for McpError {
+    fn from(err: String) -> Self {
+        Self::Protocol(err)
+    }
+}
+
+impl From<&str> for McpError {
+    fn from(err: &str) -> Self {
+        Self::Protocol(err.to_owned())
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct RpcRequest {
     jsonrpc: String,
@@ -94,10 +129,11 @@ impl ServerState {
 fn main() {
     if let Err(err) = run() {
         let _ = writeln!(io::stderr(), "nes-mcpd fatal error: {err}");
+        std::process::exit(1);
     }
 }
 
-fn run() -> Result<(), String> {
+fn run() -> Result<(), McpError> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut reader = BufReader::new(stdin.lock());
@@ -559,46 +595,55 @@ fn tool_input_schema(tool_name: &str) -> Value {
     }
 }
 
-fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpError> {
     let mut content_length = None::<usize>;
     loop {
         let mut line = String::new();
         let read = reader
             .read_line(&mut line)
-            .map_err(|err| format!("failed reading header line: {err}"))?;
+            .map_err(|err| McpError::Protocol(format!("failed reading header line: {err}")))?;
         if read == 0 {
             if content_length.is_none() {
                 return Ok(None);
             }
-            return Err("unexpected EOF while reading MCP headers".to_owned());
+            return Err(McpError::Protocol(
+                "unexpected EOF while reading MCP headers".to_owned(),
+            ));
         }
         if line == "\r\n" || line == "\n" {
             break;
         }
         if let Some(value) = line.strip_prefix("Content-Length:") {
             let parsed = value.trim();
-            let len = parsed
-                .parse::<usize>()
-                .map_err(|_| format!("invalid Content-Length value '{parsed}'"))?;
+            let len = parsed.parse::<usize>().map_err(|_| {
+                McpError::Protocol(format!("invalid Content-Length value '{parsed}'"))
+            })?;
             content_length = Some(len);
         }
     }
-    let len = content_length.ok_or_else(|| "missing Content-Length header".to_owned())?;
+    let len = content_length
+        .ok_or_else(|| McpError::Protocol("missing Content-Length header".to_owned()))?;
+    const MAX_PAYLOAD_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+    if len > MAX_PAYLOAD_SIZE {
+        return Err(McpError::Protocol(format!(
+            "Content-Length {len} exceeds maximum allowed size of {MAX_PAYLOAD_SIZE} bytes"
+        )));
+    }
     let mut payload = vec![0_u8; len];
     reader
         .read_exact(&mut payload)
-        .map_err(|err| format!("failed reading payload body: {err}"))?;
+        .map_err(|err| McpError::Protocol(format!("failed reading payload body: {err}")))?;
     Ok(Some(payload))
 }
 
-fn write_stdio_message(writer: &mut impl Write, value: &Value) -> Result<(), String> {
+fn write_stdio_message(writer: &mut impl Write, value: &Value) -> Result<(), McpError> {
     let payload = serde_json::to_vec(value)
-        .map_err(|err| format!("failed serializing JSON response: {err}"))?;
+        .map_err(|err| McpError::Protocol(format!("failed serializing JSON response: {err}")))?;
     writer
         .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
         .and_then(|_| writer.write_all(&payload))
         .and_then(|_| writer.flush())
-        .map_err(|err| format!("failed writing stdio response: {err}"))
+        .map_err(|err| McpError::Protocol(format!("failed writing stdio response: {err}")))
 }
 
 fn jsonrpc_result_response(id: Value, result: Value) -> Value {
@@ -829,5 +874,43 @@ mod tests {
         assert_eq!(response["id"], json!(99));
         assert_eq!(response["error"]["code"], json!(-32602));
         assert_eq!(response["error"]["message"], json!("bad input"));
+    }
+
+    #[test]
+    fn mcp_error_formatting_and_conversions() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let mcp_io: McpError = io_err.into();
+        assert_eq!(mcp_io.to_string(), "IO error: file missing");
+
+        let mcp_proto: McpError = "bad format".into();
+        assert_eq!(mcp_proto.to_string(), "Protocol error: bad format");
+
+        let mcp_proto_string: McpError = "bad format".to_owned().into();
+        assert_eq!(mcp_proto_string.to_string(), "Protocol error: bad format");
+    }
+
+    #[test]
+    fn read_stdio_message_handles_errors() {
+        let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("invalid Content-Length value 'abc'")
+        );
+
+        let mut reader = b"Something else\r\n\r\n".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(err.to_string().contains("missing Content-Length header"));
+
+        let mut reader = b"Content-Length: 100\r\nEOF".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("unexpected EOF while reading MCP headers")
+        );
+
+        let mut reader = b"Content-Length: 100\r\n\r\nshort".as_slice();
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(err.to_string().contains("failed reading payload body"));
     }
 }
