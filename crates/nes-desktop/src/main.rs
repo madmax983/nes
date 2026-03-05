@@ -727,27 +727,13 @@ fn handle_netplay_server_message(
     Ok(())
 }
 
-fn run() -> Result<(), String> {
-    let runtime = resolve_runtime_config()?;
-
-    #[cfg(not(feature = "mcp-host"))]
-    if runtime.mcp_enabled {
-        return Err(format!(
-            "MCP host requested for {} but this build does not include the `mcp-host` feature.",
-            runtime.mcp_bind_addr
-        ));
-    }
-
-    let rom_path = runtime.rom_path.clone();
-    let rom_bytes =
-        fs::read(&rom_path).map_err(|err| format!("Failed to read ROM at '{rom_path}': {err}"))?;
-
-    let mut core = NesCore::new();
-    let info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {err}"))?;
-    let step_mode = runtime.step_mode;
-
+fn build_startup_table(
+    runtime: &RuntimeConfig,
+    rom_path: &str,
+    mapper_id: u8,
+    prg_rom_bytes: usize,
+    reset_pc: u16,
+) -> Table {
     let mut table = Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
@@ -757,13 +743,13 @@ fn run() -> Result<(), String> {
 
     table.add_row(vec![
         Cell::new("ROM Path"),
-        Cell::new(&rom_path).fg(TableColor::Green),
+        Cell::new(rom_path).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("ROM Info"),
         Cell::new(format!(
             "Mapper {}, PRG {} bytes, reset vector ${:04X}",
-            info.mapper_id, info.prg_rom_bytes, info.reset_pc
+            mapper_id, prg_rom_bytes, reset_pc
         )),
     ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
@@ -780,7 +766,7 @@ fn run() -> Result<(), String> {
         Cell::new("Gamepad"),
         Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
     ]);
-    match step_mode {
+    match runtime.step_mode {
         StepMode::Frame => {
             table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
         }
@@ -814,6 +800,36 @@ fn run() -> Result<(), String> {
             ]);
         }
     }
+    table
+}
+
+fn run() -> Result<(), String> {
+    let runtime = resolve_runtime_config()?;
+
+    #[cfg(not(feature = "mcp-host"))]
+    if runtime.mcp_enabled {
+        return Err(format!(
+            "MCP host requested for {} but this build does not include the `mcp-host` feature.",
+            runtime.mcp_bind_addr
+        ));
+    }
+
+    let rom_path = runtime.rom_path.clone();
+    let rom_bytes =
+        fs::read(&rom_path).map_err(|err| format!("Failed to read ROM at '{rom_path}': {err}"))?;
+
+    let mut core = NesCore::new();
+    let info = core
+        .load_ines_rom(&rom_bytes)
+        .map_err(|err| format!("Failed to load ROM: {err}"))?;
+
+    let table = build_startup_table(
+        &runtime,
+        &rom_path,
+        info.mapper_id,
+        info.prg_rom_bytes,
+        info.reset_pc,
+    );
 
     eprintln!("{}", "nes-desktop".with(Color::Cyan).bold());
     eprintln!("{table}\n");
@@ -1202,7 +1218,7 @@ fn run() -> Result<(), String> {
                 }
             } else if rewind_held {
                 time_machine.rewind_step(&mut core);
-            } else if let Err(err) = advance_core_for_host_frame(&mut core, step_mode) {
+            } else if let Err(err) = advance_core_for_host_frame(&mut core, runtime.step_mode) {
                 eprintln!("CPU halted at PC ${:04X}: {err}", core.cpu_pc());
                 *control_flow = ControlFlow::Exit;
                 return;
@@ -2543,6 +2559,57 @@ mod tests {
         apply_gamepad_delta_commands(&mut core, 0, Button::Start.bit_mask(), true)
             .expect("applying player-2 gamepad delta should succeed");
         assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
+    }
+
+    use crate::{NetplayRuntimeConfig, RuntimeConfig};
+    use std::path::PathBuf;
+
+    #[test]
+    fn build_startup_table_includes_all_expected_fields() {
+        let runtime = RuntimeConfig {
+            rom_path: "game.nes".to_owned(),
+            window_scale: 3,
+            step_mode: StepMode::CpuBudget(10000),
+            audio_enabled: true,
+            trace_every_frames: 0,
+            metrics_enabled: false,
+            metrics_every_frames: 60,
+            capture: None,
+            loaded_config_path: Some(PathBuf::from("test.toml")),
+            mcp_enabled: false,
+            mcp_bind_addr: "".to_owned(),
+            netplay: Some(NetplayRuntimeConfig {
+                relay_addr: "localhost:1234".to_owned(),
+                room: "test_room".to_owned(),
+                player: 1,
+                input_delay_frames: 2,
+                max_rollback_frames: 5,
+                hash_check_every_frames: 60,
+            }),
+            #[cfg(feature = "nova")]
+            auto_player_enabled: true,
+        };
+
+        let table = super::build_startup_table(&runtime, "game.nes", 4, 32768, 0xC000);
+        let output = table.to_string();
+
+        assert!(output.contains("ROM Path"));
+        assert!(output.contains("game.nes"));
+        assert!(output.contains("ROM Info"));
+        assert!(output.contains("Mapper 4"));
+        assert!(output.contains("PRG 32768 bytes"));
+        assert!(output.contains("reset vector $C000"));
+        assert!(output.contains("Config"));
+        assert!(output.contains("test.toml"));
+        assert!(output.contains("Controls"));
+        assert!(output.contains("Gamepad"));
+        assert!(output.contains("Step Mode"));
+        assert!(output.contains("cpu (10000 instructions/frame)"));
+        assert!(output.contains("Netplay"));
+        assert!(output.contains("test_room"));
+
+        #[cfg(feature = "nova")]
+        assert!(output.contains("Auto Player Chaos Fuzzing Enabled"));
     }
 
     #[test]

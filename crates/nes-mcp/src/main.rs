@@ -97,13 +97,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), String> {
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let mut reader = BufReader::new(stdin.lock());
-    let mut writer = stdout.lock();
-    let mut state = ServerState::new();
-
+fn build_startup_table(protocol_version: &str, tools_loaded: usize) -> Table {
     let mut table = Table::new();
     table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
@@ -113,13 +107,23 @@ fn run() -> Result<(), String> {
 
     table.add_row(vec![
         Cell::new("Protocol Version"),
-        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
+        Cell::new(protocol_version).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("Tools Loaded"),
-        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
+        Cell::new(tools_loaded.to_string()).fg(TableColor::Yellow),
     ]);
+    table
+}
 
+fn run() -> Result<(), String> {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut reader = BufReader::new(stdin.lock());
+    let mut writer = stdout.lock();
+    let mut state = ServerState::new();
+
+    let table = build_startup_table(DEFAULT_PROTOCOL_VERSION, tool_catalog().len());
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
 
@@ -830,5 +834,17 @@ mod tests {
         assert_eq!(response["id"], json!(99));
         assert_eq!(response["error"]["code"], json!(-32602));
         assert_eq!(response["error"]["message"], json!("bad input"));
+    }
+
+    #[test]
+    fn test_build_startup_table() {
+        let table = build_startup_table("1.0.0", 42);
+        let table_str = table.to_string();
+        assert!(table_str.contains("Setting"));
+        assert!(table_str.contains("Value"));
+        assert!(table_str.contains("Protocol Version"));
+        assert!(table_str.contains("1.0.0"));
+        assert!(table_str.contains("Tools Loaded"));
+        assert!(table_str.contains("42"));
     }
 }
