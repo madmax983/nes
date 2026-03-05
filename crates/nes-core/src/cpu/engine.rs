@@ -2586,7 +2586,11 @@ mod tests_format {
 
         // Very long mnemonic to test loop
         let long = "THIS_IS_VERY_LONG_MNEMONIC_THAT_WILL_EXCEED_THIRTY_ONE_CHARS";
-        let out2 = format_trace(snapshot, &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], format_args!("{}", long));
+        let out2 = format_trace(
+            snapshot,
+            &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+            format_args!("{}", long),
+        );
         assert!(out2.contains(long));
     }
 }
