@@ -44,10 +44,14 @@ pub struct InesRom<'a> {
 pub enum RomError {
     /// File does not start with `NES<EOF>`.
     InvalidMagic,
+    /// Console type is unsupported (VS/PlayChoice/etc).
+    UnsupportedConsoleType(u8),
     /// Four-screen mirroring is not implemented yet.
     UnsupportedFourScreenMirroring,
     /// NES 2.0 exponent/multiplier sizing is not implemented.
     UnsupportedNes2SizeEncoding,
+    /// NES 2.0 submapper is not currently supported.
+    UnsupportedNes2Submapper(u8),
     /// NES 2.0 extended mapper IDs are currently unsupported.
     UnsupportedNes2ExtendedMapper(u16),
     /// PRG bank count is zero.
@@ -64,11 +68,17 @@ impl fmt::Display for RomError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidMagic => f.write_str("invalid iNES magic header"),
+            Self::UnsupportedConsoleType(console_type) => {
+                write!(f, "unsupported console type {console_type}")
+            }
             Self::UnsupportedFourScreenMirroring => {
                 f.write_str("four-screen nametable mirroring is not supported")
             }
             Self::UnsupportedNes2SizeEncoding => {
                 f.write_str("NES 2.0 exponent/multiplier size encoding is not supported")
+            }
+            Self::UnsupportedNes2Submapper(submapper) => {
+                write!(f, "NES 2.0 submapper {submapper} is not supported")
             }
             Self::UnsupportedNes2ExtendedMapper(mapper) => {
                 write!(f, "NES 2.0 extended mapper id {mapper} is not supported")
@@ -110,6 +120,10 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
     let flags6 = bytes[6];
     let flags7 = bytes[7];
     let is_nes2 = (flags7 & 0b0000_1100) == 0b0000_1000;
+    let console_type = flags7 & 0b0000_0011;
+    if console_type != 0 {
+        return Err(RomError::UnsupportedConsoleType(console_type));
+    }
     if flags6 & 0b0000_1000 != 0 {
         return Err(RomError::UnsupportedFourScreenMirroring);
     }
@@ -123,6 +137,10 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
         let mapper_low = (flags6 >> 4) | (flags7 & 0xF0);
         let mapper_high = bytes[8] & 0x0F;
         let mapper_extended = ((mapper_high as u16) << 8) | mapper_low as u16;
+        let submapper = bytes[8] >> 4;
+        if submapper != 0 {
+            return Err(RomError::UnsupportedNes2Submapper(submapper));
+        }
         if mapper_high != 0 {
             return Err(RomError::UnsupportedNes2ExtendedMapper(mapper_extended));
         }
@@ -189,12 +207,20 @@ mod tests {
             "invalid iNES magic header"
         );
         assert_eq!(
+            RomError::UnsupportedConsoleType(1).to_string(),
+            "unsupported console type 1"
+        );
+        assert_eq!(
             RomError::UnsupportedFourScreenMirroring.to_string(),
             "four-screen nametable mirroring is not supported"
         );
         assert_eq!(
             RomError::UnsupportedNes2SizeEncoding.to_string(),
             "NES 2.0 exponent/multiplier size encoding is not supported"
+        );
+        assert_eq!(
+            RomError::UnsupportedNes2Submapper(3).to_string(),
+            "NES 2.0 submapper 3 is not supported"
         );
         assert_eq!(
             RomError::UnsupportedNes2ExtendedMapper(42).to_string(),
@@ -299,6 +325,37 @@ mod tests {
         bytes[9] = 0xF0; // CHR MSB == 0x0F
         let err2 = parse_ines(&bytes).unwrap_err();
         assert_eq!(err2, RomError::UnsupportedNes2SizeEncoding);
+    }
+
+    #[test]
+    fn test_parse_ines_nes2_submapper_is_rejected() {
+        let mut bytes = vec![0; 16 + 16 * 1024];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank
+        bytes[7] = 0b0000_1000; // NES 2.0 marker
+        bytes[8] = 0x10; // Submapper 1
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::UnsupportedNes2Submapper(1));
+    }
+
+    #[test]
+    fn test_parse_ines_ines_console_type_is_rejected() {
+        let mut bytes = vec![0; 16 + 16 * 1024];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank
+        bytes[7] = 0b0000_0001; // VS Unisystem
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::UnsupportedConsoleType(1));
+    }
+
+    #[test]
+    fn test_parse_ines_nes2_console_type_is_rejected() {
+        let mut bytes = vec![0; 16 + 16 * 1024];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank
+        bytes[7] = 0b0000_1001; // NES 2.0 marker + non-standard console type
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err, RomError::UnsupportedConsoleType(1));
     }
 
     #[test]
