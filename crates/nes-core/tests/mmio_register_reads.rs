@@ -30,6 +30,39 @@ fn ppu_status_read_clears_vblank_bit() {
 }
 
 #[test]
+fn mirrored_ppu_status_read_clears_vblank_bit() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
+
+    for _ in 0..300 {
+        core.execute(Command::StepScanline).unwrap();
+        if core.read_memory(0x2002) & 0x80 != 0 {
+            break;
+        }
+    }
+    assert_ne!(
+        core.read_memory(0x2002) & 0x80,
+        0,
+        "expected vblank before mirrored read"
+    );
+
+    let pc = core.cpu_pc();
+    core.load_cpu_bytes(pc, &[0xAD, 0x0A, 0x20]); // LDA $200A (mirror of $2002)
+    core.execute(Command::StepCpu).unwrap();
+
+    assert_ne!(
+        core.cpu_a() & 0x80,
+        0,
+        "mirrored read should observe vblank set"
+    );
+    assert_eq!(
+        core.read_memory(0x2002) & 0x80,
+        0,
+        "mirrored PPUSTATUS read must clear vblank"
+    );
+}
+
+#[test]
 fn ppudata_reads_are_buffered() {
     let mut core = NesCore::new();
     core.load_cpu_bytes(
@@ -58,6 +91,34 @@ fn ppudata_reads_are_buffered() {
         core.read_memory(0x0011),
         0x12,
         "second read should return first byte"
+    );
+}
+
+#[test]
+fn unofficial_nop_abs_still_performs_read_side_effects() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
+
+    for _ in 0..300 {
+        core.execute(Command::StepScanline).unwrap();
+        if core.read_memory(0x2002) & 0x80 != 0 {
+            break;
+        }
+    }
+    assert_ne!(
+        core.read_memory(0x2002) & 0x80,
+        0,
+        "expected vblank before unofficial NOP"
+    );
+
+    let pc = core.cpu_pc();
+    core.load_cpu_bytes(pc, &[0x0C, 0x02, 0x20]); // NOP $2002 (unofficial absolute NOP)
+    core.execute(Command::StepCpu).unwrap();
+
+    assert_eq!(
+        core.read_memory(0x2002) & 0x80,
+        0,
+        "unofficial NOP abs should perform a read and clear vblank"
     );
 }
 

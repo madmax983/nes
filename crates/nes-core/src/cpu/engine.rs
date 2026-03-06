@@ -193,12 +193,12 @@ impl Cpu {
     /// Reads a byte from CPU memory image.
     #[must_use]
     pub fn read_byte(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
+        self.memory[normalize_cpu_addr(addr) as usize]
     }
 
     /// Writes a byte into CPU memory image.
     pub fn write_byte(&mut self, addr: u16, value: u8) {
-        self.memory[addr as usize] = value;
+        self.memory[normalize_cpu_addr(addr) as usize] = value;
     }
 
     /// Captures register snapshot including 2KB work RAM.
@@ -2183,10 +2183,24 @@ impl Cpu {
                 };
                 Ok(trace)
             }
-            0x04 | 0x44 | 0x64 | 0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 | 0x14 | 0x34 | 0x54 | 0x74
-            | 0xD4 | 0xF4 => {
+            0x80 | 0x82 | 0x89 | 0xC2 | 0xE2 => {
                 let operand = self.read(snapshot.pc.wrapping_add(1));
                 let trace = format_trace(snapshot, &[opcode, operand], format_args!("NOP"));
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x04 | 0x44 | 0x64 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let _ = self.read(zp as u16);
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("NOP"));
+                self.pc = self.pc.wrapping_add(2);
+                Ok(trace)
+            }
+            0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
+                let zp = self.read(snapshot.pc.wrapping_add(1));
+                let addr = zp.wrapping_add(self.x) as u16;
+                let _ = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, zp], format_args!("NOP"));
                 self.pc = self.pc.wrapping_add(2);
                 Ok(trace)
             }
@@ -2212,9 +2226,21 @@ impl Cpu {
                 };
                 Ok(trace)
             }
-            0x0C | 0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+            0x0C => {
                 let low = self.read(snapshot.pc.wrapping_add(1));
                 let high = self.read(snapshot.pc.wrapping_add(2));
+                let addr = u16::from_le_bytes([low, high]);
+                let _ = self.read(addr);
+                let trace = format_trace(snapshot, &[opcode, low, high], format_args!("NOP"));
+                self.pc = self.pc.wrapping_add(3);
+                Ok(trace)
+            }
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+                let low = self.read(snapshot.pc.wrapping_add(1));
+                let high = self.read(snapshot.pc.wrapping_add(2));
+                let base = u16::from_le_bytes([low, high]);
+                let addr = base.wrapping_add(self.x as u16);
+                let _ = self.read(addr);
                 let trace = format_trace(snapshot, &[opcode, low, high], format_args!("NOP"));
                 self.pc = self.pc.wrapping_add(3);
                 Ok(trace)
@@ -2235,13 +2261,14 @@ impl Cpu {
     }
 
     fn read(&self, addr: u16) -> u8 {
-        let value = self.memory[addr as usize];
-        self.record_bus_access(addr, value, CpuBusAccessKind::Read);
+        let resolved = normalize_cpu_addr(addr);
+        let value = self.memory[resolved as usize];
+        self.record_bus_access(resolved, value, CpuBusAccessKind::Read);
         value
     }
 
     fn peek(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
+        self.memory[normalize_cpu_addr(addr) as usize]
     }
 
     fn read_u16(&self, addr: u16) -> u16 {
@@ -2507,7 +2534,11 @@ impl Cpu {
         )
     }
 
-    /// Swaps the collected non-PRG writes into the provided vector.
+    /// Swaps all collected CPU writes into the provided vector.
+    ///
+    /// Note: PRG-space writes (`>= 0x8000`) are also mirrored in
+    /// [`swap_prg_writes`](Self::swap_prg_writes) for consumers that need a
+    /// dedicated mapper-write stream.
     ///
     /// **Optimization:** Swapping allows the caller to reuse a previously allocated `Vec` capacity,
     /// eliminating continuous heap allocations on the hot path during instruction steps.
@@ -2577,6 +2608,17 @@ fn branch_target(next_pc: u16, offset: u8) -> u16 {
 #[must_use]
 fn page_crossed(base: u16, indexed: u16) -> bool {
     (base & 0xFF00) != (indexed & 0xFF00)
+}
+
+#[must_use]
+const fn normalize_cpu_addr(addr: u16) -> u16 {
+    match addr {
+        // 2KB internal RAM mirrored through $1FFF.
+        0x0000..=0x1FFF => addr & 0x07FF,
+        // PPU register mirrors every 8 bytes through $3FFF.
+        0x2000..=0x3FFF => 0x2000 + ((addr - 0x2000) & 0x0007),
+        _ => addr,
+    }
 }
 
 /// Formats a CPU trace string.
