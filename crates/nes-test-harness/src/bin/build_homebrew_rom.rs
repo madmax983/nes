@@ -1,11 +1,13 @@
 use std::env;
 use std::path::PathBuf;
 
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use nes_test_harness::{default_homebrew_rom_path, write_homebrew_rom};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
         std::process::exit(1);
     }
 }
@@ -34,6 +36,25 @@ fn run() -> Result<(), String> {
     }
 
     write_homebrew_rom(&out_path)?;
-    println!("Wrote homebrew ROM: {}", out_path.display());
+
+    println!("{}", "Building Homebrew ROM...".with(Color::Cyan).bold());
+
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Metric").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Output Path"),
+        Cell::new(out_path.display().to_string()).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("Status"),
+        Cell::new("Success").fg(TableColor::Green),
+    ]);
+
+    println!("\n{table}");
+
     Ok(())
 }
