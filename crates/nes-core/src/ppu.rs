@@ -152,8 +152,12 @@ pub struct PpuSnapshot {
     /// X scroll captured at VBlank start (before NMI handler overwrites it).
     /// Used by `render_full_framebuffer()` so restored frames show the correct game-area scroll.
     pub render_scroll_x: u8,
+    /// Y scroll captured at VBlank start (before NMI handler overwrites it).
+    pub render_scroll_y: u8,
     /// PPUCTRL captured at VBlank start (before NMI handler can change nametable bits).
     pub render_ctrl: u8,
+    /// Whether a VBlank render capture has been recorded.
+    pub render_capture_valid: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,7 +186,9 @@ pub struct Ppu {
     scroll_y: u8,
     read_buffer: u8,
     render_scroll_x: u8,
+    render_scroll_y: u8,
     render_ctrl: u8,
+    render_capture_valid: bool,
     framebuffer: Vec<u8>,
 }
 
@@ -214,7 +220,9 @@ impl Ppu {
             scroll_y: 0,
             read_buffer: 0,
             render_scroll_x: 0,
+            render_scroll_y: 0,
             render_ctrl: 0,
+            render_capture_valid: false,
             framebuffer: blank_framebuffer(),
         }
     }
@@ -264,7 +272,9 @@ impl Ppu {
         self.scroll_y = 0;
         self.read_buffer = 0;
         self.render_scroll_x = 0;
+        self.render_scroll_y = 0;
         self.render_ctrl = 0;
+        self.render_capture_valid = false;
         self.framebuffer = blank_framebuffer();
     }
 
@@ -275,8 +285,9 @@ impl Ppu {
         self.status = snapshot.status;
         self.oam_addr = snapshot.oam_addr;
         self.oam = snapshot.oam;
-        self.scanline = snapshot.scanline;
-        self.dot = snapshot.dot;
+        let (scanline, dot) = Self::scanline_dot_from_cycle(snapshot.cycle_in_frame);
+        self.scanline = scanline;
+        self.dot = dot;
         self.odd_frame = snapshot.odd_frame;
         self.frame_counter = snapshot.frame_counter;
         self.nmi_pending = snapshot.nmi_pending;
@@ -293,7 +304,9 @@ impl Ppu {
         self.scroll_y = snapshot.scroll_y;
         self.read_buffer = snapshot.read_buffer;
         self.render_scroll_x = snapshot.render_scroll_x;
+        self.render_scroll_y = snapshot.render_scroll_y;
         self.render_ctrl = snapshot.render_ctrl;
+        self.render_capture_valid = snapshot.render_capture_valid;
         self.framebuffer = blank_framebuffer();
         self.render_full_framebuffer();
     }
@@ -326,7 +339,9 @@ impl Ppu {
             scroll_y: self.scroll_y,
             read_buffer: self.read_buffer,
             render_scroll_x: self.render_scroll_x,
+            render_scroll_y: self.render_scroll_y,
             render_ctrl: self.render_ctrl,
+            render_capture_valid: self.render_capture_valid,
         }
     }
 
@@ -362,7 +377,9 @@ impl Ppu {
             // SMB writes scroll_x=0 (status bar) in its NMI handler; capturing here preserves
             // the game-area scroll so render_full_framebuffer() restores frames correctly.
             self.render_scroll_x = self.scroll_x;
+            self.render_scroll_y = self.scroll_y;
             self.render_ctrl = self.ctrl;
+            self.render_capture_valid = true;
             self.status |= STATUS_VBLANK;
             if self.ctrl & CTRL_NMI_ENABLE != 0 {
                 self.nmi_pending = true;
@@ -739,7 +756,6 @@ impl Ppu {
 
     fn update_sprite_overflow(&mut self, scanline: usize) {
         if self.mask & MASK_SHOW_SPRITES == 0 {
-            self.status &= !STATUS_SPRITE_OVERFLOW;
             return;
         }
 
@@ -786,11 +802,16 @@ impl Ppu {
         // Use the scroll/ctrl captured at VBlank start rather than the post-NMI values.
         // During live play each dot picks up scroll changes dynamically (sprite-0-hit trick),
         // but a static re-render must use a single consistent scroll value for the whole frame.
-        // render_scroll_x/render_ctrl hold the game-area scroll before the NMI handler reset it.
+        // render_scroll_x/render_scroll_y/render_ctrl hold the game-area scroll before the
+        // NMI handler reset it.
         let saved_scroll_x = self.scroll_x;
+        let saved_scroll_y = self.scroll_y;
         let saved_ctrl = self.ctrl;
-        self.scroll_x = self.render_scroll_x;
-        self.ctrl = self.render_ctrl;
+        if self.render_capture_valid {
+            self.scroll_x = self.render_scroll_x;
+            self.scroll_y = self.render_scroll_y;
+            self.ctrl = self.render_ctrl;
+        }
         for y in 0..FRAME_HEIGHT {
             for x in 0..FRAME_WIDTH {
                 let (r, g, b) = self.render_pixel(x, y);
@@ -802,7 +823,18 @@ impl Ppu {
             }
         }
         self.scroll_x = saved_scroll_x;
+        self.scroll_y = saved_scroll_y;
         self.ctrl = saved_ctrl;
+    }
+
+    #[must_use]
+    fn scanline_dot_from_cycle(cycle_in_frame: u32) -> (u16, u16) {
+        let dots_per_scanline = u32::from(DOTS_PER_SCANLINE);
+        let dots_per_frame = dots_per_scanline * u32::from(SCANLINES_PER_FRAME);
+        let wrapped = cycle_in_frame % dots_per_frame;
+        let scanline = (wrapped / dots_per_scanline) as u16;
+        let dot = (wrapped % dots_per_scanline) as u16;
+        (scanline, dot)
     }
 
     #[must_use]
@@ -960,7 +992,11 @@ fn blank_framebuffer() -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Ppu, STATUS_VBLANK};
+    use super::{
+        DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK,
+        VBLANK_EDGE_DOT, VBLANK_SCANLINE,
+    };
+    use crate::api::FRAME_RGBA_BYTES;
     use crate::rom::NametableMirroring;
 
     #[test]
@@ -1060,5 +1096,124 @@ mod tests {
         assert_eq!(ppu.read_ppu_data(0x2400), 0x94);
         assert_eq!(ppu.read_ppu_data(0x2800), 0x94);
         assert_eq!(ppu.read_ppu_data(0x2C00), 0x94);
+    }
+
+    #[test]
+    fn sprite_overflow_stays_latched_until_pre_render_clear_when_sprites_disabled() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x10); // sprites enabled
+
+        for sprite in 0..9 {
+            let base = sprite * 4;
+            ppu.oam[base] = 0;
+        }
+
+        step_until(&mut ppu, |p| p.scanline() == 1 && p.dot() == 257);
+        assert_ne!(ppu.status() & STATUS_SPRITE_OVERFLOW, 0);
+
+        ppu.write_register(0x2001, 0x00); // disable rendering mid-frame
+        step_until(&mut ppu, |p| p.scanline() == 2 && p.dot() == 257);
+        assert_ne!(
+            ppu.status() & STATUS_SPRITE_OVERFLOW,
+            0,
+            "overflow bit should remain latched until pre-render clear"
+        );
+
+        step_until(&mut ppu, |p| {
+            p.scanline() == PRE_RENDER_SCANLINE && p.dot() == VBLANK_EDGE_DOT
+        });
+        assert_eq!(ppu.status() & STATUS_SPRITE_OVERFLOW, 0);
+    }
+
+    #[test]
+    fn restore_rerender_falls_back_to_live_scroll_before_first_vblank_capture() {
+        let mut ppu = Ppu::new();
+        configure_two_tile_scroll_scene(&mut ppu);
+
+        ppu.write_register(0x2005, 8); // X scroll
+        ppu.write_register(0x2005, 0); // Y scroll
+
+        let snapshot = ppu.snapshot();
+        let mut restored = Ppu::new();
+        restored.restore(snapshot);
+
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        restored.render_rgba(&mut frame);
+        assert_eq!((frame[0], frame[1], frame[2]), (236, 106, 100));
+    }
+
+    #[test]
+    fn restore_rerender_uses_vblank_captured_y_scroll() {
+        let mut ppu = Ppu::new();
+        configure_two_tile_scroll_scene(&mut ppu);
+
+        ppu.write_register(0x2005, 0); // X scroll
+        ppu.write_register(0x2005, 8); // Y scroll
+        step_until(&mut ppu, |p| {
+            p.scanline() == VBLANK_SCANLINE && p.dot() == VBLANK_EDGE_DOT
+        });
+
+        // Emulate NMI handler resetting scroll after VBlank edge.
+        ppu.write_register(0x2005, 0);
+        ppu.write_register(0x2005, 0);
+
+        let snapshot = ppu.snapshot();
+        let mut restored = Ppu::new();
+        restored.restore(snapshot);
+
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        restored.render_rgba(&mut frame);
+        assert_eq!((frame[0], frame[1], frame[2]), (236, 106, 100));
+    }
+
+    #[test]
+    fn restore_position_is_derived_from_cycle_in_frame() {
+        let mut snapshot = Ppu::new().snapshot();
+        snapshot.cycle_in_frame = u32::from(DOTS_PER_SCANLINE) * 10 + 5;
+        snapshot.scanline = 0;
+        snapshot.dot = 0;
+
+        let mut restored = Ppu::new();
+        restored.restore(snapshot);
+
+        assert_eq!(restored.scanline(), 10);
+        assert_eq!(restored.dot(), 5);
+    }
+
+    fn step_until(mut_ppu: &mut Ppu, done: impl Fn(&Ppu) -> bool) {
+        let max_steps = u32::from(DOTS_PER_SCANLINE) * 262 * 2;
+        for _ in 0..max_steps {
+            if done(mut_ppu) {
+                return;
+            }
+            mut_ppu.step_dot();
+        }
+        panic!("timed out while stepping PPU");
+    }
+
+    fn configure_two_tile_scroll_scene(ppu: &mut Ppu) {
+        ppu.write_register(0x2001, 0x0A); // background + leftmost 8px background
+
+        // Universal + background palette entries for color indexes 1 and 2.
+        ppu.write_ppu_data(0x3F00, 0x0F);
+        ppu.write_ppu_data(0x3F01, 0x30); // color index 1 => (236, 238, 236)
+        ppu.write_ppu_data(0x3F02, 0x26); // color index 2 => (236, 106, 100)
+
+        // Tile #0 renders color 1 everywhere.
+        for row in 0..8 {
+            ppu.write_ppu_data(row, 0xFF);
+            ppu.write_ppu_data(row + 8, 0x00);
+        }
+        // Tile #1 renders color 2 everywhere.
+        for row in 0..8 {
+            ppu.write_ppu_data(0x0010 + row, 0x00);
+            ppu.write_ppu_data(0x0018 + row, 0xFF);
+        }
+
+        // Top-left tile and its right neighbor.
+        ppu.write_ppu_data(0x2000, 0x00);
+        ppu.write_ppu_data(0x2001, 0x01);
+        // Tile directly below top-left.
+        ppu.write_ppu_data(0x2020, 0x01);
     }
 }
