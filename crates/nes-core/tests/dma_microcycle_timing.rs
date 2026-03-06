@@ -99,3 +99,34 @@ fn dmc_fetches_increase_cpu_cycle_count_via_dma_stalls() {
     );
     assert!(with_dmc.apu_dmc_fetch_count() > 0);
 }
+
+#[test]
+fn oam_dma_timing_remains_correct_across_cpu_cycle_wrap() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(
+        0xC000,
+        &[
+            0xA9, 0x00, // LDA #$00
+            0x8D, 0x14, 0x40, // STA $4014
+            0x8D, 0x14, 0x40, // STA $4014
+        ],
+    );
+
+    let mut snapshot = core.save_state();
+    snapshot.scheduler.cpu_cycles = u64::MAX;
+    core.load_state(&snapshot);
+
+    core.execute(Command::StepCpu).unwrap(); // LDA
+
+    let before_first_dma = core.total_cycles();
+    core.execute(Command::StepCpu).unwrap(); // STA $4014
+    let first_dma_delta = core.total_cycles().wrapping_sub(before_first_dma);
+
+    let before_second_dma = core.total_cycles();
+    core.execute(Command::StepCpu).unwrap(); // STA $4014
+    let second_dma_delta = core.total_cycles().wrapping_sub(before_second_dma);
+
+    // First DMA starts on odd CPU cycle parity (513-stall path), second on even (514-stall path).
+    assert_eq!(first_dma_delta, 517);
+    assert_eq!(second_dma_delta, 518);
+}

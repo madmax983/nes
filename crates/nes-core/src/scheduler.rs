@@ -36,17 +36,17 @@ impl Scheduler {
 
     /// Advances CPU cycles by one tick.
     pub fn step_cpu_cycle(&mut self) {
-        self.cpu_cycles = self.cpu_cycles.saturating_add(1);
+        self.cpu_cycles = self.cpu_cycles.wrapping_add(1);
     }
 
     /// Advances PPU cycles by one tick.
     pub fn step_ppu_cycle(&mut self) {
-        self.ppu_cycles = self.ppu_cycles.saturating_add(1);
+        self.ppu_cycles = self.ppu_cycles.wrapping_add(1);
     }
 
     /// Advances APU cycles by one tick.
     pub fn step_apu_cycle(&mut self) {
-        self.apu_cycles = self.apu_cycles.saturating_add(1);
+        self.apu_cycles = self.apu_cycles.wrapping_add(1);
     }
 
     /// Returns a copyable snapshot of all counters.
@@ -106,7 +106,7 @@ impl Default for Scheduler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Scheduler, SchedulerSnapshot};
 
     #[test]
     fn should_return_correct_default_scheduler() {
@@ -155,5 +155,43 @@ mod tests {
         assert_eq!(scheduler.cpu_cycles(), 0);
         assert_eq!(scheduler.ppu_cycles(), 0);
         assert_eq!(scheduler.apu_cycles(), 0);
+    }
+
+    #[test]
+    fn wrap_behavior_preserves_phase_instead_of_saturating() {
+        let mut scheduler = Scheduler::new();
+        scheduler.restore(SchedulerSnapshot {
+            cpu_cycles: u64::MAX,
+            ppu_cycles: u64::MAX,
+            apu_cycles: u64::MAX,
+        });
+
+        scheduler.step_cpu_cycle();
+        scheduler.step_ppu_cycle();
+        scheduler.step_apu_cycle();
+
+        assert_eq!(scheduler.cpu_cycles(), 0);
+        assert_eq!(scheduler.ppu_cycles(), 0);
+        assert_eq!(scheduler.apu_cycles(), 0);
+    }
+
+    #[test]
+    fn restore_near_wrap_then_step_advances_and_wraps() {
+        let mut scheduler = Scheduler::new();
+        scheduler.restore(SchedulerSnapshot {
+            cpu_cycles: u64::MAX - 1,
+            ppu_cycles: 41,
+            apu_cycles: 99,
+        });
+
+        scheduler.step_cpu_cycle();
+        assert_eq!(scheduler.cpu_cycles(), u64::MAX);
+        scheduler.step_cpu_cycle();
+        assert_eq!(scheduler.cpu_cycles(), 0);
+
+        scheduler.step_ppu_cycle();
+        scheduler.step_apu_cycle();
+        assert_eq!(scheduler.ppu_cycles(), 42);
+        assert_eq!(scheduler.apu_cycles(), 100);
     }
 }
