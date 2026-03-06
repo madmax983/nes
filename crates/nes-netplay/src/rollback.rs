@@ -1,11 +1,51 @@
+//! Deterministic rollback engine for NES netplay.
+//!
+//! This module provides a GGPO-style rollback netcode implementation for the NES emulator.
+//! Rollback netplay allows two remote players to play synchronously with near-zero perceived
+//! latency by predictively simulating the remote player's inputs and "rolling back" the emulator
+//! state when a misprediction occurs.
+//!
+//! # How it works
+//!
+//! 1. **Input Delay:** A small, fixed input delay is added to local inputs to absorb typical network latency.
+//! 2. **Prediction:** If the remote player's input hasn't arrived by the time a frame needs to be rendered,
+//!    the engine predicts that they will continue holding the same buttons as the previous frame.
+//! 3. **Rollback:** When the actual remote input arrives, if it differs from the prediction, the engine
+//!    restores an older snapshot of the emulator state (prior to the misprediction), applies the correct
+//!    inputs, and rapidly re-simulates the intervening frames to catch back up to the present.
+
 use std::collections::BTreeMap;
 
 use nes_core::{Command, CoreError, CoreSnapshot, NesCore};
 
+/// Configuration parameters for the [`RollbackEngine`].
+///
+/// These parameters define the boundaries of the rollback window and how local inputs
+/// are delayed to mitigate network jitter.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::RollbackConfig;
+///
+/// let _config = RollbackConfig {
+///     local_player: 1, // Player 1
+///     input_delay_frames: 2, // Delay local inputs by 2 frames
+///     max_rollback_frames: 60, // Keep 1 second of history (at 60 FPS)
+/// };
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RollbackConfig {
+    /// Which player controller (1 or 2) the local user is controlling.
     pub local_player: u8,
+    /// The number of frames to artificially delay local inputs.
+    ///
+    /// Setting this higher increases local latency but reduces the frequency and
+    /// severity of rollbacks.
     pub input_delay_frames: u32,
+    /// The maximum number of frames the engine is allowed to roll back.
+    ///
+    /// If a remote input arrives later than this window, the session will desync or abort.
     pub max_rollback_frames: u32,
 }
 
@@ -101,6 +141,24 @@ impl From<CoreError> for RollbackError {
     }
 }
 
+/// A deterministic rollback engine for synchronizing NES execution.
+///
+/// The `RollbackEngine` coordinates a single [`nes_core::NesCore`] instance, applying delayed local
+/// inputs and predictive remote inputs. When mispredictions are identified, it forces the
+/// NES core to rewind to a previously saved snapshot and recalculate state.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::{RollbackConfig, RollbackEngine};
+///
+/// let config = RollbackConfig {
+///     local_player: 1,
+///     input_delay_frames: 2,
+///     max_rollback_frames: 60,
+/// };
+/// let engine = RollbackEngine::new(config).unwrap();
+/// ```
 #[derive(Debug, Clone)]
 pub struct RollbackEngine {
     config: RollbackConfig,
@@ -115,6 +173,21 @@ pub struct RollbackEngine {
 }
 
 impl RollbackEngine {
+    /// Creates a new `RollbackEngine` initialized at frame 0.
+    ///
+    /// ## Panics
+    ///
+    /// This function does not panic, but it will return a [`RollbackError`] if the
+    /// `local_player` is not `1` or `2`, or if the rollback window settings are invalid
+    /// (e.g. `max_rollback_frames` is 0 or smaller than `input_delay_frames`).
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// ```
     pub fn new(config: RollbackConfig) -> Result<Self, RollbackError> {
         if !matches!(config.local_player, 1 | 2) {
             return Err(RollbackError::InvalidLocalPlayer(config.local_player));
@@ -139,6 +212,19 @@ impl RollbackEngine {
         })
     }
 
+    /// Returns the absolute frame number that the engine expects to simulate next.
+    ///
+    /// This is the "present" frame from the perspective of the local simulation.
+    /// Note that local inputs scheduled now will actually apply to `next_frame + input_delay_frames`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// assert_eq!(engine.next_frame(), 0);
+    /// ```
     #[must_use]
     pub fn next_frame(&self) -> u64 {
         self.next_frame
@@ -170,6 +256,30 @@ impl RollbackEngine {
         Ok(())
     }
 
+    /// Schedules a local input to be applied in the future.
+    ///
+    /// The input is artificially delayed by the configured `input_delay_frames` to absorb
+    /// network latency before being sent to the remote peer. The engine will not execute
+    /// this input until `advance_frame` reaches the target frame.
+    ///
+    /// The `bits` parameter should be a bitmask representing standard NES controller
+    /// button states.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig {
+    ///     local_player: 1,
+    ///     input_delay_frames: 2,
+    ///     max_rollback_frames: 60,
+    /// }).unwrap();
+    ///
+    /// // Schedule an input for the present frame + delay
+    /// let scheduled = engine.schedule_local_input(0x80); // A button
+    /// assert_eq!(scheduled.frame, 2);
+    /// ```
     pub fn schedule_local_input(&mut self, bits: u8) -> ScheduledInput {
         let target_frame = self.next_frame + u64::from(self.config.input_delay_frames);
         self.local_inputs.insert(target_frame, bits);
@@ -179,6 +289,34 @@ impl RollbackEngine {
         }
     }
 
+    /// Receives an input sent by the remote player and checks if it causes a misprediction.
+    ///
+    /// If the `frame` represents a time in the past (before `next_frame`), the engine
+    /// checks its prediction against the received `bits`. If there is a mismatch, the engine
+    /// queues a rollback to be executed on the next call to [`RollbackEngine::advance_frame`].
+    ///
+    /// Returns a [`RemoteInputIngest`] describing whether a rollback was triggered.
+    ///
+    /// The `frame` is the absolute frame number the input applies to, and `bits` is the standard
+    /// NES controller bitmask.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    /// use nes_core::NesCore;
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// let mut core = NesCore::new();
+    ///
+    /// // Advance a few frames, so the engine has predicted remote inputs
+    /// engine.advance_frame(&mut core).unwrap();
+    /// engine.advance_frame(&mut core).unwrap();
+    ///
+    /// // Receive actual input for frame 0 from the peer
+    /// let ingest = engine.ingest_remote_input(0, 0x01);
+    /// assert_eq!(ingest.rollback_queued, true); // Assuming the prediction (0x00) didn't match 0x01
+    /// ```
     pub fn ingest_remote_input(&mut self, frame: u64, bits: u8) -> RemoteInputIngest {
         self.remote_inputs.insert(frame, bits);
         let rollback_queued = if frame < self.next_frame {
@@ -203,6 +341,30 @@ impl RollbackEngine {
         }
     }
 
+    /// Compares a remote player's state hash for a specific frame against the local state hash.
+    ///
+    /// Used to detect desyncs between clients.
+    ///
+    /// Returns a [`HashComparison`] enum indicating a Match, a Mismatch, or if the
+    /// local engine hasn't reached `frame` yet.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine, HashComparison};
+    /// use nes_core::NesCore;
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// let mut core = NesCore::new();
+    ///
+    /// // Initially, we have no frame hashes
+    /// assert_eq!(engine.compare_remote_hash(0, 12345), HashComparison::PendingLocalFrame);
+    ///
+    /// engine.advance_frame(&mut core).unwrap();
+    ///
+    /// // Once the local frame is processed, it will likely mismatch an arbitrary remote hash
+    /// assert_eq!(engine.compare_remote_hash(0, 12345), HashComparison::Mismatch);
+    /// ```
     #[must_use]
     pub fn compare_remote_hash(&self, frame: u64, remote_hash: u64) -> HashComparison {
         match self.frame_hashes.get(&frame).copied() {
@@ -217,6 +379,28 @@ impl RollbackEngine {
         self.frame_hashes.get(&frame).copied()
     }
 
+    /// Gets the resolved inputs (local and remote) applied during a specific past frame.
+    ///
+    /// This returns an `Option` containing a tuple of `(local_bits, remote_bits)`.
+    /// If the frame has not yet been simulated, it returns `None`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    /// use nes_core::NesCore;
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// let mut core = NesCore::new();
+    ///
+    /// // Initially, no inputs are resolved
+    /// assert_eq!(engine.resolved_inputs(0), None);
+    ///
+    /// engine.advance_frame(&mut core).unwrap();
+    ///
+    /// // After advancing, the inputs applied on frame 0 are known
+    /// assert_eq!(engine.resolved_inputs(0), Some((0, 0))); // 0 for no buttons pressed
+    /// ```
     #[must_use]
     pub fn resolved_inputs(&self, frame: u64) -> Option<(u8, u8)> {
         let local = self.resolved_local.get(&frame).copied()?;
@@ -224,6 +408,31 @@ impl RollbackEngine {
         Some((local, remote))
     }
 
+    /// Steps the engine forward by one frame, automatically handling any queued rollbacks.
+    ///
+    /// This function performs the core rollback simulation. If a misprediction was detected via
+    /// [`RollbackEngine::ingest_remote_input`], this function will transparently restore a previous state
+    /// of the [`NesCore`], rapidly fast-forward simulation through the mispredicted frames,
+    /// and then execute the actual frame representing the present time.
+    ///
+    /// If no rollback is pending, it simply simulates one frame normally.
+    ///
+    /// It returns a [`RollbackStep`] describing the inputs applied, the hash of the resulting state,
+    /// and whether a rollback occurred (and how far it reached back).
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    /// use nes_core::NesCore;
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// let mut core = NesCore::new();
+    ///
+    /// let step = engine.advance_frame(&mut core).unwrap();
+    /// assert_eq!(step.frame, 0);
+    /// assert_eq!(step.rollback_distance, 0);
+    /// ```
     pub fn advance_frame(&mut self, core: &mut NesCore) -> Result<RollbackStep, RollbackError> {
         let rollback_distance = if let Some(rollback_from) = self.pending_rollback_from.take() {
             self.rollback_from(core, rollback_from)?;
