@@ -39,6 +39,12 @@ fn run() -> Result<(), String> {
 
     println!("{}", "Building Homebrew ROM...".with(Color::Cyan).bold());
 
+    println!("\n{}", build_success_table(&out_path));
+
+    Ok(())
+}
+
+fn build_success_table(out_path: &std::path::Path) -> Table {
     let mut table = Table::new();
     table.set_header(vec![
         Cell::new("Metric").fg(TableColor::Cyan),
@@ -54,7 +60,23 @@ fn run() -> Result<(), String> {
         Cell::new("Success").fg(TableColor::Green),
     ]);
 
-    println!("\n{table}");
+    table
+}
 
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::build_success_table;
+    use std::path::PathBuf;
+
+    #[test]
+    fn build_success_table_includes_path_and_success_status() {
+        let path = PathBuf::from("test/path/rom.nes");
+        let table = build_success_table(&path);
+        let output = table.to_string();
+
+        assert!(output.contains("test/path/rom.nes"));
+        assert!(output.contains("Output Path"));
+        assert!(output.contains("Status"));
+        assert!(output.contains("Success"));
+    }
 }
