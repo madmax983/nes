@@ -46,6 +46,8 @@ Desktop/TUI launch commands:
 
 ```powershell
 cargo run -p nes-desktop --release -- ./roms/homebrew/homebrew.nes
+# Or with your own ROM:
+# cargo run -p nes-desktop --release -- <path-to-your-rom>.nes
 cargo run -p nes-desktop --release -- --config ./nes.toml
 cargo run -p nes-tui -- --config ./nes.toml
 ```
@@ -102,6 +104,8 @@ Desktop can optionally host MCP on the same live `NesCore` instance:
 ```powershell
 cargo run -p nes-desktop --features mcp-host -- --mcp-host --mcp-bind 127.0.0.1:6502
 ```
+
+**⚠️ REQUIRES FEATURE NOVA:** The `story_demo` and related narrative generation scripts require the `nova` feature to be enabled!
 
 Automation scripts:
 
