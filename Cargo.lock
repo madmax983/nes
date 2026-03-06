@@ -1833,6 +1833,8 @@ dependencies = [
 name = "nes-test-harness"
 version = "0.1.0"
 dependencies = [
+ "comfy-table",
+ "crossterm 0.28.1",
  "nes-config",
  "nes-core",
  "nes-dsl",
