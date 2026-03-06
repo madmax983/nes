@@ -35,7 +35,7 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
                 for _ in 0..frames {
                     core.execute(Command::StepFrame)
                         .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
-                    frames_elapsed += 1;
+                    frames_elapsed += 1; // COULD OVERFLOW HERE if frames_elapsed is u64 and frame count is large
                 }
             }
             "PRESS" | "HOLD" => {
