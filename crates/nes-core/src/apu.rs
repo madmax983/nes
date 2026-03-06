@@ -119,7 +119,6 @@ impl PulseChannel {
 
     fn write_control(&mut self, value: u8) {
         self.control = value;
-        self.envelope_start = true;
     }
 
     fn write_sweep(&mut self, value: u8) {
@@ -392,7 +391,6 @@ impl NoiseChannel {
 
     fn write_control(&mut self, value: u8) {
         self.control = value;
-        self.envelope_start = true;
     }
 
     fn write_period(&mut self, value: u8) {
@@ -494,6 +492,7 @@ struct DmcChannel {
     bits_remaining: u8,
     silence: bool,
     timer_counter: u16,
+    dma_pending: bool,
     irq_pending: bool,
     fetch_count: u64,
 }
@@ -514,7 +513,8 @@ impl DmcChannel {
             shift_register: 0,
             bits_remaining: 8,
             silence: true,
-            timer_counter: DMC_RATE_TABLE[0],
+            timer_counter: DMC_RATE_TABLE[0].saturating_sub(1),
+            dma_pending: false,
             irq_pending: false,
             fetch_count: 0,
         }
@@ -549,41 +549,31 @@ impl DmcChannel {
                 self.restart_sample();
             }
         } else {
+            self.dma_pending = false;
             self.bytes_remaining = 0;
         }
     }
 
     fn load_sample(&mut self, sample: u8) {
         self.sample_buffer = Some(sample);
+        self.complete_pending_fetch();
     }
 
     fn step_timer(&mut self) -> Option<DmcDmaRequest> {
         if self.timer_counter == 0 {
-            self.timer_counter = self.rate_period();
+            self.timer_counter = self.rate_period_counter();
             self.clock_output();
         } else {
             self.timer_counter = self.timer_counter.saturating_sub(1);
         }
 
-        if self.sample_buffer.is_none() && self.bytes_remaining > 0 {
+        if !self.dma_pending && self.sample_buffer.is_none() && self.bytes_remaining > 0 {
+            self.dma_pending = true;
             let request = DmcDmaRequest {
                 addr: self.current_addr,
                 stall_cycles: 4,
             };
             self.fetch_count = self.fetch_count.saturating_add(1);
-            self.current_addr = if self.current_addr == 0xFFFF {
-                0x8000
-            } else {
-                self.current_addr.wrapping_add(1)
-            };
-            self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
-            if self.bytes_remaining == 0 {
-                if self.loop_flag {
-                    self.restart_sample();
-                } else if self.irq_enabled {
-                    self.irq_pending = true;
-                }
-            }
             return Some(request);
         }
 
@@ -619,8 +609,32 @@ impl DmcChannel {
         self.bytes_remaining = (u16::from(self.sample_len_reg) << 4) | 1;
     }
 
+    fn complete_pending_fetch(&mut self) {
+        if !self.dma_pending {
+            return;
+        }
+        self.dma_pending = false;
+        self.current_addr = if self.current_addr == 0xFFFF {
+            0x8000
+        } else {
+            self.current_addr.wrapping_add(1)
+        };
+        self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
+        if self.bytes_remaining == 0 {
+            if self.loop_flag {
+                self.restart_sample();
+            } else if self.irq_enabled {
+                self.irq_pending = true;
+            }
+        }
+    }
+
     fn rate_period(&self) -> u16 {
         DMC_RATE_TABLE[usize::from(self.rate_index)]
+    }
+
+    fn rate_period_counter(&self) -> u16 {
+        self.rate_period().saturating_sub(1)
     }
 
     fn output(&self) -> u8 {
@@ -848,10 +862,7 @@ impl Apu {
                 idx += 1;
                 continue;
             }
-            if self.step_cpu_cycle(paused).is_some() {
-                // No CPU bus callback when called from output fetch path.
-                self.dmc.load_sample(0);
-            }
+            let _ = self.step_cpu_cycle(paused);
         }
     }
 
@@ -1139,4 +1150,73 @@ fn get_mixer_tables() -> &'static (Vec<f32>, Vec<f32>) {
         }
         (pulse, tnd)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pulse_control_write_does_not_restart_envelope() {
+        let mut pulse = PulseChannel::new(true);
+        pulse.envelope_start = false;
+        pulse.write_control(0x1F);
+        assert!(
+            !pulse.envelope_start,
+            "writing pulse control must not restart the envelope"
+        );
+    }
+
+    #[test]
+    fn noise_control_write_does_not_restart_envelope() {
+        let mut noise = NoiseChannel::new();
+        noise.envelope_start = false;
+        noise.write_control(0x1F);
+        assert!(
+            !noise.envelope_start,
+            "writing noise control must not restart the envelope"
+        );
+    }
+
+    #[test]
+    fn dmc_timer_uses_exact_period_cycles() {
+        let mut dmc = DmcChannel::new();
+        dmc.write_control(0x0F); // fastest rate => 54 CPU cycles
+        dmc.timer_counter = dmc.rate_period_counter();
+        let initial_bits = dmc.bits_remaining;
+
+        for _ in 0..53 {
+            dmc.step_timer();
+            assert_eq!(dmc.bits_remaining, initial_bits);
+        }
+
+        dmc.step_timer();
+        assert_eq!(dmc.bits_remaining, initial_bits - 1);
+    }
+
+    #[test]
+    fn dmc_request_does_not_consume_sample_until_loaded() {
+        let mut dmc = DmcChannel::new();
+        dmc.write_control(0x8F); // IRQ enabled, no loop
+        dmc.write_sample_addr(0x00);
+        dmc.write_sample_len(0x00); // 1 byte sample
+        dmc.write_status_enable(true);
+
+        assert_eq!(dmc.bytes_remaining, 1);
+        let request = dmc.step_timer();
+        assert!(request.is_some(), "expected a DMA request");
+        assert_eq!(
+            dmc.bytes_remaining, 1,
+            "bytes remaining must not decrement before DMA data arrives"
+        );
+
+        for _ in 0..8 {
+            let follow_up = dmc.step_timer();
+            assert!(follow_up.is_none(), "request should stay pending");
+        }
+
+        dmc.load_sample(0xAA);
+        assert_eq!(dmc.bytes_remaining, 0);
+        assert!(dmc.irq_pending, "finishing the sample should latch DMC IRQ");
+    }
 }
