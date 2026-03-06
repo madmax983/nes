@@ -103,3 +103,57 @@ impl Default for Scheduler {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_return_correct_default_scheduler() {
+        let scheduler = Scheduler::default();
+        assert_eq!(scheduler.cpu_cycles(), 0);
+        assert_eq!(scheduler.ppu_cycles(), 0);
+        assert_eq!(scheduler.apu_cycles(), 0);
+        assert_eq!(scheduler.total_cycles(), 0);
+    }
+
+    #[test]
+    fn should_save_and_restore_scheduler_snapshot() {
+        let mut scheduler = Scheduler::new();
+        scheduler.step_cpu_cycle();
+        scheduler.step_ppu_cycle();
+        scheduler.step_ppu_cycle();
+        scheduler.step_apu_cycle();
+        scheduler.step_apu_cycle();
+        scheduler.step_apu_cycle();
+
+        let snapshot = scheduler.snapshot();
+        assert_eq!(snapshot.cpu_cycles, 1);
+        assert_eq!(snapshot.ppu_cycles, 2);
+        assert_eq!(snapshot.apu_cycles, 3);
+
+        let mut scheduler2 = Scheduler::new();
+        scheduler2.restore(snapshot);
+        assert_eq!(scheduler2.cpu_cycles(), 1);
+        assert_eq!(scheduler2.ppu_cycles(), 2);
+        assert_eq!(scheduler2.apu_cycles(), 3);
+    }
+
+    #[test]
+    fn should_reset_scheduler_counters() {
+        let mut scheduler = Scheduler::new();
+        scheduler.step_cpu_cycle();
+        scheduler.step_ppu_cycle();
+        scheduler.step_apu_cycle();
+
+        assert_eq!(scheduler.cpu_cycles(), 1);
+        assert_eq!(scheduler.ppu_cycles(), 1);
+        assert_eq!(scheduler.apu_cycles(), 1);
+
+        scheduler.reset();
+
+        assert_eq!(scheduler.cpu_cycles(), 0);
+        assert_eq!(scheduler.ppu_cycles(), 0);
+        assert_eq!(scheduler.apu_cycles(), 0);
+    }
+}
