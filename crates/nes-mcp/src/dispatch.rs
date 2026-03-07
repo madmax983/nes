@@ -15,6 +15,19 @@ use crate::output::{
 };
 
 /// Type alias for key-value pair strings passed as arguments to an MCP tool.
+///
+/// This serves as a dynamic map of strings that the dispatch engine parses
+/// into strict types according to the requirements of the requested tool.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::ToolParams;
+///
+/// let mut params = ToolParams::new();
+/// params.insert("button".to_owned(), "A".to_owned());
+/// params.insert("player".to_owned(), "1".to_owned());
+/// ```
 pub type ToolParams = BTreeMap<String, String>;
 
 /// Represents the strongly typed response from a successful tool invocation.
@@ -226,10 +239,19 @@ fn saved_states() -> &'static Mutex<HashMap<String, CoreSnapshot>> {
     STATE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Dispatches an MCP tool call to the provided `NesCore` instance.
+/// Dispatches an MCP tool call to the provided [`NesCore`] instance.
 ///
 /// This function is the primary translation boundary between dynamic string maps
-/// and strict type-checked emulator API interactions.
+/// and strict type-checked emulator API interactions. It exists to decouple the
+/// raw JSON/string payloads received by the MCP server from the internal execution
+/// methods of the emulator core.
+///
+/// ## Errors
+///
+/// Returns a [`DispatchError`] if:
+/// - The `tool_name` is unrecognized or unsupported.
+/// - Required parameters are missing or invalid in `params`.
+/// - The underlying [`NesCore`] encounters a runtime error.
 ///
 /// ## Examples
 ///

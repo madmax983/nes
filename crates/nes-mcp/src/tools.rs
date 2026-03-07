@@ -1,4 +1,9 @@
 //! Defines the available tools for the Model Context Protocol (MCP) server.
+//!
+//! This module maintains the central registry of all capabilities the emulator
+//! exposes to external AI models. When the MCP client connects, the daemon
+//! reads this catalog and translates it into the JSON-RPC response for the
+//! `tools/list` protocol initialization phase.
 
 /// Describes a single tool that can be invoked via the MCP.
 ///
@@ -149,7 +154,10 @@ const TOOL_CATALOG: [ToolDefinition; 30] = [
 
 /// Returns the static catalog of all registered MCP tools.
 ///
-/// Use this list to register capabilities with the MCP client.
+/// The MCP daemon uses this list during the `tools/list` initialization phase to
+/// broadcast available capabilities to the connected LLM client. Every tool
+/// registered here must have a corresponding implementation in `dispatch::dispatch_tool`
+/// and a schema definition in `tool_input_schema`.
 ///
 /// ## Examples
 ///
