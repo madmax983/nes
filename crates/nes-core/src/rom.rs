@@ -258,6 +258,23 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_ines_truncated_body() {
+        let mut bytes = vec![0; 32];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank (16KB)
+        bytes[5] = 1; // 1 CHR bank (8KB)
+
+        let err = parse_ines(&bytes).unwrap_err();
+        assert_eq!(
+            err,
+            RomError::Truncated {
+                expected_min: 16 + 16384 + 8192,
+                actual: 32,
+            }
+        );
+    }
+
+    #[test]
     fn test_parse_ines_invalid_magic() {
         let mut bytes = [0; 32];
         bytes[0..4].copy_from_slice(b"BAD!");
