@@ -152,6 +152,15 @@ Force overwrite existing golden files:
 cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config ./nes.toml --force
 ```
 
+## Nova Experimental Features
+
+The workspace includes experimental features code-named **Nova**, such as the `NarrativeGenerator` (used in the `story_demo`) and the `TimeMachine`.
+To use these features, you **MUST** compile and run with the `nova` feature flag enabled. For example:
+
+```powershell
+cargo run --features nova -p nes-desktop --release -- ./roms/homebrew/homebrew.nes
+```
+
 ## Homebrew ROM
 
 Build the in-repo custom ROM (no external assembler required):
