@@ -6,8 +6,8 @@ use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
 use nes_test_harness::{
-    audio_stats, capture_audio_window, detect_mapper_id, mapper_supported_by_core, waveform_hash,
-    write_pcm_i16le,
+    AudioStats, audio_stats, capture_audio_window, detect_mapper_id, mapper_supported_by_core,
+    waveform_hash, write_pcm_i16le,
 };
 
 const AUDIO_WARMUP_FRAMES: u32 = 60;
@@ -22,6 +22,51 @@ struct RowData {
     rms: String,
     peak: String,
     hash: String,
+}
+
+fn format_skipped_mapper_row(rom_name: String, mapper_id: u16) -> RowData {
+    RowData {
+        rom_name,
+        status: "Skip (Mapper)".to_string(),
+        status_color: TableColor::Magenta,
+        mapper: mapper_id.to_string(),
+        samples: "-".to_string(),
+        rms: "-".to_string(),
+        peak: "-".to_string(),
+        hash: "-".to_string(),
+    }
+}
+
+fn format_skipped_existing_row(rom_name: String, mapper_id: u16) -> RowData {
+    RowData {
+        rom_name,
+        status: "Skip (Exists)".to_string(),
+        status_color: TableColor::Yellow,
+        mapper: mapper_id.to_string(),
+        samples: "-".to_string(),
+        rms: "-".to_string(),
+        peak: "-".to_string(),
+        hash: "-".to_string(),
+    }
+}
+
+fn format_written_row(
+    rom_name: String,
+    mapper_id: u16,
+    samples_len: usize,
+    stats: AudioStats,
+    hash: u64,
+) -> RowData {
+    RowData {
+        rom_name,
+        status: "Written".to_string(),
+        status_color: TableColor::Green,
+        mapper: mapper_id.to_string(),
+        samples: samples_len.to_string(),
+        rms: format!("{:.2}", stats.rms),
+        peak: stats.peak.to_string(),
+        hash: format!("{:016X}", hash),
+    }
 }
 
 fn main() {
@@ -95,18 +140,12 @@ fn run() -> Result<(), String> {
             .map_err(|err| format!("failed to read ROM '{}': {err}", rom_path.display()))?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
-            print!("\r\x1B[2K{}", format!("Processing {}...", rom_name).with(Color::Yellow));
+            print!(
+                "\r\x1B[2K{}",
+                format!("Processing {}...", rom_name).with(Color::Yellow)
+            );
             let _ = stdout.flush();
-            rows.push(RowData {
-                rom_name,
-                status: "Skip (Mapper)".to_string(),
-                status_color: TableColor::Magenta,
-                mapper: mapper_id.to_string(),
-                samples: "-".to_string(),
-                rms: "-".to_string(),
-                peak: "-".to_string(),
-                hash: "-".to_string(),
-            });
+            rows.push(format_skipped_mapper_row(rom_name, mapper_id));
             skipped_mapper = skipped_mapper.saturating_add(1);
             continue;
         }
@@ -122,23 +161,20 @@ fn run() -> Result<(), String> {
             })?;
         let output_path = PathBuf::from(&golden_dir).join(format!("{stem}.s16le.pcm"));
         if output_path.exists() && !force {
-            print!("\r\x1B[2K{}", format!("Processing {}...", rom_name).with(Color::Yellow));
+            print!(
+                "\r\x1B[2K{}",
+                format!("Processing {}...", rom_name).with(Color::Yellow)
+            );
             let _ = stdout.flush();
-            rows.push(RowData {
-                rom_name,
-                status: "Skip (Exists)".to_string(),
-                status_color: TableColor::Yellow,
-                mapper: mapper_id.to_string(),
-                samples: "-".to_string(),
-                rms: "-".to_string(),
-                peak: "-".to_string(),
-                hash: "-".to_string(),
-            });
+            rows.push(format_skipped_existing_row(rom_name, mapper_id));
             skipped_existing = skipped_existing.saturating_add(1);
             continue;
         }
 
-        print!("\r\x1B[2K{}", format!("Processing {}...", rom_name).with(Color::Green));
+        print!(
+            "\r\x1B[2K{}",
+            format!("Processing {}...", rom_name).with(Color::Green)
+        );
         let _ = stdout.flush();
 
         let samples = capture_audio_window(&rom_bytes, AUDIO_WARMUP_FRAMES, AUDIO_CAPTURE_FRAMES)?;
@@ -146,16 +182,13 @@ fn run() -> Result<(), String> {
         let stats = audio_stats(&samples);
         let hash = waveform_hash(&samples);
 
-        rows.push(RowData {
+        rows.push(format_written_row(
             rom_name,
-            status: "Written".to_string(),
-            status_color: TableColor::Green,
-            mapper: mapper_id.to_string(),
-            samples: samples.len().to_string(),
-            rms: format!("{:.2}", stats.rms),
-            peak: stats.peak.to_string(),
-            hash: format!("{:016X}", hash),
-        });
+            mapper_id,
+            samples.len(),
+            stats,
+            hash,
+        ));
 
         written = written.saturating_add(1);
     }
@@ -205,8 +238,49 @@ fn build_summary_table(rows: &[RowData]) -> Table {
 
 #[cfg(test)]
 mod tests {
-    use super::{RowData, build_summary_table};
+    use super::{
+        RowData, build_summary_table, format_skipped_existing_row, format_skipped_mapper_row,
+        format_written_row,
+    };
     use comfy_table::Color as TableColor;
+    use nes_test_harness::AudioStats;
+
+    #[test]
+    fn format_skipped_mapper_row_returns_correct_data() {
+        let row = format_skipped_mapper_row("test.nes".to_string(), 99);
+        assert_eq!(row.rom_name, "test.nes");
+        assert_eq!(row.status, "Skip (Mapper)");
+        assert_eq!(row.mapper, "99");
+        assert_eq!(row.samples, "-");
+    }
+
+    #[test]
+    fn format_skipped_existing_row_returns_correct_data() {
+        let row = format_skipped_existing_row("test2.nes".to_string(), 1);
+        assert_eq!(row.rom_name, "test2.nes");
+        assert_eq!(row.status, "Skip (Exists)");
+        assert_eq!(row.mapper, "1");
+        assert_eq!(row.rms, "-");
+    }
+
+    #[test]
+    fn format_written_row_returns_correct_data() {
+        let stats = AudioStats {
+            rms: 12.345,
+            peak: 100,
+            dc_offset: 0.0,
+            sample_count: 500,
+            clipping_ratio: 0.0,
+        };
+        let row = format_written_row("test3.nes".to_string(), 4, 500, stats, 0x1234567890ABCDEF);
+        assert_eq!(row.rom_name, "test3.nes");
+        assert_eq!(row.status, "Written");
+        assert_eq!(row.mapper, "4");
+        assert_eq!(row.samples, "500");
+        assert_eq!(row.rms, "12.35");
+        assert_eq!(row.peak, "100");
+        assert_eq!(row.hash, "1234567890ABCDEF");
+    }
 
     #[test]
     fn build_summary_table_includes_all_columns() {
