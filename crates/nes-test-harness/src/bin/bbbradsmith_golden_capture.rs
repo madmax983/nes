@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table};
@@ -69,14 +70,24 @@ fn format_written_row(
     }
 }
 
+fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Color) {
+    let _ = write!(
+        stdout,
+        "\r\x1B[2K{}",
+        format!("Processing {}...", rom_name).with(color)
+    );
+    let _ = stdout.flush();
+}
+
 fn main() {
-    if let Err(err) = run() {
+    let mut stdout = std::io::stdout();
+    if let Err(err) = run(&mut stdout) {
         eprintln!("{err}");
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<(), String> {
+fn run(stdout: &mut impl Write) -> Result<(), String> {
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
     let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
     let force = pass_through.iter().any(|arg| arg == "--force");
@@ -127,9 +138,6 @@ fn run() -> Result<(), String> {
     let mut skipped_existing = 0_usize;
     let mut rows: Vec<RowData> = Vec::new();
 
-    use std::io::{self, Write};
-    let mut stdout = io::stdout();
-
     for rom_path in rom_paths {
         let rom_name = rom_path
             .file_name()
@@ -140,11 +148,7 @@ fn run() -> Result<(), String> {
             .map_err(|err| format!("failed to read ROM '{}': {err}", rom_path.display()))?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
-            print!(
-                "\r\x1B[2K{}",
-                format!("Processing {}...", rom_name).with(Color::Yellow)
-            );
-            let _ = stdout.flush();
+            print_processing_progress(stdout, &rom_name, Color::Yellow);
             rows.push(format_skipped_mapper_row(rom_name, mapper_id));
             skipped_mapper = skipped_mapper.saturating_add(1);
             continue;
@@ -161,21 +165,13 @@ fn run() -> Result<(), String> {
             })?;
         let output_path = PathBuf::from(&golden_dir).join(format!("{stem}.s16le.pcm"));
         if output_path.exists() && !force {
-            print!(
-                "\r\x1B[2K{}",
-                format!("Processing {}...", rom_name).with(Color::Yellow)
-            );
-            let _ = stdout.flush();
+            print_processing_progress(stdout, &rom_name, Color::Yellow);
             rows.push(format_skipped_existing_row(rom_name, mapper_id));
             skipped_existing = skipped_existing.saturating_add(1);
             continue;
         }
 
-        print!(
-            "\r\x1B[2K{}",
-            format!("Processing {}...", rom_name).with(Color::Green)
-        );
-        let _ = stdout.flush();
+        print_processing_progress(stdout, &rom_name, Color::Green);
 
         let samples = capture_audio_window(&rom_bytes, AUDIO_WARMUP_FRAMES, AUDIO_CAPTURE_FRAMES)?;
         write_pcm_i16le(&output_path, &samples)?;
@@ -192,11 +188,12 @@ fn run() -> Result<(), String> {
 
         written = written.saturating_add(1);
     }
-    print!("\r\x1B[2K");
+    let _ = write!(stdout, "\r\x1B[2K");
     let _ = stdout.flush();
 
-    println!("{}", build_summary_table(&rows));
-    println!(
+    let _ = writeln!(stdout, "{}", build_summary_table(&rows));
+    let _ = writeln!(
+        stdout,
         "done: written={} skipped_mapper={} skipped_existing={}",
         written.to_string().with(Color::Green),
         skipped_mapper.to_string().with(Color::Magenta),
@@ -273,10 +270,27 @@ fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
 mod tests {
     use super::{
         RowData, build_summary_table, format_skipped_existing_row, format_skipped_mapper_row,
-        format_written_row,
+        format_written_row, print_processing_progress,
     };
     use comfy_table::Color as TableColor;
+    use crossterm::style::Color;
     use nes_test_harness::AudioStats;
+
+    #[test]
+    fn print_processing_progress_writes_to_stdout_with_ansi() {
+        let mut buf = Vec::new();
+        print_processing_progress(&mut buf, "test_rom.nes", Color::Green);
+        let output = String::from_utf8(buf).expect("should output valid utf8");
+        assert!(output.contains("\r\x1B[2K"));
+        assert!(output.contains("test_rom.nes"));
+    }
+
+    #[test]
+    fn load_config_returns_default_when_no_path_provided() {
+        use super::load_config;
+        let result = load_config(None);
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn format_skipped_mapper_row_returns_correct_data() {
