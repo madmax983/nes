@@ -396,3 +396,52 @@ mod tests {
         assert_eq!(window.len(), CHR_WINDOW_BYTES);
     }
 }
+
+#[test]
+fn sync_chr_ram_from_ppu_window_updates_chr_data_for_writable_banks() {
+    let mut m = Mmc3::from_prg_chr(
+        vec![0x11; 4 * PRG_BANK_8K],
+        vec![], // Empty CHR ROM makes it CHR RAM
+        NametableMirroring::Horizontal,
+    );
+
+    assert!(m.chr_writable());
+
+    // Default layout:
+    // Bank 0 (2k) at 0x0000
+    // Bank 1 (2k) at 0x0800
+    // Bank 2 (1k) at 0x1000
+    // Bank 3 (1k) at 0x1400
+    // Bank 4 (1k) at 0x1800
+    // Bank 5 (1k) at 0x1C00
+    // Initial registers for these are mostly 0 or basic values from constructor.
+
+    // Grab current window, mutate it to simulate PPU write
+    let mut window = m.chr_window();
+
+    // Write to bank 2 mapped at 0x1000
+    window[0x1000] = 0xAA;
+    window[0x1001] = 0xBB;
+
+    // Write to bank 0 mapped at 0x0000 (which is a 2K bank split into two 1K banks)
+    window[0x0000] = 0xCC;
+
+    m.sync_chr_ram_from_ppu_window(&window);
+
+    // Since m.bank_registers[2] maps to CHR bank 4 according to new constructor (0, 2, 4, 5, 0, 0, 0, 1)
+    // Wait, let's just re-read the window and see if the writes persisted
+    let window2 = m.chr_window();
+    assert_eq!(window2[0x1000], 0xAA);
+    assert_eq!(window2[0x1001], 0xBB);
+    assert_eq!(window2[0x0000], 0xCC);
+
+    // Change inversion to hit the other branch
+    m.write_prg(0x8000, 0x80); // Set bit 7 for CHR inversion
+    let mut window3 = m.chr_window();
+    // Now Bank 0 (2k) is at 0x1000. Write something there
+    window3[0x1000] = 0xDD;
+    m.sync_chr_ram_from_ppu_window(&window3);
+
+    let window4 = m.chr_window();
+    assert_eq!(window4[0x1000], 0xDD);
+}
