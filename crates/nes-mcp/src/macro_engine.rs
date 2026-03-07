@@ -1,6 +1,17 @@
+//! A lightweight scripting engine for programmatic emulator control.
+//!
+//! The macro engine allows users to write simple, line-based text scripts to
+//! deterministically drive the emulator's inputs and execution frames. This is
+//! useful for automating repetitive tasks, creating save states at precise
+//! moments, or testing specific gameplay sequences.
+
 use nes_core::{Button, Command, NesCore};
 
-/// Executes a simple line-based macro script on the given NesCore.
+/// Executes a simple line-based macro script on the given [`NesCore`].
+///
+/// Scripts are executed synchronously and block until the entire sequence
+/// completes. This is useful for fast-forwarding the emulator state deterministically
+/// without manual user interaction.
 ///
 /// Supported commands:
 /// - `WAIT <frames>`: Steps the emulator for the given number of frames.
@@ -8,7 +19,37 @@ use nes_core::{Button, Command, NesCore};
 /// - `RELEASE <button>`: Releases the given controller button.
 /// - `RESET`: Resets the emulator.
 ///
-/// Empty lines and lines starting with `#` or `//` are ignored.
+/// Empty lines and lines starting with `#` or `//` are ignored. Trailing text on
+/// a line after a valid command is also ignored.
+///
+/// ## Errors
+///
+/// Returns an error if:
+/// - A command is not recognized.
+/// - A command is missing required arguments (e.g. `WAIT` without a frame count).
+/// - An invalid frame count or button name is provided.
+/// - The underlying [`NesCore`] fails to execute a command.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::NesCore;
+/// use nes_mcp::macro_engine::execute_macro_script;
+///
+/// let mut core = NesCore::new();
+/// // In a real scenario, you'd load a ROM first:
+/// // core.load_ines_rom(&rom_bytes).unwrap();
+///
+/// let script = "
+/// WAIT 10
+/// PRESS Start
+/// WAIT 1
+/// RELEASE Start
+/// ";
+///
+/// let frames_elapsed = execute_macro_script(&mut core, script).unwrap();
+/// assert_eq!(frames_elapsed, 11);
+/// ```
 pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, String> {
     let mut frames_elapsed = 0;
 

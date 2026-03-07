@@ -1,3 +1,11 @@
+//! Manages shared audio and video output state for the MCP server.
+//!
+//! Because the emulator generates full 256x240 RGBA frames (~245KB each) and
+//! audio samples 60 times a second, copying these buffers for every single JSON
+//! RPC query would cause severe memory pressure. This module uses `Arc` wrapped
+//! data structures to allow multiple readers to hold references to the latest
+//! output chunk without needing to deep-copy the underlying arrays.
+
 use std::cmp;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -7,16 +15,23 @@ const DEFAULT_WIDTH: u32 = FRAME_WIDTH as u32;
 const DEFAULT_HEIGHT: u32 = FRAME_HEIGHT as u32;
 const DEFAULT_AUDIO_SAMPLE_COUNT: usize = AUDIO_CHUNK_SAMPLES;
 
+/// Current metadata snapshot of the publisher's output state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OutputMetadata {
+    /// Incremented each time a new frame is published.
     pub frame_seq: u64,
+    /// Incremented each time a new audio chunk is published.
     pub audio_seq: u64,
+    /// The width of the current published frame.
     pub width: u32,
+    /// The height of the current published frame.
     pub height: u32,
 }
 
+/// A reference-counted video frame snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameChunk {
+    /// The sequence number of this frame.
     pub seq: u64,
     /// We use `Arc<Vec<u8>>` instead of `Vec<u8>` here to allow the MCP engine to
     /// share a single read-only view of the framebuffer across threads without
@@ -24,8 +39,10 @@ pub struct FrameChunk {
     pub rgba: Arc<Vec<u8>>,
 }
 
+/// A reference-counted block of audio samples.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudioChunk {
+    /// The sequence number of this audio chunk.
     pub seq: u64,
     /// We use `Arc<Vec<i16>>` to share audio samples safely without incurring
     /// per-query memory allocations or deep `.clone()` operations on the hot path.
@@ -67,11 +84,38 @@ fn output_state() -> &'static Mutex<OutputState> {
     })
 }
 
+/// Returns the current metadata for available frame and audio chunks.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::latest_output_metadata;
+///
+/// let meta = latest_output_metadata();
+/// assert_eq!(meta.width, 256);
+/// assert_eq!(meta.height, 240);
+/// ```
 #[must_use]
 pub fn latest_output_metadata() -> OutputMetadata {
     output_state().lock().expect("output state lock").metadata()
 }
 
+/// Updates the globally shared output state with a new video frame.
+///
+/// This increments the internal `frame_seq` counter and wraps the payload
+/// in an `Arc` for lock-free reader access.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::{publish_frame, latest_output_metadata};
+///
+/// let empty_frame = vec![0; 256 * 240 * 4];
+/// publish_frame(256, 240, empty_frame);
+///
+/// let meta = latest_output_metadata();
+/// assert!(meta.frame_seq > 0);
+/// ```
 pub fn publish_frame(width: u32, height: u32, rgba: Vec<u8>) {
     let Some(expected_len) = expected_frame_len(width, height) else {
         return;
@@ -87,12 +131,42 @@ pub fn publish_frame(width: u32, height: u32, rgba: Vec<u8>) {
     state.frame_rgba = Arc::new(rgba);
 }
 
+/// Updates the globally shared output state with a new audio chunk.
+///
+/// This increments the internal `audio_seq` counter and wraps the samples
+/// in an `Arc` for lock-free reader access.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::{publish_audio, latest_output_metadata};
+///
+/// publish_audio(vec![0; 735]);
+///
+/// let meta = latest_output_metadata();
+/// assert!(meta.audio_seq > 0);
+/// ```
 pub fn publish_audio(samples: Vec<i16>) {
     let mut state = output_state().lock().expect("output state lock");
     state.audio_seq = state.audio_seq.saturating_add(1);
     state.audio_samples = Arc::new(samples);
 }
 
+/// Retrieves a reference-counted view of the requested frame sequence.
+///
+/// If the requested sequence is newer than the current sequence, the state
+/// acts as a fast-forward and clamps to the requested sequence to prevent
+/// future drift on the client side.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::{frame_chunk, publish_frame};
+///
+/// publish_frame(256, 240, vec![0; 256 * 240 * 4]);
+/// let chunk = frame_chunk(1).unwrap();
+/// assert_eq!(chunk.rgba.len(), 256 * 240 * 4);
+/// ```
 #[must_use]
 pub fn frame_chunk(requested_seq: u64) -> Option<FrameChunk> {
     let mut state = output_state().lock().expect("output state lock");
@@ -104,6 +178,21 @@ pub fn frame_chunk(requested_seq: u64) -> Option<FrameChunk> {
     })
 }
 
+/// Retrieves a reference-counted view of the requested audio sequence.
+///
+/// If the requested sequence is newer than the current sequence, the state
+/// acts as a fast-forward and clamps to the requested sequence to prevent
+/// future drift on the client side.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::{audio_chunk, publish_audio};
+///
+/// publish_audio(vec![0; 735]);
+/// let chunk = audio_chunk(1).unwrap();
+/// assert_eq!(chunk.samples.len(), 735);
+/// ```
 #[must_use]
 pub fn audio_chunk(requested_seq: u64) -> Option<AudioChunk> {
     let mut state = output_state().lock().expect("output state lock");
