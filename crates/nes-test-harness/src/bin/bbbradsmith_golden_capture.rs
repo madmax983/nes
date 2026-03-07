@@ -236,6 +236,39 @@ fn build_summary_table(rows: &[RowData]) -> Table {
     table
 }
 
+fn load_config(path: Option<&Path>) -> Result<NesConfig, String> {
+    match path {
+        Some(config_path) => NesConfig::load(config_path),
+        None => NesConfig::load_or_default(None),
+    }
+}
+
+fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut roms = Vec::new();
+    for entry in fs::read_dir(suite_dir).map_err(|err| {
+        format!(
+            "failed to read suite directory '{}': {err}",
+            suite_dir.display()
+        )
+    })? {
+        let entry = entry.map_err(|err| {
+            format!(
+                "failed to inspect directory entry in '{}': {err}",
+                suite_dir.display()
+            )
+        })?;
+        let path = entry.path();
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("nes"))
+        {
+            roms.push(path);
+        }
+    }
+    Ok(roms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -319,37 +352,4 @@ mod tests {
         assert!(output.contains("Skip (Mapper)"));
         assert!(output.contains("255"));
     }
-}
-
-fn load_config(path: Option<&Path>) -> Result<NesConfig, String> {
-    match path {
-        Some(config_path) => NesConfig::load(config_path),
-        None => NesConfig::load_or_default(None),
-    }
-}
-
-fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut roms = Vec::new();
-    for entry in fs::read_dir(suite_dir).map_err(|err| {
-        format!(
-            "failed to read suite directory '{}': {err}",
-            suite_dir.display()
-        )
-    })? {
-        let entry = entry.map_err(|err| {
-            format!(
-                "failed to inspect directory entry in '{}': {err}",
-                suite_dir.display()
-            )
-        })?;
-        let path = entry.path();
-        if path.is_file()
-            && path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("nes"))
-        {
-            roms.push(path);
-        }
-    }
-    Ok(roms)
 }
