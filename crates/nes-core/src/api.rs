@@ -260,6 +260,12 @@ impl LoadedMapper {
             mapper.on_ppu_dot(scanline, dot, rendering_enabled);
         }
     }
+
+    fn sync_chr_ram_from_ppu_window(&mut self, window: &[u8; CHR_8K_BYTES]) {
+        if let Self::Mmc3(mapper) = self {
+            mapper.sync_chr_ram_from_ppu_window(window);
+        }
+    }
 }
 
 /// The central NES emulator state machine.
@@ -1091,6 +1097,11 @@ impl NesCore {
 
     fn apply_cpu_writes(&mut self, writes: &[CpuWrite]) {
         let remap_needed = if let Some(mapper) = self.mapper.as_mut() {
+            if writes.iter().any(|write| write.addr >= 0x8000) {
+                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+                let chr_window = self.ppu.chr_window_snapshot();
+                mapper.sync_chr_ram_from_ppu_window(&chr_window);
+            }
             let mut wrote_prg = false;
             for write in writes {
                 if write.addr >= 0x8000 {

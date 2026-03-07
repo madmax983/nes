@@ -6,9 +6,9 @@ const CHR_WINDOW_BYTES: usize = 8 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Mapper 66 (GxROM): switchable 32KB PRG bank and switchable 8KB CHR bank.
 pub struct Gxrom {
-    prg_bank_count: u8,
+    prg_bank_count: usize,
     selected_prg_bank: u8,
-    chr_bank_count: u8,
+    chr_bank_count: usize,
     selected_chr_bank: u8,
     prg_rom: Vec<u8>,
     chr_data: Vec<u8>,
@@ -19,19 +19,37 @@ impl Gxrom {
     /// Builds GxROM from raw PRG/CHR data.
     ///
     /// Empty CHR initializes one writable 8KB CHR-RAM window.
+    ///
+    /// Inputs are normalized to avoid panics in mapper operations:
+    /// - PRG is zero-padded to at least one 32KB bank and rounded up to a full bank.
+    /// - Non-empty CHR is rounded up to a full 8KB window.
     #[must_use]
-    pub fn from_prg_chr(prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
-        let (chr_data, chr_writable) = if chr_rom.is_empty() {
+    pub fn from_prg_chr(mut prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
+        if prg_rom.len() < PRG_BANK_32K {
+            prg_rom.resize(PRG_BANK_32K, 0);
+        }
+        let prg_remainder = prg_rom.len() % PRG_BANK_32K;
+        if prg_remainder != 0 {
+            prg_rom.resize(prg_rom.len() + (PRG_BANK_32K - prg_remainder), 0);
+        }
+
+        let (mut chr_data, chr_writable) = if chr_rom.is_empty() {
             (vec![0_u8; CHR_WINDOW_BYTES], true)
         } else {
             (chr_rom, false)
         };
-        let prg_bank_count = (prg_rom.len() / PRG_BANK_32K) as u8;
-        let chr_bank_count = (chr_data.len() / CHR_WINDOW_BYTES) as u8;
+        let chr_remainder = chr_data.len() % CHR_WINDOW_BYTES;
+        if chr_remainder != 0 {
+            chr_data.resize(chr_data.len() + (CHR_WINDOW_BYTES - chr_remainder), 0);
+        }
+
+        let prg_bank_count = (prg_rom.len() / PRG_BANK_32K).max(1);
+        let chr_bank_count = (chr_data.len() / CHR_WINDOW_BYTES).max(1);
+
         Self {
-            prg_bank_count: prg_bank_count.max(1),
+            prg_bank_count,
             selected_prg_bank: 0,
-            chr_bank_count: chr_bank_count.max(1),
+            chr_bank_count,
             selected_chr_bank: 0,
             prg_rom,
             chr_data,
@@ -57,7 +75,9 @@ impl Gxrom {
         let mut window = [0_u8; CHR_WINDOW_BYTES];
         let start = usize::from(self.selected_chr_bank) * CHR_WINDOW_BYTES;
         let end = start + CHR_WINDOW_BYTES;
-        window.copy_from_slice(&self.chr_data[start..end]);
+        if let Some(mapped_window) = self.chr_data.get(start..end) {
+            window.copy_from_slice(mapped_window);
+        }
         window
     }
 
@@ -85,15 +105,15 @@ impl Gxrom {
 
 impl Mapper for Gxrom {
     fn read_prg(&self, addr: u16) -> u8 {
-        let within_bank = (usize::from(addr) - 0x8000) & 0x7FFF;
+        let within_bank = usize::from(addr) & 0x7FFF;
         let offset = self.prg_bank_offset(self.selected_prg_bank) + within_bank;
         self.prg_rom[offset]
     }
 
     fn write_prg(&mut self, _addr: u16, value: u8) {
-        let prg_select = (value >> 4) & 0x03;
-        let chr_select = value & 0x03;
-        self.selected_prg_bank = prg_select % self.prg_bank_count;
-        self.selected_chr_bank = chr_select % self.chr_bank_count;
+        let prg_select = usize::from((value >> 4) & 0x03);
+        let chr_select = usize::from(value & 0x03);
+        self.selected_prg_bank = (prg_select % self.prg_bank_count) as u8;
+        self.selected_chr_bank = (chr_select % self.chr_bank_count) as u8;
     }
 }

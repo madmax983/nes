@@ -67,19 +67,39 @@ impl Mmc3 {
 
     /// Builds MMC3 from raw ROM metadata.
     #[must_use]
-    pub fn from_prg_chr(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: NametableMirroring) -> Self {
+    pub fn from_prg_chr(
+        mut prg_rom: Vec<u8>,
+        chr_rom: Vec<u8>,
+        mirroring: NametableMirroring,
+    ) -> Self {
+        let min_prg_bytes = 4 * PRG_BANK_8K;
+        if prg_rom.len() < min_prg_bytes {
+            prg_rom.resize(min_prg_bytes, 0);
+        }
+        let prg_remainder = prg_rom.len() % PRG_BANK_8K;
+        if prg_remainder != 0 {
+            prg_rom.resize(prg_rom.len() + (PRG_BANK_8K - prg_remainder), 0);
+        }
         let prg_bank_count_8k = (prg_rom.len() / PRG_BANK_8K) as u8;
-        let (chr_data, chr_writable) = if chr_rom.is_empty() {
+
+        let (mut chr_data, chr_writable) = if chr_rom.is_empty() {
             (vec![0_u8; CHR_WINDOW_BYTES], true)
         } else {
             (chr_rom, false)
         };
+        if chr_data.len() < CHR_WINDOW_BYTES {
+            chr_data.resize(CHR_WINDOW_BYTES, 0);
+        }
+        let chr_remainder = chr_data.len() % CHR_BANK_1K;
+        if chr_remainder != 0 {
+            chr_data.resize(chr_data.len() + (CHR_BANK_1K - chr_remainder), 0);
+        }
         let chr_bank_count_1k = (chr_data.len() / CHR_BANK_1K) as u16;
 
         Self {
-            prg_bank_count_8k: prg_bank_count_8k.max(4),
+            prg_bank_count_8k,
             prg_rom,
-            chr_bank_count_1k: chr_bank_count_1k.max(8),
+            chr_bank_count_1k,
             chr_data,
             chr_writable,
             bank_select: 0,
@@ -167,6 +187,42 @@ impl Mmc3 {
         self.copy_chr_1k_bank(even.wrapping_add(1), dst_offset + CHR_BANK_1K, dst);
     }
 
+    fn queue_chr_1k_update(
+        &self,
+        bank: u8,
+        src_offset: usize,
+        window: &[u8; CHR_WINDOW_BYTES],
+        old_chr: &[u8],
+        planned_offsets: &mut [Option<usize>],
+    ) {
+        let bank_index = usize::from(self.normalize_chr_bank(bank));
+        let dst_start = bank_index * CHR_BANK_1K;
+        let dst_end = dst_start + CHR_BANK_1K;
+        let src_slice = &window[src_offset..src_offset + CHR_BANK_1K];
+        if src_slice != &old_chr[dst_start..dst_end] {
+            planned_offsets[bank_index] = Some(src_offset);
+        }
+    }
+
+    fn queue_chr_2k_update(
+        &self,
+        bank: u8,
+        src_offset: usize,
+        window: &[u8; CHR_WINDOW_BYTES],
+        old_chr: &[u8],
+        planned_offsets: &mut [Option<usize>],
+    ) {
+        let even = bank & !1;
+        self.queue_chr_1k_update(even, src_offset, window, old_chr, planned_offsets);
+        self.queue_chr_1k_update(
+            even.wrapping_add(1),
+            src_offset + CHR_BANK_1K,
+            window,
+            old_chr,
+            planned_offsets,
+        );
+    }
+
     /// Returns the currently mapped 8KB CHR window.
     #[must_use]
     pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
@@ -193,6 +249,113 @@ impl Mmc3 {
     #[must_use]
     pub fn chr_writable(&self) -> bool {
         self.chr_writable
+    }
+
+    /// Synchronizes writable CHR-RAM from the currently visible PPU CHR window.
+    pub fn sync_chr_ram_from_ppu_window(&mut self, window: &[u8; CHR_WINDOW_BYTES]) {
+        if !self.chr_writable {
+            return;
+        }
+
+        let old_chr = self.chr_data.clone();
+        let mut planned_offsets = vec![None; usize::from(self.chr_bank_count_1k.max(1))];
+
+        if self.chr_inversion() {
+            self.queue_chr_1k_update(
+                self.bank_registers[2],
+                0x0000,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[3],
+                0x0400,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[4],
+                0x0800,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[5],
+                0x0C00,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_2k_update(
+                self.bank_registers[0],
+                0x1000,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_2k_update(
+                self.bank_registers[1],
+                0x1800,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+        } else {
+            self.queue_chr_2k_update(
+                self.bank_registers[0],
+                0x0000,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_2k_update(
+                self.bank_registers[1],
+                0x0800,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[2],
+                0x1000,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[3],
+                0x1400,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[4],
+                0x1800,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+            self.queue_chr_1k_update(
+                self.bank_registers[5],
+                0x1C00,
+                window,
+                &old_chr,
+                &mut planned_offsets,
+            );
+        }
+
+        for (bank_index, src_offset) in planned_offsets.into_iter().enumerate() {
+            if let Some(src_offset) = src_offset {
+                let dst_start = bank_index * CHR_BANK_1K;
+                let dst_end = dst_start + CHR_BANK_1K;
+                self.chr_data[dst_start..dst_end]
+                    .copy_from_slice(&window[src_offset..src_offset + CHR_BANK_1K]);
+            }
+        }
     }
 
     /// Returns current nametable mirroring mode controlled by MMC3.
@@ -288,5 +451,24 @@ impl Mapper for Mmc3 {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_prg_chr_short_inputs_do_not_panic_on_reads() {
+        let m = Mmc3::from_prg_chr(
+            vec![0x11; PRG_BANK_8K + 17],
+            vec![0x22; (4 * CHR_BANK_1K) + 9],
+            NametableMirroring::Horizontal,
+        );
+
+        let _ = m.read_prg(0x8000);
+        let _ = m.read_prg(0xE000);
+        let window = m.chr_window();
+        assert_eq!(window.len(), CHR_WINDOW_BYTES);
     }
 }

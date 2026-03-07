@@ -1,5 +1,8 @@
 use super::Mapper;
 
+const PRG_16K_BYTES: usize = 16 * 1024;
+const PRG_32K_BYTES: usize = 32 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Mapper 0 (NROM): fixed PRG mapping with optional 16K mirroring.
 pub struct Nrom {
@@ -20,8 +23,20 @@ impl Nrom {
     }
 
     /// Builds NROM from raw PRG ROM bytes.
+    ///
+    /// Input is normalized to hardware-sized PRG windows:
+    /// - `0..=16KB` becomes a 16KB NROM-128 image (zero-padded).
+    /// - `16KB+1..=32KB` becomes a 32KB NROM-256 image (zero-padded).
+    /// - `>32KB` is truncated to 32KB.
     #[must_use]
-    pub fn from_prg_rom(prg_rom: Vec<u8>) -> Self {
+    pub fn from_prg_rom(mut prg_rom: Vec<u8>) -> Self {
+        if prg_rom.len() <= PRG_16K_BYTES {
+            prg_rom.resize(PRG_16K_BYTES, 0);
+        } else if prg_rom.len() <= PRG_32K_BYTES {
+            prg_rom.resize(PRG_32K_BYTES, 0);
+        } else {
+            prg_rom.truncate(PRG_32K_BYTES);
+        }
         Self { prg_rom }
     }
 

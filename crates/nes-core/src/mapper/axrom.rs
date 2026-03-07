@@ -15,8 +15,14 @@ pub struct Axrom {
 
 impl Axrom {
     /// Builds AxROM from raw PRG ROM bytes.
+    ///
+    /// If fewer than 32KB are provided, the bank is zero-padded so reads stay
+    /// in-bounds across the full `$8000..=$FFFF` PRG window.
     #[must_use]
-    pub fn from_prg_rom(prg_rom: Vec<u8>) -> Self {
+    pub fn from_prg_rom(mut prg_rom: Vec<u8>) -> Self {
+        if prg_rom.len() < PRG_BANK_32K {
+            prg_rom.resize(PRG_BANK_32K, 0);
+        }
         let bank_count = (prg_rom.len() / PRG_BANK_32K) as u8;
         Self {
             bank_count: bank_count.max(1),
@@ -68,7 +74,7 @@ impl Axrom {
 
 impl Mapper for Axrom {
     fn read_prg(&self, addr: u16) -> u8 {
-        let within_bank = (usize::from(addr) - 0x8000) & 0x7FFF;
+        let within_bank = usize::from(addr) & 0x7FFF;
         let offset = self.bank_offset(self.selected_bank) + within_bank;
         self.prg_rom[offset]
     }

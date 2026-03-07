@@ -1,10 +1,12 @@
 use super::Mapper;
 
+const PRG_BANK_BYTES: usize = 16 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Mapper 2 (UxROM): switchable lower 16K bank + fixed upper 16K bank.
 pub struct Uxrom {
-    bank_count: u8,
-    selected_bank: u8,
+    bank_count: usize,
+    selected_bank: usize,
     prg_rom: Vec<u8>,
 }
 
@@ -12,8 +14,8 @@ impl Uxrom {
     /// Creates a synthetic mapper instance with the requested PRG bank count.
     #[must_use]
     pub fn new(bank_count: u8) -> Self {
-        let effective_bank_count = bank_count.max(1);
-        let mut prg_rom = vec![0_u8; effective_bank_count as usize * 16 * 1024];
+        let effective_bank_count = usize::from(bank_count.max(1));
+        let mut prg_rom = vec![0_u8; effective_bank_count * PRG_BANK_BYTES];
         for (idx, byte) in prg_rom.iter_mut().enumerate() {
             *byte = (idx & 0xFF) as u8;
         }
@@ -27,10 +29,17 @@ impl Uxrom {
 
     /// Builds UxROM from raw PRG ROM bytes.
     #[must_use]
-    pub fn from_prg_rom(prg_rom: Vec<u8>) -> Self {
-        let bank_count = (prg_rom.len() / (16 * 1024)) as u8;
+    pub fn from_prg_rom(mut prg_rom: Vec<u8>) -> Self {
+        if prg_rom.is_empty() {
+            prg_rom.resize(PRG_BANK_BYTES, 0);
+        }
+        let remainder = prg_rom.len() % PRG_BANK_BYTES;
+        if remainder != 0 {
+            prg_rom.resize(prg_rom.len() + (PRG_BANK_BYTES - remainder), 0);
+        }
+        let bank_count = (prg_rom.len() / PRG_BANK_BYTES).max(1);
         Self {
-            bank_count: bank_count.max(1),
+            bank_count,
             selected_bank: 0,
             prg_rom,
         }
@@ -39,7 +48,7 @@ impl Uxrom {
     /// Returns the currently selected switchable bank.
     #[must_use]
     pub fn selected_bank(&self) -> u8 {
-        self.selected_bank
+        self.selected_bank as u8
     }
 
     /// Reads PRG byte through UxROM bank mapping.
@@ -53,15 +62,15 @@ impl Uxrom {
         <Self as Mapper>::write_prg(self, addr, value);
     }
 
-    fn bank_offset(&self, bank: u8) -> usize {
-        bank as usize * 16 * 1024
+    fn bank_offset(&self, bank: usize) -> usize {
+        bank * PRG_BANK_BYTES
     }
 
-    fn last_bank(&self) -> u8 {
+    fn last_bank(&self) -> usize {
         self.bank_count - 1
     }
 
-    fn read_bank(&self, bank: u8, addr: u16) -> u8 {
+    fn read_bank(&self, bank: usize, addr: u16) -> u8 {
         let within_bank = (addr as usize) & 0x3FFF;
         self.prg_rom[self.bank_offset(bank) + within_bank]
     }
@@ -77,6 +86,6 @@ impl Mapper for Uxrom {
     }
 
     fn write_prg(&mut self, _addr: u16, value: u8) {
-        self.selected_bank = value % self.bank_count;
+        self.selected_bank = usize::from(value) % self.bank_count;
     }
 }

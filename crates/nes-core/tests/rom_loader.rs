@@ -332,6 +332,28 @@ fn mmc3_bank_switch_via_prg_writes_changes_lower_8k_window() {
 }
 
 #[test]
+fn mmc3_chr_ram_writes_survive_mapper_register_writes() {
+    let mut rom = sample_ines(4, 4); // Mapper 4 with CHR-RAM.
+    let prg_start = 16;
+    let last_bank = prg_start + (7 * 8 * 1024);
+    rom[last_bank + 0x1FFC] = 0x00;
+    rom[last_bank + 0x1FFD] = 0xE0;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    // Write CHR-RAM[0x0000] = 0x5A via CPU-visible PPU registers.
+    core.write_cpu_bus(0x2006, 0x00);
+    core.write_cpu_bus(0x2006, 0x00);
+    core.write_cpu_bus(0x2007, 0x5A);
+    assert_eq!(core.save_state().ppu.chr[0x0000], 0x5A);
+
+    // Mapper write triggers remap/sync; CHR-RAM content must persist.
+    core.write_cpu_bus(0x8000, 0x06);
+    assert_eq!(core.save_state().ppu.chr[0x0000], 0x5A);
+}
+
+#[test]
 fn load_axrom_maps_initial_32k_bank_for_boot() {
     let mut rom = sample_ines(7, 4); // 64KB PRG => two 32KB banks.
     let prg_start = 16;

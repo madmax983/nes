@@ -6,7 +6,7 @@ use super::Mapper;
 /// This implementation focuses on the 5-bit serial shift register protocol
 /// and PRG banking behavior needed for current compatibility targets.
 pub struct Mmc1 {
-    prg_bank_count: u8,
+    prg_bank_count: usize,
     _chr_bank_count: u8,
     control: u8,
     shift_register: u8,
@@ -16,14 +16,15 @@ pub struct Mmc1 {
 }
 
 impl Mmc1 {
+    const PRG_BANK_BYTES: usize = 16 * 1024;
     const SHIFT_RESET: u8 = 0x10;
     const CONTROL_RESET: u8 = 0x0C;
 
     /// Creates a synthetic MMC1 instance for tests.
     #[must_use]
     pub fn new(prg_bank_count: u8, chr_bank_count: u8) -> Self {
-        let effective_prg_banks = prg_bank_count.max(1);
-        let prg_rom = vec![0_u8; effective_prg_banks as usize * 16 * 1024];
+        let effective_prg_banks = usize::from(prg_bank_count.max(1));
+        let prg_rom = vec![0_u8; effective_prg_banks * Self::PRG_BANK_BYTES];
 
         Self {
             prg_bank_count: effective_prg_banks,
@@ -39,9 +40,9 @@ impl Mmc1 {
     /// Builds MMC1 from PRG ROM bytes and CHR bank metadata.
     #[must_use]
     pub fn from_prg_rom(prg_rom: Vec<u8>, chr_bank_count: u8) -> Self {
-        let prg_bank_count = (prg_rom.len() / (16 * 1024)) as u8;
+        let (prg_rom, prg_bank_count) = Self::normalize_prg_rom(prg_rom);
         Self {
-            prg_bank_count: prg_bank_count.max(1),
+            prg_bank_count,
             _chr_bank_count: chr_bank_count.max(1),
             control: Self::CONTROL_RESET,
             shift_register: Self::SHIFT_RESET,
@@ -74,6 +75,18 @@ impl Mmc1 {
         <Self as Mapper>::write_prg(self, addr, value);
     }
 
+    fn normalize_prg_rom(mut prg_rom: Vec<u8>) -> (Vec<u8>, usize) {
+        if prg_rom.is_empty() {
+            prg_rom.resize(Self::PRG_BANK_BYTES, 0);
+        }
+        let remainder = prg_rom.len() % Self::PRG_BANK_BYTES;
+        if remainder != 0 {
+            prg_rom.resize(prg_rom.len() + (Self::PRG_BANK_BYTES - remainder), 0);
+        }
+        let prg_bank_count = (prg_rom.len() / Self::PRG_BANK_BYTES).max(1);
+        (prg_rom, prg_bank_count)
+    }
+
     fn reset_shift(&mut self) {
         self.shift_register = Self::SHIFT_RESET;
         self.shift_count = 0;
@@ -99,11 +112,11 @@ impl Mmc1 {
         self.shift_count = self.shift_count.saturating_add(1);
     }
 
-    fn bank_offset(&self, bank: u8) -> usize {
-        bank as usize * 16 * 1024
+    fn bank_offset(&self, bank: usize) -> usize {
+        bank * Self::PRG_BANK_BYTES
     }
 
-    fn read_bank(&self, bank: u8, addr: u16) -> u8 {
+    fn read_bank(&self, bank: usize, addr: u16) -> u8 {
         let within_bank = (addr as usize) & 0x3FFF;
         self.prg_rom[self.bank_offset(bank) + within_bank]
     }
@@ -113,15 +126,15 @@ impl Mapper for Mmc1 {
     fn read_prg(&self, addr: u16) -> u8 {
         let bank_count = self.prg_bank_count.max(1);
         let prg_mode = (self.control >> 2) & 0b11;
-        let selected = self.selected_prg_bank % bank_count;
+        let selected = usize::from(self.selected_prg_bank) % bank_count;
 
         let bank = match prg_mode {
             0 | 1 => {
-                let lower = (selected & 0xFE) % bank_count;
+                let lower = (selected & !1) % bank_count;
                 if addr < 0xC000 {
                     lower
                 } else {
-                    lower.wrapping_add(1) % bank_count
+                    (lower + 1) % bank_count
                 }
             }
             2 => {
@@ -359,6 +372,8 @@ mod tests {
         let m2 = Mmc1::from_prg_rom(vec![], 0);
         assert_eq!(m2.prg_bank_count, 1);
         assert_eq!(m2._chr_bank_count, 1);
+        assert_eq!(m2.prg_rom.len(), 16 * 1024);
+        assert_eq!(m2.read_prg(0x8000), 0);
     }
 
     #[test]
@@ -374,5 +389,30 @@ mod tests {
         assert!(m.shift_is_reset());
         assert_eq!(m.shift_count, 0);
         assert_eq!(m.control & Mmc1::CONTROL_RESET, Mmc1::CONTROL_RESET);
+    }
+
+    #[test]
+    fn mmc1_from_prg_rom_pads_partial_bank_and_reads_without_panic() {
+        let mut prg_rom = vec![0_u8; 123];
+        prg_rom[0] = 0xAB;
+        let m = Mmc1::from_prg_rom(prg_rom, 1);
+        assert_eq!(m.prg_bank_count, 1);
+        assert_eq!(m.prg_rom.len(), 16 * 1024);
+        assert_eq!(m.read_prg(0x8000), 0xAB);
+        assert_eq!(m.read_prg(0xBFFF), 0x00);
+    }
+
+    #[test]
+    fn mmc1_from_prg_rom_preserves_large_bank_count_without_u8_wrap() {
+        let bank_bytes = 16 * 1024;
+        let bank_count = 257_usize;
+        let mut prg_rom = vec![0_u8; bank_count * bank_bytes];
+        prg_rom[0] = 0x11;
+        prg_rom[bank_bytes * (bank_count - 1)] = 0xEE;
+
+        let m = Mmc1::from_prg_rom(prg_rom, 1);
+        assert_eq!(m.prg_bank_count, bank_count);
+        assert_eq!(m.read_prg(0x8000), 0x11);
+        assert_eq!(m.read_prg(0xC000), 0xEE);
     }
 }

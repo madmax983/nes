@@ -576,6 +576,12 @@ impl Ppu {
         self.rendering_enabled()
     }
 
+    /// Returns a copy of the active 8KB CHR window.
+    #[must_use]
+    pub fn chr_window_snapshot(&self) -> [u8; CHR_BYTES] {
+        self.chr
+    }
+
     fn render_pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
         let (bg_palette_color, bg_opaque) = self.background_palette_index(x, y);
         let sprite = self.sprite_palette_index(x, y, bg_opaque);

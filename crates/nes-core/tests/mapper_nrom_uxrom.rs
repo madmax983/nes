@@ -27,10 +27,13 @@ fn nrom_reads_from_prg_rom() {
     assert_eq!(m.read_prg(0x8000), 0);
     assert_eq!(m.read_prg(0xFFFF), 0xFF);
 
-    // Test that the PRG bounds wrap around
+    // `from_prg_rom` now normalizes short inputs to a 16KB PRG image.
+    // With a single-byte input, only the first byte is `0x42`; the rest is zero.
     let m_small = Nrom::from_prg_rom(vec![0x42]);
     assert_eq!(m_small.read_prg(0x8000), 0x42);
-    assert_eq!(m_small.read_prg(0xFFFF), 0x42);
+    assert_eq!(m_small.read_prg(0x8001), 0x00);
+    assert_eq!(m_small.read_prg(0xC000), 0x42);
+    assert_eq!(m_small.read_prg(0xFFFF), 0x00);
 }
 
 #[test]
@@ -77,4 +80,33 @@ fn uxrom_boundary_read() {
     // 0xC000 should map to upper bank (Bank 3, offset 49152)
     // Within bank offset is 0
     assert_eq!(m.read_prg(0xC000), (49152 & 0xFF) as u8);
+}
+
+#[test]
+fn uxrom_from_prg_rom_empty_is_readable() {
+    let m = Uxrom::from_prg_rom(vec![]);
+    assert_eq!(m.read_prg(0x8000), 0);
+    assert_eq!(m.read_prg(0xBFFF), 0);
+    assert_eq!(m.read_prg(0xC000), 0);
+}
+
+#[test]
+fn uxrom_from_prg_rom_partial_bank_is_padded() {
+    let m = Uxrom::from_prg_rom(vec![0xAB]);
+    assert_eq!(m.read_prg(0x8000), 0xAB);
+    assert_eq!(m.read_prg(0xBFFF), 0x00);
+    assert_eq!(m.read_prg(0xC000), 0xAB);
+}
+
+#[test]
+fn uxrom_from_prg_rom_preserves_large_bank_count_without_u8_wrap() {
+    let bank_bytes = 16 * 1024;
+    let bank_count = 257_usize;
+    let mut prg_rom = vec![0_u8; bank_count * bank_bytes];
+    prg_rom[0] = 0x11;
+    prg_rom[bank_bytes * (bank_count - 1)] = 0xEE;
+
+    let m = Uxrom::from_prg_rom(prg_rom);
+    assert_eq!(m.read_prg(0x8000), 0x11);
+    assert_eq!(m.read_prg(0xC000), 0xEE);
 }
