@@ -190,6 +190,57 @@ pub struct Ppu {
     render_ctrl: u8,
     render_capture_valid: bool,
     framebuffer: Vec<u8>,
+    render_revision: u64,
+    bg_tile_cache: BgTileCache,
+    sprite_scanline_cache: SpriteScanlineCache,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct BgTileCacheKey {
+    nametable_addr: u16,
+    pattern_base: u16,
+    fine_y: u8,
+    attr_addr: u16,
+    attr_shift: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct BgTileCache {
+    key: Option<BgTileCacheKey>,
+    plane0: u8,
+    plane1: u8,
+    palette_colors: [u8; 4],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct SpriteScanlineEntry {
+    x: u8,
+    behind_bg: bool,
+    colors: [u8; 8],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct SpriteScanlineCacheKey {
+    scanline: usize,
+    ctrl: u8,
+    render_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SpriteScanlineCache {
+    key: Option<SpriteScanlineCacheKey>,
+    len: usize,
+    entries: [SpriteScanlineEntry; 64],
+}
+
+impl Default for SpriteScanlineCache {
+    fn default() -> Self {
+        Self {
+            key: None,
+            len: 0,
+            entries: [SpriteScanlineEntry::default(); 64],
+        }
+    }
 }
 
 impl Ppu {
@@ -224,6 +275,9 @@ impl Ppu {
             render_ctrl: 0,
             render_capture_valid: false,
             framebuffer: blank_framebuffer(),
+            render_revision: 0,
+            bg_tile_cache: BgTileCache::default(),
+            sprite_scanline_cache: SpriteScanlineCache::default(),
         }
     }
 
@@ -235,6 +289,7 @@ impl Ppu {
         self.chr[..copy_len].copy_from_slice(&chr_rom[..copy_len]);
         self.chr_writable = chr_rom.is_empty();
         self.framebuffer = blank_framebuffer();
+        self.mark_render_state_dirty();
     }
 
     /// Updates mapped CHR window without resetting runtime PPU state.
@@ -243,11 +298,13 @@ impl Ppu {
         let copy_len = chr_window.len().min(CHR_BYTES);
         self.chr[..copy_len].copy_from_slice(&chr_window[..copy_len]);
         self.chr_writable = writable;
+        self.mark_render_state_dirty();
     }
 
     /// Updates current nametable mirroring mode.
     pub fn set_mirroring(&mut self, mirroring: NametableMirroring) {
         self.mirroring = mirroring;
+        self.mark_render_state_dirty();
     }
 
     /// Resets runtime state while retaining cartridge CHR mapping mode.
@@ -276,6 +333,9 @@ impl Ppu {
         self.render_ctrl = 0;
         self.render_capture_valid = false;
         self.framebuffer = blank_framebuffer();
+        self.render_revision = 0;
+        self.bg_tile_cache = BgTileCache::default();
+        self.sprite_scanline_cache = SpriteScanlineCache::default();
     }
 
     /// Restores full PPU state from snapshot.
@@ -307,6 +367,9 @@ impl Ppu {
         self.render_scroll_y = snapshot.render_scroll_y;
         self.render_ctrl = snapshot.render_ctrl;
         self.render_capture_valid = snapshot.render_capture_valid;
+        self.render_revision = 0;
+        self.bg_tile_cache = BgTileCache::default();
+        self.sprite_scanline_cache = SpriteScanlineCache::default();
         self.framebuffer = blank_framebuffer();
         self.render_full_framebuffer();
     }
@@ -410,9 +473,11 @@ impl Ppu {
                 if !nmi_before && nmi_after && self.status & STATUS_VBLANK != 0 {
                     self.nmi_pending = true;
                 }
+                self.mark_render_state_dirty();
             }
             0x2001 => {
                 self.mask = value;
+                self.mark_render_state_dirty();
             }
             0x2002 => {}
             0x2003 => {
@@ -421,6 +486,7 @@ impl Ppu {
             0x2004 => {
                 self.oam[self.oam_addr as usize] = value;
                 self.oam_addr = self.oam_addr.wrapping_add(1);
+                self.mark_render_state_dirty();
             }
             0x2005 => {
                 if !self.write_toggle {
@@ -434,6 +500,7 @@ impl Ppu {
                     self.temp_addr = (self.temp_addr & !0x7000) | (u16::from(value & 0x07) << 12);
                 }
                 self.write_toggle = !self.write_toggle;
+                self.mark_render_state_dirty();
             }
             0x2006 => {
                 if !self.write_toggle {
@@ -458,6 +525,7 @@ impl Ppu {
             self.oam[self.oam_addr as usize] = *byte;
             self.oam_addr = self.oam_addr.wrapping_add(1);
         }
+        self.mark_render_state_dirty();
     }
 
     /// Applies side-effects of reading `PPUSTATUS` (`$2002`).
@@ -568,6 +636,12 @@ impl Ppu {
     #[must_use]
     fn rendering_enabled(&self) -> bool {
         self.mask & RENDER_MASK_BITS != 0
+    }
+
+    fn mark_render_state_dirty(&mut self) {
+        self.render_revision = self.render_revision.wrapping_add(1);
+        self.bg_tile_cache = BgTileCache::default();
+        self.sprite_scanline_cache = SpriteScanlineCache::default();
     }
 
     /// Returns whether background or sprite rendering is currently enabled.
@@ -741,6 +815,228 @@ impl Ppu {
         None
     }
 
+    fn render_pixel_cached(&mut self, x: usize, y: usize) -> (u8, u8, u8) {
+        let universal = self.read_palette(0x3F00);
+        let (bg_palette_color, bg_opaque) = self.background_palette_index_cached(x, y);
+        let sprite = self.sprite_palette_index_cached(x, y, bg_opaque);
+
+        let palette_index = if let Some(sprite_color) = sprite {
+            sprite_color
+        } else if bg_opaque {
+            bg_palette_color
+        } else {
+            universal
+        };
+
+        NES_PALETTE_RGB[(palette_index & 0x3F) as usize]
+    }
+
+    fn background_palette_index_cached(&mut self, x: usize, y: usize) -> (u8, bool) {
+        if self.mask & MASK_SHOW_BG == 0 {
+            return (self.read_palette(0x3F00), false);
+        }
+        if x < 8 && self.mask & MASK_SHOW_BG_LEFT == 0 {
+            return (self.read_palette(0x3F00), false);
+        }
+
+        let base_nt = (self.ctrl & 0x03) as usize;
+        let base_nt_x = base_nt & 1;
+        let base_nt_y = (base_nt >> 1) & 1;
+
+        let world_x = (x + usize::from(self.scroll_x)) % 512;
+        let world_y = (y + usize::from(self.scroll_y)) % 480;
+        let nt_x = (base_nt_x + world_x / 256) & 1;
+        let nt_y = (base_nt_y + world_y / 240) & 1;
+        let table = (nt_y << 1) | nt_x;
+
+        let local_x = world_x % 256;
+        let local_y = world_y % 240;
+        let tile_x = local_x / 8;
+        let tile_y = local_y / 8;
+
+        let nametable_addr = 0x2000 + (table as u16 * 0x400) + (tile_y as u16 * 32) + tile_x as u16;
+        let pattern_base = if self.ctrl & CTRL_BG_TABLE_ADDR != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+        let fine_y = (local_y % 8) as u8;
+        let attr_addr =
+            0x23C0 + (table as u16 * 0x400) + ((tile_y as u16 / 4) * 8) + (tile_x as u16 / 4);
+        let quadrant_x = (tile_x % 4) / 2;
+        let quadrant_y = (tile_y % 4) / 2;
+        let attr_shift = ((quadrant_y * 2 + quadrant_x) * 2) as u8;
+        let key = BgTileCacheKey {
+            nametable_addr,
+            pattern_base,
+            fine_y,
+            attr_addr,
+            attr_shift,
+        };
+
+        if self.bg_tile_cache.key != Some(key) {
+            let tile_index = self.read_ppu_data(nametable_addr);
+            let pattern_addr = pattern_base + (u16::from(tile_index) * 16) + u16::from(fine_y);
+            let plane0 = self.read_ppu_data(pattern_addr);
+            let plane1 = self.read_ppu_data(pattern_addr + 8);
+            let attr = self.read_ppu_data(attr_addr);
+            let palette = (attr >> attr_shift) & 0x03;
+            let palette_base = 0x3F00 + (u16::from(palette) * 4);
+
+            self.bg_tile_cache.key = Some(key);
+            self.bg_tile_cache.plane0 = plane0;
+            self.bg_tile_cache.plane1 = plane1;
+            self.bg_tile_cache.palette_colors = [
+                self.read_palette(0x3F00),
+                self.read_palette(palette_base + 1),
+                self.read_palette(palette_base + 2),
+                self.read_palette(palette_base + 3),
+            ];
+        }
+
+        let bit = 7 - (local_x % 8) as u8;
+        let low = (self.bg_tile_cache.plane0 >> bit) & 1;
+        let high = (self.bg_tile_cache.plane1 >> bit) & 1;
+        let color = (high << 1) | low;
+        if color == 0 {
+            return (self.bg_tile_cache.palette_colors[0], false);
+        }
+
+        (self.bg_tile_cache.palette_colors[color as usize], true)
+    }
+
+    fn sprite_palette_index_cached(&mut self, x: usize, y: usize, bg_opaque: bool) -> Option<u8> {
+        if self.mask & MASK_SHOW_SPRITES == 0 {
+            return None;
+        }
+        if x < 8 && self.mask & MASK_SHOW_SPRITE_LEFT == 0 {
+            return None;
+        }
+
+        self.ensure_sprite_scanline_cache(y);
+        for sprite in self
+            .sprite_scanline_cache
+            .entries
+            .iter()
+            .take(self.sprite_scanline_cache.len)
+        {
+            let sprite_x = usize::from(sprite.x);
+            if x < sprite_x || x >= sprite_x + 8 {
+                continue;
+            }
+            let color = sprite.colors[x - sprite_x];
+            if color == 0 {
+                continue;
+            }
+            if sprite.behind_bg && bg_opaque {
+                continue;
+            }
+            return Some(color);
+        }
+
+        None
+    }
+
+    fn ensure_sprite_scanline_cache(&mut self, y: usize) {
+        let key = SpriteScanlineCacheKey {
+            scanline: y,
+            ctrl: self.ctrl,
+            render_revision: self.render_revision,
+        };
+        if self.sprite_scanline_cache.key == Some(key) {
+            return;
+        }
+
+        let mut entries = [SpriteScanlineEntry::default(); 64];
+        let mut len = 0usize;
+        for sprite_index in 0..64 {
+            if let Some(entry) = self.build_sprite_scanline_entry(sprite_index, y) {
+                entries[len] = entry;
+                len += 1;
+            }
+        }
+
+        self.sprite_scanline_cache.key = Some(key);
+        self.sprite_scanline_cache.len = len;
+        self.sprite_scanline_cache.entries = entries;
+    }
+
+    fn build_sprite_scanline_entry(
+        &self,
+        sprite_index: usize,
+        scanline: usize,
+    ) -> Option<SpriteScanlineEntry> {
+        let base = sprite_index * 4;
+        let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
+        let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
+            16
+        } else {
+            8
+        };
+        if scanline < sprite_y || scanline >= sprite_y + sprite_height {
+            return None;
+        }
+
+        let tile = self.oam[base + 1];
+        let attr = self.oam[base + 2];
+        let sprite_x = self.oam[base + 3];
+
+        let mut local_y = (scanline - sprite_y) as u8;
+        if attr & 0x80 != 0 {
+            local_y = (sprite_height as u8 - 1) - local_y;
+        }
+
+        let pattern_addr = if sprite_height == 16 {
+            let table = u16::from(tile & 1) * 0x1000;
+            let tile_top = u16::from(tile & 0xFE);
+            let tile_offset = u16::from(local_y / 8);
+            let row = u16::from(local_y % 8);
+            table + (tile_top + tile_offset) * 16 + row
+        } else {
+            let table = if self.ctrl & CTRL_SPRITE_TABLE_ADDR != 0 {
+                0x1000
+            } else {
+                0x0000
+            };
+            table + u16::from(tile) * 16 + u16::from(local_y)
+        };
+
+        let plane0 = self.read_ppu_data(pattern_addr);
+        let plane1 = self.read_ppu_data(pattern_addr + 8);
+        let palette = attr & 0x03;
+        let palette_base = 0x3F10 + (u16::from(palette) * 4);
+        let palette_colors = [
+            0,
+            self.read_palette(palette_base + 1),
+            self.read_palette(palette_base + 2),
+            self.read_palette(palette_base + 3),
+        ];
+        let flip_h = attr & 0x40 != 0;
+
+        let mut colors = [0_u8; 8];
+        let mut any_opaque = false;
+        for (pixel, out) in colors.iter_mut().enumerate() {
+            let bit = if flip_h { pixel as u8 } else { 7 - pixel as u8 };
+            let low = (plane0 >> bit) & 1;
+            let high = (plane1 >> bit) & 1;
+            let color = (high << 1) | low;
+            if color != 0 {
+                *out = palette_colors[color as usize];
+                any_opaque = true;
+            }
+        }
+
+        if !any_opaque {
+            return None;
+        }
+
+        Some(SpriteScanlineEntry {
+            x: sprite_x,
+            behind_bg: attr & 0x20 != 0,
+            colors,
+        })
+    }
+
     fn update_sprite_zero_hit(&mut self, x: usize, y: usize) {
         if self.status & STATUS_SPRITE_ZERO_HIT != 0 {
             return;
@@ -809,7 +1105,7 @@ impl Ppu {
         }
         let x = usize::from(self.dot - 1);
         let y = usize::from(self.scanline);
-        let (r, g, b) = self.render_pixel(x, y);
+        let (r, g, b) = self.render_pixel_cached(x, y);
         let idx = (y * FRAME_WIDTH + x) * 4;
         self.framebuffer[idx] = r;
         self.framebuffer[idx + 1] = g;
@@ -890,21 +1186,36 @@ impl Ppu {
     }
 
     fn write_ppu_data(&mut self, addr: u16, value: u8) {
+        let mut changed = false;
         match addr & PPU_ADDR_MASK {
             0x0000..=0x1FFF => {
                 if self.chr_writable {
-                    self.chr[addr as usize] = value;
+                    let index = addr as usize;
+                    if self.chr[index] != value {
+                        self.chr[index] = value;
+                        changed = true;
+                    }
                 }
             }
             0x2000..=0x3EFF => {
                 let index = self.nametable_index(addr);
-                self.nametable_ram[index] = value;
+                if self.nametable_ram[index] != value {
+                    self.nametable_ram[index] = value;
+                    changed = true;
+                }
             }
             0x3F00..=0x3FFF => {
                 let index = self.palette_index(addr);
-                self.palette_ram[index] = value & 0x3F;
+                let masked = value & 0x3F;
+                if self.palette_ram[index] != masked {
+                    self.palette_ram[index] = masked;
+                    changed = true;
+                }
             }
             _ => {}
+        }
+        if changed {
+            self.mark_render_state_dirty();
         }
     }
 
@@ -968,7 +1279,7 @@ mod tests {
         DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK,
         VBLANK_EDGE_DOT, VBLANK_SCANLINE,
     };
-    use crate::api::FRAME_RGBA_BYTES;
+    use crate::api::{FRAME_RGBA_BYTES, FRAME_WIDTH};
     use crate::rom::NametableMirroring;
 
     #[test]
@@ -1152,6 +1463,66 @@ mod tests {
         assert_eq!(restored.dot(), 5);
     }
 
+    #[test]
+    fn visible_dot_background_cache_invalidates_after_pattern_write() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x0A); // background + leftmost 8px background
+
+        ppu.write_ppu_data(0x3F00, 0x0F);
+        ppu.write_ppu_data(0x3F01, 0x30); // color index 1 => (236, 238, 236)
+        ppu.write_ppu_data(0x3F02, 0x26); // color index 2 => (236, 106, 100)
+
+        ppu.write_ppu_data(0x2000, 0x00); // top-left nametable tile uses tile #0
+        ppu.write_ppu_data(0x0000, 0xFF); // tile #0 row 0 plane 0
+        ppu.write_ppu_data(0x0008, 0x00); // tile #0 row 0 plane 1
+
+        ppu.scanline = 0;
+        ppu.dot = 1;
+        ppu.render_visible_dot();
+        assert_eq!(pixel_rgb(&ppu, 0, 0), (236, 238, 236));
+
+        // Mid-scanline pattern update should invalidate cached tile fetches.
+        ppu.write_ppu_data(0x0000, 0x00);
+        ppu.write_ppu_data(0x0008, 0xFF);
+
+        ppu.dot = 2; // x = 1, still same tile/scanline
+        ppu.render_visible_dot();
+        assert_eq!(pixel_rgb(&ppu, 1, 0), (236, 106, 100));
+    }
+
+    #[test]
+    fn visible_dot_sprite_cache_invalidates_after_oam_write() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x14); // sprites + leftmost 8px sprites
+        ppu.oam = [0xFF; 256];
+
+        ppu.write_ppu_data(0x3F00, 0x0F); // universal background => black
+        ppu.write_ppu_data(0x3F11, 0x26); // sprite palette 0 color 1 => (236, 106, 100)
+
+        ppu.write_ppu_data(0x0000, 0xFF); // tile #0 row 0 plane 0
+        ppu.write_ppu_data(0x0008, 0x00); // tile #0 row 0 plane 1
+
+        // Sprite 0 at (0, 0), opaque row from tile #0.
+        ppu.write_register(0x2003, 0x00);
+        ppu.write_register(0x2004, 0x00); // top row appears at scanline 1
+        ppu.write_register(0x2004, 0x00); // tile
+        ppu.write_register(0x2004, 0x00); // attr
+        ppu.write_register(0x2004, 0x00); // X
+
+        ppu.scanline = 1;
+        ppu.dot = 1;
+        ppu.render_visible_dot();
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 106, 100));
+
+        // Move sprite 0 away mid-scanline through OAMDATA; next dot must see the move.
+        ppu.write_register(0x2003, 0x03);
+        ppu.write_register(0x2004, 100);
+
+        ppu.dot = 2; // x = 1
+        ppu.render_visible_dot();
+        assert_eq!(pixel_rgb(&ppu, 1, 1), (0, 0, 0));
+    }
+
     fn step_until(mut_ppu: &mut Ppu, done: impl Fn(&Ppu) -> bool) {
         let max_steps = u32::from(DOTS_PER_SCANLINE) * 262 * 2;
         for _ in 0..max_steps {
@@ -1187,5 +1558,12 @@ mod tests {
         ppu.write_ppu_data(0x2001, 0x01);
         // Tile directly below top-left.
         ppu.write_ppu_data(0x2020, 0x01);
+    }
+
+    fn pixel_rgb(ppu: &Ppu, x: usize, y: usize) -> (u8, u8, u8) {
+        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        ppu.render_rgba(&mut frame);
+        let idx = (y * FRAME_WIDTH + x) * 4;
+        (frame[idx], frame[idx + 1], frame[idx + 2])
     }
 }
