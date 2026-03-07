@@ -63,6 +63,8 @@ fn assemble_homebrew_program() -> String {
 .const JOY1 = $4016
 .const JOY2 = $4017
 
+; Game Design Theory: Movement felt sluggish at 1 pixel per frame. Increased to 2 pixels for better 'Game Feel' and responsiveness.
+.const SPEED = 2
 .const SPR_Y = $00
 .const SPR_X = $01
 .const OAM_Y = $0200
@@ -181,28 +183,40 @@ nmi:
     lda JOY1
     and #$01
     beq not_up
-    dec SPR_Y
+    lda SPR_Y
+    sec
+    sbc #SPEED
+    sta SPR_Y
 not_up:
 
     ; Down
     lda JOY1
     and #$01
     beq not_down
-    inc SPR_Y
+    lda SPR_Y
+    clc
+    adc #SPEED
+    sta SPR_Y
 not_down:
 
     ; Left
     lda JOY1
     and #$01
     beq not_left
-    dec SPR_X
+    lda SPR_X
+    sec
+    sbc #SPEED
+    sta SPR_X
 not_left:
 
     ; Right
     lda JOY1
     and #$01
     beq not_right
-    inc SPR_X
+    lda SPR_X
+    clc
+    adc #SPEED
+    sta SPR_X
 not_right:
 
     lda SPR_Y
