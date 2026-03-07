@@ -2,6 +2,8 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
 use nes_test_harness::{
     audio_stats, capture_audio_window, detect_mapper_id, mapper_supported_by_core, waveform_hash,
@@ -10,6 +12,17 @@ use nes_test_harness::{
 
 const AUDIO_WARMUP_FRAMES: u32 = 60;
 const AUDIO_CAPTURE_FRAMES: u32 = 180;
+
+struct RowData {
+    rom_name: String,
+    status: String,
+    status_color: TableColor,
+    mapper: String,
+    samples: String,
+    rms: String,
+    peak: String,
+    hash: String,
+}
 
 fn main() {
     if let Err(err) = run() {
@@ -57,20 +70,43 @@ fn run() -> Result<(), String> {
         ));
     }
 
+    println!(
+        "{}",
+        "Capturing bbbradsmith audio goldens..."
+            .with(Color::Cyan)
+            .bold()
+    );
+
     let mut written = 0_usize;
     let mut skipped_mapper = 0_usize;
     let mut skipped_existing = 0_usize;
+    let mut rows: Vec<RowData> = Vec::new();
+
+    use std::io::{self, Write};
+    let mut stdout = io::stdout();
 
     for rom_path in rom_paths {
         let rom_name = rom_path
             .file_name()
             .and_then(|name| name.to_str())
-            .unwrap_or("<unknown>");
+            .unwrap_or("<unknown>")
+            .to_owned();
         let rom_bytes = fs::read(&rom_path)
             .map_err(|err| format!("failed to read ROM '{}': {err}", rom_path.display()))?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
-            println!("skip {rom_name}: unsupported mapper {mapper_id}");
+            print!("\r\x1B[2K{}", format!("Processing {}...", rom_name).with(Color::Yellow));
+            let _ = stdout.flush();
+            rows.push(RowData {
+                rom_name,
+                status: "Skip (Mapper)".to_string(),
+                status_color: TableColor::Magenta,
+                mapper: mapper_id.to_string(),
+                samples: "-".to_string(),
+                rms: "-".to_string(),
+                peak: "-".to_string(),
+                hash: "-".to_string(),
+            });
             skipped_mapper = skipped_mapper.saturating_add(1);
             continue;
         }
@@ -86,35 +122,129 @@ fn run() -> Result<(), String> {
             })?;
         let output_path = PathBuf::from(&golden_dir).join(format!("{stem}.s16le.pcm"));
         if output_path.exists() && !force {
-            println!(
-                "skip {rom_name}: golden already exists ({})",
-                output_path.display()
-            );
+            print!("\r\x1B[2K{}", format!("Processing {}...", rom_name).with(Color::Yellow));
+            let _ = stdout.flush();
+            rows.push(RowData {
+                rom_name,
+                status: "Skip (Exists)".to_string(),
+                status_color: TableColor::Yellow,
+                mapper: mapper_id.to_string(),
+                samples: "-".to_string(),
+                rms: "-".to_string(),
+                peak: "-".to_string(),
+                hash: "-".to_string(),
+            });
             skipped_existing = skipped_existing.saturating_add(1);
             continue;
         }
 
+        print!("\r\x1B[2K{}", format!("Processing {}...", rom_name).with(Color::Green));
+        let _ = stdout.flush();
+
         let samples = capture_audio_window(&rom_bytes, AUDIO_WARMUP_FRAMES, AUDIO_CAPTURE_FRAMES)?;
         write_pcm_i16le(&output_path, &samples)?;
         let stats = audio_stats(&samples);
-        println!(
-            "write {rom_name}: mapper={mapper_id} samples={} rms={:.2} peak={} hash={:016X} -> {}",
-            samples.len(),
-            stats.rms,
-            stats.peak,
-            waveform_hash(&samples),
-            output_path.display()
-        );
+        let hash = waveform_hash(&samples);
+
+        rows.push(RowData {
+            rom_name,
+            status: "Written".to_string(),
+            status_color: TableColor::Green,
+            mapper: mapper_id.to_string(),
+            samples: samples.len().to_string(),
+            rms: format!("{:.2}", stats.rms),
+            peak: stats.peak.to_string(),
+            hash: format!("{:016X}", hash),
+        });
+
         written = written.saturating_add(1);
     }
+    print!("\r\x1B[2K");
+    let _ = stdout.flush();
 
+    println!("{}", build_summary_table(&rows));
     println!(
-        "done: written={written} skipped_mapper={skipped_mapper} skipped_existing={skipped_existing}"
+        "done: written={} skipped_mapper={} skipped_existing={}",
+        written.to_string().with(Color::Green),
+        skipped_mapper.to_string().with(Color::Magenta),
+        skipped_existing.to_string().with(Color::Yellow),
     );
+
     if written == 0 && skipped_existing == 0 {
         return Err("no golden files were written".to_owned());
     }
     Ok(())
+}
+
+fn build_summary_table(rows: &[RowData]) -> Table {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("ROM").fg(TableColor::Cyan),
+        Cell::new("Status").fg(TableColor::Cyan),
+        Cell::new("Mapper").fg(TableColor::Cyan),
+        Cell::new("Samples").fg(TableColor::Cyan),
+        Cell::new("RMS").fg(TableColor::Cyan),
+        Cell::new("Peak").fg(TableColor::Cyan),
+        Cell::new("Hash").fg(TableColor::Cyan),
+    ]);
+
+    for row in rows {
+        table.add_row(vec![
+            Cell::new(&row.rom_name),
+            Cell::new(&row.status).fg(row.status_color),
+            Cell::new(&row.mapper),
+            Cell::new(&row.samples),
+            Cell::new(&row.rms),
+            Cell::new(&row.peak),
+            Cell::new(&row.hash),
+        ]);
+    }
+
+    table
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RowData, build_summary_table};
+    use comfy_table::Color as TableColor;
+
+    #[test]
+    fn build_summary_table_includes_all_columns() {
+        let rows = vec![
+            RowData {
+                rom_name: "test1.nes".to_string(),
+                status: "Written".to_string(),
+                status_color: TableColor::Green,
+                mapper: "0".to_string(),
+                samples: "1000".to_string(),
+                rms: "1.23".to_string(),
+                peak: "50".to_string(),
+                hash: "0000111122223333".to_string(),
+            },
+            RowData {
+                rom_name: "test2.nes".to_string(),
+                status: "Skip (Mapper)".to_string(),
+                status_color: TableColor::Magenta,
+                mapper: "255".to_string(),
+                samples: "-".to_string(),
+                rms: "-".to_string(),
+                peak: "-".to_string(),
+                hash: "-".to_string(),
+            },
+        ];
+
+        let table = build_summary_table(&rows);
+        let output = table.to_string();
+
+        assert!(output.contains("test1.nes"));
+        assert!(output.contains("Written"));
+        assert!(output.contains("1.23"));
+        assert!(output.contains("0000111122223333"));
+
+        assert!(output.contains("test2.nes"));
+        assert!(output.contains("Skip (Mapper)"));
+        assert!(output.contains("255"));
+    }
 }
 
 fn load_config(path: Option<&Path>) -> Result<NesConfig, String> {
