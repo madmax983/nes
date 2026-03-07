@@ -192,14 +192,13 @@ impl Mmc3 {
         bank: u8,
         src_offset: usize,
         window: &[u8; CHR_WINDOW_BYTES],
-        old_chr: &[u8],
         planned_offsets: &mut [Option<usize>],
     ) {
         let bank_index = usize::from(self.normalize_chr_bank(bank));
         let dst_start = bank_index * CHR_BANK_1K;
         let dst_end = dst_start + CHR_BANK_1K;
         let src_slice = &window[src_offset..src_offset + CHR_BANK_1K];
-        if src_slice != &old_chr[dst_start..dst_end] {
+        if src_slice != &self.chr_data[dst_start..dst_end] {
             planned_offsets[bank_index] = Some(src_offset);
         }
     }
@@ -209,16 +208,14 @@ impl Mmc3 {
         bank: u8,
         src_offset: usize,
         window: &[u8; CHR_WINDOW_BYTES],
-        old_chr: &[u8],
         planned_offsets: &mut [Option<usize>],
     ) {
         let even = bank & !1;
-        self.queue_chr_1k_update(even, src_offset, window, old_chr, planned_offsets);
+        self.queue_chr_1k_update(even, src_offset, window, planned_offsets);
         self.queue_chr_1k_update(
             even.wrapping_add(1),
             src_offset + CHR_BANK_1K,
             window,
-            old_chr,
             planned_offsets,
         );
     }
@@ -257,95 +254,22 @@ impl Mmc3 {
             return;
         }
 
-        let old_chr = self.chr_data.clone();
         let mut planned_offsets = vec![None; usize::from(self.chr_bank_count_1k.max(1))];
 
         if self.chr_inversion() {
-            self.queue_chr_1k_update(
-                self.bank_registers[2],
-                0x0000,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[3],
-                0x0400,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[4],
-                0x0800,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[5],
-                0x0C00,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_2k_update(
-                self.bank_registers[0],
-                0x1000,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_2k_update(
-                self.bank_registers[1],
-                0x1800,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
+            self.queue_chr_1k_update(self.bank_registers[2], 0x0000, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[3], 0x0400, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[4], 0x0800, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[5], 0x0C00, window, &mut planned_offsets);
+            self.queue_chr_2k_update(self.bank_registers[0], 0x1000, window, &mut planned_offsets);
+            self.queue_chr_2k_update(self.bank_registers[1], 0x1800, window, &mut planned_offsets);
         } else {
-            self.queue_chr_2k_update(
-                self.bank_registers[0],
-                0x0000,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_2k_update(
-                self.bank_registers[1],
-                0x0800,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[2],
-                0x1000,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[3],
-                0x1400,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[4],
-                0x1800,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
-            self.queue_chr_1k_update(
-                self.bank_registers[5],
-                0x1C00,
-                window,
-                &old_chr,
-                &mut planned_offsets,
-            );
+            self.queue_chr_2k_update(self.bank_registers[0], 0x0000, window, &mut planned_offsets);
+            self.queue_chr_2k_update(self.bank_registers[1], 0x0800, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[2], 0x1000, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[3], 0x1400, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[4], 0x1800, window, &mut planned_offsets);
+            self.queue_chr_1k_update(self.bank_registers[5], 0x1C00, window, &mut planned_offsets);
         }
 
         for (bank_index, src_offset) in planned_offsets.into_iter().enumerate() {

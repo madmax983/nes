@@ -1,254 +1,30 @@
 import re
 
-with open('crates/nes-core/src/ppu.rs', 'r') as f:
+with open("crates/nes-core/src/mapper/mmc3.rs", "r") as f:
     content = f.read()
 
-# Define the new struct and helper method
-new_helper = """
-    fn sprite_pixel_details(&self, sprite_index: usize, x: usize, y: usize) -> Option<(u8, u8, bool)> {
-        let base = sprite_index * 4;
-        let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
-        let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 { 16 } else { 8 };
+# Replace queue_chr_1k_update signature and body
+content = re.sub(
+    r"fn queue_chr_1k_update\(\s*&self,\s*bank: u8,\s*src_offset: usize,\s*window: &\[u8; CHR_WINDOW_BYTES\],\s*old_chr: &\[u8\],\s*planned_offsets: &mut \[Option<usize>\],\s*\) \{\s*let bank_index = usize::from\(self\.normalize_chr_bank\(bank\)\);\s*let dst_start = bank_index \* CHR_BANK_1K;\s*let dst_end = dst_start \+ CHR_BANK_1K;\s*let src_slice = &window\[src_offset\.\.src_offset \+ CHR_BANK_1K\];\s*if src_slice != &old_chr\[dst_start\.\.dst_end\] \{\s*planned_offsets\[bank_index\] = Some\(src_offset\);\s*\}\s*\}",
+    r"fn queue_chr_1k_update(\n        &self,\n        bank: u8,\n        src_offset: usize,\n        window: &[u8; CHR_WINDOW_BYTES],\n        planned_offsets: &mut [Option<usize>],\n    ) {\n        let bank_index = usize::from(self.normalize_chr_bank(bank));\n        let dst_start = bank_index * CHR_BANK_1K;\n        let dst_end = dst_start + CHR_BANK_1K;\n        let src_slice = &window[src_offset..src_offset + CHR_BANK_1K];\n        if src_slice != &self.chr_data[dst_start..dst_end] {\n            planned_offsets[bank_index] = Some(src_offset);\n        }\n    }",
+    content
+)
 
-        if y < sprite_y || y >= sprite_y + sprite_height {
-            return None;
-        }
+# Replace queue_chr_2k_update signature and body
+content = re.sub(
+    r"fn queue_chr_2k_update\(\s*&self,\s*bank: u8,\s*src_offset: usize,\s*window: &\[u8; CHR_WINDOW_BYTES\],\s*old_chr: &\[u8\],\s*planned_offsets: &mut \[Option<usize>\],\s*\) \{\s*let even = bank & !1;\s*self\.queue_chr_1k_update\(even, src_offset, window, old_chr, planned_offsets\);\s*self\.queue_chr_1k_update\(\s*even\.wrapping_add\(1\),\s*src_offset \+ CHR_BANK_1K,\s*window,\s*old_chr,\s*planned_offsets,\s*\);\s*\}",
+    r"fn queue_chr_2k_update(\n        &self,\n        bank: u8,\n        src_offset: usize,\n        window: &[u8; CHR_WINDOW_BYTES],\n        planned_offsets: &mut [Option<usize>],\n    ) {\n        let even = bank & !1;\n        self.queue_chr_1k_update(even, src_offset, window, planned_offsets);\n        self.queue_chr_1k_update(\n            even.wrapping_add(1),\n            src_offset + CHR_BANK_1K,\n            window,\n            planned_offsets,\n        );\n    }",
+    content
+)
 
-        let sprite_x = usize::from(self.oam[base + 3]);
-        if x < sprite_x || x >= sprite_x + 8 {
-            return None;
-        }
+# Replace sync_chr_ram_from_ppu_window body
+content = re.sub(
+    r"let old_chr = self\.chr_data\.clone\(\);\s*let mut planned_offsets = vec\!\[None; usize::from\(self\.chr_bank_count_1k\.max\(1\)\)\];",
+    r"let mut planned_offsets = vec![None; usize::from(self.chr_bank_count_1k.max(1))];",
+    content
+)
 
-        let tile = self.oam[base + 1];
-        let attr = self.oam[base + 2];
+content = content.replace(",\n                &old_chr", "")
 
-        let mut local_x = (x - sprite_x) as u8;
-        let mut local_y = (y - sprite_y) as u8;
-        if attr & 0x40 != 0 {
-            local_x = 7 - local_x;
-        }
-        if attr & 0x80 != 0 {
-            local_y = (sprite_height as u8 - 1) - local_y;
-        }
-
-        let (pattern_addr, bit) = if sprite_height == 16 {
-            let table = u16::from(tile & 1) * 0x1000;
-            let tile_top = u16::from(tile & 0xFE);
-            let tile_offset = u16::from(local_y / 8);
-            let row = u16::from(local_y % 8);
-            let addr = table + (tile_top + tile_offset) * 16 + row;
-            (addr, 7 - local_x)
-        } else {
-            let table = if self.ctrl & CTRL_SPRITE_TABLE_ADDR != 0 {
-                0x1000
-            } else {
-                0x0000
-            };
-            let addr = table + u16::from(tile) * 16 + u16::from(local_y);
-            (addr, 7 - local_x)
-        };
-
-        let plane0 = self.read_ppu_data(pattern_addr);
-        let plane1 = self.read_ppu_data(pattern_addr + 8);
-        let low = (plane0 >> bit) & 1;
-        let high = (plane1 >> bit) & 1;
-        let color = (high << 1) | low;
-
-        if color == 0 {
-            return None;
-        }
-
-        let palette = attr & 0x03;
-        let behind_bg = attr & 0x20 != 0;
-
-        Some((color, palette, behind_bg))
-    }
-
-"""
-
-# Search blocks
-sprite_palette_index_search = """    fn sprite_palette_index(&self, x: usize, y: usize, bg_opaque: bool) -> Option<u8> {
-        if self.mask & MASK_SHOW_SPRITES == 0 {
-            return None;
-        }
-        if x < 8 && self.mask & MASK_SHOW_SPRITE_LEFT == 0 {
-            return None;
-        }
-
-        let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
-            16
-        } else {
-            8
-        };
-
-        for sprite in 0..64 {
-            let base = sprite * 4;
-            let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
-            let tile = self.oam[base + 1];
-            let attr = self.oam[base + 2];
-            let sprite_x = usize::from(self.oam[base + 3]);
-
-            if x < sprite_x || x >= sprite_x + 8 {
-                continue;
-            }
-            if y < sprite_y || y >= sprite_y + sprite_height {
-                continue;
-            }
-
-            let mut local_x = (x - sprite_x) as u8;
-            let mut local_y = (y - sprite_y) as u8;
-            if attr & 0x40 != 0 {
-                local_x = 7 - local_x;
-            }
-            if attr & 0x80 != 0 {
-                local_y = (sprite_height as u8 - 1) - local_y;
-            }
-
-            let (pattern_addr, bit) = if sprite_height == 16 {
-                let table = u16::from(tile & 1) * 0x1000;
-                let tile_top = u16::from(tile & 0xFE);
-                let tile_offset = u16::from(local_y / 8);
-                let row = u16::from(local_y % 8);
-                let addr = table + (tile_top + tile_offset) * 16 + row;
-                (addr, 7 - local_x)
-            } else {
-                let table = if self.ctrl & CTRL_SPRITE_TABLE_ADDR != 0 {
-                    0x1000
-                } else {
-                    0x0000
-                };
-                let addr = table + u16::from(tile) * 16 + u16::from(local_y);
-                (addr, 7 - local_x)
-            };
-
-            let plane0 = self.read_ppu_data(pattern_addr);
-            let plane1 = self.read_ppu_data(pattern_addr + 8);
-            let low = (plane0 >> bit) & 1;
-            let high = (plane1 >> bit) & 1;
-            let color = (high << 1) | low;
-            if color == 0 {
-                continue;
-            }
-
-            let behind_bg = attr & 0x20 != 0;
-            if behind_bg && bg_opaque {
-                continue;
-            }
-
-            let palette = attr & 0x03;
-            let palette_color =
-                self.read_palette(0x3F10 + (u16::from(palette) * 4) + u16::from(color));
-            return Some(palette_color);
-        }
-
-        None
-    }"""
-
-sprite_zero_opaque_search = """    #[must_use]
-    fn sprite_zero_opaque_at(&self, x: usize, y: usize) -> bool {
-        if self.mask & MASK_SHOW_SPRITES == 0 {
-            return false;
-        }
-        if x < 8 && self.mask & MASK_SHOW_SPRITE_LEFT == 0 {
-            return false;
-        }
-
-        let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
-            16
-        } else {
-            8
-        };
-        let sprite_y = usize::from(self.oam[0]).wrapping_add(1);
-        let tile = self.oam[1];
-        let attr = self.oam[2];
-        let sprite_x = usize::from(self.oam[3]);
-
-        if x < sprite_x || x >= sprite_x + 8 {
-            return false;
-        }
-        if y < sprite_y || y >= sprite_y + sprite_height {
-            return false;
-        }
-
-        let mut local_x = (x - sprite_x) as u8;
-        let mut local_y = (y - sprite_y) as u8;
-        if attr & 0x40 != 0 {
-            local_x = 7 - local_x;
-        }
-        if attr & 0x80 != 0 {
-            local_y = (sprite_height as u8 - 1) - local_y;
-        }
-
-        let (pattern_addr, bit) = if sprite_height == 16 {
-            let table = u16::from(tile & 1) * 0x1000;
-            let tile_top = u16::from(tile & 0xFE);
-            let tile_offset = u16::from(local_y / 8);
-            let row = u16::from(local_y % 8);
-            let addr = table + (tile_top + tile_offset) * 16 + row;
-            (addr, 7 - local_x)
-        } else {
-            let table = if self.ctrl & CTRL_SPRITE_TABLE_ADDR != 0 {
-                0x1000
-            } else {
-                0x0000
-            };
-            let addr = table + u16::from(tile) * 16 + u16::from(local_y);
-            (addr, 7 - local_x)
-        };
-
-        let plane0 = self.read_ppu_data(pattern_addr);
-        let plane1 = self.read_ppu_data(pattern_addr + 8);
-        let low = (plane0 >> bit) & 1;
-        let high = (plane1 >> bit) & 1;
-        ((high << 1) | low) != 0
-    }"""
-
-sprite_palette_index_replace = """    fn sprite_palette_index(&self, x: usize, y: usize, bg_opaque: bool) -> Option<u8> {
-        if self.mask & MASK_SHOW_SPRITES == 0 {
-            return None;
-        }
-        if x < 8 && self.mask & MASK_SHOW_SPRITE_LEFT == 0 {
-            return None;
-        }
-
-        for sprite in 0..64 {
-            if let Some((color, palette, behind_bg)) = self.sprite_pixel_details(sprite, x, y) {
-                if behind_bg && bg_opaque {
-                    continue;
-                }
-                let palette_color =
-                    self.read_palette(0x3F10 + (u16::from(palette) * 4) + u16::from(color));
-                return Some(palette_color);
-            }
-        }
-
-        None
-    }"""
-
-sprite_zero_opaque_replace = """    #[must_use]
-    fn sprite_zero_opaque_at(&self, x: usize, y: usize) -> bool {
-        if self.mask & MASK_SHOW_SPRITES == 0 {
-            return false;
-        }
-        if x < 8 && self.mask & MASK_SHOW_SPRITE_LEFT == 0 {
-            return false;
-        }
-
-        self.sprite_pixel_details(0, x, y).is_some()
-    }"""
-
-
-if sprite_palette_index_search not in content:
-    print("Failed to find sprite_palette_index")
-    exit(1)
-if sprite_zero_opaque_search not in content:
-    print("Failed to find sprite_zero_opaque_at")
-    exit(1)
-
-content = content.replace(sprite_palette_index_search, new_helper + sprite_palette_index_replace)
-content = content.replace(sprite_zero_opaque_search, sprite_zero_opaque_replace)
-
-with open('crates/nes-core/src/ppu.rs', 'w') as f:
+with open("crates/nes-core/src/mapper/mmc3.rs", "w") as f:
     f.write(content)
-
-print("Replaced successfully")
