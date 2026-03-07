@@ -159,4 +159,75 @@ mod tests {
         assert!(!scanner.candidates().contains(&0x0042));
         assert_eq!(scanner.candidate_count(), 0);
     }
+
+    #[test]
+    fn test_scanner_reset() {
+        let mut core = NesCore::new();
+        let mut scanner = MemoryScanner::new();
+
+        core.load_cpu_bytes(0x0042, &[3]);
+        scanner.scan(&core, ScanCondition::Exact(3));
+
+        assert!(scanner.candidate_count() > 0);
+        assert!(scanner.initialized);
+
+        scanner.reset();
+
+        assert_eq!(scanner.candidate_count(), 0);
+        assert!(!scanner.initialized);
+    }
+
+    #[test]
+    fn test_scanner_candidate_count() {
+        let mut core = NesCore::new();
+        let mut scanner = MemoryScanner::new();
+
+        assert_eq!(scanner.candidate_count(), 0);
+
+        core.load_cpu_bytes(0x0042, &[3]);
+        core.load_cpu_bytes(0x0100, &[3]);
+        scanner.scan(&core, ScanCondition::Exact(3));
+
+        let count = scanner.candidates().len();
+        assert!(count >= 2);
+        assert_eq!(scanner.candidate_count(), count);
+    }
+
+    #[test]
+    fn test_scanner_conditions_boundaries() {
+        let mut core = NesCore::new();
+        let mut scanner = MemoryScanner::new();
+
+        // Setup boundary testing values
+        core.load_cpu_bytes(0x0010, &[10]); // Will decrease
+        core.load_cpu_bytes(0x0020, &[10]); // Will stay same (test <= mutant for Decreased)
+        core.load_cpu_bytes(0x0030, &[10]); // Will increase
+        core.load_cpu_bytes(0x0040, &[10]); // Will stay same (test >= mutant for Increased)
+
+        // Baseline scan
+        scanner.scan(&core, ScanCondition::Exact(10));
+        assert!(scanner.candidates().contains(&0x0010));
+        assert!(scanner.candidates().contains(&0x0020));
+        assert!(scanner.candidates().contains(&0x0030));
+        assert!(scanner.candidates().contains(&0x0040));
+
+        // Mutate memory
+        core.load_cpu_bytes(0x0010, &[9]); // Decreased
+        core.load_cpu_bytes(0x0020, &[10]); // Unchanged
+        core.load_cpu_bytes(0x0030, &[11]); // Increased
+        core.load_cpu_bytes(0x0040, &[10]); // Unchanged
+
+        // To test Decreased, copy the scanner
+        let mut dec_scanner = scanner.clone();
+        dec_scanner.scan(&core, ScanCondition::Decreased);
+        assert!(dec_scanner.candidates().contains(&0x0010)); // 9 < 10, kept
+        assert!(!dec_scanner.candidates().contains(&0x0020)); // 10 < 10 is false, dropped (kills < to <=)
+        assert!(!dec_scanner.candidates().contains(&0x0030)); // 11 < 10 is false, dropped
+
+        // To test Increased, use the original scanner
+        scanner.scan(&core, ScanCondition::Increased);
+        assert!(scanner.candidates().contains(&0x0030)); // 11 > 10, kept (kills > to < because 11 < 10 is false)
+        assert!(!scanner.candidates().contains(&0x0040)); // 10 > 10 is false, dropped (kills > to >=)
+        assert!(!scanner.candidates().contains(&0x0010)); // 9 > 10 is false, dropped
+    }
 }
