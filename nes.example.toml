@@ -25,3 +25,9 @@ player = 1
 input_delay_frames = 2
 max_rollback_frames = 240
 hash_check_every_frames = 120
+
+# RTA mode profiles are external TOML files.
+# Example profile:
+#   ./config/rta/profiles/smb-any.example.toml
+# Use desktop flags:
+#   --rta --rta-profiles-dir ./config/rta/profiles [--rta-profile <id>] [--rta-calibrate]

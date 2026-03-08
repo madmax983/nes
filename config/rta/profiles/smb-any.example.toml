@@ -1,0 +1,46 @@
+id = "smb-any"
+status = "published"
+rom_hashes = [
+  "replace_with_sha256_of_your_rom"
+]
+
+[timer]
+clock = "wall"
+focus_loss = "continue"
+manual_fallback = false
+
+[invalidation]
+invalidate_on = ["rewind", "save_load", "frame_step"]
+
+[split_policy]
+append_only = true
+manual_hotkey = "F9"
+
+[logging]
+save_input_log = false
+
+[start]
+address = 0x0770
+width = "u8"
+op = "eq"
+value = 1
+debounce_frames = 0
+require_consecutive = 1
+
+[end]
+address = 0x0770
+width = "u8"
+op = "eq"
+value = 2
+debounce_frames = 0
+require_consecutive = 1
+
+[[splits]]
+name = "world-1"
+[splits.trigger]
+address = 0x075f
+width = "u8"
+op = "changed"
+value = 0
+debounce_frames = 3
+require_consecutive = 1
