@@ -1,3 +1,3 @@
-**[Remove Circular Dependency and Nested Sprawl]
-**Tangle:** The `api` and `replay` modules in `nes-core` had a circular dependency. Additionally, `macro_engine` was nested unnecessarily inside an `experimental` module in `nes-mcp`, exposing internals to binaries.
-**Blueprint:** Inlined `replay_commands` directly into `api.rs` to break the cycle and deleted `replay.rs`. Moved `macro_engine.rs` up to the top level of `nes-mcp` and removed the `experimental` module namespace, flattening the structure.
+**[McpHost Cohesion]**
+**Tangle:** The `McpHost` logic (the transport and protocol handling for the Model Context Protocol server) was housed inside the UI-heavy `nes-desktop` runner `src/mcp_host.rs`, which meant `nes-desktop` imported `nes-mcp` tools but then handled the protocol logic itself.
+**Blueprint:** Moved `mcp_host.rs` directly into `nes-mcp/src/mcp_host.rs`, centralizing all MCP transport and dispatch logic under the `nes-mcp` crate. This enforces high cohesion within the MCP crate and slims down the desktop app to simply launching the pre-built host.

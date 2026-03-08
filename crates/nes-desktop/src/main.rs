@@ -6,8 +6,6 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
-#[cfg(feature = "mcp-host")]
-mod mcp_host;
 mod netplay;
 
 use comfy_table::{Cell, Color as TableColor, Table};
@@ -30,9 +28,9 @@ use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
-#[cfg(feature = "mcp-host")]
-use crate::mcp_host::McpHost;
 use crate::netplay::{NetplayClient, NetplayRuntimeConfig};
+#[cfg(feature = "mcp-host")]
+use nes_mcp::McpHost;
 
 const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
 const DEFAULT_WINDOW_SCALE: u32 = 3;

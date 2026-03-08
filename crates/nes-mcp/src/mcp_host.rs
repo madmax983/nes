@@ -4,8 +4,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 
+use crate::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 use nes_core::NesCore;
-use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
