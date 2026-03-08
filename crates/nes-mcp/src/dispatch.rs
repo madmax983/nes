@@ -203,6 +203,21 @@ pub enum DispatchOutput {
 }
 
 /// Errors raised when parsing or executing MCP tools.
+///
+/// This error acts as the primary failure boundary. If a requested tool does
+/// not exist, has malformed inputs, or the underlying [`nes_core::NesCore`] throws
+/// an internal exception, this enum safely propagates the error back to the
+/// MCP JSON-RPC router as a structured response message.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::DispatchError;
+///
+/// // The client attempted to call a non-existent tool.
+/// let err = DispatchError::UnknownTool("deploy_skynet".to_owned());
+/// assert_eq!(err.to_string(), "unknown tool: deploy_skynet");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DispatchError {
     /// The specified tool name was not recognized.
