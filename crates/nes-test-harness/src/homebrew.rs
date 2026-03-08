@@ -65,6 +65,7 @@ fn assemble_homebrew_program() -> String {
 
 .const SPR_Y = $00
 .const SPR_X = $01
+.const SPRINT_ACTIVE = $02
 .const OAM_Y = $0200
 .const OAM_TILE = $0201
 .const OAM_ATTR = $0202
@@ -171,8 +172,14 @@ nmi:
     lda #$00
     sta JOY1
 
-    ; Skip A/B/Select/Start
+    ; Read A (Sprint)
+    ; Game Design Theory: Allowing players to hold 'A' to sprint gives them
+    ; control over movement pacing, reducing sluggishness when traversing empty space.
     lda JOY1
+    and #$01
+    sta SPRINT_ACTIVE
+
+    ; Skip B/Select/Start
     lda JOY1
     lda JOY1
     lda JOY1
@@ -182,11 +189,17 @@ nmi:
     and #$01
     beq not_up
     dec SPR_Y
+    lda SPRINT_ACTIVE
+    beq not_up
+    dec SPR_Y
 not_up:
 
     ; Down
     lda JOY1
     and #$01
+    beq not_down
+    inc SPR_Y
+    lda SPRINT_ACTIVE
     beq not_down
     inc SPR_Y
 not_down:
@@ -196,11 +209,17 @@ not_down:
     and #$01
     beq not_left
     dec SPR_X
+    lda SPRINT_ACTIVE
+    beq not_left
+    dec SPR_X
 not_left:
 
     ; Right
     lda JOY1
     and #$01
+    beq not_right
+    inc SPR_X
+    lda SPRINT_ACTIVE
     beq not_right
     inc SPR_X
 not_right:
