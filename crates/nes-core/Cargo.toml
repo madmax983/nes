@@ -9,5 +9,9 @@ nova = []
 [dependencies]
 itoa = "1.0.17"
 
+[[example]]
+name = "story_demo"
+required-features = ["nova"]
+
 [dev-dependencies]
 proptest = "1.0.0"
