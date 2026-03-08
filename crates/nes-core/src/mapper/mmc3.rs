@@ -395,4 +395,16 @@ mod tests {
         let window = m.chr_window();
         assert_eq!(window.len(), CHR_WINDOW_BYTES);
     }
+
+    #[test]
+    fn mmc3_mirroring_writes_update_nametable_mirroring() {
+        let mut m = Mmc3::new(8, 8);
+        assert_eq!(m.mirroring(), NametableMirroring::Horizontal);
+
+        m.write_prg(0xA000, 0x00);
+        assert_eq!(m.mirroring(), NametableMirroring::Vertical);
+
+        m.write_prg(0xA000, 0x01);
+        assert_eq!(m.mirroring(), NametableMirroring::Horizontal);
+    }
 }
