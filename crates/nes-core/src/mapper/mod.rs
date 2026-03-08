@@ -9,12 +9,18 @@ mod nrom;
 mod uxrom;
 
 pub use axrom::Axrom;
+pub(crate) use axrom::AxromState;
 pub use cnrom::Cnrom;
+pub(crate) use cnrom::CnromState;
 pub use gxrom::Gxrom;
+pub(crate) use gxrom::GxromState;
 pub use mmc1::Mmc1;
+pub(crate) use mmc1::Mmc1State;
 pub use mmc3::Mmc3;
+pub(crate) use mmc3::Mmc3State;
 pub use nrom::Nrom;
 pub use uxrom::Uxrom;
+pub(crate) use uxrom::UxromState;
 
 /// Common PRG read/write contract for cartridge mappers.
 ///

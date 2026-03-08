@@ -24,6 +24,18 @@ pub struct Mmc3 {
     irq_pending: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Mmc3State {
+    pub bank_select: u8,
+    pub bank_registers: [u8; 8],
+    pub mirroring: NametableMirroring,
+    pub irq_latch: u8,
+    pub irq_counter: u8,
+    pub irq_reload: bool,
+    pub irq_enabled: bool,
+    pub irq_pending: bool,
+}
+
 impl Mmc3 {
     /// Creates a synthetic MMC3 mapper for tests.
     ///
@@ -292,6 +304,31 @@ impl Mmc3 {
     #[must_use]
     pub fn irq_pending(&self) -> bool {
         self.irq_pending
+    }
+
+    #[must_use]
+    pub(crate) fn state(&self) -> Mmc3State {
+        Mmc3State {
+            bank_select: self.bank_select,
+            bank_registers: self.bank_registers,
+            mirroring: self.mirroring,
+            irq_latch: self.irq_latch,
+            irq_counter: self.irq_counter,
+            irq_reload: self.irq_reload,
+            irq_enabled: self.irq_enabled,
+            irq_pending: self.irq_pending,
+        }
+    }
+
+    pub(crate) fn restore_state(&mut self, state: Mmc3State) {
+        self.bank_select = state.bank_select;
+        self.bank_registers = state.bank_registers;
+        self.mirroring = state.mirroring;
+        self.irq_latch = state.irq_latch;
+        self.irq_counter = state.irq_counter;
+        self.irq_reload = state.irq_reload;
+        self.irq_enabled = state.irq_enabled;
+        self.irq_pending = state.irq_pending;
     }
 
     /// Advances scanline IRQ logic based on current PPU dot.

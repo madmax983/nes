@@ -15,6 +15,14 @@ pub struct Mmc1 {
     prg_rom: Vec<u8>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Mmc1State {
+    pub control: u8,
+    pub shift_register: u8,
+    pub shift_count: u8,
+    pub selected_prg_bank: u8,
+}
+
 impl Mmc1 {
     const PRG_BANK_BYTES: usize = 16 * 1024;
     const SHIFT_RESET: u8 = 0x10;
@@ -62,6 +70,23 @@ impl Mmc1 {
     #[must_use]
     pub fn selected_prg_bank(&self) -> u8 {
         self.selected_prg_bank
+    }
+
+    #[must_use]
+    pub(crate) fn state(&self) -> Mmc1State {
+        Mmc1State {
+            control: self.control,
+            shift_register: self.shift_register,
+            shift_count: self.shift_count,
+            selected_prg_bank: self.selected_prg_bank,
+        }
+    }
+
+    pub(crate) fn restore_state(&mut self, state: Mmc1State) {
+        self.control = state.control;
+        self.shift_register = state.shift_register;
+        self.shift_count = state.shift_count;
+        self.selected_prg_bank = state.selected_prg_bank;
     }
 
     /// Reads PRG through current MMC1 bank mode.

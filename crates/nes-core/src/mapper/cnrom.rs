@@ -12,6 +12,11 @@ pub struct Cnrom {
     chr_writable: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CnromState {
+    pub selected_chr_bank: u8,
+}
+
 impl Cnrom {
     /// Builds CNROM from raw PRG/CHR data.
     ///
@@ -51,6 +56,17 @@ impl Cnrom {
         self.selected_chr_bank
     }
 
+    #[must_use]
+    pub(crate) fn state(&self) -> CnromState {
+        CnromState {
+            selected_chr_bank: self.selected_chr_bank,
+        }
+    }
+
+    pub(crate) fn restore_state(&mut self, state: CnromState) {
+        self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
+    }
+
     /// Returns the currently mapped 8KB CHR window.
     #[must_use]
     pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
@@ -67,6 +83,17 @@ impl Cnrom {
     #[must_use]
     pub fn chr_writable(&self) -> bool {
         self.chr_writable
+    }
+
+    /// Synchronizes writable CHR-RAM from the current PPU window.
+    pub fn sync_chr_ram_from_ppu_window(&mut self, window: &[u8; CHR_WINDOW_BYTES]) {
+        if !self.chr_writable {
+            return;
+        }
+
+        let start = usize::from(self.selected_chr_bank) * CHR_WINDOW_BYTES;
+        let end = start + CHR_WINDOW_BYTES;
+        self.chr_data[start..end].copy_from_slice(window);
     }
 
     /// Reads PRG using fixed CNROM PRG mapping.

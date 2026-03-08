@@ -10,6 +10,11 @@ pub struct Uxrom {
     prg_rom: Vec<u8>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UxromState {
+    pub selected_bank: u8,
+}
+
 impl Uxrom {
     /// Creates a synthetic mapper instance with the requested PRG bank count.
     #[must_use]
@@ -49,6 +54,17 @@ impl Uxrom {
     #[must_use]
     pub fn selected_bank(&self) -> u8 {
         self.selected_bank as u8
+    }
+
+    #[must_use]
+    pub(crate) fn state(&self) -> UxromState {
+        UxromState {
+            selected_bank: self.selected_bank as u8,
+        }
+    }
+
+    pub(crate) fn restore_state(&mut self, state: UxromState) {
+        self.selected_bank = usize::from(state.selected_bank) % self.bank_count;
     }
 
     /// Reads PRG byte through UxROM bank mapping.
