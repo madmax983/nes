@@ -261,7 +261,7 @@ fn handle_tools_call(
     request_tx
         .send(ToolRequest {
             name: tool_name.to_owned(),
-            params: map_tool_arguments(&args),
+            params: map_tool_arguments(args),
             respond_to: reply_tx,
         })
         .map_err(|_| RpcError::internal_error("desktop core request channel closed"))?;
@@ -300,17 +300,29 @@ fn handle_tools_call(
     Ok(Some(response))
 }
 
-fn map_tool_arguments(arguments: &Map<String, Value>) -> ToolParams {
+/// Maps raw JSON RPC arguments into a strongly typed `ToolParams` map.
+///
+/// **Performance optimization:** This function consumes an owned `Map<String, Value>`
+/// rather than taking a borrowed reference `&Map`. Because the MCP dispatch
+/// layer typically already has an owned arguments object, taking ownership here
+/// entirely eliminates the need to allocate and `.clone()` every string key
+/// and value when inserting them into the returned `ToolParams`.
+fn map_tool_arguments(arguments: Map<String, Value>) -> ToolParams {
     let mut params = ToolParams::new();
     for (key, value) in arguments {
-        params.insert(key.clone(), json_arg_to_string(value));
+        params.insert(key, json_arg_to_string(value));
     }
     params
 }
 
-fn json_arg_to_string(value: &Value) -> String {
+/// Converts a JSON `Value` into a `String` without extra allocations if possible.
+///
+/// **Performance optimization:** Taking an owned `Value` allows us to extract
+/// and return the inner `String` directly via pattern matching, avoiding
+/// a heap allocation compared to calling `.to_string()` or `.clone()` on a reference.
+fn json_arg_to_string(value: Value) -> String {
     match value {
-        Value::String(v) => v.clone(),
+        Value::String(v) => v,
         _ => value.to_string(),
     }
 }
@@ -719,16 +731,16 @@ mod tests {
 
     #[test]
     fn json_arg_and_tool_argument_mapping_stringify_scalars_and_structures() {
-        assert_eq!(json_arg_to_string(&json!("x")), "x");
-        assert_eq!(json_arg_to_string(&json!(42)), "42");
-        assert_eq!(json_arg_to_string(&json!(true)), "true");
-        assert_eq!(json_arg_to_string(&Value::Null), "null");
-        assert_eq!(json_arg_to_string(&json!({"k": "v"})), "{\"k\":\"v\"}");
+        assert_eq!(json_arg_to_string(json!("x")), "x");
+        assert_eq!(json_arg_to_string(json!(42)), "42");
+        assert_eq!(json_arg_to_string(json!(true)), "true");
+        assert_eq!(json_arg_to_string(Value::Null), "null");
+        assert_eq!(json_arg_to_string(json!({"k": "v"})), "{\"k\":\"v\"}");
 
         let mut args = Map::<String, Value>::new();
         args.insert("a".to_owned(), json!(5));
         args.insert("b".to_owned(), json!(false));
-        let mapped = map_tool_arguments(&args);
+        let mapped = map_tool_arguments(args);
         assert_eq!(mapped.get("a").map(String::as_str), Some("5"));
         assert_eq!(mapped.get("b").map(String::as_str), Some("false"));
     }

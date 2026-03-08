@@ -285,7 +285,7 @@ fn handle_tools_call(
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    let tool_params = map_tool_arguments(&args);
+    let tool_params = map_tool_arguments(args);
 
     let call_result = match dispatch_tool(&mut state.core, tool_name, &tool_params) {
         Ok(output) => {
@@ -316,17 +316,29 @@ fn handle_tools_call(
     Ok(Some(call_result))
 }
 
-fn map_tool_arguments(arguments: &Map<String, Value>) -> ToolParams {
+/// Maps raw JSON RPC arguments into a strongly typed `ToolParams` map.
+///
+/// **Performance optimization:** This function consumes an owned `Map<String, Value>`
+/// rather than taking a borrowed reference `&Map`. Because the MCP dispatch
+/// layer typically already has an owned arguments object, taking ownership here
+/// entirely eliminates the need to allocate and `.clone()` every string key
+/// and value when inserting them into the returned `ToolParams`.
+fn map_tool_arguments(arguments: Map<String, Value>) -> ToolParams {
     let mut params = ToolParams::new();
     for (key, value) in arguments {
-        params.insert(key.clone(), json_arg_to_string(value));
+        params.insert(key, json_arg_to_string(value));
     }
     params
 }
 
-fn json_arg_to_string(value: &Value) -> String {
+/// Converts a JSON `Value` into a `String` without extra allocations if possible.
+///
+/// **Performance optimization:** Taking an owned `Value` allows us to extract
+/// and return the inner `String` directly via pattern matching, avoiding
+/// a heap allocation compared to calling `.to_string()` or `.clone()` on a reference.
+fn json_arg_to_string(value: Value) -> String {
     match value {
-        Value::String(v) => v.clone(),
+        Value::String(v) => v,
         _ => value.to_string(),
     }
 }
@@ -827,7 +839,7 @@ mod tests {
         arguments.insert("null".to_owned(), Value::Null);
         arguments.insert("object".to_owned(), json!({ "x": 1 }));
 
-        let mapped = map_tool_arguments(&arguments);
+        let mapped = map_tool_arguments(arguments);
         assert_eq!(mapped.get("str"), Some(&"value".to_owned()));
         assert_eq!(mapped.get("num"), Some(&"123".to_owned()));
         assert_eq!(mapped.get("bool"), Some(&"true".to_owned()));
