@@ -401,7 +401,10 @@ fn handle_read_memory(
     }
 }
 
-fn handle_get_frame(core: &mut NesCore, params: &ToolParams) -> Result<DispatchOutput, DispatchError> {
+fn handle_get_frame(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
     sync_frame_output(core);
     let default_seq = latest_output_metadata().frame_seq.saturating_add(1);
     let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
