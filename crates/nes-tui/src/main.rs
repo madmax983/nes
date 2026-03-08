@@ -27,7 +27,7 @@ use ratatui_image::picker::{Picker, ProtocolType};
 use ratatui_image::protocol::{ImageSource, StatefulProtocol, StatefulProtocolType};
 use ratatui_image::{Resize, ResizeEncodeRender};
 
-const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
+const TARGET_FRAME_TIME: Duration = Duration::from_micros(33_333);
 const NES_CELL_HEIGHT: u32 = (FRAME_HEIGHT / 2) as u32;
 const PROTOCOL_TARGET_FPS: u32 = 30;
 const PROTOCOL_FRAME_INTERVAL: Duration = Duration::from_millis(1000 / PROTOCOL_TARGET_FPS as u64);
@@ -1035,6 +1035,11 @@ mod tests {
     #[test]
     fn protocol_frame_interval_matches_target_fps() {
         assert_eq!(PROTOCOL_FRAME_INTERVAL, Duration::from_millis(33));
+    }
+
+    #[test]
+    fn target_frame_time_defaults_to_30_fps() {
+        assert_eq!(TARGET_FRAME_TIME, Duration::from_micros(33_333));
     }
 
     #[test]
