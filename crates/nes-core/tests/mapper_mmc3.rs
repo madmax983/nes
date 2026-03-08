@@ -80,3 +80,69 @@ fn mmc3_irq_counter_reloads_and_raises_pending_flag() {
     m.write_prg(0xE000, 0x00); // disable + acknowledge
     assert!(!m.irq_pending());
 }
+
+// No mirroring test here
+
+#[test]
+fn mmc3_irq_disabled_and_acknowledged_on_write_to_e000() {
+    let mut m = Mmc3::new(8, 8);
+    m.write_prg(0xC000, 0x01); // latch
+    m.write_prg(0xC001, 0x00); // reload
+    m.write_prg(0xE001, 0x00); // enable
+
+    m.on_ppu_dot(0, 260, true);
+    m.on_ppu_dot(1, 260, true);
+    assert!(m.irq_pending());
+
+    m.write_prg(0xE000, 0x00); // disable and acknowledge
+    assert!(!m.irq_pending());
+}
+
+#[test]
+fn mmc3_irq_not_triggered_if_rendering_disabled() {
+    let mut m = Mmc3::new(8, 8);
+    m.write_prg(0xC000, 0x01);
+    m.write_prg(0xC001, 0x00);
+    m.write_prg(0xE001, 0x00);
+
+    m.on_ppu_dot(0, 260, false);
+    m.on_ppu_dot(1, 260, false);
+    assert!(!m.irq_pending());
+}
+
+#[test]
+fn mmc3_irq_not_triggered_on_wrong_dot() {
+    let mut m = Mmc3::new(8, 8);
+    m.write_prg(0xC000, 0x01);
+    m.write_prg(0xC001, 0x00);
+    m.write_prg(0xE001, 0x00);
+
+    m.on_ppu_dot(0, 259, true);
+    m.on_ppu_dot(1, 259, true);
+    assert!(!m.irq_pending());
+}
+
+#[test]
+fn mmc3_irq_not_triggered_on_wrong_scanline() {
+    let mut m = Mmc3::new(8, 8);
+    m.write_prg(0xC000, 0x01);
+    m.write_prg(0xC001, 0x00);
+    m.write_prg(0xE001, 0x00);
+
+    m.on_ppu_dot(240, 260, true);
+    m.on_ppu_dot(241, 260, true);
+    assert!(!m.irq_pending());
+}
+
+#[test]
+fn mmc3_prg_ram_protect_is_ignored() {
+    let mut m = Mmc3::new(8, 8);
+    m.write_prg(0xA001, 0xFF);
+    assert_eq!(m.read_prg(0x8000), 0); // Doesn't panic/crash, just ignored
+}
+
+#[test]
+fn mmc3_write_prg_below_8000_is_ignored() {
+    let mut m = Mmc3::new(8, 8);
+    m.write_prg(0x7FFF, 0xFF);
+}
