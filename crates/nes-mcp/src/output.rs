@@ -16,6 +16,28 @@ const DEFAULT_HEIGHT: u32 = FRAME_HEIGHT as u32;
 const DEFAULT_AUDIO_SAMPLE_COUNT: usize = AUDIO_CHUNK_SAMPLES;
 
 /// Current metadata snapshot of the publisher's output state.
+///
+/// This metadata allows consumers to quickly check if new frames or audio
+/// samples have been published by the emulator without needing to acquire locks
+/// or perform deep copies of the underlying media buffers.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::OutputMetadata;
+///
+/// // Metadata is typically retrieved via `latest_output_metadata()`
+/// let metadata = OutputMetadata {
+///     frame_seq: 42,
+///     audio_seq: 15,
+///     width: 256,
+///     height: 240,
+/// };
+///
+/// if metadata.frame_seq > 0 {
+///     println!("The emulator has rendered {} frames!", metadata.frame_seq);
+/// }
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OutputMetadata {
     /// Incremented each time a new frame is published.
@@ -29,6 +51,26 @@ pub struct OutputMetadata {
 }
 
 /// A reference-counted video frame snapshot.
+///
+/// By utilizing `Arc<Vec<u8>>`, the MCP server can broadcast a single rendered
+/// frame to multiple connected clients (or tool invocations) simultaneously.
+/// This zero-copy approach prevents severe memory pressure when dealing with
+/// the ~245KB RGBA payload of a standard NES frame.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use nes_mcp::FrameChunk;
+///
+/// // A blank, black frame ready to be shipped over JSON-RPC.
+/// let chunk = FrameChunk {
+///     seq: 1,
+///     rgba: Arc::new(vec![0; 256 * 240 * 4]),
+/// };
+///
+/// assert_eq!(chunk.rgba.len(), 245760);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameChunk {
     /// The sequence number of this frame.
@@ -40,6 +82,25 @@ pub struct FrameChunk {
 }
 
 /// A reference-counted block of audio samples.
+///
+/// Similar to `FrameChunk`, this structure wraps raw `i16` audio samples in
+/// an `Arc`. This ensures that high-frequency audio polling from external
+/// tools does not trigger expensive memory allocations on the hot path.
+///
+/// ## Examples
+///
+/// ```
+/// use std::sync::Arc;
+/// use nes_mcp::AudioChunk;
+///
+/// // A block of pure silence, perhaps from a paused emulator.
+/// let chunk = AudioChunk {
+///     seq: 1,
+///     samples: Arc::new(vec![0; 735]),
+/// };
+///
+/// assert_eq!(chunk.samples.len(), 735);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudioChunk {
     /// The sequence number of this audio chunk.
