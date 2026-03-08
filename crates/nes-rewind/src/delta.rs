@@ -5,8 +5,8 @@
 //! - [`FieldDelta`]: scalar register/timing changes between [`CoreSnapshot`]s.
 //! - [`FrameDelta`]: full per-frame delta combining array and field deltas.
 
-use nes_core::CoreSnapshot;
 use nes_core::cpu::CpuSnapshot;
+use nes_core::{CoreSnapshot, MapperDelta};
 use smallvec::SmallVec;
 
 // ---------------------------------------------------------------------------
@@ -119,7 +119,8 @@ pub struct FieldDelta {
     pub ppu_timing: Option<PpuTimingDelta>,
     /// PPU address/scroll (Loopy) registers if any changed.
     pub ppu_scroll: Option<PpuScrollDelta>,
-    // TODO: mapper delta tracking -- keyframes capture full state for now.
+    /// Mapper-specific runtime state (banking/IRQ/etc.) if any changed.
+    pub mapper: Option<MapperDelta>,
 }
 
 impl FieldDelta {
@@ -188,11 +189,14 @@ impl FieldDelta {
             }
         };
 
+        let mapper = before.mapper_delta(after);
+
         Self {
             cpu_regs,
             ppu_ctrl,
             ppu_timing,
             ppu_scroll,
+            mapper,
         }
     }
 
@@ -223,6 +227,9 @@ impl FieldDelta {
             target.ppu.read_buffer = scroll.read_buffer;
             target.ppu.render_scroll_x = scroll.render_scroll_x;
             target.ppu.render_ctrl = scroll.render_ctrl;
+        }
+        if let Some(mapper) = &self.mapper {
+            target.apply_mapper_delta(mapper);
         }
     }
 }
@@ -404,6 +411,41 @@ mod tests {
         core.save_state()
     }
 
+    fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
+        let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
+        rom[0] = 0x4E;
+        rom[1] = 0x45;
+        rom[2] = 0x53;
+        rom[3] = 0x1A;
+        rom[4] = prg_banks;
+        rom[5] = 0;
+        rom[6] = (mapper_id & 0x0F) << 4;
+        rom[7] = mapper_id & 0xF0;
+        rom
+    }
+
+    fn make_mmc3_snapshot() -> CoreSnapshot {
+        let rom = sample_ines(4, 4);
+        let mut core = NesCore::new();
+        core.load_ines_rom(&rom).unwrap();
+        core.save_state()
+    }
+
+    fn make_cnrom_chr_ram_snapshot() -> CoreSnapshot {
+        let rom = sample_ines(3, 1);
+        let mut core = NesCore::new();
+        core.load_ines_rom(&rom).unwrap();
+        core.save_state()
+    }
+
+    fn write_ppu_data(core: &mut NesCore, addr: u16, data: &[u8]) {
+        core.write_cpu_bus(0x2006, (addr >> 8) as u8);
+        core.write_cpu_bus(0x2006, addr as u8);
+        for &byte in data {
+            core.write_cpu_bus(0x2007, byte);
+        }
+    }
+
     #[test]
     fn identical_snapshots_all_none() {
         let snap = make_snapshot();
@@ -412,6 +454,45 @@ mod tests {
         assert!(fd.ppu_ctrl.is_none());
         assert!(fd.ppu_timing.is_none());
         assert!(fd.ppu_scroll.is_none());
+        assert!(fd.mapper.is_none());
+    }
+
+    #[test]
+    fn mapper_irq_state_roundtrip_requires_mapper_delta() {
+        let before = make_mmc3_snapshot();
+
+        let mut core = NesCore::new();
+        core.load_state(&before);
+        core.write_cpu_bus(0xC000, 0x03);
+        core.write_cpu_bus(0xC001, 0x00);
+        core.write_cpu_bus(0xE001, 0x00);
+        let after = core.save_state();
+
+        let fd = FrameDelta::compute(&before, &after);
+        let mut target = before.clone();
+        fd.apply(&mut target);
+
+        assert_eq!(target, after);
+    }
+
+    #[test]
+    fn chr_ram_writes_preserve_mapper_backing_without_register_change() {
+        let before = make_cnrom_chr_ram_snapshot();
+
+        let mut core = NesCore::new();
+        core.load_state(&before);
+        write_ppu_data(&mut core, 0x0000, &[0x5A]);
+        let after = core.save_state();
+
+        let fd = FrameDelta::compute(&before, &after);
+        assert!(fd.fields.mapper.is_some());
+
+        let mut target = before.clone();
+        fd.apply(&mut target);
+
+        let mut restored = NesCore::new();
+        restored.load_state(&target);
+        assert_eq!(restored.save_state().ppu.chr[0], 0x5A);
     }
 
     #[test]

@@ -17,5 +17,6 @@ pub mod experimental;
 
 pub use api::{
     AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, Button, Command, CoreError, CoreQuery, CoreSnapshot,
-    EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, QueryResult, RomLoadInfo,
+    EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, MapperDelta, NesCore, QueryResult,
+    RomLoadInfo,
 };

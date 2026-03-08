@@ -8,7 +8,10 @@ use core::fmt;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
-use crate::mapper::{Axrom, Cnrom, Gxrom, Mmc1, Mmc3, Nrom, Uxrom};
+use crate::mapper::{
+    Axrom, AxromState, Cnrom, CnromState, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State,
+    Nrom, Uxrom, UxromState,
+};
 use crate::ppu::{Ppu, PpuSnapshot};
 use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
@@ -184,6 +187,26 @@ pub struct CoreSnapshot {
     reset_pc: u16,
 }
 
+/// Opaque mapper-runtime delta between two [`CoreSnapshot`]s.
+///
+/// This captures mutable mapper state such as bank registers, mirroring mode,
+/// and IRQ counters without exposing internal mapper implementations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapperDelta {
+    kind: MapperDeltaKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MapperDeltaKind {
+    Replace(Option<LoadedMapper>),
+    Uxrom(UxromState),
+    Mmc1(Mmc1State),
+    Cnrom(CnromState),
+    Axrom(AxromState),
+    Gxrom(GxromState),
+    Mmc3(Mmc3State),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Metadata returned after successfully loading a ROM.
 pub struct RomLoadInfo {
@@ -262,8 +285,168 @@ impl LoadedMapper {
     }
 
     fn sync_chr_ram_from_ppu_window(&mut self, window: &[u8; CHR_8K_BYTES]) {
-        if let Self::Mmc3(mapper) = self {
-            mapper.sync_chr_ram_from_ppu_window(window);
+        match self {
+            Self::Cnrom(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Gxrom(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Mmc3(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            _ => {}
+        }
+    }
+
+    #[must_use]
+    fn chr_writable(&self) -> bool {
+        match self {
+            Self::Cnrom(mapper) => mapper.chr_writable(),
+            Self::Gxrom(mapper) => mapper.chr_writable(),
+            Self::Mmc3(mapper) => mapper.chr_writable(),
+            _ => false,
+        }
+    }
+
+    fn delta_to(&self, after: &Self) -> Option<MapperDelta> {
+        let kind = match (self, after) {
+            (Self::Nrom(_), Self::Nrom(_)) => return None,
+            (Self::Uxrom(before), Self::Uxrom(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Uxrom(state))
+            }
+            (Self::Mmc1(before), Self::Mmc1(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc1(state))
+            }
+            (Self::Cnrom(before), Self::Cnrom(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Cnrom(state))
+            }
+            (Self::Axrom(before), Self::Axrom(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Axrom(state))
+            }
+            (Self::Gxrom(before), Self::Gxrom(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Gxrom(state))
+            }
+            (Self::Mmc3(before), Self::Mmc3(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc3(state))
+            }
+            _ => Some(MapperDeltaKind::Replace(Some(after.clone()))),
+        }?;
+
+        Some(MapperDelta { kind })
+    }
+
+    #[must_use]
+    fn snapshot_delta(&self) -> Option<MapperDelta> {
+        let kind = match self {
+            Self::Nrom(_) => return None,
+            Self::Uxrom(mapper) => MapperDeltaKind::Uxrom(mapper.state()),
+            Self::Mmc1(mapper) => MapperDeltaKind::Mmc1(mapper.state()),
+            Self::Cnrom(mapper) => MapperDeltaKind::Cnrom(mapper.state()),
+            Self::Axrom(mapper) => MapperDeltaKind::Axrom(mapper.state()),
+            Self::Gxrom(mapper) => MapperDeltaKind::Gxrom(mapper.state()),
+            Self::Mmc3(mapper) => MapperDeltaKind::Mmc3(mapper.state()),
+        };
+
+        Some(MapperDelta { kind })
+    }
+
+    fn apply_delta(&mut self, delta: &MapperDelta, chr_window: &[u8; CHR_8K_BYTES]) {
+        match &delta.kind {
+            MapperDeltaKind::Uxrom(state) => {
+                if let Self::Uxrom(mapper) = self {
+                    mapper.restore_state(*state);
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            }
+            MapperDeltaKind::Mmc1(state) => {
+                if let Self::Mmc1(mapper) = self {
+                    mapper.restore_state(*state);
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            }
+            MapperDeltaKind::Cnrom(state) => {
+                if let Self::Cnrom(mapper) = self {
+                    mapper.restore_state(*state);
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            }
+            MapperDeltaKind::Axrom(state) => {
+                if let Self::Axrom(mapper) = self {
+                    mapper.restore_state(*state);
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            }
+            MapperDeltaKind::Gxrom(state) => {
+                if let Self::Gxrom(mapper) = self {
+                    mapper.restore_state(*state);
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            }
+            MapperDeltaKind::Mmc3(state) => {
+                if let Self::Mmc3(mapper) = self {
+                    mapper.restore_state(*state);
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            }
+            MapperDeltaKind::Replace(_) => {
+                debug_assert!(
+                    false,
+                    "replacement mapper deltas are handled by CoreSnapshot"
+                );
+                return;
+            }
+        }
+
+        self.sync_chr_ram_from_ppu_window(chr_window);
+    }
+}
+
+impl CoreSnapshot {
+    /// Computes the mapper-specific delta needed to transform this snapshot into `after`.
+    #[must_use]
+    pub fn mapper_delta(&self, after: &Self) -> Option<MapperDelta> {
+        match (&self.mapper, &after.mapper) {
+            (None, None) => None,
+            (Some(before), Some(after_mapper)) => before.delta_to(after_mapper).or_else(|| {
+                (self.ppu.chr != after.ppu.chr && after_mapper.chr_writable())
+                    .then(|| after_mapper.snapshot_delta())
+                    .flatten()
+            }),
+            _ => Some(MapperDelta {
+                kind: MapperDeltaKind::Replace(after.mapper.clone()),
+            }),
+        }
+    }
+
+    /// Applies a mapper-specific delta to this snapshot in-place.
+    pub fn apply_mapper_delta(&mut self, delta: &MapperDelta) {
+        match &delta.kind {
+            MapperDeltaKind::Replace(mapper) => {
+                self.mapper = mapper.clone();
+            }
+            _ => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.apply_delta(delta, &self.ppu.chr);
+                } else {
+                    debug_assert!(
+                        false,
+                        "non-replacement mapper delta requires existing mapper"
+                    );
+                }
+            }
         }
     }
 }
