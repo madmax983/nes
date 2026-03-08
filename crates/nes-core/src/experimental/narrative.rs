@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn test_narrative_generator() {
         let mut core = NesCore::new();
-        let mut generator = NarrativeGenerator::new();
+        let mut generator = NarrativeGenerator::default();
 
         // 1. Core starts at PC 0xC000
         let event = generator.observe(&core);
