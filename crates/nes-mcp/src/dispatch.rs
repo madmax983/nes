@@ -274,198 +274,249 @@ pub fn dispatch_tool(
         "resume" => execute_command(core, Command::Resume).map(|_| DispatchOutput::Ack),
         "reset" => execute_command(core, Command::Reset).map(|_| DispatchOutput::Ack),
         "power_cycle" => execute_command(core, Command::PowerCycle).map(|_| DispatchOutput::Ack),
-        "step_cpu" => {
-            execute_command(core, Command::StepCpu)?;
-            Ok(DispatchOutput::CpuStep {
-                trace: core.last_cpu_trace().map(ToOwned::to_owned),
-                cpu_cycles: core.total_cycles(),
-            })
-        }
-        "step_scanline" => {
-            execute_command(core, Command::StepScanline)?;
-            Ok(DispatchOutput::CycleCount {
-                cpu_cycles: core.total_cycles(),
-            })
-        }
-        "step_frame" => {
-            execute_command(core, Command::StepFrame)?;
-            Ok(DispatchOutput::CycleCount {
-                cpu_cycles: core.total_cycles(),
-            })
-        }
+        "step_cpu" => handle_step_cpu(core),
+        "step_scanline" => handle_step_scanline(core),
+        "step_frame" => handle_step_frame(core),
         "set_controller_state" => handle_set_controller_state(core, params),
         "press_button" => handle_press_button(core, params),
         "release_button" => handle_release_button(core, params),
-        "set_speed" => {
-            let speed = parse_speed_permille(params)?;
-            execute_command(core, Command::SetSpeed(speed))?;
-            Ok(DispatchOutput::EmulatorState {
-                paused: core.is_paused(),
-                speed_permille: core.speed_permille(),
-                controller_bits: core.controller_bits(),
-            })
-        }
-        "get_fps" => match core.query(CoreQuery::FpsMilli) {
-            QueryResult::FpsMilli(fps_milli) => Ok(DispatchOutput::Fps { fps_milli }),
-            _ => Err(DispatchError::Internal(
-                "unexpected core query result for get_fps".to_owned(),
-            )),
-        },
-        "get_ppu_frame_counter" => match core.query(CoreQuery::PpuFrameCounter) {
-            QueryResult::PpuFrameCounter(frame_counter) => {
-                Ok(DispatchOutput::PpuFrameCounter { frame_counter })
-            }
-            _ => Err(DispatchError::Internal(
-                "unexpected core query result for get_ppu_frame_counter".to_owned(),
-            )),
-        },
-        "get_emulator_state" => match core.query(CoreQuery::EmulatorState) {
-            QueryResult::EmulatorState(state) => Ok(DispatchOutput::EmulatorState {
-                paused: state.paused,
-                speed_permille: state.speed_permille,
-                controller_bits: state.controller_bits,
-            }),
-            _ => Err(DispatchError::Internal(
-                "unexpected core query result for get_emulator_state".to_owned(),
-            )),
-        },
-        "read_registers" => match core.query(CoreQuery::Registers) {
-            QueryResult::Registers(regs) => Ok(DispatchOutput::Registers {
-                pc: regs.pc,
-                a: regs.a,
-                x: regs.x,
-                y: regs.y,
-                sp: regs.sp,
-                status: regs.status,
-            }),
-            _ => Err(DispatchError::Internal(
-                "unexpected core query result for read_registers".to_owned(),
-            )),
-        },
-        "read_memory" => {
-            let address = parse_u16(params, "address")?;
-            match core.query(CoreQuery::Memory(address)) {
-                QueryResult::Memory(value) => Ok(DispatchOutput::Memory { address, value }),
-                _ => Err(DispatchError::Internal(
-                    "unexpected core query result for read_memory".to_owned(),
-                )),
-            }
-        }
-        "get_frame" => {
-            sync_frame_output(core);
-            let default_seq = latest_output_metadata().frame_seq.saturating_add(1);
-            let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
-            let chunk = frame_chunk(requested_seq)
-                .ok_or_else(|| DispatchError::Internal("frame chunk missing".to_owned()))?;
-            Ok(DispatchOutput::Frame {
-                seq: chunk.seq,
-                bytes: chunk.rgba.len(),
-            })
-        }
+        "set_speed" => handle_set_speed(core, params),
+        "get_fps" => handle_get_fps(core),
+        "get_ppu_frame_counter" => handle_get_ppu_frame_counter(core),
+        "get_emulator_state" => handle_get_emulator_state(core),
+        "read_registers" => handle_read_registers(core),
+        "read_memory" => handle_read_memory(core, params),
+        "get_frame" => handle_get_frame(core, params),
         "capture_frame" => handle_capture_frame(core, params),
-        "get_audio_chunk" => {
-            sync_audio_output(core);
-            let default_seq = latest_output_metadata().audio_seq.saturating_add(1);
-            let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
-            let chunk = audio_chunk(requested_seq)
-                .ok_or_else(|| DispatchError::Internal("audio chunk missing".to_owned()))?;
-            Ok(DispatchOutput::Audio {
-                seq: chunk.seq,
-                samples: chunk.samples.len(),
-            })
-        }
+        "get_audio_chunk" => handle_get_audio_chunk(core, params),
         "save_state" => handle_save_state(core, params),
         "load_state" => handle_load_state(core, params),
         "load_rom" => handle_load_rom(core, params),
-        "run_macro" => {
-            let Some(script) = params.get("script") else {
-                return Err(DispatchError::InvalidParams(
-                    "script must be provided".to_owned(),
-                ));
-            };
-            let frames_elapsed = crate::macro_engine::execute_macro_script(core, script)
-                .map_err(DispatchError::InvalidParams)?;
-            Ok(DispatchOutput::MacroExecuted {
-                frames_elapsed,
-                final_controller_bits: core.controller_bits(),
-            })
-        }
-        "assemble_6502_dsl" => {
-            let source = parse_dsl_source(params)?;
-            let assembled = nes_dsl::assemble(source).map_err(|err| {
-                DispatchError::InvalidParams(format!("dsl assembly failed: {err}"))
-            })?;
-            Ok(DispatchOutput::DslAssembled {
-                bytes_written: assembled.bytes.len(),
-                label_count: assembled.labels.len(),
-                nmi_vector: assembled.nmi_vector,
-                reset_vector: assembled.reset_vector,
-                irq_vector: assembled.irq_vector,
-            })
-        }
-        "load_6502_dsl" => {
-            let source = parse_dsl_source(params)?;
-            let options = parse_dsl_rom_options(params)?;
-            let rom = nes_dsl::build_ines_nrom_rom(source, &options).map_err(|err| {
-                DispatchError::InvalidParams(format!("dsl rom build failed: {err}"))
-            })?;
-            let info = core
-                .load_ines_rom(&rom)
-                .map_err(|err| DispatchError::Core(err.to_string()))?;
-            Ok(DispatchOutput::DslRomLoaded {
-                mapper_id: info.mapper_id,
-                prg_rom_bytes: info.prg_rom_bytes,
-                reset_pc: info.reset_pc,
-                rom_bytes: rom.len(),
-            })
-        }
-        "export_6502_dsl_rom" => {
-            let source = parse_dsl_source(params)?;
-            let options = parse_dsl_rom_options(params)?;
-            let output_path = parse_required_string(params, "output_path")?;
-            let rom = nes_dsl::build_ines_nrom_rom(source, &options).map_err(|err| {
-                DispatchError::InvalidParams(format!("dsl rom build failed: {err}"))
-            })?;
-            fs::write(&output_path, &rom).map_err(|err| {
-                DispatchError::InvalidParams(format!(
-                    "unable to write output_path '{}': {err}",
-                    output_path
-                ))
-            })?;
-
-            let prg_rom_bytes = rom
-                .get(4)
-                .map(|banks| usize::from(*banks) * 16 * 1024)
-                .unwrap_or(0);
-            Ok(DispatchOutput::DslRomExported {
-                path: output_path,
-                bytes: rom.len(),
-                mapper_id: 0,
-                prg_rom_bytes,
-            })
-        }
-        "export_6502_dsl_rom_base64" => {
-            let source = parse_dsl_source(params)?;
-            let options = parse_dsl_rom_options(params)?;
-            let rom = nes_dsl::build_ines_nrom_rom(source, &options).map_err(|err| {
-                DispatchError::InvalidParams(format!("dsl rom build failed: {err}"))
-            })?;
-            let prg_rom_bytes = rom
-                .get(4)
-                .map(|banks| usize::from(*banks) * 16 * 1024)
-                .unwrap_or(0);
-            Ok(DispatchOutput::DslRomExportedBase64 {
-                rom_base64: encode_base64(rom.as_slice()),
-                bytes: rom.len(),
-                mapper_id: 0,
-                prg_rom_bytes,
-            })
-        }
+        "run_macro" => handle_run_macro(core, params),
+        "assemble_6502_dsl" => handle_assemble_6502_dsl(params),
+        "load_6502_dsl" => handle_load_6502_dsl(core, params),
+        "export_6502_dsl_rom" => handle_export_6502_dsl_rom(params),
+        "export_6502_dsl_rom_base64" => handle_export_6502_dsl_rom_base64(params),
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }
         _ => Err(DispatchError::UnknownTool(tool_name.to_owned())),
     }
+}
+
+fn handle_step_cpu(core: &mut NesCore) -> Result<DispatchOutput, DispatchError> {
+    execute_command(core, Command::StepCpu)?;
+    Ok(DispatchOutput::CpuStep {
+        trace: core.last_cpu_trace().map(ToOwned::to_owned),
+        cpu_cycles: core.total_cycles(),
+    })
+}
+
+fn handle_step_scanline(core: &mut NesCore) -> Result<DispatchOutput, DispatchError> {
+    execute_command(core, Command::StepScanline)?;
+    Ok(DispatchOutput::CycleCount {
+        cpu_cycles: core.total_cycles(),
+    })
+}
+
+fn handle_step_frame(core: &mut NesCore) -> Result<DispatchOutput, DispatchError> {
+    execute_command(core, Command::StepFrame)?;
+    Ok(DispatchOutput::CycleCount {
+        cpu_cycles: core.total_cycles(),
+    })
+}
+
+fn handle_set_speed(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let speed = parse_speed_permille(params)?;
+    execute_command(core, Command::SetSpeed(speed))?;
+    Ok(DispatchOutput::EmulatorState {
+        paused: core.is_paused(),
+        speed_permille: core.speed_permille(),
+        controller_bits: core.controller_bits(),
+    })
+}
+
+fn handle_get_fps(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    match core.query(CoreQuery::FpsMilli) {
+        QueryResult::FpsMilli(fps_milli) => Ok(DispatchOutput::Fps { fps_milli }),
+        _ => Err(DispatchError::Internal(
+            "unexpected core query result for get_fps".to_owned(),
+        )),
+    }
+}
+
+fn handle_get_ppu_frame_counter(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    match core.query(CoreQuery::PpuFrameCounter) {
+        QueryResult::PpuFrameCounter(frame_counter) => {
+            Ok(DispatchOutput::PpuFrameCounter { frame_counter })
+        }
+        _ => Err(DispatchError::Internal(
+            "unexpected core query result for get_ppu_frame_counter".to_owned(),
+        )),
+    }
+}
+
+fn handle_get_emulator_state(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    match core.query(CoreQuery::EmulatorState) {
+        QueryResult::EmulatorState(state) => Ok(DispatchOutput::EmulatorState {
+            paused: state.paused,
+            speed_permille: state.speed_permille,
+            controller_bits: state.controller_bits,
+        }),
+        _ => Err(DispatchError::Internal(
+            "unexpected core query result for get_emulator_state".to_owned(),
+        )),
+    }
+}
+
+fn handle_read_registers(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    match core.query(CoreQuery::Registers) {
+        QueryResult::Registers(regs) => Ok(DispatchOutput::Registers {
+            pc: regs.pc,
+            a: regs.a,
+            x: regs.x,
+            y: regs.y,
+            sp: regs.sp,
+            status: regs.status,
+        }),
+        _ => Err(DispatchError::Internal(
+            "unexpected core query result for read_registers".to_owned(),
+        )),
+    }
+}
+
+fn handle_read_memory(
+    core: &NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let address = parse_u16(params, "address")?;
+    match core.query(CoreQuery::Memory(address)) {
+        QueryResult::Memory(value) => Ok(DispatchOutput::Memory { address, value }),
+        _ => Err(DispatchError::Internal(
+            "unexpected core query result for read_memory".to_owned(),
+        )),
+    }
+}
+
+fn handle_get_frame(core: &mut NesCore, params: &ToolParams) -> Result<DispatchOutput, DispatchError> {
+    sync_frame_output(core);
+    let default_seq = latest_output_metadata().frame_seq.saturating_add(1);
+    let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
+    let chunk = frame_chunk(requested_seq)
+        .ok_or_else(|| DispatchError::Internal("frame chunk missing".to_owned()))?;
+    Ok(DispatchOutput::Frame {
+        seq: chunk.seq,
+        bytes: chunk.rgba.len(),
+    })
+}
+
+fn handle_get_audio_chunk(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    sync_audio_output(core);
+    let default_seq = latest_output_metadata().audio_seq.saturating_add(1);
+    let requested_seq = parse_u64(params, "seq").unwrap_or(default_seq);
+    let chunk = audio_chunk(requested_seq)
+        .ok_or_else(|| DispatchError::Internal("audio chunk missing".to_owned()))?;
+    Ok(DispatchOutput::Audio {
+        seq: chunk.seq,
+        samples: chunk.samples.len(),
+    })
+}
+
+fn handle_run_macro(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let Some(script) = params.get("script") else {
+        return Err(DispatchError::InvalidParams(
+            "script must be provided".to_owned(),
+        ));
+    };
+    let frames_elapsed = crate::macro_engine::execute_macro_script(core, script)
+        .map_err(DispatchError::InvalidParams)?;
+    Ok(DispatchOutput::MacroExecuted {
+        frames_elapsed,
+        final_controller_bits: core.controller_bits(),
+    })
+}
+
+fn handle_assemble_6502_dsl(params: &ToolParams) -> Result<DispatchOutput, DispatchError> {
+    let source = parse_dsl_source(params)?;
+    let assembled = nes_dsl::assemble(source)
+        .map_err(|err| DispatchError::InvalidParams(format!("dsl assembly failed: {err}")))?;
+    Ok(DispatchOutput::DslAssembled {
+        bytes_written: assembled.bytes.len(),
+        label_count: assembled.labels.len(),
+        nmi_vector: assembled.nmi_vector,
+        reset_vector: assembled.reset_vector,
+        irq_vector: assembled.irq_vector,
+    })
+}
+
+fn handle_load_6502_dsl(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let source = parse_dsl_source(params)?;
+    let options = parse_dsl_rom_options(params)?;
+    let rom = nes_dsl::build_ines_nrom_rom(source, &options)
+        .map_err(|err| DispatchError::InvalidParams(format!("dsl rom build failed: {err}")))?;
+    let info = core
+        .load_ines_rom(&rom)
+        .map_err(|err| DispatchError::Core(err.to_string()))?;
+    Ok(DispatchOutput::DslRomLoaded {
+        mapper_id: info.mapper_id,
+        prg_rom_bytes: info.prg_rom_bytes,
+        reset_pc: info.reset_pc,
+        rom_bytes: rom.len(),
+    })
+}
+
+fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, DispatchError> {
+    let source = parse_dsl_source(params)?;
+    let options = parse_dsl_rom_options(params)?;
+    let output_path = parse_required_string(params, "output_path")?;
+    let rom = nes_dsl::build_ines_nrom_rom(source, &options)
+        .map_err(|err| DispatchError::InvalidParams(format!("dsl rom build failed: {err}")))?;
+    fs::write(&output_path, &rom).map_err(|err| {
+        DispatchError::InvalidParams(format!(
+            "unable to write output_path '{}': {err}",
+            output_path
+        ))
+    })?;
+
+    let prg_rom_bytes = rom
+        .get(4)
+        .map(|banks| usize::from(*banks) * 16 * 1024)
+        .unwrap_or(0);
+    Ok(DispatchOutput::DslRomExported {
+        path: output_path,
+        bytes: rom.len(),
+        mapper_id: 0,
+        prg_rom_bytes,
+    })
+}
+
+fn handle_export_6502_dsl_rom_base64(params: &ToolParams) -> Result<DispatchOutput, DispatchError> {
+    let source = parse_dsl_source(params)?;
+    let options = parse_dsl_rom_options(params)?;
+    let rom = nes_dsl::build_ines_nrom_rom(source, &options)
+        .map_err(|err| DispatchError::InvalidParams(format!("dsl rom build failed: {err}")))?;
+    let prg_rom_bytes = rom
+        .get(4)
+        .map(|banks| usize::from(*banks) * 16 * 1024)
+        .unwrap_or(0);
+    Ok(DispatchOutput::DslRomExportedBase64 {
+        rom_base64: encode_base64(rom.as_slice()),
+        bytes: rom.len(),
+        mapper_id: 0,
+        prg_rom_bytes,
+    })
 }
 
 fn handle_set_controller_state(
