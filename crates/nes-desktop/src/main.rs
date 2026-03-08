@@ -21,6 +21,11 @@ use nes_core::{
     AUDIO_SAMPLE_RATE, Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore,
 };
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use nes_desktop::rta::{
+    CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
+    ProfileStatus, RtaEvent, RtaManager, RtaProfile, compute_rom_hash, load_profiles,
+    select_profile,
+};
 use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
@@ -71,6 +76,7 @@ struct RuntimeConfig {
     mcp_enabled: bool,
     mcp_bind_addr: String,
     netplay: Option<NetplayRuntimeConfig>,
+    rta: Option<RtaRuntimeConfig>,
     #[cfg(feature = "nova")]
     auto_player_enabled: bool,
 }
@@ -87,8 +93,21 @@ struct RuntimeArgs {
     netplay_input_delay_frames: Option<u32>,
     netplay_max_rollback_frames: Option<u32>,
     netplay_hash_check_every_frames: Option<u64>,
+    rta_enabled: bool,
+    rta_profile_id: Option<String>,
+    rta_profiles_dir: Option<String>,
+    rta_runs_dir: Option<String>,
+    rta_calibrate: bool,
     #[cfg(feature = "nova")]
     auto_player_enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+struct RtaRuntimeConfig {
+    profile_id_override: Option<String>,
+    profiles_dir: PathBuf,
+    runs_dir: PathBuf,
+    calibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -437,6 +456,8 @@ fn main() {
 enum KeyboardDecision {
     Exit,
     SetRewindHeld(bool),
+    RtaManualSplit,
+    RtaFinish,
     UpdateKeyboardBits { mask: u8, pressed: bool },
     ExecuteCore(Command),
     Noop,
@@ -494,12 +515,20 @@ fn classify_keyboard_input(
     key: VirtualKeyCode,
     pressed: bool,
     rollback_enabled: bool,
+    rta_enabled: bool,
+    rta_calibrate: bool,
 ) -> KeyboardDecision {
     if key == VirtualKeyCode::Escape && pressed {
         return KeyboardDecision::Exit;
     }
     if key == VirtualKeyCode::R {
         return KeyboardDecision::SetRewindHeld(pressed);
+    }
+    if rta_enabled && pressed && key == VirtualKeyCode::F9 {
+        return KeyboardDecision::RtaManualSplit;
+    }
+    if rta_enabled && rta_calibrate && pressed && key == VirtualKeyCode::F10 {
+        return KeyboardDecision::RtaFinish;
     }
 
     let Some(key_code) = map_virtual_keycode(key) else {
@@ -516,6 +545,15 @@ fn classify_keyboard_input(
         KeyboardDecision::ExecuteCore(mapped.core)
     } else {
         KeyboardDecision::Noop
+    }
+}
+
+fn command_marks_rta_invalidation(command: Command) -> Option<ForbiddenAction> {
+    match command {
+        Command::StepCpu | Command::StepScanline | Command::StepFrame => {
+            Some(ForbiddenAction::FrameStep)
+        }
+        _ => None,
     }
 }
 
@@ -747,6 +785,65 @@ fn run() -> Result<(), String> {
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
     let step_mode = runtime.step_mode;
+    let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
+        let profiles = load_profiles(&rta_config.profiles_dir)?;
+        let rom_hash = compute_rom_hash(&rom_bytes);
+        let profile = if rta_config.calibrate {
+            match select_profile(
+                &profiles,
+                &rom_hash,
+                rta_config.profile_id_override.as_deref(),
+                true,
+            ) {
+                Ok(selection) => selection.selected.profile,
+                Err(err) => {
+                    if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
+                        eprintln!(
+                            "[rta] calibration creating profile template '{}' ({err})",
+                            profile_id
+                        );
+                        RtaProfile {
+                            id: profile_id.clone(),
+                            rom_hashes: vec![rom_hash.clone()],
+                            status: ProfileStatus::Published,
+                            ..RtaProfile::default()
+                        }
+                    } else {
+                        return Err(format!(
+                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {rom_hash}: {err}"
+                        ));
+                    }
+                }
+            }
+        } else {
+            select_profile(
+                &profiles,
+                &rom_hash,
+                rta_config.profile_id_override.as_deref(),
+                false,
+            )
+            .map_err(|err| {
+                format!(
+                    "Failed to enter RTA mode for ROM hash {rom_hash}: {err}. Provide --rta-profile <id> to override."
+                )
+            })?
+            .selected
+            .profile
+        };
+        let calibration = if rta_config.calibrate {
+            Some(CalibrationRecorder::new(profile.id.clone()))
+        } else {
+            None
+        };
+        Some(RtaManager::new(
+            profile,
+            rom_hash,
+            rta_config.runs_dir.clone(),
+            calibration,
+        ))
+    } else {
+        None
+    };
 
     let mut table = Table::new();
     table.set_header(vec![
@@ -801,6 +898,16 @@ fn run() -> Result<(), String> {
                 netplay.input_delay_frames,
                 netplay.max_rollback_frames,
                 netplay.hash_check_every_frames
+            )),
+        ]);
+    }
+    if let Some(rta) = rta_manager.as_ref() {
+        table.add_row(vec![
+            Cell::new("RTA"),
+            Cell::new(format!(
+                "enabled profile='{}' calibrate={}",
+                rta.profile_id(),
+                rta.is_calibrating()
             )),
         ]);
     }
@@ -945,19 +1052,52 @@ fn run() -> Result<(), String> {
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
             WindowEventDecision::CloseRequested => {
+                if let Some(rta) = rta_manager.as_mut() {
+                    if rta.is_calibrating() && rta.is_active() {
+                        let _ = rta.force_finish(frame_index, Instant::now());
+                    }
+                    let _ = rta.write_artifacts_if_finished();
+                    if let Some(rta_config) = runtime.rta.as_ref() {
+                        let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                    }
+                }
                 *control_flow = ControlFlow::Exit;
             }
             WindowEventDecision::KeyboardInput { key, pressed } => {
                 let Some(key) = key else {
                     return;
                 };
-                match classify_keyboard_input(key, pressed, rollback.is_some()) {
+                match classify_keyboard_input(
+                    key,
+                    pressed,
+                    rollback.is_some(),
+                    rta_manager.is_some(),
+                    rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
+                ) {
                     KeyboardDecision::Exit => {
+                        if let Some(rta) = rta_manager.as_mut() {
+                            if rta.is_calibrating() && rta.is_active() {
+                                let _ = rta.force_finish(frame_index, Instant::now());
+                            }
+                            let _ = rta.write_artifacts_if_finished();
+                            if let Some(rta_config) = runtime.rta.as_ref() {
+                                let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                            }
+                        }
                         *control_flow = ControlFlow::Exit;
                     }
                     KeyboardDecision::SetRewindHeld(held) => {
                         // R: hold to rewind, release to resume.
                         rewind_held = held;
+                        if held
+                            && let Some(rta) = rta_manager.as_mut()
+                        {
+                            let _ = rta.mark_forbidden_action(
+                                ForbiddenAction::Rewind,
+                                frame_index,
+                                Instant::now(),
+                            );
+                        }
                         if should_resume_after_rewind_hold(held) {
                             time_machine.resume();
                             // The restored snapshot's controller_bits may reflect buttons
@@ -968,10 +1108,29 @@ fn run() -> Result<(), String> {
                             }
                         }
                     }
+                    KeyboardDecision::RtaManualSplit => {
+                        if let Some(rta) = rta_manager.as_mut() {
+                            let _ = rta.manual_split(frame_index, Instant::now());
+                        }
+                    }
+                    KeyboardDecision::RtaFinish => {
+                        if let Some(rta) = rta_manager.as_mut() {
+                            let _ = rta.force_finish(frame_index, Instant::now());
+                            let _ = rta.write_artifacts_if_finished();
+                            if let Some(rta_config) = runtime.rta.as_ref() {
+                                let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                            }
+                        }
+                    }
                     KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
                         keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
                     }
                     KeyboardDecision::ExecuteCore(command) => {
+                        if let Some(action) = command_marks_rta_invalidation(command)
+                            && let Some(rta) = rta_manager.as_mut()
+                        {
+                            let _ = rta.mark_forbidden_action(action, frame_index, Instant::now());
+                        }
                         if let Err(err) = core.execute(command) {
                             eprintln!("Input command failed: {err}");
                             *control_flow = ControlFlow::Exit;
@@ -1211,6 +1370,29 @@ fn run() -> Result<(), String> {
 
             let step_elapsed = step_start.elapsed();
             frame_index = frame_index.saturating_add(1);
+            if let Some(rta) = rta_manager.as_mut() {
+                let events = rta.tick(frame_index, now, |addr| core.read_memory(addr));
+                rta.record_input_frame(
+                    frame_index,
+                    core.controller_bits(),
+                    core.controller2_bits(),
+                    now,
+                );
+                if events
+                    .iter()
+                    .any(|event| matches!(event, RtaEvent::Finished(_)))
+                {
+                    if let Err(err) = rta.write_artifacts_if_finished() {
+                        eprintln!("RTA artifact write failed: {err}");
+                    }
+                    if let Some(rta_config) = runtime.rta.as_ref()
+                        && rta.is_calibrating()
+                        && let Err(err) = rta.write_calibration_draft(&rta_config.profiles_dir)
+                    {
+                        eprintln!("RTA calibration draft write failed: {err}");
+                    }
+                }
+            }
             metrics.on_step(&core, step_elapsed, missed_deadline);
             if let Some(stats) = netplay_stats.as_ref() {
                 metrics.on_netplay_stats(stats);
@@ -1350,6 +1532,31 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     } else {
         None
     };
+    let rta_enabled = runtime_args.rta_enabled
+        || runtime_args.rta_profile_id.is_some()
+        || runtime_args.rta_profiles_dir.is_some()
+        || runtime_args.rta_runs_dir.is_some()
+        || runtime_args.rta_calibrate;
+    let rta = if rta_enabled {
+        Some(RtaRuntimeConfig {
+            profile_id_override: runtime_args.rta_profile_id.clone(),
+            profiles_dir: PathBuf::from(
+                runtime_args
+                    .rta_profiles_dir
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
+            ),
+            runs_dir: PathBuf::from(
+                runtime_args
+                    .rta_runs_dir
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
+            ),
+            calibrate: runtime_args.rta_calibrate,
+        })
+    } else {
+        None
+    };
 
     Ok(RuntimeConfig {
         rom_path,
@@ -1364,6 +1571,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         mcp_enabled: runtime_args.mcp_enabled,
         mcp_bind_addr: runtime_args.mcp_bind_addr,
         netplay,
+        rta,
         #[cfg(feature = "nova")]
         auto_player_enabled: runtime_args.auto_player_enabled,
     })
@@ -1381,6 +1589,11 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         netplay_input_delay_frames: None,
         netplay_max_rollback_frames: None,
         netplay_hash_check_every_frames: None,
+        rta_enabled: false,
+        rta_profile_id: None,
+        rta_profiles_dir: None,
+        rta_runs_dir: None,
+        rta_calibrate: false,
         #[cfg(feature = "nova")]
         auto_player_enabled: false,
     };
@@ -1389,7 +1602,7 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
             return Err(format!(
-                "Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
             ));
         }
         if arg == "--mcp-host" {
@@ -1405,6 +1618,16 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         }
         if arg == "--netplay" {
             parsed.netplay_enabled = true;
+            idx += 1;
+            continue;
+        }
+        if arg == "--rta" {
+            parsed.rta_enabled = true;
+            idx += 1;
+            continue;
+        }
+        if arg == "--rta-calibrate" {
+            parsed.rta_calibrate = true;
             idx += 1;
             continue;
         }
@@ -1466,6 +1689,30 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 2;
             continue;
         }
+        if arg == "--rta-profile" {
+            let Some(profile_id) = args.get(idx + 1) else {
+                return Err("missing value after --rta-profile".to_owned());
+            };
+            parsed.rta_profile_id = Some(profile_id.clone());
+            idx += 2;
+            continue;
+        }
+        if arg == "--rta-profiles-dir" {
+            let Some(path) = args.get(idx + 1) else {
+                return Err("missing value after --rta-profiles-dir".to_owned());
+            };
+            parsed.rta_profiles_dir = Some(path.clone());
+            idx += 2;
+            continue;
+        }
+        if arg == "--rta-runs-dir" {
+            let Some(path) = args.get(idx + 1) else {
+                return Err("missing value after --rta-runs-dir".to_owned());
+            };
+            parsed.rta_runs_dir = Some(path.clone());
+            idx += 2;
+            continue;
+        }
         if let Some(bind_addr) = arg.strip_prefix("--mcp-bind=") {
             if bind_addr.is_empty() {
                 return Err("missing value after --mcp-bind=".to_owned());
@@ -1524,9 +1771,33 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
+        if let Some(profile_id) = arg.strip_prefix("--rta-profile=") {
+            if profile_id.is_empty() {
+                return Err("missing value after --rta-profile=".to_owned());
+            }
+            parsed.rta_profile_id = Some(profile_id.to_owned());
+            idx += 1;
+            continue;
+        }
+        if let Some(path) = arg.strip_prefix("--rta-profiles-dir=") {
+            if path.is_empty() {
+                return Err("missing value after --rta-profiles-dir=".to_owned());
+            }
+            parsed.rta_profiles_dir = Some(path.to_owned());
+            idx += 1;
+            continue;
+        }
+        if let Some(path) = arg.strip_prefix("--rta-runs-dir=") {
+            if path.is_empty() {
+                return Err("missing value after --rta-runs-dir=".to_owned());
+            }
+            parsed.rta_runs_dir = Some(path.to_owned());
+            idx += 1;
+            continue;
+        }
         if arg.starts_with("--") {
             return Err(format!(
-                "unknown flag '{arg}'. Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [rom_path]"
+                "unknown flag '{arg}'. Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]"
             ));
         }
         if parsed.rom_path.is_some() {
@@ -2013,10 +2284,37 @@ mod tests {
             netplay_input_delay_frames: Some(3),
             netplay_max_rollback_frames: Some(360),
             netplay_hash_check_every_frames: Some(90),
+            rta_enabled: false,
+            rta_profile_id: None,
+            rta_profiles_dir: None,
+            rta_runs_dir: None,
+            rta_calibrate: false,
             #[cfg(feature = "nova")]
             auto_player_enabled: false,
         };
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_rta_flags() {
+        let args = vec![
+            "--rta".to_owned(),
+            "--rta-profile=smb-any".to_owned(),
+            "--rta-profiles-dir".to_owned(),
+            "config/rta/profiles".to_owned(),
+            "--rta-runs-dir=runs/rta".to_owned(),
+            "--rta-calibrate".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+
+        assert!(parsed.rta_enabled);
+        assert_eq!(parsed.rta_profile_id.as_deref(), Some("smb-any"));
+        assert_eq!(
+            parsed.rta_profiles_dir.as_deref(),
+            Some("config/rta/profiles")
+        );
+        assert_eq!(parsed.rta_runs_dir.as_deref(), Some("runs/rta"));
+        assert!(parsed.rta_calibrate);
     }
 
     #[test]
@@ -2249,31 +2547,39 @@ mod tests {
     #[test]
     fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, true, false),
+            classify_keyboard_input(VirtualKeyCode::Escape, true, false, false, false),
             KeyboardDecision::Exit
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, true, false),
+            classify_keyboard_input(VirtualKeyCode::R, true, false, false, false),
             KeyboardDecision::SetRewindHeld(true)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, false, true),
+            classify_keyboard_input(VirtualKeyCode::R, false, true, false, false),
             KeyboardDecision::SetRewindHeld(false)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Z, true, true),
+            classify_keyboard_input(VirtualKeyCode::Z, true, true, false, false),
             KeyboardDecision::UpdateKeyboardBits {
                 mask: Button::A.bit_mask(),
                 pressed: true
             }
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::X, false, false),
+            classify_keyboard_input(VirtualKeyCode::X, false, false, false, false),
             KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, false, false),
+            classify_keyboard_input(VirtualKeyCode::Escape, false, false, false, false),
             KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F9, true, false, true, false),
+            KeyboardDecision::RtaManualSplit
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
+            KeyboardDecision::RtaFinish
         );
     }
 

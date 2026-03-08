@@ -50,6 +50,26 @@ cargo run -p nes-desktop --release -- --config ./nes.toml
 cargo run -p nes-tui -- --config ./nes.toml
 ```
 
+RTA mode (speedrunner-focused):
+
+```powershell
+# Strict RTA mode (auto-select profile by ROM hash)
+cargo run -p nes-desktop --release -- --rta --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes
+
+# Pre-start manual profile override
+cargo run -p nes-desktop --release -- --rta --rta-profile smb-any --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes
+
+# Calibration mode -> writes draft profile/report
+cargo run -p nes-desktop --release -- --rta --rta-calibrate --rta-profile smb-any --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes
+```
+
+RTA profile + artifacts:
+- Profiles live in `config/rta/profiles/*.toml` (see `config/rta/profiles/smb-any.example.toml`).
+- Finished runs always write `*.run.json` to `runs/rta` (override with `--rta-runs-dir`).
+- Per-frame input logs are optional (`[logging].save_input_log = true`).
+- Calibration mode writes `<id>.draft.toml` and `<id>.draft_report.json`; draft profiles are not used by strict auto-selection.
+- Hotkeys: `F9` manual split, `F10` finish calibration run.
+
 Rollback netplay (across-town) flow:
 
 ```powershell
