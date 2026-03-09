@@ -820,16 +820,7 @@ fn run() -> Result<(), String> {
     }
 
     let rom_path = runtime.rom_path.clone();
-    let rom_bytes = fs::read(&rom_path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            format!(
-                "Error: Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
-                rom_path
-            )
-        } else {
-            format!("Error: Failed to read ROM at '{}': {}", rom_path, err)
-        }
-    })?;
+    let rom_bytes = fs::read(&rom_path).map_err(|err| format_rom_read_error(&rom_path, &err))?;
 
     let mut core = NesCore::new();
     let info = core
@@ -2174,6 +2165,17 @@ fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
     ppm
 }
 
+fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "Error: Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            rom_path
+        )
+    } else {
+        format!("Error: Failed to read ROM at '{}': {}", rom_path, err)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2186,7 +2188,7 @@ mod tests {
         capture_path_for_frame, classify_keyboard_input, classify_window_event,
         compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
         controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, frame_signature, gamepad_assignments_changed,
+        evaluate_frame_deadline, format_rom_read_error, frame_signature, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, handle_netplay_server_message,
         is_player_two_slot, map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
         parse_runtime_args, recommended_input_delay_frames, resync_restored_inputs,
@@ -3475,6 +3477,19 @@ mod tests {
         let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
         assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
         assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
+    }
+
+    #[test]
+    fn format_rom_read_error_handles_not_found_and_other_errors() {
+        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let msg = format_rom_read_error("bad.nes", &not_found);
+        assert!(msg.contains("Could not find the ROM file at 'bad.nes'"));
+        assert!(msg.contains("homebrew.nes"));
+
+        let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = format_rom_read_error("bad.nes", &other);
+        assert!(msg.contains("Failed to read ROM at 'bad.nes'"));
+        assert!(msg.contains("permission denied"));
     }
 
     #[test]
