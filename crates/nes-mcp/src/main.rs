@@ -203,7 +203,7 @@ fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
         }
         "ping" => Ok(Some(json!({}))),
         "tools/list" => Ok(Some(handle_tools_list())),
-        "tools/call" => handle_tools_call(state, request.params.as_ref()),
+        "tools/call" => handle_tools_call(state, request.params),
         "resources/list" => Ok(Some(json!({ "resources": [] }))),
         "prompts/list" => Ok(Some(json!({ "prompts": [] }))),
         "logging/setLevel" => Ok(Some(json!({}))),
@@ -270,24 +270,32 @@ fn handle_tools_list() -> Value {
 
 fn handle_tools_call(
     state: &mut ServerState,
-    params: Option<&Value>,
+    params: Option<Value>,
 ) -> Result<Option<Value>, RpcError> {
-    let params_obj = params
-        .and_then(Value::as_object)
-        .ok_or_else(|| RpcError::invalid_params("tools/call params must be an object"))?;
-    let tool_name = params_obj
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| RpcError::invalid_params("tools/call requires string field 'name'"))?;
+    let mut params_obj = match params {
+        Some(Value::Object(map)) => map,
+        _ => {
+            return Err(RpcError::invalid_params(
+                "tools/call params must be an object",
+            ));
+        }
+    };
+    let tool_name = match params_obj.remove("name") {
+        Some(Value::String(name)) => name,
+        _ => {
+            return Err(RpcError::invalid_params(
+                "tools/call requires string field 'name'",
+            ));
+        }
+    };
 
-    let args = params_obj
-        .get("arguments")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let args = match params_obj.remove("arguments") {
+        Some(Value::Object(map)) => map,
+        _ => Default::default(),
+    };
     let tool_params = map_tool_arguments(args);
 
-    let call_result = match dispatch_tool(&mut state.core, tool_name, &tool_params) {
+    let call_result = match dispatch_tool(&mut state.core, &tool_name, &tool_params) {
         Ok(output) => {
             let structured = dispatch_output_value(output);
             json!({
