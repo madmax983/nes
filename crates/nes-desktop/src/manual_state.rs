@@ -16,13 +16,23 @@ struct SaveStateFile {
     snapshot: CoreSnapshot,
 }
 
-#[must_use]
-pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
-    let stem = rom_path
+fn portable_stem_for_rom_path(rom_path: &Path) -> String {
+    let raw_path = rom_path.as_os_str().to_string_lossy();
+    let basename = raw_path
+        .rsplit(['/', '\\'])
+        .find(|segment| !segment.is_empty())
+        .unwrap_or(raw_path.as_ref());
+    Path::new(basename)
         .file_stem()
         .and_then(|value| value.to_str())
         .filter(|value| !value.is_empty())
-        .unwrap_or("rom");
+        .unwrap_or("rom")
+        .to_owned()
+}
+
+#[must_use]
+pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
+    let stem = portable_stem_for_rom_path(rom_path);
     let sanitized_stem: String = stem
         .chars()
         .map(|ch| {
@@ -86,4 +96,27 @@ pub fn load_state_file(path: &Path, expected_rom_hash: &str) -> Result<CoreSnaps
         ));
     }
     Ok(payload.snapshot)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::portable_stem_for_rom_path;
+
+    #[test]
+    fn portable_stem_for_rom_path_uses_last_segment_for_windows_style_paths() {
+        assert_eq!(
+            portable_stem_for_rom_path(Path::new(r"C:\roms\Super Mario Bros. (World).nes")),
+            "Super Mario Bros. (World)"
+        );
+    }
+
+    #[test]
+    fn portable_stem_for_rom_path_uses_last_segment_for_unix_style_paths() {
+        assert_eq!(
+            portable_stem_for_rom_path(Path::new("/roms/Super Mario Bros. (World).nes")),
+            "Super Mario Bros. (World)"
+        );
+    }
 }
