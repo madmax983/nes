@@ -4,7 +4,9 @@
 //! schedule events directly; instead it acts as a deterministic counter source
 //! for stepping logic, timing assertions, and state snapshots.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable scheduler snapshot.
 pub struct SchedulerSnapshot {
     /// Total CPU cycles elapsed.

@@ -21,6 +21,7 @@ use nes_core::{
     AUDIO_SAMPLE_RATE, Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore,
 };
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use nes_desktop::manual_state::{load_state_file, quicksave_path_for_rom, save_state_file};
 use nes_desktop::rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
     ProfileStatus, RtaEvent, RtaManager, RtaProfile, compute_rom_hash, load_profiles,
@@ -124,6 +125,7 @@ struct CaptureConfig {
 trait AudioSinkControl {
     fn queue_len(&self) -> usize;
     fn append_i16(&self, samples: Vec<i16>);
+    fn clear(&self);
     fn stop(&self);
 }
 
@@ -142,6 +144,10 @@ impl AudioSinkControl for RodioSinkAdapter {
             AUDIO_SAMPLE_RATE,
             samples,
         ));
+    }
+
+    fn clear(&self) {
+        self.inner.clear();
     }
 
     fn stop(&self) {
@@ -437,6 +443,10 @@ impl AudioOutput {
     fn queue_len(&self) -> usize {
         self.sink.queue_len()
     }
+
+    fn clear(&self) {
+        self.sink.clear();
+    }
 }
 
 impl Drop for AudioOutput {
@@ -455,6 +465,8 @@ fn main() {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KeyboardDecision {
     Exit,
+    ManualSaveState,
+    ManualLoadState,
     SetRewindHeld(bool),
     RtaManualSplit,
     RtaFinish,
@@ -520,6 +532,12 @@ fn classify_keyboard_input(
 ) -> KeyboardDecision {
     if key == VirtualKeyCode::Escape && pressed {
         return KeyboardDecision::Exit;
+    }
+    if pressed && key == VirtualKeyCode::F5 {
+        return KeyboardDecision::ManualSaveState;
+    }
+    if pressed && key == VirtualKeyCode::F8 {
+        return KeyboardDecision::ManualLoadState;
     }
     if key == VirtualKeyCode::R {
         return KeyboardDecision::SetRewindHeld(pressed);
@@ -596,6 +614,31 @@ fn element_state_pressed(state: ElementState) -> bool {
 
 fn should_resume_after_rewind_hold(held: bool) -> bool {
     !held
+}
+
+fn release_all_buttons(core: &mut NesCore) {
+    for &button in &CONTROLLER_BUTTONS {
+        let _ = core.execute(Command::ReleaseButton(button));
+        let _ = core.execute(Command::ReleaseButton2(button));
+    }
+}
+
+fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
+    if let Some(key_code) = map_virtual_keycode(key)
+        && let Some(mask) = map_key_event_to_button_bit(key_code)
+    {
+        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+    }
+}
+
+fn resync_restored_inputs(
+    core: &mut NesCore,
+    keyboard_bits: u8,
+    gamepad_bits: &mut [u8; 2],
+) -> Result<(), String> {
+    release_all_buttons(core);
+    *gamepad_bits = [0; 2];
+    apply_gamepad_delta_commands(core, 0, keyboard_bits, false)
 }
 
 fn is_player_two_slot(player_index: usize) -> bool {
@@ -785,9 +828,11 @@ fn run() -> Result<(), String> {
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
     let step_mode = runtime.step_mode;
+    let rom_hash = compute_rom_hash(&rom_bytes);
+    let manual_state_path =
+        quicksave_path_for_rom(std::path::Path::new(&runtime.rom_path), &rom_hash);
     let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
         let profiles = load_profiles(&rta_config.profiles_dir)?;
-        let rom_hash = compute_rom_hash(&rom_bytes);
         let profile = if rta_config.calibrate {
             match select_profile(
                 &profiles,
@@ -837,7 +882,7 @@ fn run() -> Result<(), String> {
         };
         Some(RtaManager::new(
             profile,
-            rom_hash,
+            rom_hash.clone(),
             rta_config.runs_dir.clone(),
             calibration,
         ))
@@ -870,7 +915,9 @@ fn run() -> Result<(), String> {
     }
     table.add_row(vec![
         Cell::new("Controls"),
-        Cell::new("keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, Esc=Quit"),
+        Cell::new(
+            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save, F8=Load, Esc=Quit",
+        ),
     ]);
     table.add_row(vec![
         Cell::new("Gamepad"),
@@ -1067,6 +1114,7 @@ fn run() -> Result<(), String> {
                 let Some(key) = key else {
                     return;
                 };
+                track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
                 match classify_keyboard_input(
                     key,
                     pressed,
@@ -1086,6 +1134,72 @@ fn run() -> Result<(), String> {
                         }
                         *control_flow = ControlFlow::Exit;
                     }
+                    KeyboardDecision::ManualSaveState => {
+                        if rollback.is_some() {
+                            eprintln!(
+                                "[state] manual save-state is unavailable while netplay/rollback is active"
+                            );
+                            return;
+                        }
+                        if let Some(rta) = rta_manager.as_mut() {
+                            let _ = rta.mark_forbidden_action(
+                                ForbiddenAction::SaveLoad,
+                                frame_index,
+                                Instant::now(),
+                            );
+                        }
+                        let snapshot = core.save_state();
+                        match save_state_file(&manual_state_path, &rom_hash, &snapshot) {
+                            Ok(()) => {
+                                eprintln!("[state] saved {}", manual_state_path.display());
+                            }
+                            Err(err) => {
+                                eprintln!("[state] save failed: {err}");
+                            }
+                        }
+                    }
+                    KeyboardDecision::ManualLoadState => {
+                        if rollback.is_some() {
+                            eprintln!(
+                                "[state] manual load-state is unavailable while netplay/rollback is active"
+                            );
+                            return;
+                        }
+                        if let Some(rta) = rta_manager.as_mut() {
+                            let _ = rta.mark_forbidden_action(
+                                ForbiddenAction::SaveLoad,
+                                frame_index,
+                                Instant::now(),
+                            );
+                        }
+                        match load_state_file(&manual_state_path, &rom_hash) {
+                            Ok(snapshot) => {
+                                core.load_state(&snapshot);
+                                if let Err(err) =
+                                    resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
+                                {
+                                    eprintln!("Input resync failed: {err}");
+                                    *control_flow = ControlFlow::Exit;
+                                    return;
+                                }
+                                if let Some(output) = audio_output.as_ref() {
+                                    output.clear();
+                                }
+                                rewind_held = false;
+                                time_machine = TimeMachine::new(TimeMachineConfig::default());
+                                time_machine.record_frame(&core);
+                                metrics = PerfMetrics::new(
+                                    runtime.metrics_enabled,
+                                    runtime.metrics_every_frames,
+                                    core.ppu_frame_counter(),
+                                );
+                                eprintln!("[state] loaded {}", manual_state_path.display());
+                            }
+                            Err(err) => {
+                                eprintln!("[state] load failed: {err}");
+                            }
+                        }
+                    }
                     KeyboardDecision::SetRewindHeld(held) => {
                         // R: hold to rewind, release to resume.
                         rewind_held = held;
@@ -1100,11 +1214,14 @@ fn run() -> Result<(), String> {
                         }
                         if should_resume_after_rewind_hold(held) {
                             time_machine.resume();
-                            // The restored snapshot's controller_bits may reflect buttons
-                            // held at that historical frame. Release all buttons so the
-                            // core's latch matches the actual key state going forward.
-                            for &button in &CONTROLLER_BUTTONS {
-                                let _ = core.execute(Command::ReleaseButton(button));
+                            // The restored snapshot's controller bits may reflect buttons
+                            // held at that historical frame. Release both pads so the
+                            // core's latch matches the host's live input state going forward.
+                            if let Err(err) =
+                                resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
+                            {
+                                eprintln!("Input resync failed: {err}");
+                                *control_flow = ControlFlow::Exit;
                             }
                         }
                     }
@@ -2118,10 +2235,11 @@ mod tests {
         evaluate_frame_deadline, frame_signature, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, handle_netplay_server_message,
         is_player_two_slot, map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
-        parse_runtime_args, recommended_input_delay_frames, scaled_window_dimensions,
-        schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
-        should_trace_frame, should_update_input_delay, update_button_bits, write_frame_ppm,
+        parse_runtime_args, recommended_input_delay_frames, resync_restored_inputs,
+        scaled_window_dimensions, schedule_netplay_ping, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_send_netplay_hash, should_trace_frame, should_update_input_delay,
+        track_keyboard_bits_for_key, update_button_bits, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -2169,6 +2287,7 @@ mod tests {
         queue_len: usize,
         append_calls: usize,
         appended_sample_count: usize,
+        clear_calls: usize,
         stop_calls: usize,
     }
 
@@ -2215,6 +2334,15 @@ mod tests {
                 .lock()
                 .expect("fake audio state lock should not poison");
             state.stop_calls = state.stop_calls.saturating_add(1);
+        }
+
+        fn clear(&self) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.clear_calls = state.clear_calls.saturating_add(1);
+            state.queue_len = 0;
         }
     }
 
@@ -2443,6 +2571,20 @@ mod tests {
     }
 
     #[test]
+    fn audio_output_clear_forwards_to_sink_and_empties_queue() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(3);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        output.clear();
+
+        let state = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state.clear_calls, 1);
+        assert_eq!(state.queue_len, 0);
+    }
+
+    #[test]
     fn rodio_sink_adapter_forwards_append_and_queue_len() {
         let (sink, _queue_rx) = Sink::new_idle();
         let adapter = RodioSinkAdapter { inner: sink };
@@ -2551,6 +2693,14 @@ mod tests {
             KeyboardDecision::Exit
         );
         assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F5, true, false, false, false),
+            KeyboardDecision::ManualSaveState
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F8, true, false, false, false),
+            KeyboardDecision::ManualLoadState
+        );
+        assert_eq!(
             classify_keyboard_input(VirtualKeyCode::R, true, false, false, false),
             KeyboardDecision::SetRewindHeld(true)
         );
@@ -2580,6 +2730,10 @@ mod tests {
         assert_eq!(
             classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
             KeyboardDecision::RtaFinish
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
+            KeyboardDecision::Noop
         );
     }
 
@@ -2819,6 +2973,49 @@ mod tests {
         assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
         let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
         assert_eq!(cleared_a, Button::B.bit_mask());
+    }
+
+    #[test]
+    fn track_keyboard_bits_for_key_updates_controller_bits_and_ignores_hotkeys() {
+        let mut keyboard_bits = 0_u8;
+
+        track_keyboard_bits_for_key(VirtualKeyCode::Z, true, &mut keyboard_bits);
+        assert_eq!(keyboard_bits, Button::A.bit_mask());
+
+        track_keyboard_bits_for_key(VirtualKeyCode::F5, true, &mut keyboard_bits);
+        assert_eq!(
+            keyboard_bits,
+            Button::A.bit_mask(),
+            "manual save hotkey must not alter controller state"
+        );
+
+        track_keyboard_bits_for_key(VirtualKeyCode::Z, false, &mut keyboard_bits);
+        assert_eq!(keyboard_bits, 0);
+    }
+
+    #[test]
+    fn resync_restored_inputs_reapplies_keyboard_and_resets_gamepad_cache() {
+        let mut core = NesCore::new();
+        let mut gamepad_bits = [Button::Right.bit_mask(), Button::Start.bit_mask()];
+
+        resync_restored_inputs(&mut core, Button::A.bit_mask(), &mut gamepad_bits)
+            .expect("restored inputs should resync");
+
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask(),
+            "held keyboard input should be re-applied immediately"
+        );
+        assert_eq!(
+            core.controller2_bits(),
+            0,
+            "player-2 gamepad state should be cleared until the next poll replays it"
+        );
+        assert_eq!(
+            gamepad_bits,
+            [0, 0],
+            "gamepad cache must reset so held pads generate deltas on the next poll"
+        );
     }
 
     #[test]

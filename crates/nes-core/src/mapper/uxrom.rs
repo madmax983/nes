@@ -1,8 +1,9 @@
 use super::Mapper;
+use serde::{Deserialize, Serialize};
 
 const PRG_BANK_BYTES: usize = 16 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 2 (UxROM): switchable lower 16K bank + fixed upper 16K bank.
 pub struct Uxrom {
     bank_count: usize,
@@ -10,7 +11,7 @@ pub struct Uxrom {
     prg_rom: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct UxromState {
     pub selected_bank: u8,
 }

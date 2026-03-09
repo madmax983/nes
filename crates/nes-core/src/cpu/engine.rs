@@ -50,7 +50,9 @@ impl fmt::Display for CpuError {
 
 impl std::error::Error for CpuError {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable register snapshot.
 pub struct CpuSnapshot {
     /// Program counter.
@@ -66,6 +68,10 @@ pub struct CpuSnapshot {
     /// Raw status flags.
     pub status: u8,
     /// 2KB NES work RAM ($0000–$07FF).
+    #[serde(
+        serialize_with = "crate::serde_array::serialize_u8_array",
+        deserialize_with = "crate::serde_array::deserialize_u8_array"
+    )]
     pub work_ram: [u8; 2048],
 }
 

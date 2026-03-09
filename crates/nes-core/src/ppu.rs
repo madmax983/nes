@@ -5,6 +5,7 @@
 
 use crate::api::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use crate::rom::NametableMirroring;
+use serde::{Deserialize, Serialize};
 
 const CTRL_NMI_ENABLE: u8 = 0x80;
 const CTRL_VRAM_INC_32: u8 = 0x04;
@@ -100,7 +101,7 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable PPU state snapshot.
 pub struct PpuSnapshot {
     /// PPUCTRL (`$2000`).
@@ -112,6 +113,10 @@ pub struct PpuSnapshot {
     /// OAM address pointer.
     pub oam_addr: u8,
     /// OAM data.
+    #[serde(
+        serialize_with = "crate::serde_array::serialize_u8_array",
+        deserialize_with = "crate::serde_array::deserialize_u8_array"
+    )]
     pub oam: [u8; 256],
     /// Dot index within current frame.
     pub cycle_in_frame: u32,
@@ -128,10 +133,18 @@ pub struct PpuSnapshot {
     /// Cartridge mirroring mode.
     pub mirroring: NametableMirroring,
     /// CHR backing store.
+    #[serde(
+        serialize_with = "crate::serde_array::serialize_u8_array",
+        deserialize_with = "crate::serde_array::deserialize_u8_array"
+    )]
     pub chr: [u8; CHR_BYTES],
     /// Whether CHR writes are allowed (CHR RAM mode).
     pub chr_writable: bool,
     /// Internal nametable RAM.
+    #[serde(
+        serialize_with = "crate::serde_array::serialize_u8_array",
+        deserialize_with = "crate::serde_array::deserialize_u8_array"
+    )]
     pub nametable_ram: [u8; NAMETABLE_RAM_BYTES],
     /// Palette RAM.
     pub palette_ram: [u8; PALETTE_RAM_BYTES],

@@ -6,6 +6,8 @@
 use std::collections::VecDeque;
 use std::sync::OnceLock;
 
+use serde::{Deserialize, Serialize};
+
 use crate::api::AUDIO_SAMPLE_RATE;
 
 const CPU_CLOCK_HZ: u64 = 1_789_773;
@@ -57,7 +59,7 @@ pub struct DmcDmaRequest {
     pub stall_cycles: u16,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PulseChannel {
     is_pulse1: bool,
     enabled: bool,
@@ -252,7 +254,7 @@ impl PulseChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct TriangleChannel {
     enabled: bool,
     control: u8,
@@ -350,7 +352,7 @@ impl TriangleChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct NoiseChannel {
     enabled: bool,
     control: u8,
@@ -476,7 +478,7 @@ impl NoiseChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct DmcChannel {
     enabled: bool,
     irq_enabled: bool,
@@ -662,7 +664,7 @@ impl DmcChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable APU snapshot.
 pub struct ApuSnapshot {
     cpu_cycles: u64,

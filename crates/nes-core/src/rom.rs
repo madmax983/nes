@@ -6,6 +6,8 @@
 
 use core::fmt;
 
+use serde::{Deserialize, Serialize};
+
 const INES_HEADER_LEN: usize = 16;
 const INES_TRAINER_LEN: usize = 512;
 const PRG_BANK_BYTES: usize = 16 * 1024;
@@ -13,7 +15,7 @@ const CHR_BANK_BYTES: usize = 8 * 1024;
 
 const INES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Nametable mirroring mode declared by the cartridge header.
 pub enum NametableMirroring {
     /// Horizontal arrangement (`[A A][B B]`).

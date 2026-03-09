@@ -1,4 +1,5 @@
 use crate::rom::NametableMirroring;
+use serde::{Deserialize, Serialize};
 
 use super::Mapper;
 
@@ -6,7 +7,7 @@ const PRG_BANK_8K: usize = 8 * 1024;
 const CHR_BANK_1K: usize = 1024;
 const CHR_WINDOW_BYTES: usize = 8 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 4 (MMC3): banked PRG/CHR with scanline IRQ support.
 pub struct Mmc3 {
     prg_bank_count_8k: u8,
@@ -24,7 +25,7 @@ pub struct Mmc3 {
     irq_pending: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Mmc3State {
     pub bank_select: u8,
     pub bank_registers: [u8; 8],
