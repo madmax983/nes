@@ -4,7 +4,7 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 
 ## Workspace
 
-- `crates/nes-core`: deterministic emulation core and command/query API.
+- `crates/nes-core`: deterministic emulation core, command/query API, and stable TAS movie/recorder primitives.
 - `crates/nes-mcp`: MCP tool surface mapped to core APIs.
 - `crates/nes-desktop`: desktop input bridge and runtime adapter.
 - `crates/nes-tui`: terminal (`ratatui`) runtime adapter.
@@ -138,6 +138,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_play_demo.ps1
 # Hybrid controller: macro segments + deterministic micro-control + savestate retries
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_hybrid_autoplay.ps1
 ```
+
+For in-process automation, `nes_core::tas` is now the stable foundation when `nes-core` is built with `--features tas`: it records run-length encoded per-frame controller movies, replays them deterministically against `NesCore`, and can export the legacy macro script format for existing MCP tooling. That gives future search/planning work, including a possible `nes-ai` crate, a structured input tape instead of a stringly experiment.
 
 ROM harness tests read from:
 - `roms.smb`
