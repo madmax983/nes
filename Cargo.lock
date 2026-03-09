@@ -1803,6 +1803,7 @@ dependencies = [
  "itoa",
  "proptest",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

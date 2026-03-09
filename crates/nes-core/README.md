@@ -8,7 +8,7 @@
 - Dot-stepped PPU with framebuffer output (`256x240 RGBA`).
 - APU channel simulation (pulse/triangle/noise/DMC) with mixed PCM output.
 - Mapper-backed PRG/CHR banking (currently NROM, MMC1, UxROM, CNROM, MMC3, AxROM, GxROM).
-- Save/load state snapshots and command replay.
+- Save/load state snapshots, command replay, and stable TAS movie/recorder primitives.
 
 ## Host Model
 
@@ -18,6 +18,11 @@ Hosts control emulation through `NesCore`:
 2. Drive progression with `execute(Command::StepCpu|StepScanline|StepFrame)`.
 3. Push controller state with `SetControllerState` or button press/release commands.
 4. Pull video/audio (`fill_framebuffer_rgba`, `audio_chunk_i16`).
+
+Higher-level automation can stay in-process through `nes_core::tas` when the `tas` feature is enabled:
+- `TasRecorder` captures per-frame controller state into a deterministic movie.
+- `TasMovie::replay` applies that movie back onto a `NesCore`.
+- `TasMovie::to_macro_script` exports the legacy `nes-mcp` line format when player 2 is unused.
 
 The core remains platform-agnostic. Windowing, audio devices, web bindings, and MCP transport are out-of-scope for this crate.
 
@@ -48,6 +53,7 @@ This preserves deterministic progression for replay, testing, and state hashing.
 - `save_state`/`load_state` round-trip full machine state needed for deterministic restore.
 - `state_hash` offers a compact change detector for regression tooling.
 - `replay` applies command streams for reproducible host-independent runs.
+- `tas` (feature-gated) adds a structured movie format that future tooling can mutate, branch, serialize, and replay.
 
 ## Limitations (Current)
 
