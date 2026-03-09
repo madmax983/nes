@@ -2188,14 +2188,15 @@ mod tests {
         capture_path_for_frame, classify_keyboard_input, classify_window_event,
         compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
         controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, frame_signature, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, handle_netplay_server_message,
-        is_player_two_slot, map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
-        parse_runtime_args, recommended_input_delay_frames, resync_restored_inputs,
-        scaled_window_dimensions, schedule_netplay_ping, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_send_netplay_hash, should_trace_frame, should_update_input_delay,
-        track_keyboard_bits_for_key, update_button_bits, write_frame_ppm,
+        evaluate_frame_deadline, format_rom_read_error, frame_signature,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        handle_netplay_server_message, is_player_two_slot, map_virtual_keycode,
+        merge_local_input_bits, netplay_feature_enabled, parse_runtime_args,
+        recommended_input_delay_frames, resync_restored_inputs, scaled_window_dimensions,
+        schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
+        should_trace_frame, should_update_input_delay, track_keyboard_bits_for_key,
+        update_button_bits, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};

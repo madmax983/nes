@@ -884,7 +884,12 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
             "Hint:".with(crossterm::style::Color::Cyan).bold()
         )
     } else {
-        format!("{} Failed to read ROM at '{}': {}", "Error:".with(crossterm::style::Color::Red).bold(), rom_path, err)
+        format!(
+            "{} Failed to read ROM at '{}': {}",
+            "Error:".with(crossterm::style::Color::Red).bold(),
+            rom_path,
+            err
+        )
     }
 }
 
@@ -894,11 +899,11 @@ mod tests {
         CrosstermEventSource, EventSource, FrameTick, LoopAction, LoopTimer,
         PROTOCOL_FRAME_INTERVAL, ProtocolRenderer, SystemLoopTimer, TARGET_FRAME_TIME, TuiRuntime,
         VideoBackend, VideoBackendKind, drain_protocol_results, draw_frame, evaluate_frame_tick,
-        event_loop, fit_nes_viewport, format_rom_read_error, frame_rgba_to_rgba_image, handle_runtime_key_event,
-        key_is_pressed, key_pressed_state, make_protocol_state, maybe_step_runtime_frame,
-        parse_tui_args, protocol_image_resize, refresh_runtime_fps, select_video_backend_kind,
-        should_quit, should_refresh_protocol_frame, should_replace_protocol_state, usage_line,
-        usage_message,
+        event_loop, fit_nes_viewport, format_rom_read_error, frame_rgba_to_rgba_image,
+        handle_runtime_key_event, key_is_pressed, key_pressed_state, make_protocol_state,
+        maybe_step_runtime_frame, parse_tui_args, protocol_image_resize, refresh_runtime_fps,
+        select_video_backend_kind, should_quit, should_refresh_protocol_frame,
+        should_replace_protocol_state, usage_line, usage_message,
     };
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use image::Rgba;
