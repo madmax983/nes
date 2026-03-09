@@ -81,7 +81,6 @@ impl Axrom {
     pub fn read_prg(&self, addr: u16) -> u8 {
         <Self as Mapper>::read_prg(self, addr)
     }
-
     /// Applies AxROM bank/mirroring register writes.
     pub fn write_prg(&mut self, addr: u16, value: u8) {
         <Self as Mapper>::write_prg(self, addr, value);
@@ -102,5 +101,40 @@ impl Mapper for Axrom {
     fn write_prg(&mut self, _addr: u16, value: u8) {
         self.selected_bank = (value & 0x07) % self.bank_count;
         self.selected_nametable_bank = (value >> 4) & 0x01;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn axrom_state_can_be_restored() {
+        let prg = vec![0_u8; 64 * 1024];
+        let mut mapper = Axrom::from_prg_rom(prg);
+
+        mapper.write_prg(0x8000, 0x11);
+
+        let state = mapper.state();
+
+        let mut mapper_restored = Axrom::from_prg_rom(vec![0_u8; 64 * 1024]);
+        mapper_restored.restore_state(state);
+
+        assert_eq!(mapper.selected_bank(), mapper_restored.selected_bank());
+        assert_eq!(
+            mapper.selected_nametable_bank(),
+            mapper_restored.selected_nametable_bank()
+        );
+    }
+
+    #[test]
+    fn axrom_mirroring_reflects_selected_nametable_bank() {
+        let mut mapper = Axrom::from_prg_rom(vec![0_u8; 32 * 1024]);
+
+        mapper.write_prg(0x8000, 0x00);
+        assert_eq!(mapper.mirroring(), NametableMirroring::OneScreenLower);
+
+        mapper.write_prg(0x8000, 0x10);
+        assert_eq!(mapper.mirroring(), NametableMirroring::OneScreenUpper);
     }
 }

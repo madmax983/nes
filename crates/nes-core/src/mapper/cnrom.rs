@@ -126,3 +126,50 @@ impl Mapper for Cnrom {
         self.selected_chr_bank = (usize::from(value) % self.chr_bank_count) as u8;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cnrom_state_can_be_restored() {
+        let prg = vec![0_u8; 32 * 1024];
+        let chr = vec![0_u8; 16 * 1024];
+        let mut mapper = Cnrom::from_prg_chr(prg.clone(), chr.clone());
+        mapper.write_prg(0x8000, 1);
+        let state = mapper.state();
+        let mut mapper_restored = Cnrom::from_prg_chr(prg, chr);
+        mapper_restored.restore_state(state);
+        assert_eq!(
+            mapper.selected_chr_bank(),
+            mapper_restored.selected_chr_bank()
+        );
+    }
+
+    #[test]
+    fn cnrom_chr_ram_is_writable_and_syncs_from_ppu() {
+        let prg = vec![0_u8; 32 * 1024];
+        let mut mapper = Cnrom::from_prg_chr(prg, vec![]);
+        assert!(mapper.chr_writable());
+        let mut new_window = [0_u8; CHR_WINDOW_BYTES];
+        new_window[0] = 0x55;
+        new_window[8191] = 0xAA;
+        mapper.sync_chr_ram_from_ppu_window(&new_window);
+        let window = mapper.chr_window();
+        assert_eq!(window[0], 0x55);
+        assert_eq!(window[8191], 0xAA);
+    }
+
+    #[test]
+    fn cnrom_chr_rom_is_not_writable() {
+        let prg = vec![0_u8; 32 * 1024];
+        let chr = vec![0_u8; 8 * 1024];
+        let mut mapper = Cnrom::from_prg_chr(prg, chr);
+        assert!(!mapper.chr_writable());
+        let mut new_window = [0_u8; CHR_WINDOW_BYTES];
+        new_window[0] = 0x55;
+        mapper.sync_chr_ram_from_ppu_window(&new_window);
+        let window = mapper.chr_window();
+        assert_eq!(window[0], 0x00);
+    }
+}
