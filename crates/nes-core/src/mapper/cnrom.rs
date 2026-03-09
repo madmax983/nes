@@ -1,8 +1,9 @@
 use super::Mapper;
+use serde::{Deserialize, Serialize};
 
 const CHR_WINDOW_BYTES: usize = 8 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 3 (CNROM): fixed PRG mapping with switchable 8KB CHR banks.
 pub struct Cnrom {
     selected_chr_bank: u8,
@@ -12,7 +13,7 @@ pub struct Cnrom {
     chr_writable: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CnromState {
     pub selected_chr_bank: u8,
 }

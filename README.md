@@ -123,6 +123,12 @@ Desktop can optionally host MCP on the same live `NesCore` instance:
 cargo run -p nes-desktop --features mcp-host -- --mcp-host --mcp-bind 127.0.0.1:6502
 ```
 
+Desktop quicksave / quickload:
+- `F5` writes a manual save state for the current ROM.
+- `F8` loads that manual save state back.
+- Save files live under `./savestates/<rom-stem>-<hash8>.state.json`.
+- Manual save/load is blocked while netplay rollback is active.
+
 Automation scripts:
 
 ```powershell

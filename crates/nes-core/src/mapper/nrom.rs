@@ -1,9 +1,10 @@
 use super::Mapper;
+use serde::{Deserialize, Serialize};
 
 const PRG_16K_BYTES: usize = 16 * 1024;
 const PRG_32K_BYTES: usize = 32 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 0 (NROM): fixed PRG mapping with optional 16K mirroring.
 pub struct Nrom {
     prg_rom: Vec<u8>,

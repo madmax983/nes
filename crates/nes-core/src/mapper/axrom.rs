@@ -1,10 +1,11 @@
 use crate::rom::NametableMirroring;
+use serde::{Deserialize, Serialize};
 
 use super::Mapper;
 
 const PRG_BANK_32K: usize = 32 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 7 (AxROM): switchable 32KB PRG bank with one-screen mirroring control.
 pub struct Axrom {
     bank_count: u8,
@@ -13,7 +14,7 @@ pub struct Axrom {
     prg_rom: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct AxromState {
     pub selected_bank: u8,
     pub selected_nametable_bank: u8,

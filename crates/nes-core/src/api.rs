@@ -6,6 +6,8 @@
 
 use core::fmt;
 
+use serde::{Deserialize, Serialize};
+
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{
@@ -160,7 +162,7 @@ pub enum QueryResult {
     PpuFrameCounter(u64),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Complete serializable machine snapshot for save-state support.
 pub struct CoreSnapshot {
     /// Pause state.
@@ -218,7 +220,7 @@ pub struct RomLoadInfo {
     pub reset_pc: u16,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 enum LoadedMapper {
     Nrom(Nrom),
     Uxrom(Uxrom),

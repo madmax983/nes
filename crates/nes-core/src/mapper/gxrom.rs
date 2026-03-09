@@ -1,9 +1,10 @@
 use super::Mapper;
+use serde::{Deserialize, Serialize};
 
 const PRG_BANK_32K: usize = 32 * 1024;
 const CHR_WINDOW_BYTES: usize = 8 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 66 (GxROM): switchable 32KB PRG bank and switchable 8KB CHR bank.
 pub struct Gxrom {
     prg_bank_count: usize,
@@ -15,7 +16,7 @@ pub struct Gxrom {
     chr_writable: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct GxromState {
     pub selected_prg_bank: u8,
     pub selected_chr_bank: u8,

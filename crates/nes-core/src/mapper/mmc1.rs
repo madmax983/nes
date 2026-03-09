@@ -1,6 +1,7 @@
 use super::Mapper;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 1 (MMC1) PRG banking subset used by the core.
 ///
 /// This implementation focuses on the 5-bit serial shift register protocol
@@ -15,7 +16,7 @@ pub struct Mmc1 {
     prg_rom: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Mmc1State {
     pub control: u8,
     pub shift_register: u8,

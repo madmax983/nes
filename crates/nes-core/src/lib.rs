@@ -11,6 +11,7 @@ pub mod mapper;
 mod ppu;
 mod rom;
 mod scheduler;
+mod serde_array;
 
 #[cfg(feature = "nova")]
 pub mod experimental;
