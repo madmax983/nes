@@ -820,8 +820,16 @@ fn run() -> Result<(), String> {
     }
 
     let rom_path = runtime.rom_path.clone();
-    let rom_bytes =
-        fs::read(&rom_path).map_err(|err| format!("Failed to read ROM at '{rom_path}': {err}"))?;
+    let rom_bytes = fs::read(&rom_path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            format!(
+                "Error: Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+                rom_path
+            )
+        } else {
+            format!("Error: Failed to read ROM at '{}': {}", rom_path, err)
+        }
+    })?;
 
     let mut core = NesCore::new();
     let info = core

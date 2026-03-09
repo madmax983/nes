@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
+use crossterm::style::Stylize;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
@@ -231,8 +232,18 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let (rom_path, loaded_config_path, cli_options) = resolve_rom_path()?;
-    let rom_bytes =
-        fs::read(&rom_path).map_err(|err| format!("Failed to read ROM at '{rom_path}': {err}"))?;
+    let rom_bytes = fs::read(&rom_path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            format!(
+                "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+                "Error:".with(crossterm::style::Color::Red).bold(),
+                rom_path.clone().with(crossterm::style::Color::Yellow),
+                "Hint:".with(crossterm::style::Color::Cyan).bold()
+            )
+        } else {
+            format!("{} Failed to read ROM at '{}': {}", "Error:".with(crossterm::style::Color::Red).bold(), rom_path.clone(), err)
+        }
+    })?;
 
     let mut core = NesCore::new();
     let info = core
