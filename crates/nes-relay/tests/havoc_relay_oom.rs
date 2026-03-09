@@ -14,6 +14,7 @@ impl Drop for ChildGuard {
 }
 
 #[test]
+#[cfg(unix)]
 fn havoc_crash_relay_daemon_oom() {
     // Start server normally on a random port to avoid port conflicts
     // It's tricky to get the exact port it bound to when it's `0`, so we use a known high port
