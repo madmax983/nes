@@ -180,7 +180,7 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
         "notifications/initialized" => Ok(None),
         "ping" => Ok(Some(json!({}))),
         "tools/list" => Ok(Some(handle_tools_list())),
-        "tools/call" => handle_tools_call(request.params.as_ref(), request_tx),
+        "tools/call" => handle_tools_call(request.params, request_tx),
         "resources/list" => Ok(Some(json!({ "resources": [] }))),
         "prompts/list" => Ok(Some(json!({ "prompts": [] }))),
         "logging/setLevel" => Ok(Some(json!({}))),
@@ -241,21 +241,21 @@ fn handle_tools_list() -> Value {
 }
 
 fn handle_tools_call(
-    params: Option<&Value>,
+    params: Option<Value>,
     request_tx: &Sender<ToolRequest>,
 ) -> Result<Option<Value>, RpcError> {
-    let params_obj = params
-        .and_then(Value::as_object)
-        .ok_or_else(|| RpcError::invalid_params("tools/call params must be an object"))?;
-    let tool_name = params_obj
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| RpcError::invalid_params("tools/call requires string field 'name'"))?;
-    let args = params_obj
-        .get("arguments")
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
+    let mut params_obj = match params {
+        Some(Value::Object(map)) => map,
+        _ => return Err(RpcError::invalid_params("tools/call params must be an object")),
+    };
+    let tool_name = match params_obj.remove("name") {
+        Some(Value::String(name)) => name,
+        _ => return Err(RpcError::invalid_params("tools/call requires string field 'name'")),
+    };
+    let args = match params_obj.remove("arguments") {
+        Some(Value::Object(map)) => map,
+        _ => Default::default(),
+    };
 
     let (reply_tx, reply_rx) = mpsc::channel();
     request_tx
@@ -854,14 +854,14 @@ mod tests {
                 "speed": 2
             }
         });
-        let response = handle_tools_call(Some(&params), &request_tx)
+        let response = handle_tools_call(Some(params), &request_tx)
             .expect("tools/call should succeed")
             .expect("tools/call should return payload");
         assert_eq!(response["isError"], false);
         assert_eq!(response["structuredContent"]["kind"], "ack");
         worker.join().expect("worker join should succeed");
 
-        let missing_name = handle_tools_call(Some(&json!({ "arguments": {} })), &request_tx)
+        let missing_name = handle_tools_call(Some(json!({ "arguments": {} })), &request_tx)
             .expect_err("missing name should fail");
         assert_eq!(missing_name.code, -32602);
     }
