@@ -2150,7 +2150,7 @@ fn write_frame_ppm(path: &str, rgba: &[u8]) -> Result<(), String> {
         return Err("frame length mismatch".to_owned());
     }
     let bytes = if path.to_ascii_lowercase().ends_with(".bmp") {
-        encode_bmp(FRAME_WIDTH, FRAME_HEIGHT, rgba)?
+        nes_core::bmp::encode_bmp(FRAME_WIDTH, FRAME_HEIGHT, rgba)?
     } else {
         encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba)
     };
@@ -2166,60 +2166,6 @@ fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
     ppm
 }
 
-fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
-    let row_bytes = width
-        .checked_mul(3)
-        .ok_or_else(|| "bmp row size overflow".to_owned())?;
-    let row_padding = (4 - (row_bytes % 4)) % 4;
-    let stride = row_bytes
-        .checked_add(row_padding)
-        .ok_or_else(|| "bmp stride overflow".to_owned())?;
-    let pixel_data_size = stride
-        .checked_mul(height)
-        .ok_or_else(|| "bmp pixel data size overflow".to_owned())?;
-    let file_size = 54usize
-        .checked_add(pixel_data_size)
-        .ok_or_else(|| "bmp file size overflow".to_owned())?;
-
-    let width_i32 = i32::try_from(width).map_err(|_| "bmp width out of range".to_owned())?;
-    let height_i32 = i32::try_from(height).map_err(|_| "bmp height out of range".to_owned())?;
-    let file_size_u32 =
-        u32::try_from(file_size).map_err(|_| "bmp file size out of range".to_owned())?;
-    let pixel_data_size_u32 = u32::try_from(pixel_data_size)
-        .map_err(|_| "bmp pixel data size out of range".to_owned())?;
-
-    let mut bmp = Vec::with_capacity(file_size);
-    bmp.extend_from_slice(b"BM");
-    bmp.extend_from_slice(&file_size_u32.to_le_bytes());
-    bmp.extend_from_slice(&0u16.to_le_bytes());
-    bmp.extend_from_slice(&0u16.to_le_bytes());
-    bmp.extend_from_slice(&54u32.to_le_bytes());
-
-    bmp.extend_from_slice(&40u32.to_le_bytes());
-    bmp.extend_from_slice(&width_i32.to_le_bytes());
-    bmp.extend_from_slice(&height_i32.to_le_bytes());
-    bmp.extend_from_slice(&1u16.to_le_bytes());
-    bmp.extend_from_slice(&24u16.to_le_bytes());
-    bmp.extend_from_slice(&0u32.to_le_bytes());
-    bmp.extend_from_slice(&pixel_data_size_u32.to_le_bytes());
-    bmp.extend_from_slice(&2_835u32.to_le_bytes());
-    bmp.extend_from_slice(&2_835u32.to_le_bytes());
-    bmp.extend_from_slice(&0u32.to_le_bytes());
-    bmp.extend_from_slice(&0u32.to_le_bytes());
-
-    for y in (0..height).rev() {
-        let row_start = y * width * 4;
-        for x in 0..width {
-            let idx = row_start + x * 4;
-            bmp.push(rgba[idx + 2]);
-            bmp.push(rgba[idx + 1]);
-            bmp.push(rgba[idx]);
-        }
-        bmp.extend(std::iter::repeat_n(0, row_padding));
-    }
-    Ok(bmp)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2231,7 +2177,7 @@ mod tests {
         apply_gamepad_delta_commands, audio_queue_dropped, capture_config_from_parts,
         capture_path_for_frame, classify_keyboard_input, classify_window_event,
         compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_bmp, encode_ppm,
+        controller_state_delta_for_player, element_state_pressed, encode_ppm,
         evaluate_frame_deadline, frame_signature, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, handle_netplay_server_message,
         is_player_two_slot, map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
@@ -3517,30 +3463,10 @@ mod tests {
     }
 
     #[test]
-    fn ppm_and_bmp_encoders_emit_expected_headers_and_pixel_layout() {
+    fn encode_ppm_emits_expected_headers_and_pixel_layout() {
         let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
         assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
         assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
-
-        let bmp = encode_bmp(1, 1, &[10, 20, 30, 255]).expect("bmp encoding should succeed");
-        assert_eq!(&bmp[0..2], b"BM");
-        assert_eq!(bmp.len(), 58);
-        assert_eq!(&bmp[54..58], &[30, 20, 10, 0]);
-    }
-
-    #[test]
-    fn encode_bmp_multiplies_row_and_column_indices_for_bottom_up_bgr_layout() {
-        let rgba = vec![
-            // Top row.
-            255, 0, 0, 255, 0, 255, 0, 255, // Bottom row.
-            0, 0, 255, 255, 255, 255, 255, 255,
-        ];
-        let bmp = encode_bmp(2, 2, &rgba).expect("bmp encoding should succeed");
-        assert_eq!(bmp.len(), 70);
-
-        // BMP stores rows bottom-up and colors as B,G,R with row padding.
-        assert_eq!(&bmp[54..62], &[255, 0, 0, 255, 255, 255, 0, 0]);
-        assert_eq!(&bmp[62..70], &[0, 0, 255, 0, 255, 0, 0, 0]);
     }
 
     #[test]

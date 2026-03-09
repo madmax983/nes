@@ -2,6 +2,8 @@
 
 mod api;
 mod apu;
+/// BMP image encoding utilities.
+pub mod bmp;
 /// CPU bus region helpers and address classification.
 pub mod bus;
 /// 6502 CPU engine and status register helpers.
