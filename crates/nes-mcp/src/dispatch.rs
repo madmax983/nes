@@ -1164,3 +1164,16 @@ mod tests {
         assert!(after_audio.audio_seq > before.audio_seq);
     }
 }
+#[cfg(test)]
+mod havoc_fuzz_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_hex(hex in ".*") {
+            let _ = parse_hex_bytes(&hex);
+        }
+    }
+}

@@ -389,3 +389,17 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(50000))]
+        #[test]
+        fn havoc_fuzz_ines_parse(bytes in proptest::collection::vec(any::<u8>(), 0..1024)) {
+            let _ = parse_ines(&bytes);
+        }
+    }
+}
