@@ -248,6 +248,16 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_ines_exactly_16_bytes_missing_prg() {
+        let mut bytes = [0; 16];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 0; // 0 PRG banks
+        let err = parse_ines(&bytes).unwrap_err();
+        // If `< 16` is mutated to `<= 16`, it will incorrectly return Truncated { 16, 16 }
+        assert_eq!(err, RomError::MissingPrgRom);
+    }
+
+    #[test]
     fn test_parse_ines_truncated_header() {
         let err = parse_ines(&[0; 15]).unwrap_err();
         assert_eq!(
@@ -375,6 +385,51 @@ mod tests {
         bytes[7] = 0b0000_1001; // NES 2.0 marker + non-standard console type
         let err = parse_ines(&bytes).unwrap_err();
         assert_eq!(err, RomError::UnsupportedConsoleType(1));
+    }
+
+    #[test]
+    fn test_parse_ines_nes2_mapper_id() {
+        let mut bytes = vec![0; 16 + 16 * 1024];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank
+        bytes[7] = 0b0000_1000; // NES 2.0 marker
+
+        // mapper_low = (flags6 >> 4) | (flags7 & 0xF0)
+        // Set flags6 >> 4 to 0x05 (lower 4 bits of mapper id)
+        // Set flags7 & 0xF0 to 0x20 (upper 4 bits of mapper id)
+        // Resulting mapper_low should be 0x25 (37)
+        bytes[6] = 0x50; // 0x50 >> 4 = 0x05
+        bytes[7] |= 0x20;
+
+        let rom = parse_ines(&bytes).unwrap();
+        assert_eq!(rom.mapper_id, 0x25);
+    }
+
+    #[test]
+    fn test_parse_ines_nes2_prg_chr_msb() {
+        // We will construct a NES 2.0 ROM with:
+        // prg_banks = 0x0102 (258 banks)
+        // chr_banks = 0x0201 (513 banks)
+        // prg_rom length = 258 * 16384 = 4,227,072 bytes
+        // chr_rom length = 513 * 8192 = 4,202,496 bytes
+        let prg_banks = 0x0102;
+        let chr_banks = 0x0201;
+        let prg_len = prg_banks * PRG_BANK_BYTES;
+        let chr_len = chr_banks * CHR_BANK_BYTES;
+
+        let mut bytes = vec![0; 16 + prg_len + chr_len];
+        bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = (prg_banks & 0xFF) as u8; // 0x02
+        bytes[5] = (chr_banks & 0xFF) as u8; // 0x01
+        bytes[7] = 0b0000_1000; // NES 2.0 marker
+
+        // bytes[9] = (chr_msb << 4) | prg_msb
+        // prg_msb = 0x01, chr_msb = 0x02
+        bytes[9] = (0x02 << 4) | 0x01;
+
+        let rom = parse_ines(&bytes).unwrap();
+        assert_eq!(rom.prg_rom.len(), prg_len);
+        assert_eq!(rom.chr_rom.len(), chr_len);
     }
 
     #[test]
