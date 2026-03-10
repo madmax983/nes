@@ -5,8 +5,11 @@ use std::thread;
 use std::time::Duration;
 
 use nes_core::NesCore;
-use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
-use serde::Deserialize;
+use nes_mcp::{
+    DispatchError, DispatchOutput, ToolParams, dispatch_tool,
+    protocol::{RpcError, RpcRequest},
+    tool_catalog,
+};
 use serde_json::{Map, Value, json};
 
 const JSONRPC_VERSION: &str = "2.0";
@@ -23,66 +26,6 @@ struct ToolRequest {
     name: String,
     params: ToolParams,
     respond_to: Sender<Result<DispatchOutput, DispatchError>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RpcRequest {
-    jsonrpc: String,
-    #[serde(default)]
-    id: Option<Value>,
-    method: String,
-    #[serde(default)]
-    params: Option<Value>,
-}
-
-#[derive(Debug, Clone)]
-struct RpcError {
-    code: i64,
-    message: String,
-}
-
-impl RpcError {
-    fn parse_error(message: impl Into<String>) -> Self {
-        Self {
-            code: -32700,
-            message: message.into(),
-        }
-    }
-
-    fn invalid_request(message: impl Into<String>) -> Self {
-        Self {
-            code: -32600,
-            message: message.into(),
-        }
-    }
-
-    fn method_not_found(message: impl Into<String>) -> Self {
-        Self {
-            code: -32601,
-            message: message.into(),
-        }
-    }
-
-    fn invalid_params(message: impl Into<String>) -> Self {
-        Self {
-            code: -32602,
-            message: message.into(),
-        }
-    }
-
-    fn internal_error(message: impl Into<String>) -> Self {
-        Self {
-            code: -32603,
-            message: message.into(),
-        }
-    }
-
-    fn as_json(&self) -> Value {
-        json!({
-            "code": self.code,
-            "message": self.message
-        })
-    }
 }
 
 impl McpHost {
@@ -654,7 +597,7 @@ fn jsonrpc_error(id: Value, err: RpcError) -> Value {
     json!({
         "jsonrpc": JSONRPC_VERSION,
         "id": id,
-        "error": err.as_json()
+        "error": err.to_json()
     })
 }
 
@@ -718,7 +661,7 @@ mod tests {
         assert_eq!(internal.code, -32603);
         assert_eq!(internal.message, "boom");
 
-        let json = internal.as_json();
+        let json = internal.to_json();
         assert_eq!(json["code"], -32603);
         assert_eq!(json["message"], "boom");
     }
