@@ -1,3 +1,6 @@
 **[Remove Circular Dependency and Nested Sprawl]
 **Tangle:** The `api` and `replay` modules in `nes-core` had a circular dependency. Additionally, `macro_engine` was nested unnecessarily inside an `experimental` module in `nes-mcp`, exposing internals to binaries.
 **Blueprint:** Inlined `replay_commands` directly into `api.rs` to break the cycle and deleted `replay.rs`. Moved `macro_engine.rs` up to the top level of `nes-mcp` and removed the `experimental` module namespace, flattening the structure.
+**[Unified RpcRequest and RpcError for MCP Protocol]
+**Tangle:** The `RpcRequest` and `RpcError` types were defined in two separate locations: `crates/nes-mcp/src/main.rs` and `crates/nes-desktop/src/mcp_host.rs`. The duplicate implementations caused a scattered source of truth and divergence (e.g., `nes-mcp` had a `data` field and `to_json` method, while `nes-desktop` had an `internal_error` function and `as_json` method).
+**Blueprint:** Extracted both types and their implementations into a new shared module `crates/nes-mcp/src/protocol.rs`. Merged diverging logic (`data`, `to_json`, `internal_error`), removed duplicate code, and updated all call sites to import from `nes_mcp::protocol::{RpcRequest, RpcError}`.

@@ -3,8 +3,9 @@ use std::io::{self, BufRead, BufReader, Write};
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use nes_core::NesCore;
+use nes_mcp::protocol::{RpcError, RpcRequest};
 use nes_mcp::{DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
-use serde::Deserialize;
+
 use serde_json::{Map, Value, json};
 
 const JSONRPC_VERSION: &str = "2.0";
@@ -42,70 +43,6 @@ impl From<String> for McpError {
 impl From<&str> for McpError {
     fn from(err: &str) -> Self {
         Self::Protocol(err.to_owned())
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct RpcRequest {
-    jsonrpc: String,
-    #[serde(default)]
-    id: Option<Value>,
-    method: String,
-    #[serde(default)]
-    params: Option<Value>,
-}
-
-#[derive(Debug, Clone)]
-struct RpcError {
-    code: i64,
-    message: String,
-    data: Option<Value>,
-}
-
-impl RpcError {
-    fn parse_error(message: impl Into<String>) -> Self {
-        Self {
-            code: -32700,
-            message: message.into(),
-            data: None,
-        }
-    }
-
-    fn invalid_request(message: impl Into<String>) -> Self {
-        Self {
-            code: -32600,
-            message: message.into(),
-            data: None,
-        }
-    }
-
-    fn method_not_found(message: impl Into<String>) -> Self {
-        Self {
-            code: -32601,
-            message: message.into(),
-            data: None,
-        }
-    }
-
-    fn invalid_params(message: impl Into<String>) -> Self {
-        Self {
-            code: -32602,
-            message: message.into(),
-            data: None,
-        }
-    }
-
-    fn to_json(&self) -> Value {
-        let mut value = json!({
-            "code": self.code,
-            "message": self.message,
-        });
-        if let Some(data) = self.data.clone()
-            && let Some(obj) = value.as_object_mut()
-        {
-            obj.insert("data".to_owned(), data);
-        }
-        value
     }
 }
 

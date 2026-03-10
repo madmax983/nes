@@ -3,6 +3,7 @@
 mod dispatch;
 pub mod macro_engine;
 mod output;
+pub mod protocol;
 pub mod tools;
 
 pub use dispatch::{DispatchError, DispatchOutput, ToolParams, dispatch_tool};
