@@ -69,6 +69,7 @@ fn assemble_homebrew_program() -> String {
 .const OAM_TILE = $0201
 .const OAM_ATTR = $0202
 .const OAM_X = $0203
+.const PLAYER_SPEED = $02 ; Game Design Theory: Increased movement speed to prevent sluggishness and make the character feel more responsive.
 
 reset:
     sei
@@ -181,28 +182,40 @@ nmi:
     lda JOY1
     and #$01
     beq not_up
-    dec SPR_Y
+    lda SPR_Y
+    sec
+    sbc #PLAYER_SPEED
+    sta SPR_Y
 not_up:
 
     ; Down
     lda JOY1
     and #$01
     beq not_down
-    inc SPR_Y
+    lda SPR_Y
+    clc
+    adc #PLAYER_SPEED
+    sta SPR_Y
 not_down:
 
     ; Left
     lda JOY1
     and #$01
     beq not_left
-    dec SPR_X
+    lda SPR_X
+    sec
+    sbc #PLAYER_SPEED
+    sta SPR_X
 not_left:
 
     ; Right
     lda JOY1
     and #$01
     beq not_right
-    inc SPR_X
+    lda SPR_X
+    clc
+    adc #PLAYER_SPEED
+    sta SPR_X
 not_right:
 
     lda SPR_Y
