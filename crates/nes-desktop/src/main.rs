@@ -53,6 +53,7 @@ const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
+const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 const CONTROLLER_BUTTONS: [Button; 8] = [
     Button::A,
     Button::B,
@@ -66,6 +67,7 @@ const CONTROLLER_BUTTONS: [Button; 8] = [
 
 struct RuntimeConfig {
     rom_path: String,
+    cheat_codes: Vec<String>,
     window_scale: u32,
     step_mode: StepMode,
     audio_enabled: bool,
@@ -85,6 +87,7 @@ struct RuntimeConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RuntimeArgs {
     rom_path: Option<String>,
+    cheat_codes: Vec<String>,
     mcp_enabled: bool,
     mcp_bind_addr: String,
     netplay_enabled: bool,
@@ -826,6 +829,10 @@ fn run() -> Result<(), String> {
     let info = core
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
+    for raw_code in &runtime.cheat_codes {
+        core.add_cheat_code(raw_code)
+            .map_err(|err| format!("Invalid cheat code '{raw_code}': {err}"))?;
+    }
     let step_mode = runtime.step_mode;
     let rom_hash = compute_rom_hash(&rom_bytes);
     let manual_state_path =
@@ -1676,6 +1683,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 
     Ok(RuntimeConfig {
         rom_path,
+        cheat_codes: runtime_args.cheat_codes,
         window_scale,
         step_mode,
         audio_enabled: config.desktop.audio_enabled,
@@ -1696,6 +1704,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     let mut parsed = RuntimeArgs {
         rom_path: None,
+        cheat_codes: Vec::new(),
         mcp_enabled: false,
         mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
         netplay_enabled: false,
@@ -1718,8 +1727,16 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
             return Err(format!(
-                "Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
             ));
+        }
+        if arg == "--cheat-code" {
+            let Some(code) = args.get(idx + 1) else {
+                return Err("missing value after --cheat-code".to_owned());
+            };
+            parsed.cheat_codes.push(code.clone());
+            idx += 2;
+            continue;
         }
         if arg == "--mcp-host" {
             parsed.mcp_enabled = true;
@@ -1837,6 +1854,14 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
+        if let Some(code) = arg.strip_prefix("--cheat-code=") {
+            if code.is_empty() {
+                return Err("missing value after --cheat-code=".to_owned());
+            }
+            parsed.cheat_codes.push(code.to_owned());
+            idx += 1;
+            continue;
+        }
         if let Some(relay_addr) = arg.strip_prefix("--netplay-relay=") {
             if relay_addr.is_empty() {
                 return Err("missing value after --netplay-relay=".to_owned());
@@ -1912,9 +1937,7 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             continue;
         }
         if arg.starts_with("--") {
-            return Err(format!(
-                "unknown flag '{arg}'. Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]"
-            ));
+            return Err(format!("unknown flag '{arg}'. {RUNTIME_USAGE}"));
         }
         if parsed.rom_path.is_some() {
             return Err(
@@ -2331,6 +2354,7 @@ mod tests {
         let args = vec!["game.nes".to_owned()];
         let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+        assert!(parsed.cheat_codes.is_empty());
         assert!(!parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, DEFAULT_MCP_BIND_ADDR);
     }
@@ -2360,6 +2384,7 @@ mod tests {
         let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         let expected = RuntimeArgs {
             rom_path: None,
+            cheat_codes: Vec::new(),
             mcp_enabled: false,
             mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
             netplay_enabled: true,
@@ -2378,6 +2403,23 @@ mod tests {
             auto_player_enabled: false,
         };
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_repeated_cheat_code_flags() {
+        let args = vec![
+            "--cheat-code".to_owned(),
+            "gossip".to_owned(),
+            "--cheat-code=ZEXPYGLA".to_owned(),
+            "rom.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("cheat code args should parse");
+
+        assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
+        assert_eq!(
+            parsed.cheat_codes,
+            vec!["gossip".to_owned(), "ZEXPYGLA".to_owned()]
+        );
     }
 
     #[test]
@@ -3127,10 +3169,15 @@ mod tests {
             .expect_err("help returns usage");
         assert!(help.contains("Usage: nes-desktop"));
         assert!(help.contains("Default config path"));
+        assert!(help.contains("--cheat-code <code>"));
 
         let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
             .expect_err("missing mcp bind");
         assert!(missing_bind.contains("missing value after --mcp-bind"));
+
+        let missing_code = parse_runtime_args_with_timeout(vec!["--cheat-code".to_owned()])
+            .expect_err("missing cheat code");
+        assert!(missing_code.contains("missing value after --cheat-code"));
 
         let missing_relay = parse_runtime_args_with_timeout(vec!["--netplay-relay".to_owned()])
             .expect_err("missing netplay relay");

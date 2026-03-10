@@ -14,4 +14,5 @@ fn help_flag_prints_usage_and_default_config_path() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Usage: nes-desktop"));
     assert!(stderr.contains("Default config path:"));
+    assert!(stderr.contains("--cheat-code <code>"));
 }

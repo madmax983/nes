@@ -6,6 +6,8 @@ mod apu;
 pub mod bmp;
 /// CPU bus region helpers and address classification.
 pub mod bus;
+/// NES cheat code decoding and patch metadata.
+pub mod cheat_codes;
 /// 6502 CPU engine and status register helpers.
 pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
@@ -18,11 +20,9 @@ mod serde_array;
 #[cfg(feature = "tas")]
 pub mod tas;
 
-#[cfg(feature = "nova")]
-pub mod experimental;
-
 pub use api::{
     AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, Button, Command, CoreError, CoreQuery, CoreSnapshot,
     EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, MapperDelta, NesCore, QueryResult,
     RomLoadInfo,
 };
+pub use cheat_codes::{CheatCode, CheatCodeError};

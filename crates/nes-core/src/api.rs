@@ -9,6 +9,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
+use crate::cheat_codes::{CheatCode, CheatCodeError};
 use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{
     Axrom, AxromState, Cnrom, CnromState, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State,
@@ -186,6 +187,7 @@ pub struct CoreSnapshot {
     controller2_shift: u8,
     pending_oam_dma_page: Option<u8>,
     mapper: Option<LoadedMapper>,
+    cheat_codes: Vec<CheatCode>,
     reset_pc: u16,
 }
 
@@ -503,6 +505,7 @@ pub struct NesCore {
     controller_shift: u8,
     controller2_shift: u8,
     mapper: Option<LoadedMapper>,
+    cheat_codes: Vec<CheatCode>,
     reset_pc: u16,
     cpu: Cpu,
     apu: Apu,
@@ -561,6 +564,7 @@ impl NesCore {
             controller_shift: 0,
             controller2_shift: 0,
             mapper: None,
+            cheat_codes: Vec::new(),
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
             apu: Apu::new(),
@@ -668,6 +672,38 @@ impl NesCore {
         let status = self.apu.read_status();
         self.cpu.write_byte(0x4015, status);
         status
+    }
+
+    /// Returns the currently configured cheat codes.
+    #[must_use]
+    pub fn cheat_codes(&self) -> &[CheatCode] {
+        &self.cheat_codes
+    }
+
+    /// Adds one cheat code and reapplies PRG mappings immediately.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CheatCodeError`] when the code string is not a valid NES
+    /// cheat code.
+    pub fn add_cheat_code(&mut self, raw: &str) -> Result<CheatCode, CheatCodeError> {
+        let code: CheatCode = raw.parse()?;
+        self.cheat_codes.push(code.clone());
+        if self.mapper.is_some() {
+            self.sync_mapper_prg_window();
+        }
+        Ok(code)
+    }
+
+    /// Removes all configured cheat codes and restores the mapper PRG view.
+    pub fn clear_cheat_codes(&mut self) {
+        if self.cheat_codes.is_empty() {
+            return;
+        }
+        self.cheat_codes.clear();
+        if self.mapper.is_some() {
+            self.sync_mapper_prg_window();
+        }
     }
 
     /// Writes to CPU bus then applies mapped side-effects immediately.
@@ -813,6 +849,7 @@ impl NesCore {
             ^ self.apu.quarter_frame_ticks().rotate_left(5)
             ^ self.apu.half_frame_ticks().rotate_left(9)
             ^ ((if self.apu.irq_pending() { 1_u64 } else { 0_u64 }).rotate_left(57))
+            ^ self.cheat_code_hash_component().rotate_left(25)
             ^ self.mapper_hash_component().rotate_left(53)
     }
 
@@ -842,6 +879,7 @@ impl NesCore {
             controller2_shift: self.controller2_shift,
             pending_oam_dma_page: self.pending_oam_dma_page,
             mapper: self.mapper.clone(),
+            cheat_codes: self.cheat_codes.clone(),
             reset_pc: self.reset_pc,
         }
     }
@@ -871,6 +909,7 @@ impl NesCore {
         self.controller2_shift = snapshot.controller2_shift;
         self.pending_oam_dma_page = snapshot.pending_oam_dma_page;
         self.mapper = snapshot.mapper.clone();
+        self.cheat_codes = snapshot.cheat_codes.clone();
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
         self.sync_mapper_chr_window();
@@ -1258,7 +1297,7 @@ impl NesCore {
     fn sync_mapper_prg_window(&mut self) {
         if let Some(mapper) = self.mapper.as_ref() {
             for addr in 0x8000..=0xFFFF {
-                let value = mapper.read_prg(addr);
+                let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
                 self.cpu.write_byte(addr, value);
             }
         }
@@ -1357,6 +1396,19 @@ impl NesCore {
         }
     }
 
+    fn cheat_code_hash_component(&self) -> u64 {
+        let mut hash = 0_u64;
+        for (index, code) in self.cheat_codes.iter().enumerate() {
+            let compare = code.compare().map_or(0x1FF_u64, u64::from);
+            let component = u64::from(code.address())
+                ^ (u64::from(code.value()) << 16)
+                ^ (compare << 24)
+                ^ ((index as u64) << 40);
+            hash ^= component.rotate_left(((index % 63) + 1) as u32);
+        }
+        hash
+    }
+
     fn sync_ppu_register_image(&mut self) {
         self.cpu.write_byte(0x2000, self.ppu.ctrl());
         self.cpu.write_byte(0x2001, self.ppu.mask());
@@ -1408,6 +1460,16 @@ impl NesCore {
         for _ in 0..controller2_reads {
             self.consume_controller_read(true);
         }
+    }
+
+    fn apply_cheat_codes(&self, addr: u16, original: u8) -> u8 {
+        let mut patched = original;
+        for code in &self.cheat_codes {
+            if code.applies_to(addr, original) {
+                patched = code.value();
+            }
+        }
+        patched
     }
 
     fn set_controller_bits(&mut self, bits: u8, player2: bool) {
