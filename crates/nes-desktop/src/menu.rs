@@ -10,14 +10,7 @@ use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use winit::platform::windows::WindowExtWindows;
 use winit::window::Window;
 
-#[cfg(not(test))]
 use crate::actions::{AppAction, action_from_menu_id, menu_id_for_action};
-#[cfg(test)]
-#[path = "actions.rs"]
-mod actions;
-
-#[cfg(test)]
-use actions::{AppAction, action_from_menu_id, menu_id_for_action};
 
 /// Pure description of the desktop menu tree.
 #[cfg_attr(test, derive(Debug, Clone, PartialEq, Eq))]
@@ -39,7 +32,7 @@ impl DesktopMenu {
         unsafe {
             self.native
                 .root
-                .init_for_hwnd(window.hwnd() as isize)
+                .init_for_hwnd(window.hwnd())
                 .map_err(|err| format!("Failed to attach native menu: {err}"))?;
         }
 

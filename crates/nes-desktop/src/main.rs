@@ -1604,7 +1604,7 @@ fn run() -> Result<(), String> {
                         window.request_redraw();
                     }
                     if let Some(action) = action {
-                        if dispatch_app_action(
+                        let _ = dispatch_app_action(
                             action,
                             &mut core,
                             &mut session,
@@ -1621,9 +1621,7 @@ fn run() -> Result<(), String> {
                             &mut rta_manager,
                             frame_index,
                             control_flow,
-                        ) {
-                            return;
-                        }
+                        );
                     }
                     return;
                 }
@@ -1636,7 +1634,7 @@ fn run() -> Result<(), String> {
                     rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 ) {
                     KeyboardDecision::ToggleOverlay => {
-                        if dispatch_app_action(
+                        let _ = dispatch_app_action(
                             AppAction::ToggleOverlay,
                             &mut core,
                             &mut session,
@@ -1653,13 +1651,11 @@ fn run() -> Result<(), String> {
                             &mut rta_manager,
                             frame_index,
                             control_flow,
-                        ) {
-                            return;
-                        }
+                        );
                     }
                     KeyboardDecision::ManualSaveState => {
                         if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
-                            if dispatch_app_action(
+                            let _ = dispatch_app_action(
                                 action,
                                 &mut core,
                                 &mut session,
@@ -1676,14 +1672,12 @@ fn run() -> Result<(), String> {
                                 &mut rta_manager,
                                 frame_index,
                                 control_flow,
-                            ) {
-                                return;
-                            }
+                            );
                         }
                     }
                     KeyboardDecision::ManualLoadState => {
                         if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
-                            if dispatch_app_action(
+                            let _ = dispatch_app_action(
                                 action,
                                 &mut core,
                                 &mut session,
@@ -1700,9 +1694,7 @@ fn run() -> Result<(), String> {
                                 &mut rta_manager,
                                 frame_index,
                                 control_flow,
-                            ) {
-                                return;
-                            }
+                            );
                         }
                     }
                     KeyboardDecision::SetRewindHeld(held) => {
