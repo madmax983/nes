@@ -5,6 +5,14 @@
 //! latency by predictively simulating the remote player's inputs and "rolling back" the emulator
 //! state when a misprediction occurs.
 //!
+//! # The Black Box
+//!
+//! At its core, the [`RollbackEngine`] is a specialized state manager that wraps around the
+//! [`nes_core::NesCore`]. It maintains a history of controller inputs and emulator snapshots.
+//! By decoupling the *presentation* frame rate from the *simulation* frame rate, it allows
+//! the local simulation to advance seamlessly while waiting on the network, quickly rewriting
+//! history when new network packets arrive.
+//!
 //! # How it works
 //!
 //! 1. **Input Delay:** A small, fixed input delay is added to local inputs to absorb typical network latency.
@@ -59,48 +67,175 @@ impl Default for RollbackConfig {
     }
 }
 
+/// Represents a local input that has been queued for execution in the future.
+///
+/// Because local inputs are artificially delayed to mask network latency,
+/// they are scheduled for `current_frame + input_delay_frames`. This struct
+/// tracks what that input is and when it will actually affect the emulator state.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::{RollbackConfig, RollbackEngine};
+///
+/// let mut engine = RollbackEngine::new(RollbackConfig {
+///     local_player: 1,
+///     input_delay_frames: 2,
+///     max_rollback_frames: 60,
+/// }).unwrap();
+///
+/// // Schedule an input for the present frame + delay
+/// let scheduled = engine.schedule_local_input(0x80); // A button
+/// assert_eq!(scheduled.frame, 2);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScheduledInput {
+    /// The absolute frame number when this input will be executed.
     pub frame: u64,
+    /// The controller button bitmask to apply.
     pub bits: u8,
 }
 
+/// The result of processing an incoming input from the remote player.
+///
+/// When remote inputs arrive, they may arrive "late" relative to the local simulation.
+/// If they differ from what the engine predicted, a rollback is queued. This struct
+/// provides observability into that ingestion process.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::{RollbackConfig, RollbackEngine};
+/// use nes_core::NesCore;
+///
+/// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+/// let mut core = NesCore::new();
+///
+/// // Advance a few frames, so the engine has predicted remote inputs
+/// engine.advance_frame(&mut core).unwrap();
+/// engine.advance_frame(&mut core).unwrap();
+///
+/// // Receive actual input for frame 0 from the peer
+/// let ingest = engine.ingest_remote_input(0, 0x01);
+/// assert_eq!(ingest.rollback_queued, true); // Assuming the prediction (0x00) didn't match 0x01
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteInputIngest {
+    /// The absolute frame number this remote input targets.
     pub frame: u64,
+    /// The remote controller button bitmask.
     pub bits: u8,
+    /// Whether this input contradicted a previous prediction, meaning the engine
+    /// will rewind state on the next frame advance.
     pub rollback_queued: bool,
 }
 
+/// A summary of what occurred during a single call to [`RollbackEngine::advance_frame`].
+///
+/// This provides crucial observability for the netplay host, allowing it to log rollbacks,
+/// verify state hashes, and broadcast the actual inputs used.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::{RollbackConfig, RollbackEngine};
+/// use nes_core::NesCore;
+///
+/// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+/// let mut core = NesCore::new();
+///
+/// let step = engine.advance_frame(&mut core).unwrap();
+/// assert_eq!(step.frame, 0);
+/// assert_eq!(step.rollback_distance, 0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RollbackStep {
+    /// The frame that was just completed.
     pub frame: u64,
+    /// How many frames the engine had to rewind before simulating this frame.
+    /// `0` means no rollback occurred.
     pub rollback_distance: u64,
+    /// The resolved local input bitmask used for this frame.
     pub local_bits: u8,
+    /// The resolved remote input bitmask used for this frame.
     pub remote_bits: u8,
+    /// The deterministic hash of the [`nes_core::NesCore`] state immediately after this frame.
     pub state_hash: u64,
 }
 
+/// The result of comparing the local state hash against a remote peer's hash.
+///
+/// This is used to detect unrecoverable desynchronizations between the two clients.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::{RollbackConfig, RollbackEngine, HashComparison};
+/// use nes_core::NesCore;
+///
+/// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+/// let mut core = NesCore::new();
+///
+/// // Initially, we have no frame hashes
+/// assert_eq!(engine.compare_remote_hash(0, 12345), HashComparison::PendingLocalFrame);
+///
+/// engine.advance_frame(&mut core).unwrap();
+///
+/// // Once the local frame is processed, it will likely mismatch an arbitrary remote hash
+/// assert_eq!(engine.compare_remote_hash(0, 12345), HashComparison::Mismatch);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashComparison {
+    /// The local engine has not yet reached the frame in question, so it cannot be compared yet.
     PendingLocalFrame,
+    /// The state hashes match. The simulation remains synchronized.
     Match,
+    /// The state hashes differ. A desync has occurred, and the session should likely be aborted.
     Mismatch,
 }
 
+/// Errors that can occur during rollback engine configuration or execution.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_netplay::{RollbackConfig, RollbackEngine};
+///
+/// // Will fail because max_rollback_frames must be >= input_delay_frames
+/// let config = RollbackConfig {
+///     local_player: 1,
+///     input_delay_frames: 60,
+///     max_rollback_frames: 10,
+/// };
+/// let result = RollbackEngine::new(config);
+/// assert!(result.is_err());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RollbackError {
+    /// The configured `local_player` was not 1 or 2.
     InvalidLocalPlayer(u8),
+    /// The rollback configuration parameters are mathematically invalid
+    /// (e.g., input delay is larger than the max rollback window).
     InvalidRollbackConfig {
+        /// The configured input delay frames.
         input_delay_frames: u32,
+        /// The configured maximum rollback frames.
         max_rollback_frames: u32,
     },
+    /// The engine attempted to roll back to a frame, but the snapshot for that frame
+    /// had already been pruned from history.
     MissingSnapshot(u64),
+    /// A remote input arrived so late that rewinding to correct it would exceed
+    /// the configured `max_rollback_frames`.
     RollbackWindowExceeded {
+        /// The frame the engine needed to return to.
         rollback_from: u64,
+        /// The current frame of the engine.
         next_frame: u64,
+        /// The maximum allowed rollback distance.
         max_rollback_frames: u32,
     },
+    /// An underlying error occurred within the [`nes_core::NesCore`] during simulation.
     Core(CoreError),
 }
 
@@ -230,21 +365,79 @@ impl RollbackEngine {
         self.next_frame
     }
 
+    /// Returns the assigned player number (1 or 2) that this engine instance is controlling.
+    ///
+    /// The remote player will automatically control the other.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let engine = RollbackEngine::new(RollbackConfig { local_player: 2, ..Default::default() }).unwrap();
+    /// assert_eq!(engine.local_player(), 2);
+    /// ```
     #[must_use]
     pub fn local_player(&self) -> u8 {
         self.config.local_player
     }
 
+    /// Returns the currently configured input delay in frames.
+    ///
+    /// By checking this value, the networking layer can determine how far into the
+    /// future newly generated local inputs should be scheduled.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let engine = RollbackEngine::new(RollbackConfig { input_delay_frames: 4, ..Default::default() }).unwrap();
+    /// assert_eq!(engine.input_delay_frames(), 4);
+    /// ```
     #[must_use]
     pub fn input_delay_frames(&self) -> u32 {
         self.config.input_delay_frames
     }
 
+    /// Returns the maximum allowable rollback window in frames.
+    ///
+    /// If an incoming remote input indicates a misprediction occurred further in the past
+    /// than this window, the simulation will crash and desync.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let engine = RollbackEngine::new(RollbackConfig { max_rollback_frames: 120, ..Default::default() }).unwrap();
+    /// assert_eq!(engine.max_rollback_frames(), 120);
+    /// ```
     #[must_use]
     pub fn max_rollback_frames(&self) -> u32 {
         self.config.max_rollback_frames
     }
 
+    /// Dynamically adjusts the input delay at runtime.
+    ///
+    /// Network latency is rarely constant. This method allows the netplay layer
+    /// to continually tune the input delay during a match. If ping spikes, increasing
+    /// the delay will introduce more local latency but drastically reduce jarring rollbacks.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// // Network conditions worsened, increase delay to 5 frames
+    /// engine.set_input_delay_frames(5).unwrap();
+    /// assert_eq!(engine.input_delay_frames(), 5);
+    /// ```
+    ///
+    /// ## Errors
+    /// Returns an [`RollbackError::InvalidRollbackConfig`] if the requested delay
+    /// exceeds the configured `max_rollback_frames`.
     pub fn set_input_delay_frames(&mut self, input_delay_frames: u32) -> Result<(), RollbackError> {
         if input_delay_frames > self.config.max_rollback_frames {
             return Err(RollbackError::InvalidRollbackConfig {
@@ -374,6 +567,32 @@ impl RollbackEngine {
         }
     }
 
+    /// Retrieves the deterministic hash of the local state for a specific past frame.
+    ///
+    /// The netplay host should send this value to the peer so they can compare
+    /// it against their own using [`compare_remote_hash`](Self::compare_remote_hash).
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_netplay::{RollbackConfig, RollbackEngine};
+    /// use nes_core::NesCore;
+    ///
+    /// let mut engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+    /// let mut core = NesCore::new();
+    ///
+    /// // Simulate a frame
+    /// engine.advance_frame(&mut core).unwrap();
+    ///
+    /// // The hash for frame 0 is now available
+    /// assert!(engine.frame_hash(0).is_some());
+    /// ```
+    ///
+    /// ## Returns
+    ///
+    /// Returns `Some(hash)` if the local engine has already simulated that frame.
+    /// If it hasn't simulated the frame yet, or if it was pruned from history,
+    /// returns `None`.
     #[must_use]
     pub fn frame_hash(&self, frame: u64) -> Option<u64> {
         self.frame_hashes.get(&frame).copied()
