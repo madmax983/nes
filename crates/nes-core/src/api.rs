@@ -319,6 +319,8 @@ pub struct NesCore {
     last_cpu_trace: Option<String>,
     last_cpu_bus_trace: Vec<CpuBusAccess>,
     scratch_writes: Vec<CpuWrite>,
+    #[cfg(feature = "nova")]
+    scanner: crate::experimental::scanner::MemoryScanner,
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
@@ -377,6 +379,8 @@ impl NesCore {
             last_cpu_trace: None,
             last_cpu_bus_trace: Vec::new(),
             scratch_writes: Vec::new(),
+            #[cfg(feature = "nova")]
+            scanner: crate::experimental::scanner::MemoryScanner::new(),
         }
     }
 
@@ -855,6 +859,28 @@ impl NesCore {
     ///
     /// Useful for extracting out-of-band information, like [`EmulatorState`]
     /// or reading mapped memory addresses without modifying cycles.
+    #[cfg(feature = "nova")]
+    pub fn scanner_reset(&mut self) {
+        self.scanner.reset();
+    }
+
+    #[cfg(feature = "nova")]
+    pub fn scanner_scan(&mut self, condition: crate::experimental::scanner::ScanCondition) {
+        let mut scanner = std::mem::take(&mut self.scanner);
+        scanner.scan(self, condition);
+        self.scanner = scanner;
+    }
+
+    #[cfg(feature = "nova")]
+    pub fn scanner_candidates(&self) -> Vec<u16> {
+        self.scanner.candidates()
+    }
+
+    #[cfg(feature = "nova")]
+    pub fn scanner_candidate_count(&self) -> usize {
+        self.scanner.candidate_count()
+    }
+
     #[must_use]
     pub fn query(&self, query: CoreQuery) -> QueryResult {
         match query {
@@ -1345,5 +1371,46 @@ fn normalize_ppu_register_addr(addr: u16) -> u16 {
 impl Default for NesCore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(all(test, feature = "nova"))]
+mod nova_tests {
+    use super::*;
+    use crate::experimental::scanner::ScanCondition;
+
+    #[test]
+    fn test_scanner_integration() {
+        let mut core = NesCore::new();
+
+        // Write some test data
+        core.write_cpu_bus(0x0010, 5);
+        core.write_cpu_bus(0x0020, 10);
+        core.write_cpu_bus(0x0030, 5);
+
+        // First scan
+        core.scanner_scan(ScanCondition::Exact(5));
+
+        let candidates = core.scanner_candidates();
+        assert!(candidates.contains(&0x0010));
+        assert!(candidates.contains(&0x0030));
+        assert!(!candidates.contains(&0x0020));
+        assert_eq!(core.scanner_candidate_count(), 2);
+
+        // Change values
+        core.write_cpu_bus(0x0010, 4);
+        core.write_cpu_bus(0x0030, 6);
+
+        // Second scan
+        core.scanner_scan(ScanCondition::Decreased);
+        let candidates = core.scanner_candidates();
+
+        assert!(candidates.contains(&0x0010)); // Decreased from 5 to 4
+        assert!(!candidates.contains(&0x0030)); // Increased from 5 to 6
+        assert_eq!(core.scanner_candidate_count(), 1);
+
+        // Reset
+        let _ = core.scanner_reset();
+        assert_eq!(core.scanner_candidate_count(), 0);
     }
 }
