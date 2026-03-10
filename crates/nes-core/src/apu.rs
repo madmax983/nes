@@ -8,7 +8,10 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::api::AUDIO_SAMPLE_RATE;
+/// Default host audio sample rate.
+pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
+/// Samples produced/consumed per 60Hz host frame.
+pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
 
 const CPU_CLOCK_HZ: u64 = 1_789_773;
 const MAX_SAMPLE_AMPLITUDE: f32 = 11_500.0;

@@ -14,10 +14,12 @@ mod scheduler;
 mod serde_array;
 
 #[cfg(feature = "nova")]
-pub mod experimental;
+pub(crate) mod experimental;
 
 pub use api::{
-    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, Button, Command, CoreError, CoreQuery, CoreSnapshot,
-    EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, MapperDelta, NesCore, QueryResult,
+    Button, Command, CoreError, CoreQuery, CoreSnapshot,
+    EmulatorState, MapperDelta, NesCore, QueryResult,
     RomLoadInfo,
 };
+pub use apu::{AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE};
+pub use ppu::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};

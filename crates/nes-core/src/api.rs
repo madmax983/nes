@@ -27,17 +27,6 @@ const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
 const CHR_8K_BYTES: usize = 8 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
-/// NES visible frame width in pixels.
-pub const FRAME_WIDTH: usize = 256;
-/// NES visible frame height in pixels.
-pub const FRAME_HEIGHT: usize = 240;
-/// Framebuffer byte count for `RGBA8` format.
-pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
-/// Default host audio sample rate.
-pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
-/// Samples produced/consumed per 60Hz host frame.
-pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
-
 /// Represents a standard NES controller button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -764,7 +753,7 @@ impl NesCore {
     /// Returns a freshly allocated RGBA framebuffer snapshot.
     #[must_use]
     pub fn framebuffer_rgba(&self) -> Vec<u8> {
-        let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
+        let mut frame = vec![0_u8; crate::FRAME_RGBA_BYTES];
         self.fill_framebuffer_rgba(&mut frame);
         frame
     }
@@ -777,7 +766,7 @@ impl NesCore {
     /// Drains one host-frame-sized audio chunk (`AUDIO_CHUNK_SAMPLES`).
     #[must_use]
     pub fn audio_chunk_i16(&mut self) -> Vec<i16> {
-        let mut buffer = vec![0; AUDIO_CHUNK_SAMPLES];
+        let mut buffer = vec![0; crate::AUDIO_CHUNK_SAMPLES];
         self.fill_audio_chunk_i16(&mut buffer);
         buffer
     }

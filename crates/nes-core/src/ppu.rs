@@ -3,9 +3,15 @@
 //! The PPU owns CHR/nametable/palette memory, dot/scanline counters, register
 //! semantics, sprite evaluation, and the RGBA framebuffer consumed by hosts.
 
-use crate::api::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use crate::rom::NametableMirroring;
 use serde::{Deserialize, Serialize};
+
+/// NES visible frame width in pixels.
+pub const FRAME_WIDTH: usize = 256;
+/// NES visible frame height in pixels.
+pub const FRAME_HEIGHT: usize = 240;
+/// Framebuffer byte count for `RGBA8` format.
+pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
 
 const CTRL_NMI_ENABLE: u8 = 0x80;
 const CTRL_VRAM_INC_32: u8 = 0x04;
@@ -1292,8 +1298,8 @@ mod tests {
         DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK,
         VBLANK_EDGE_DOT, VBLANK_SCANLINE,
     };
-    use crate::api::{FRAME_RGBA_BYTES, FRAME_WIDTH};
     use crate::rom::NametableMirroring;
+    use super::{FRAME_RGBA_BYTES, FRAME_WIDTH};
 
     #[test]
     fn vblank_edges_are_dot_exact() {
