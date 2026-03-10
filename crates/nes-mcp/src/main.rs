@@ -72,13 +72,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), McpError> {
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let mut reader = BufReader::new(stdin.lock());
-    let mut writer = stdout.lock();
-    let mut state = ServerState::new();
-
+fn build_startup_table(protocol_version: &str, tools_count: usize) -> Table {
     let mut table = Table::new();
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
@@ -87,13 +81,24 @@ fn run() -> Result<(), McpError> {
 
     table.add_row(vec![
         Cell::new("Protocol Version"),
-        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
+        Cell::new(protocol_version).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("Tools Loaded"),
-        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
+        Cell::new(tools_count.to_string()).fg(TableColor::Yellow),
     ]);
 
+    table
+}
+
+fn run() -> Result<(), McpError> {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut reader = BufReader::new(stdin.lock());
+    let mut writer = stdout.lock();
+    let mut state = ServerState::new();
+
+    let table = build_startup_table(DEFAULT_PROTOCOL_VERSION, tool_catalog().len());
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
 
@@ -637,6 +642,16 @@ mod tests {
     fn call(state: &mut ServerState, request: Value) -> Value {
         let payload = serde_json::to_vec(&request).expect("request serializes");
         handle_message(state, &payload).expect("request produces response")
+    }
+
+    #[test]
+    fn build_startup_table_includes_version_and_tools_count() {
+        let table = build_startup_table("2024-10-10", 42);
+        let output = table.to_string();
+        assert!(output.contains("2024-10-10"));
+        assert!(output.contains("42"));
+        assert!(output.contains("Protocol Version"));
+        assert!(output.contains("Tools Loaded"));
     }
 
     #[test]

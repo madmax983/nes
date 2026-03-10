@@ -808,6 +808,101 @@ fn handle_netplay_server_message(
     Ok(())
 }
 
+struct StartupTableData<'a> {
+    rom_path: &'a str,
+    mapper_id: u8,
+    prg_rom_bytes: usize,
+    reset_pc: u16,
+    config_path: Option<&'a std::path::Path>,
+    step_mode: StepMode,
+    netplay: Option<&'a NetplayRuntimeConfig>,
+    rta_profile_id: Option<&'a str>,
+    rta_calibrate: bool,
+    #[cfg(feature = "nova")]
+    auto_player_enabled: bool,
+}
+
+fn build_startup_table(data: StartupTableData) -> Table {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("ROM Path"),
+        Cell::new(data.rom_path).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("ROM Info"),
+        Cell::new(format!(
+            "Mapper {}, PRG {} bytes, reset vector ${:04X}",
+            data.mapper_id, data.prg_rom_bytes, data.reset_pc
+        )),
+    ]);
+    if let Some(config_path) = data.config_path {
+        table.add_row(vec![
+            Cell::new("Config"),
+            Cell::new(config_path.display().to_string()),
+        ]);
+    }
+    table.add_row(vec![
+        Cell::new("Controls"),
+        Cell::new(
+            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save, F8=Load, Esc=Quit",
+        ),
+    ]);
+    table.add_row(vec![
+        Cell::new("Gamepad"),
+        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
+    ]);
+    match data.step_mode {
+        StepMode::Frame => {
+            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
+        }
+        StepMode::CpuBudget(steps) => {
+            table.add_row(vec![
+                Cell::new("Step Mode"),
+                Cell::new(format!("cpu ({steps} instructions/frame)")),
+            ]);
+        }
+    }
+    if let Some(netplay) = data.netplay {
+        table.add_row(vec![
+            Cell::new("Netplay"),
+            Cell::new(format!(
+                "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
+                netplay.relay_addr,
+                netplay.room,
+                netplay.player,
+                netplay.input_delay_frames,
+                netplay.max_rollback_frames,
+                netplay.hash_check_every_frames
+            )),
+        ]);
+    }
+    if let Some(rta_profile_id) = data.rta_profile_id {
+        table.add_row(vec![
+            Cell::new("RTA"),
+            Cell::new(format!(
+                "enabled profile='{}' calibrate={}",
+                rta_profile_id, data.rta_calibrate
+            )),
+        ]);
+    }
+    #[cfg(feature = "nova")]
+    {
+        if data.auto_player_enabled {
+            table.add_row(vec![
+                Cell::new("Nova"),
+                Cell::new("Auto Player Chaos Fuzzing Enabled"),
+            ]);
+        }
+    }
+
+    table
+}
+
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
 
@@ -889,83 +984,22 @@ fn run() -> Result<(), String> {
         None
     };
 
-    let mut table = Table::new();
-    table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
-        Cell::new("Value").fg(TableColor::White),
-    ]);
-
-    table.add_row(vec![
-        Cell::new("ROM Path"),
-        Cell::new(&rom_path).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("ROM Info"),
-        Cell::new(format!(
-            "Mapper {}, PRG {} bytes, reset vector ${:04X}",
-            info.mapper_id, info.prg_rom_bytes, info.reset_pc
-        )),
-    ]);
-    if let Some(config_path) = runtime.loaded_config_path.as_ref() {
-        table.add_row(vec![
-            Cell::new("Config"),
-            Cell::new(config_path.display().to_string()),
-        ]);
-    }
-    table.add_row(vec![
-        Cell::new("Controls"),
-        Cell::new(
-            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save, F8=Load, Esc=Quit",
-        ),
-    ]);
-    table.add_row(vec![
-        Cell::new("Gamepad"),
-        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
-    ]);
-    match step_mode {
-        StepMode::Frame => {
-            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
-        }
-        StepMode::CpuBudget(steps) => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new(format!("cpu ({steps} instructions/frame)")),
-            ]);
-        }
-    }
-    if let Some(netplay) = runtime.netplay.as_ref() {
-        table.add_row(vec![
-            Cell::new("Netplay"),
-            Cell::new(format!(
-                "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
-                netplay.relay_addr,
-                netplay.room,
-                netplay.player,
-                netplay.input_delay_frames,
-                netplay.max_rollback_frames,
-                netplay.hash_check_every_frames
-            )),
-        ]);
-    }
-    if let Some(rta) = rta_manager.as_ref() {
-        table.add_row(vec![
-            Cell::new("RTA"),
-            Cell::new(format!(
-                "enabled profile='{}' calibrate={}",
-                rta.profile_id(),
-                rta.is_calibrating()
-            )),
-        ]);
-    }
-    #[cfg(feature = "nova")]
-    {
-        if runtime.auto_player_enabled {
-            table.add_row(vec![
-                Cell::new("Nova"),
-                Cell::new("Auto Player Chaos Fuzzing Enabled"),
-            ]);
-        }
-    }
+    let table_data = StartupTableData {
+        rom_path: &rom_path,
+        mapper_id: info.mapper_id,
+        prg_rom_bytes: info.prg_rom_bytes,
+        reset_pc: info.reset_pc,
+        config_path: runtime.loaded_config_path.as_deref(),
+        step_mode,
+        netplay: runtime.netplay.as_ref(),
+        rta_profile_id: rta_manager.as_ref().map(|rta| rta.profile_id()),
+        rta_calibrate: rta_manager
+            .as_ref()
+            .is_some_and(|rta| rta.is_calibrating()),
+        #[cfg(feature = "nova")]
+        auto_player_enabled: runtime.auto_player_enabled,
+    };
+    let table = build_startup_table(table_data);
 
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
     println!("{table}\n");
@@ -2182,16 +2216,16 @@ mod tests {
         AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
         DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
         GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
-        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, audio_queue_dropped, capture_config_from_parts,
-        capture_path_for_frame, classify_keyboard_input, classify_window_event,
-        compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, frame_signature,
-        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
-        handle_netplay_server_message, is_player_two_slot, map_virtual_keycode,
-        merge_local_input_bits, netplay_feature_enabled, parse_runtime_args,
+        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs,
+        StartupTableData, StepMode, TARGET_FRAME_TIME, WindowEventDecision,
+        advance_core_for_host_frame, apply_gamepad_delta_commands, audio_queue_dropped,
+        build_startup_table, capture_config_from_parts, capture_path_for_frame,
+        classify_keyboard_input, classify_window_event, compute_local_netplay_bits,
+        compute_metrics_snapshot, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        frame_signature, gamepad_assignments_changed, gamepad_slot_changed,
+        gamepad_snapshot_to_bits, handle_netplay_server_message, is_player_two_slot,
+        map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled, parse_runtime_args,
         recommended_input_delay_frames, resync_restored_inputs, scaled_window_dimensions,
         schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
         should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
@@ -3145,6 +3179,36 @@ mod tests {
             parse_runtime_args_with_timeout(vec!["a.nes".to_owned(), "b.nes".to_owned()])
                 .expect_err("multiple roms should fail");
         assert!(multi_rom.contains("multiple ROM paths"));
+    }
+
+    #[test]
+    fn build_startup_table_includes_all_relevant_configurations() {
+        let config_path = std::path::Path::new("/dummy/nes.toml");
+        let data = StartupTableData {
+            rom_path: "game.nes",
+            mapper_id: 1,
+            prg_rom_bytes: 32768,
+            reset_pc: 0xC000,
+            config_path: Some(config_path),
+            step_mode: StepMode::CpuBudget(10_000),
+            netplay: None,
+            rta_profile_id: Some("speedrun"),
+            rta_calibrate: true,
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
+        };
+
+        let table = build_startup_table(data);
+        let output = table.to_string();
+
+        assert!(output.contains("game.nes"));
+        assert!(output.contains("Mapper 1"));
+        assert!(output.contains("32768 bytes"));
+        assert!(output.contains("$C000"));
+        assert!(output.contains("/dummy/nes.toml"));
+        assert!(output.contains("10000 instructions/frame"));
+        assert!(output.contains("speedrun"));
+        assert!(output.contains("true"));
     }
 
     #[test]
