@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `nes-core` deterministic and platform-agnostic, with all user-facing interactions flowing through command/query APIs mirrored by `nes-mcp` tools. Frontends (`nes-desktop`, `nes-web`) are thin adapters. `nes-proof` defines and proves critical invariants before or alongside runtime implementation.
 
-**Tech Stack:** Rust 2024 workspace, Verus (`C:\Users\markm\verus\verus.exe`), `winit`, `pixels`, `cpal`, `wasm-bindgen`, `web-sys`, `proptest`, GitHub Actions.
+**Tech Stack:** Rust 2024 workspace, Verus (`verus`), `winit`, `pixels`, `cpal`, `wasm-bindgen`, `web-sys`, `proptest`, GitHub Actions.
 
 ---
 
@@ -290,7 +290,7 @@ In `cpu_model.rs`, add a lemma with an unprovable assertion.
 
 **Step 2: Run proof to verify failure**
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/cpu_model.rs`
+Run: `verus crates/nes-proof/src/cpu_model.rs`
 Expected: FAIL with proof obligation unsatisfied.
 
 **Step 3: Implement minimal proven model**
@@ -302,7 +302,7 @@ Replace failing assertion with:
 
 **Step 4: Run proof to verify pass**
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/cpu_model.rs`
+Run: `verus crates/nes-proof/src/cpu_model.rs`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -342,7 +342,7 @@ fn zero_and_negative_flags_follow_value_written() {
 Run: `cargo test -p nes-core status_flags -- --nocapture`
 Expected: FAIL with missing status behavior.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/status_flags.rs`
+Run: `verus crates/nes-proof/src/status_flags.rs`
 Expected: FAIL with missing invariant proof.
 
 **Step 3: Implement minimal runtime + proof**
@@ -354,7 +354,7 @@ Add status flag operations in runtime and matching Verus lemmas for legality/pre
 Run: `cargo test -p nes-core status_flags -- --nocapture`
 Expected: PASS.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/status_flags.rs`
+Run: `verus crates/nes-proof/src/status_flags.rs`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -401,7 +401,7 @@ proptest! {
 Run: `cargo test -p nes-core bus_map -- --nocapture`
 Expected: FAIL with missing map behavior.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/bus_map.rs`
+Run: `verus crates/nes-proof/src/bus_map.rs`
 Expected: FAIL with unsatisfied mapping obligations.
 
 **Step 3: Implement minimal mapping and proof**
@@ -413,7 +413,7 @@ Define exhaustive address mapping and prove totality + non-overlap.
 Run: `cargo test -p nes-core bus_map -- --nocapture`
 Expected: PASS.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/bus_map.rs`
+Run: `verus crates/nes-proof/src/bus_map.rs`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -458,7 +458,7 @@ fn uxrom_switches_lower_bank_only() {
 Run: `cargo test -p nes-core mapper_nrom_uxrom -- --nocapture`
 Expected: FAIL.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/mapper_nrom_uxrom.rs`
+Run: `verus crates/nes-proof/src/mapper_nrom_uxrom.rs`
 Expected: FAIL.
 
 **Step 3: Implement minimal runtime + proof**
@@ -470,7 +470,7 @@ Guarantee bank index bounds and fixed upper bank semantics for UxROM.
 Run: `cargo test -p nes-core mapper_nrom_uxrom -- --nocapture`
 Expected: PASS.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/mapper_nrom_uxrom.rs`
+Run: `verus crates/nes-proof/src/mapper_nrom_uxrom.rs`
 Expected: PASS.
 
 **Step 5: Commit**
@@ -505,7 +505,7 @@ fn mmc1_resets_shift_register_on_bit7_write() {
 Run: `cargo test -p nes-core mapper_mmc1 -- --nocapture`
 Expected: FAIL.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/mapper_mmc1.rs`
+Run: `verus crates/nes-proof/src/mapper_mmc1.rs`
 Expected: FAIL.
 
 **Step 3: Implement minimal runtime + proof**
@@ -517,7 +517,7 @@ Implement 5-bit serial latch behavior and prove selected bank legality.
 Run: `cargo test -p nes-core mapper_mmc1 -- --nocapture`
 Expected: PASS.
 
-Run: `C:\Users\markm\verus\verus.exe crates/nes-proof/src/mapper_mmc1.rs`
+Run: `verus crates/nes-proof/src/mapper_mmc1.rs`
 Expected: PASS.
 
 **Step 5: Commit**
