@@ -18,3 +18,8 @@
 **Mutant:** `replace Nrom::write_prg with ()`
 **Diagnosis:** `Nrom::write_prg` delegates to `<Self as Mapper>::write_prg`, which is documented as doing nothing ("NROM has fixed PRG bank mapping and ignores bank-select writes"). Replacing a do-nothing function with `()` is mathematically equivalent and cannot be caught by any test observing state changes, because no state changes occur.
 **Kill Shot:** Identified as EQUIVALENT_MUTANT.
+
+## YYYY-MM-DD - Equivalent Mutants in `rom.rs`
+**Mutant:** `replace | with ^` on lines 139, 141, 158, 159, and 163 in `parse_ines`
+**Diagnosis:** The bitwise OR operations `|` are combining strictly disjoint bits (e.g., `(flags6 >> 4) | (flags7 & 0xF0)`). Since the fields do not overlap, `|` is mathematically identical to `^` (and `+`).
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
