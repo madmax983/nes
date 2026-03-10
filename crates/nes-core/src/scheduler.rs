@@ -196,4 +196,20 @@ mod tests {
         assert_eq!(scheduler.ppu_cycles(), 42);
         assert_eq!(scheduler.apu_cycles(), 100);
     }
+
+    #[test]
+    fn test_cpu_ppu_apu_getters() {
+        let mut scheduler = Scheduler::new();
+        scheduler.step_cpu_cycle();
+        scheduler.step_ppu_cycle();
+        scheduler.step_ppu_cycle();
+        scheduler.step_apu_cycle();
+        scheduler.step_apu_cycle();
+        scheduler.step_apu_cycle();
+
+        assert_eq!(scheduler.total_cycles(), 1);
+        assert_eq!(scheduler.cpu_cycles(), 1);
+        assert_eq!(scheduler.ppu_cycles(), 2);
+        assert_eq!(scheduler.apu_cycles(), 3);
+    }
 }
