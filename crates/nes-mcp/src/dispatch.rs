@@ -10,6 +10,9 @@ use nes_core::{
 };
 use nes_dsl::{Mirroring, RomBuildOptions};
 
+#[cfg(feature = "nova")]
+use nes_core::experimental::scanner::{MemoryScanner, ScanCondition};
+
 use crate::output::{
     audio_chunk, frame_chunk, latest_output_metadata, publish_audio, publish_frame,
 };
@@ -200,6 +203,21 @@ pub enum DispatchOutput {
         /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
+    /// Result of memory scanner reset
+    #[cfg(feature = "nova")]
+    ScannerReset,
+    /// Result of a memory scan iteration
+    #[cfg(feature = "nova")]
+    ScannerScanned {
+        /// Number of candidate addresses remaining
+        candidate_count: usize,
+    },
+    /// Result returning remaining memory scanner candidates
+    #[cfg(feature = "nova")]
+    ScannerCandidates {
+        /// Filtered candidate addresses
+        candidates: Vec<u16>,
+    },
 }
 
 /// Errors raised when parsing or executing MCP tools.
@@ -312,6 +330,12 @@ pub fn dispatch_tool(
         "load_6502_dsl" => handle_load_6502_dsl(core, params),
         "export_6502_dsl_rom" => handle_export_6502_dsl_rom(params),
         "export_6502_dsl_rom_base64" => handle_export_6502_dsl_rom_base64(params),
+        #[cfg(feature = "nova")]
+        "scanner_reset" => handle_scanner_reset(),
+        #[cfg(feature = "nova")]
+        "scanner_scan" => handle_scanner_scan(core, params),
+        #[cfg(feature = "nova")]
+        "scanner_candidates" => handle_scanner_candidates(),
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }
@@ -517,6 +541,68 @@ fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, Dis
         bytes: rom.len(),
         mapper_id: 0,
         prg_rom_bytes,
+    })
+}
+
+#[cfg(feature = "nova")]
+fn memory_scanner() -> &'static Mutex<MemoryScanner> {
+    static SCANNER: OnceLock<Mutex<MemoryScanner>> = OnceLock::new();
+    SCANNER.get_or_init(|| Mutex::new(MemoryScanner::new()))
+}
+
+#[cfg(feature = "nova")]
+fn handle_scanner_reset() -> Result<DispatchOutput, DispatchError> {
+    let mut scanner = memory_scanner()
+        .lock()
+        .map_err(|_| DispatchError::Internal("scanner lock poisoned".to_owned()))?;
+    scanner.reset();
+    Ok(DispatchOutput::ScannerReset)
+}
+
+#[cfg(feature = "nova")]
+fn handle_scanner_scan(
+    core: &NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let condition = if let Some(exact_str) = params.get("exact") {
+        let exact_val = exact_str.parse::<u8>().map_err(|_| {
+            DispatchError::InvalidParams("exact must be an integer in [0, 255]".to_owned())
+        })?;
+        ScanCondition::Exact(exact_val)
+    } else if let Some(cond_str) = params.get("condition") {
+        match cond_str.as_str() {
+            "decreased" => ScanCondition::Decreased,
+            "increased" => ScanCondition::Increased,
+            "changed" => ScanCondition::Changed,
+            "unchanged" => ScanCondition::Unchanged,
+            _ => {
+                return Err(DispatchError::InvalidParams(
+                    "condition must be one of: decreased, increased, changed, unchanged".to_owned(),
+                ));
+            }
+        }
+    } else {
+        return Err(DispatchError::InvalidParams(
+            "must provide either 'exact' or 'condition'".to_owned(),
+        ));
+    };
+
+    let mut scanner = memory_scanner()
+        .lock()
+        .map_err(|_| DispatchError::Internal("scanner lock poisoned".to_owned()))?;
+    scanner.scan(core, condition);
+    Ok(DispatchOutput::ScannerScanned {
+        candidate_count: scanner.candidate_count(),
+    })
+}
+
+#[cfg(feature = "nova")]
+fn handle_scanner_candidates() -> Result<DispatchOutput, DispatchError> {
+    let scanner = memory_scanner()
+        .lock()
+        .map_err(|_| DispatchError::Internal("scanner lock poisoned".to_owned()))?;
+    Ok(DispatchOutput::ScannerCandidates {
+        candidates: scanner.candidates(),
     })
 }
 
@@ -1140,6 +1226,64 @@ mod tests {
         assert!(after_audio.audio_seq > before.audio_seq);
     }
 }
+
+#[cfg(all(test, feature = "nova"))]
+mod nova_tests {
+    use super::*;
+    use nes_core::NesCore;
+
+    fn params(pairs: &[(&str, &str)]) -> ToolParams {
+        let mut map = ToolParams::new();
+        for (key, value) in pairs {
+            map.insert((*key).to_owned(), (*value).to_owned());
+        }
+        map
+    }
+
+    #[test]
+    fn scanner_integration_test() {
+        let mut core = NesCore::new();
+        // Setup initial dummy state
+        core.load_cpu_bytes(0x0042, &[3]);
+        core.load_cpu_bytes(0x0100, &[3]);
+
+        // Reset scanner
+        let result = dispatch_tool(&mut core, "scanner_reset", &ToolParams::new()).unwrap();
+        assert_eq!(result, DispatchOutput::ScannerReset);
+
+        // First scan (Exact)
+        let scan_params = params(&[("exact", "3")]);
+        let result = dispatch_tool(&mut core, "scanner_scan", &scan_params).unwrap();
+        if let DispatchOutput::ScannerScanned { candidate_count } = result {
+            assert!(candidate_count >= 2);
+        } else {
+            panic!("Unexpected result {:?}", result);
+        }
+
+        // Mutate
+        core.load_cpu_bytes(0x0042, &[2]); // Decreased
+        core.load_cpu_bytes(0x0100, &[3]); // Unchanged
+
+        // Second scan (Decreased)
+        let scan_params2 = params(&[("condition", "decreased")]);
+        let result = dispatch_tool(&mut core, "scanner_scan", &scan_params2).unwrap();
+        if let DispatchOutput::ScannerScanned { candidate_count } = result {
+            assert!(candidate_count < 2);
+        } else {
+            panic!("Unexpected result {:?}", result);
+        }
+
+        // Candidates list
+        let result = dispatch_tool(&mut core, "scanner_candidates", &ToolParams::new()).unwrap();
+        if let DispatchOutput::ScannerCandidates { candidates } = result {
+            assert!(candidates.contains(&0x0042));
+            assert!(!candidates.contains(&0x0100));
+        } else {
+            panic!("Unexpected result {:?}", result);
+        }
+    }
+}
+
 #[cfg(test)]
 mod havoc_fuzz_tests {
     use super::*;

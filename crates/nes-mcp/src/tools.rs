@@ -29,7 +29,12 @@ pub struct ToolDefinition {
     pub description: &'static str,
 }
 
-const TOOL_CATALOG: [ToolDefinition; 30] = [
+#[cfg(not(feature = "nova"))]
+const TOOL_CATALOG_LEN: usize = 30;
+#[cfg(feature = "nova")]
+const TOOL_CATALOG_LEN: usize = 33;
+
+const TOOL_CATALOG: [ToolDefinition; TOOL_CATALOG_LEN] = [
     ToolDefinition {
         name: "load_rom",
         description: "Load an iNES ROM into the emulator core",
@@ -149,6 +154,21 @@ const TOOL_CATALOG: [ToolDefinition; 30] = [
     ToolDefinition {
         name: "export_6502_dsl_rom_base64",
         description: "Build an iNES NROM ROM from 6502 DSL source and return base64",
+    },
+    #[cfg(feature = "nova")]
+    ToolDefinition {
+        name: "scanner_reset",
+        description: "Reset the experimental memory scanner, clearing all candidates",
+    },
+    #[cfg(feature = "nova")]
+    ToolDefinition {
+        name: "scanner_scan",
+        description: "Scan main NES RAM using a condition to filter for state variables",
+    },
+    #[cfg(feature = "nova")]
+    ToolDefinition {
+        name: "scanner_candidates",
+        description: "List the currently filtered memory addresses from the scanner",
     },
 ];
 

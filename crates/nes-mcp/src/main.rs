@@ -431,6 +431,16 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "prg_rom_bytes": prg_rom_bytes,
             })
         }
+        #[cfg(feature = "nova")]
+        DispatchOutput::ScannerReset => json!({ "kind": "scanner_reset" }),
+        #[cfg(feature = "nova")]
+        DispatchOutput::ScannerScanned { candidate_count } => {
+            json!({ "kind": "scanner_scanned", "candidate_count": candidate_count })
+        }
+        #[cfg(feature = "nova")]
+        DispatchOutput::ScannerCandidates { candidates } => {
+            json!({ "kind": "scanner_candidates", "candidates": candidates })
+        }
     }
 }
 
@@ -544,6 +554,22 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "chr_hex": { "type": "string", "minLength": 2 }
             },
             "required": ["source"],
+            "additionalProperties": false
+        }),
+        #[cfg(feature = "nova")]
+        "scanner_scan" => json!({
+            "type": "object",
+            "properties": {
+                "condition": {
+                    "type": "string",
+                    "enum": ["decreased", "increased", "changed", "unchanged"]
+                },
+                "exact": { "type": "integer", "minimum": 0, "maximum": 255 }
+            },
+            "oneOf": [
+                { "required": ["condition"] },
+                { "required": ["exact"] }
+            ],
             "additionalProperties": false
         }),
         _ => json!({
