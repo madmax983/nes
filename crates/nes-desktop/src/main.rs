@@ -3210,6 +3210,45 @@ mod tests {
     }
 
     #[test]
+    fn build_startup_table_omits_none_configurations() {
+        let data = StartupTableData {
+            rom_path: "game2.nes",
+            mapper_id: 2,
+            prg_rom_bytes: 16384,
+            reset_pc: 0x8000,
+            config_path: None,
+            step_mode: StepMode::Frame,
+            netplay: Some(&crate::netplay::NetplayRuntimeConfig {
+                relay_addr: "127.0.0.1".to_owned(),
+                room: "lobby".to_owned(),
+                player: 1,
+                input_delay_frames: 2,
+                max_rollback_frames: 4,
+                hash_check_every_frames: 60,
+            }),
+            rta_profile_id: None,
+            rta_calibrate: false,
+            #[cfg(feature = "nova")]
+            auto_player_enabled: true,
+        };
+
+        let table = build_startup_table(data);
+        let output = table.to_string();
+
+        assert!(output.contains("game2.nes"));
+        assert!(output.contains("Mapper 2"));
+        assert!(output.contains("16384 bytes"));
+        assert!(output.contains("$8000"));
+        assert!(output.contains("frame"));
+        assert!(output.contains("lobby"));
+        assert!(output.contains("127.0.0.1"));
+        assert!(!output.contains("Config"));
+        assert!(!output.contains("speedrun"));
+        #[cfg(feature = "nova")]
+        assert!(output.contains("Auto Player Chaos Fuzzing Enabled"));
+    }
+
+    #[test]
     fn parse_runtime_args_accepts_all_equals_forms_for_netplay_flags() {
         let args = vec![
             "--mcp-host".to_owned(),
