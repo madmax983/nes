@@ -1532,3 +1532,16 @@ impl Default for NesCore {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    #[test]
+    fn test_constants_re_exported() {
+        assert_eq!(crate::FRAME_WIDTH, 256);
+        assert_eq!(crate::FRAME_HEIGHT, 240);
+        assert_eq!(crate::AUDIO_SAMPLE_RATE, 44_100);
+        assert_eq!(crate::AUDIO_CHUNK_SAMPLES, 735);
+    }
+}
