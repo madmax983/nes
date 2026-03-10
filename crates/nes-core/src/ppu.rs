@@ -1298,8 +1298,8 @@ mod tests {
         DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK,
         VBLANK_EDGE_DOT, VBLANK_SCANLINE,
     };
-    use crate::rom::NametableMirroring;
     use super::{FRAME_RGBA_BYTES, FRAME_WIDTH};
+    use crate::rom::NametableMirroring;
 
     #[test]
     fn vblank_edges_are_dot_exact() {
@@ -1585,4 +1585,11 @@ mod tests {
         let idx = (y * FRAME_WIDTH + x) * 4;
         (frame[idx], frame[idx + 1], frame[idx + 2])
     }
+}
+
+#[test]
+fn test_ppu_constants() {
+    assert_eq!(FRAME_WIDTH, 256);
+    assert_eq!(FRAME_HEIGHT, 240);
+    assert_eq!(FRAME_RGBA_BYTES, FRAME_WIDTH * FRAME_HEIGHT * 4);
 }

@@ -1225,3 +1225,9 @@ mod tests {
         assert!(dmc.irq_pending, "finishing the sample should latch DMC IRQ");
     }
 }
+
+#[test]
+fn test_apu_constants() {
+    assert_eq!(AUDIO_SAMPLE_RATE, 44_100);
+    assert_eq!(AUDIO_CHUNK_SAMPLES, (AUDIO_SAMPLE_RATE as usize) / 60);
+}
