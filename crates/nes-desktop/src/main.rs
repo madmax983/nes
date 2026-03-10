@@ -993,9 +993,7 @@ fn run() -> Result<(), String> {
         step_mode,
         netplay: runtime.netplay.as_ref(),
         rta_profile_id: rta_manager.as_ref().map(|rta| rta.profile_id()),
-        rta_calibrate: rta_manager
-            .as_ref()
-            .is_some_and(|rta| rta.is_calibrating()),
+        rta_calibrate: rta_manager.as_ref().is_some_and(|rta| rta.is_calibrating()),
         #[cfg(feature = "nova")]
         auto_player_enabled: runtime.auto_player_enabled,
     };
