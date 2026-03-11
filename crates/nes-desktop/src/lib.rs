@@ -4,3 +4,4 @@ pub mod manual_state;
 pub mod menu;
 pub mod overlay;
 pub mod rta;
+pub mod session_cheats;
