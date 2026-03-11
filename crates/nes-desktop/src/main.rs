@@ -27,7 +27,9 @@ use nes_desktop::manual_state::{
     SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
     slot_path_for_rom, slot_paths_for_rom,
 };
-use nes_desktop::menu::{DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path};
+use nes_desktop::menu::{
+    DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
+};
 use nes_desktop::overlay::{OverlayModel, OverlaySelection, OverlaySlotSummary, draw_overlay};
 use nes_desktop::rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
@@ -757,7 +759,7 @@ fn menu_action_enabled(
 ) -> bool {
     match action {
         AppAction::Resume => overlay_open,
-        AppAction::OpenRom => !rollback_enabled && !rta_active,
+        AppAction::OpenRom => !rollback_enabled && !rta_active && rom_picker_supported(),
         AppAction::SaveSlot(_) | AppAction::LoadSlot(_) => !rollback_enabled,
         AppAction::ToggleOverlay | AppAction::Reset | AppAction::Quit => true,
     }
@@ -945,6 +947,10 @@ fn execute_app_action(
         AppAction::OpenRom => {
             if rta_manager.is_some() {
                 overlay.set_status_message("Open ROM is unavailable while RTA mode is active");
+                return Ok(false);
+            }
+            if !rom_picker_supported() {
+                overlay.set_status_message("Open ROM picker is unavailable on this platform build");
                 return Ok(false);
             }
             let Some(path) = pick_rom_path() else {
@@ -2750,13 +2756,14 @@ mod tests {
         element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
         frame_signature, gamepad_assignments_changed, gamepad_slot_changed,
         gamepad_snapshot_to_bits, handle_netplay_server_message, is_player_two_slot,
-        map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled,
+        map_virtual_keycode, menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
         overlay_input_requires_redraw, parse_runtime_args, recommended_input_delay_frames,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, scaled_window_dimensions,
-        schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, schedule_netplay_ping, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_send_netplay_hash, should_trace_frame, should_update_input_delay,
+        slot_action_for_hotkey, track_keyboard_bits_for_key, update_button_bits,
+        validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -3321,6 +3328,14 @@ mod tests {
         let err = validate_action_allowed(AppAction::SaveSlot(2), true)
             .expect_err("save slot should be blocked during rollback");
         assert!(err.contains("unavailable while netplay/rollback is active"));
+    }
+
+    #[test]
+    fn open_rom_menu_action_requires_platform_picker_support() {
+        assert_eq!(
+            menu_action_enabled(AppAction::OpenRom, false, false, false),
+            rom_picker_supported()
+        );
     }
 
     #[test]

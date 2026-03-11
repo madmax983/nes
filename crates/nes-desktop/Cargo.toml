@@ -14,7 +14,6 @@ gilrs = "0.10"
 nes-config = { path = "../nes-config" }
 nes-core = { path = "../nes-core" }
 rand = { version = "0.8.5", optional = true }
-rfd = "0.15"
 comfy-table = "7.1"
 crossterm = "0.28"
 nes-netplay = { path = "../nes-netplay" }
@@ -30,3 +29,4 @@ winit = "0.28"
 
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 muda = "0.15"
+rfd = "0.15"

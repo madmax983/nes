@@ -173,6 +173,18 @@ pub const fn native_menu_supported() -> bool {
     false
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[must_use]
+pub const fn rom_picker_supported() -> bool {
+    true
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[must_use]
+pub const fn rom_picker_supported() -> bool {
+    false
+}
+
 /// Returns whether the action should be enabled for the current runtime mode.
 #[must_use]
 pub fn action_is_enabled_for_runtime(action: AppAction, rollback_enabled: bool) -> bool {
@@ -184,15 +196,15 @@ pub fn action_is_enabled_for_runtime(action: AppAction, rollback_enabled: bool) 
 }
 
 /// Opens the native ROM picker in production builds.
-#[cfg(not(test))]
+#[cfg(all(not(test), any(target_os = "windows", target_os = "macos")))]
 pub fn pick_rom_path() -> Option<PathBuf> {
     rfd::FileDialog::new()
         .add_filter("NES ROM", &["nes"])
         .pick_file()
 }
 
-/// Test shim so the pure menu helpers can be compiled without the `rfd` crate.
-#[cfg(test)]
+/// Returns no file on targets without a native picker integration in this build.
+#[cfg(any(test, not(any(target_os = "windows", target_os = "macos"))))]
 pub fn pick_rom_path() -> Option<PathBuf> {
     None
 }
@@ -286,7 +298,7 @@ fn sync_runtime_entries(menu: &DesktopMenu, entries: &[DesktopMenuEntry], rollba
 mod tests {
     use super::{
         AppAction, DesktopMenuEntry, action_from_menu_event_id, action_is_enabled_for_runtime,
-        build_native_menu,
+        build_native_menu, rom_picker_supported,
     };
 
     #[test]
@@ -331,5 +343,17 @@ mod tests {
         assert!(!action_is_enabled_for_runtime(AppAction::LoadSlot(4), true));
         assert!(action_is_enabled_for_runtime(AppAction::Reset, true));
         assert!(action_is_enabled_for_runtime(AppAction::Quit, true));
+    }
+
+    #[test]
+    fn rom_picker_capability_matches_platform_contract() {
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        assert!(rom_picker_supported());
+
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            assert!(!rom_picker_supported());
+            assert!(super::pick_rom_path().is_none());
+        }
     }
 }
