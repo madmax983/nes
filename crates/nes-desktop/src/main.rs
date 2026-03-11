@@ -822,8 +822,12 @@ fn build_startup_table(
         .set_content_arrangement(comfy_table::ContentArrangement::Dynamic);
 
     table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan).add_attribute(comfy_table::Attribute::Bold),
-        Cell::new("Value").fg(TableColor::White).add_attribute(comfy_table::Attribute::Bold),
+        Cell::new("Setting")
+            .fg(TableColor::Cyan)
+            .add_attribute(comfy_table::Attribute::Bold),
+        Cell::new("Value")
+            .fg(TableColor::White)
+            .add_attribute(comfy_table::Attribute::Bold),
     ]);
 
     table.add_row(vec![
@@ -855,7 +859,10 @@ fn build_startup_table(
     ]);
     match step_mode {
         StepMode::Frame => {
-            table.add_row(vec![Cell::new("Step Mode").fg(TableColor::DarkGrey), Cell::new("frame").fg(TableColor::DarkYellow)]);
+            table.add_row(vec![
+                Cell::new("Step Mode").fg(TableColor::DarkGrey),
+                Cell::new("frame").fg(TableColor::DarkYellow),
+            ]);
         }
         StepMode::CpuBudget(steps) => {
             table.add_row(vec![
@@ -875,7 +882,8 @@ fn build_startup_table(
                 netplay.input_delay_frames,
                 netplay.max_rollback_frames,
                 netplay.hash_check_every_frames
-            )).fg(TableColor::Magenta),
+            ))
+            .fg(TableColor::Magenta),
         ]);
     }
     if let Some(rta) = rta_manager.as_ref() {
@@ -885,7 +893,8 @@ fn build_startup_table(
                 "enabled profile='{}' calibrate={}",
                 rta.profile_id(),
                 rta.is_calibrating()
-            )).fg(TableColor::Cyan),
+            ))
+            .fg(TableColor::Cyan),
         ]);
     }
     #[cfg(feature = "nova")]
@@ -2510,7 +2519,9 @@ mod tests {
 
     #[test]
     fn test_build_startup_table_includes_expected_strings() {
-        use super::{build_startup_table, RuntimeConfig, StepMode, CaptureConfig};
+        use super::{RuntimeConfig, StepMode, build_startup_table};
+        use super::{NetplayRuntimeConfig, RtaRuntimeConfig};
+        use crate::rta::{RtaManager, RtaProfile};
         use std::path::PathBuf;
 
         let runtime = RuntimeConfig {
@@ -2525,10 +2536,22 @@ mod tests {
             loaded_config_path: Some(PathBuf::from("my_config.toml")),
             mcp_enabled: false,
             mcp_bind_addr: "127.0.0.1:1234".to_owned(),
-            netplay: None,
-            rta: None,
+            netplay: Some(NetplayRuntimeConfig {
+                relay_addr: "127.0.0.1:9000".to_string(),
+                room: "test_room".to_string(),
+                player: 1,
+                input_delay_frames: 2,
+                max_rollback_frames: 10,
+                hash_check_every_frames: 60,
+            }),
+            rta: Some(RtaRuntimeConfig {
+                profile_id_override: Some("test_profile".to_string()),
+                profiles_dir: PathBuf::from("profiles"),
+                runs_dir: PathBuf::from("runs"),
+                calibrate: true,
+            }),
             #[cfg(feature = "nova")]
-            auto_player_enabled: false,
+            auto_player_enabled: true,
         };
         let info = nes_core::RomLoadInfo {
             mapper_id: 4,
@@ -2536,7 +2559,15 @@ mod tests {
             reset_pc: 0x8000,
         };
 
-        let table = build_startup_table("test.nes", &info, &runtime, StepMode::Frame, None);
+        // Create a dummy RtaManager to satisfy the option logic in build_startup_table
+        let rta_manager = RtaManager::new(
+            RtaProfile::default(),
+            "dummy_hash".to_string(),
+            PathBuf::from("runs"),
+            None,
+        );
+
+        let table = build_startup_table("test.nes", &info, &runtime, StepMode::CpuBudget(100), Some(&rta_manager));
         let output = table.to_string();
 
         assert!(output.contains("test.nes"));
@@ -2545,7 +2576,25 @@ mod tests {
         assert!(output.contains("$8000"));
         assert!(output.contains("my_config.toml"));
         assert!(output.contains("Step Mode"));
-        assert!(output.contains("frame"));
+        assert!(output.contains("cpu (100 instructions/frame)"));
+        assert!(output.contains("Netplay"));
+        assert!(output.contains("test_room"));
+        assert!(output.contains("RTA"));
+
+        #[cfg(feature = "nova")]
+        assert!(output.contains("Auto Player Chaos Fuzzing Enabled"));
+
+        // Ensure another call with none values evaluates the other branches
+        let mut runtime2 = runtime;
+        runtime2.netplay = None;
+        runtime2.rta = None;
+        #[cfg(feature = "nova")]
+        {
+            runtime2.auto_player_enabled = false;
+        }
+        let table2 = build_startup_table("test.nes", &info, &runtime2, StepMode::Frame, None);
+        let output2 = table2.to_string();
+        assert!(output2.contains("frame"));
     }
 
     #[test]

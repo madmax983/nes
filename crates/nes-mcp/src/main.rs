@@ -80,8 +80,12 @@ fn build_startup_table(protocol_version: &str, num_tools: usize) -> Table {
         .set_content_arrangement(comfy_table::ContentArrangement::Dynamic);
 
     table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan).add_attribute(comfy_table::Attribute::Bold),
-        Cell::new("Value").fg(TableColor::White).add_attribute(comfy_table::Attribute::Bold),
+        Cell::new("Setting")
+            .fg(TableColor::Cyan)
+            .add_attribute(comfy_table::Attribute::Bold),
+        Cell::new("Value")
+            .fg(TableColor::White)
+            .add_attribute(comfy_table::Attribute::Bold),
     ]);
 
     table.add_row(vec![
