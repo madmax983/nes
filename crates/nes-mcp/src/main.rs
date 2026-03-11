@@ -786,6 +786,74 @@ mod tests {
             export_dsl_base64["inputSchema"]["required"],
             json!(["source"])
         );
+
+        #[cfg(feature = "nova")]
+        {
+            let scan_mem = tools
+                .iter()
+                .find(|tool| tool["name"] == json!("scan_memory"))
+                .expect("scan_memory tool exists");
+            assert_eq!(scan_mem["inputSchema"]["type"], json!("object"));
+            assert_eq!(scan_mem["inputSchema"]["required"], json!(["condition"]));
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "nova")]
+    fn tools_call_handles_scan_memory_and_reset_scanner() {
+        let mut state = ServerState::new();
+        // Mutate memory to setup scan
+        state.core.load_cpu_bytes(0x0042, &[42]);
+
+        // Reset scanner
+        let reset_res = call(
+            &mut state,
+            request("tools/call", json!(1), json!({ "name": "reset_scanner" })),
+        );
+        assert_eq!(reset_res["result"]["isError"], json!(false));
+        assert_eq!(
+            reset_res["result"]["structuredContent"]["kind"],
+            json!("scan_results")
+        );
+
+        // Scan memory exact
+        let scan_res = call(
+            &mut state,
+            request(
+                "tools/call",
+                json!(2),
+                json!({
+                    "name": "scan_memory",
+                    "arguments": {
+                        "condition": "exact",
+                        "value": "42"
+                    }
+                }),
+            ),
+        );
+        assert_eq!(scan_res["result"]["isError"], json!(false));
+        let count = scan_res["result"]["structuredContent"]["candidate_count"]
+            .as_u64()
+            .unwrap();
+        assert!(count >= 1);
+
+        // Scan memory error (missing value for exact)
+        let err_res = call(
+            &mut state,
+            request(
+                "tools/call",
+                json!(3),
+                json!({
+                    "name": "scan_memory",
+                    "arguments": {
+                        "condition": "exact"
+                    }
+                }),
+            ),
+        );
+        assert_eq!(err_res["result"]["isError"], json!(true));
+        let text = err_res["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("value must be provided"));
     }
 
     #[test]
