@@ -268,15 +268,27 @@ mod tests {
         let mut core = NesCore::new();
 
         let wait_err = execute_macro_script(&mut core, "WAIT").unwrap_err();
-        assert!(wait_err.contains("WAIT needs a frame count"), "Expected missing frame count error for WAIT");
+        assert!(
+            wait_err.contains("WAIT needs a frame count"),
+            "Expected missing frame count error for WAIT"
+        );
 
         let press_err = execute_macro_script(&mut core, "PRESS").unwrap_err();
-        assert!(press_err.contains("PRESS needs a button"), "Expected missing button error for PRESS");
+        assert!(
+            press_err.contains("PRESS needs a button"),
+            "Expected missing button error for PRESS"
+        );
 
         let hold_err = execute_macro_script(&mut core, "HOLD").unwrap_err();
-        assert!(hold_err.contains("HOLD needs a button"), "Expected missing button error for HOLD");
+        assert!(
+            hold_err.contains("HOLD needs a button"),
+            "Expected missing button error for HOLD"
+        );
 
         let release_err = execute_macro_script(&mut core, "RELEASE").unwrap_err();
-        assert!(release_err.contains("RELEASE needs a button"), "Expected missing button error for RELEASE");
+        assert!(
+            release_err.contains("RELEASE needs a button"),
+            "Expected missing button error for RELEASE"
+        );
     }
 }
