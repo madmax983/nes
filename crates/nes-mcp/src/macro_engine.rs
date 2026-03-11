@@ -30,6 +30,9 @@ use nes_core::{Button, Command, NesCore};
 /// - An invalid frame count or button name is provided.
 /// - The underlying [`NesCore`] fails to execute a command.
 ///
+/// **Performance optimization:** Iterators are used instead of `collect::<Vec<&str>>()` to parse parts of the line.
+/// This removes a heap allocation for `Vec<&str>` per non-empty line in a macro script.
+///
 /// ## Examples
 ///
 /// ```
@@ -59,20 +62,20 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
             continue;
         }
 
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() {
+        let mut parts = line.split_whitespace();
+        let Some(command) = parts.next() else {
             continue;
-        }
+        };
 
-        let command_name = parts[0].to_uppercase();
+        let command_name = command.to_uppercase();
         match command_name.as_str() {
             "WAIT" => {
-                if parts.len() < 2 {
+                let Some(arg) = parts.next() else {
                     return Err(format!("Line {}: WAIT needs a frame count", line_num + 1));
-                }
-                let frames: u64 = parts[1].parse().map_err(|_| {
-                    format!("Line {}: Invalid frame count '{}'", line_num + 1, parts[1])
-                })?;
+                };
+                let frames: u64 = arg
+                    .parse()
+                    .map_err(|_| format!("Line {}: Invalid frame count '{}'", line_num + 1, arg))?;
                 for _ in 0..frames {
                     core.execute(Command::StepFrame)
                         .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
@@ -80,26 +83,24 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
                 }
             }
             "PRESS" | "HOLD" => {
-                if parts.len() < 2 {
+                let Some(arg) = parts.next() else {
                     return Err(format!(
                         "Line {}: {} needs a button",
                         line_num + 1,
                         command_name
                     ));
-                }
-                let btn = parse_btn(parts[1]).ok_or_else(|| {
-                    format!("Line {}: Invalid button '{}'", line_num + 1, parts[1])
-                })?;
+                };
+                let btn = parse_btn(arg)
+                    .ok_or_else(|| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
                 core.execute(Command::PressButton(btn))
                     .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
             }
             "RELEASE" => {
-                if parts.len() < 2 {
+                let Some(arg) = parts.next() else {
                     return Err(format!("Line {}: RELEASE needs a button", line_num + 1));
-                }
-                let btn = parse_btn(parts[1]).ok_or_else(|| {
-                    format!("Line {}: Invalid button '{}'", line_num + 1, parts[1])
-                })?;
+                };
+                let btn = parse_btn(arg)
+                    .ok_or_else(|| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
                 core.execute(Command::ReleaseButton(btn))
                     .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
             }
@@ -111,7 +112,7 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
                 return Err(format!(
                     "Line {}: Unknown command '{}'",
                     line_num + 1,
-                    parts[0]
+                    command
                 ));
             }
         }
