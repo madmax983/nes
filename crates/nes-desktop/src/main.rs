@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
@@ -19,9 +19,18 @@ use nes_config::{
 };
 use nes_core::{
     AUDIO_SAMPLE_RATE, Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore,
+    RomLoadInfo,
 };
+use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
-use nes_desktop::manual_state::{load_state_file, quicksave_path_for_rom, save_state_file};
+use nes_desktop::manual_state::{
+    SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
+    slot_path_for_rom, slot_paths_for_rom,
+};
+use nes_desktop::menu::{
+    DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
+};
+use nes_desktop::overlay::{OverlayModel, OverlaySelection, OverlaySlotSummary, draw_overlay};
 use nes_desktop::rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
     ProfileStatus, RtaEvent, RtaManager, RtaProfile, compute_rom_hash, load_profiles,
@@ -33,8 +42,11 @@ use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
+use winit::event_loop::{ControlFlow, EventLoopBuilder};
+use winit::window::{Window, WindowBuilder};
+
+#[cfg(target_os = "macos")]
+use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
@@ -53,6 +65,8 @@ const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
+const SAVE_SLOT_COUNT: u8 = 5;
+const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 const CONTROLLER_BUTTONS: [Button; 8] = [
     Button::A,
     Button::B,
@@ -66,6 +80,7 @@ const CONTROLLER_BUTTONS: [Button; 8] = [
 
 struct RuntimeConfig {
     rom_path: String,
+    cheat_codes: Vec<String>,
     window_scale: u32,
     step_mode: StepMode,
     audio_enabled: bool,
@@ -85,6 +100,7 @@ struct RuntimeConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RuntimeArgs {
     rom_path: Option<String>,
+    cheat_codes: Vec<String>,
     mcp_enabled: bool,
     mcp_bind_addr: String,
     netplay_enabled: bool,
@@ -117,9 +133,17 @@ enum StepMode {
     Frame,
 }
 
+#[derive(Debug, Clone)]
 struct CaptureConfig {
     path_template: String,
     every_n_frames: u64,
+}
+
+struct LoadedRomSession {
+    rom_path: PathBuf,
+    rom_hash: String,
+    info: RomLoadInfo,
+    slot_metadata: Vec<SaveSlotMetadata>,
 }
 
 trait AudioSinkControl {
@@ -464,7 +488,7 @@ fn main() {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KeyboardDecision {
-    Exit,
+    ToggleOverlay,
     ManualSaveState,
     ManualLoadState,
     SetRewindHeld(bool),
@@ -531,7 +555,7 @@ fn classify_keyboard_input(
     rta_calibrate: bool,
 ) -> KeyboardDecision {
     if key == VirtualKeyCode::Escape && pressed {
-        return KeyboardDecision::Exit;
+        return KeyboardDecision::ToggleOverlay;
     }
     if pressed && key == VirtualKeyCode::F5 {
         return KeyboardDecision::ManualSaveState;
@@ -563,6 +587,454 @@ fn classify_keyboard_input(
         KeyboardDecision::ExecuteCore(mapped.core)
     } else {
         KeyboardDecision::Noop
+    }
+}
+
+fn slot_action_for_hotkey(is_save: bool, selected_slot: u8) -> Option<AppAction> {
+    if !(1..=5).contains(&selected_slot) {
+        return None;
+    }
+    Some(if is_save {
+        AppAction::SaveSlot(selected_slot)
+    } else {
+        AppAction::LoadSlot(selected_slot)
+    })
+}
+
+fn apply_runtime_cheat_codes(core: &mut NesCore, cheat_codes: &[String]) -> Result<(), String> {
+    core.clear_cheat_codes();
+    for raw_code in cheat_codes {
+        core.add_cheat_code(raw_code)
+            .map_err(|err| format!("Invalid cheat code '{raw_code}': {err}"))?;
+    }
+    Ok(())
+}
+
+fn load_rom_session(
+    core: &mut NesCore,
+    rom_path: &Path,
+    cheat_codes: &[String],
+) -> Result<LoadedRomSession, String> {
+    let rom_bytes = fs::read(rom_path)
+        .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
+    core.clear_cheat_codes();
+    let info = core
+        .load_ines_rom(&rom_bytes)
+        .map_err(|err| format!("Failed to load ROM: {err}"))?;
+    apply_runtime_cheat_codes(core, cheat_codes)?;
+    let rom_hash = compute_rom_hash(&rom_bytes);
+    let slot_metadata = load_slot_metadata_for_rom(rom_path, &rom_hash)?;
+    Ok(LoadedRomSession {
+        rom_path: rom_path.to_path_buf(),
+        rom_hash,
+        info,
+        slot_metadata,
+    })
+}
+
+fn load_slot_metadata_for_rom(
+    rom_path: &Path,
+    rom_hash: &str,
+) -> Result<Vec<SaveSlotMetadata>, String> {
+    slot_paths_for_rom(rom_path, rom_hash, 1..=SAVE_SLOT_COUNT)
+        .into_iter()
+        .map(|path| read_slot_metadata(&path, rom_hash))
+        .collect()
+}
+
+fn refresh_slot_metadata(session: &mut LoadedRomSession) -> Result<(), String> {
+    session.slot_metadata = load_slot_metadata_for_rom(&session.rom_path, &session.rom_hash)?;
+    Ok(())
+}
+
+fn slot_path_for_selection(session: &LoadedRomSession, slot: u8) -> PathBuf {
+    slot_path_for_rom(&session.rom_path, &session.rom_hash, slot)
+}
+
+fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
+    let status_label = match metadata.status {
+        SaveSlotStatus::Empty => "Empty",
+        SaveSlotStatus::Saved => "Saved",
+        SaveSlotStatus::Corrupt => "Corrupt",
+        SaveSlotStatus::IncompatibleRom => "Mismatch",
+    }
+    .to_owned();
+    let detail = metadata.modified_unix_secs.map(|secs| secs.to_string());
+    OverlaySlotSummary {
+        slot: metadata.slot,
+        status_label,
+        detail,
+    }
+}
+
+fn overlay_slot_summaries(metadata: &[SaveSlotMetadata]) -> Vec<OverlaySlotSummary> {
+    metadata.iter().map(format_slot_status).collect()
+}
+
+fn rom_display_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("ROM")
+        .to_owned()
+}
+
+fn window_title(session: &LoadedRomSession, overlay_open: bool) -> String {
+    let suffix = if overlay_open { " [Paused]" } else { "" };
+    format!(
+        "nes-desktop - {}{suffix}",
+        rom_display_name(&session.rom_path)
+    )
+}
+
+fn overlay_action_from_selection(selection: OverlaySelection) -> AppAction {
+    match selection {
+        OverlaySelection::Resume => AppAction::Resume,
+        OverlaySelection::OpenRom => AppAction::OpenRom,
+        OverlaySelection::SaveSlot(slot) => AppAction::SaveSlot(slot),
+        OverlaySelection::LoadSlot(slot) => AppAction::LoadSlot(slot),
+        OverlaySelection::Reset => AppAction::Reset,
+        OverlaySelection::Quit => AppAction::Quit,
+    }
+}
+
+fn apply_overlay_keyboard_input(
+    overlay: &mut OverlayModel,
+    key: VirtualKeyCode,
+    pressed: bool,
+    _keyboard_bits: &mut u8,
+) -> Option<AppAction> {
+    if !overlay.is_open() || !pressed {
+        return None;
+    }
+    match key {
+        VirtualKeyCode::Escape => Some(AppAction::Resume),
+        VirtualKeyCode::Up => {
+            overlay.move_prev();
+            None
+        }
+        VirtualKeyCode::Down => {
+            overlay.move_next();
+            None
+        }
+        VirtualKeyCode::Return => Some(overlay_action_from_selection(overlay.activate())),
+        VirtualKeyCode::F5 => slot_action_for_hotkey(true, overlay.selected_slot()),
+        VirtualKeyCode::F8 => slot_action_for_hotkey(false, overlay.selected_slot()),
+        _ => None,
+    }
+}
+
+fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<(), String> {
+    if rollback_enabled
+        && matches!(
+            action,
+            AppAction::OpenRom | AppAction::SaveSlot(_) | AppAction::LoadSlot(_)
+        )
+    {
+        return Err(
+            "manual menu action is unavailable while netplay/rollback is active".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
+    pressed
+        && matches!(
+            key,
+            VirtualKeyCode::Up
+                | VirtualKeyCode::Down
+                | VirtualKeyCode::Escape
+                | VirtualKeyCode::Return
+                | VirtualKeyCode::F5
+                | VirtualKeyCode::F8
+        )
+}
+
+fn menu_action_enabled(
+    action: AppAction,
+    overlay_open: bool,
+    rollback_enabled: bool,
+    rta_active: bool,
+) -> bool {
+    match action {
+        AppAction::Resume => overlay_open,
+        AppAction::OpenRom => !rollback_enabled && !rta_active && rom_picker_supported(),
+        AppAction::SaveSlot(_) | AppAction::LoadSlot(_) => !rollback_enabled,
+        AppAction::ToggleOverlay | AppAction::Reset | AppAction::Quit => true,
+    }
+}
+
+fn sync_native_menu_state(
+    menu: &DesktopMenu,
+    overlay_open: bool,
+    rollback_enabled: bool,
+    rta_active: bool,
+) {
+    menu.set_action_enabled(
+        AppAction::Resume,
+        menu_action_enabled(
+            AppAction::Resume,
+            overlay_open,
+            rollback_enabled,
+            rta_active,
+        ),
+    );
+    menu.set_action_enabled(
+        AppAction::OpenRom,
+        menu_action_enabled(
+            AppAction::OpenRom,
+            overlay_open,
+            rollback_enabled,
+            rta_active,
+        ),
+    );
+    for slot in 1..=SAVE_SLOT_COUNT {
+        menu.set_action_enabled(
+            AppAction::SaveSlot(slot),
+            menu_action_enabled(
+                AppAction::SaveSlot(slot),
+                overlay_open,
+                rollback_enabled,
+                rta_active,
+            ),
+        );
+        menu.set_action_enabled(
+            AppAction::LoadSlot(slot),
+            menu_action_enabled(
+                AppAction::LoadSlot(slot),
+                overlay_open,
+                rollback_enabled,
+                rta_active,
+            ),
+        );
+    }
+    menu.set_action_enabled(
+        AppAction::Reset,
+        menu_action_enabled(AppAction::Reset, overlay_open, rollback_enabled, rta_active),
+    );
+    menu.set_action_enabled(
+        AppAction::Quit,
+        menu_action_enabled(AppAction::Quit, overlay_open, rollback_enabled, rta_active),
+    );
+}
+
+fn set_overlay_open(
+    overlay: &mut OverlayModel,
+    open: bool,
+    core: &mut NesCore,
+    audio_output: Option<&AudioOutput>,
+    window: &Window,
+    session: &LoadedRomSession,
+) -> Result<(), String> {
+    if open {
+        overlay.open();
+        reconcile_core_pause_with_overlay(core, true)?;
+        if let Some(output) = audio_output {
+            output.clear();
+        }
+    } else {
+        overlay.close();
+        reconcile_core_pause_with_overlay(core, false)?;
+    }
+    window.set_title(&window_title(session, overlay.is_open()));
+    Ok(())
+}
+
+fn reconcile_core_pause_with_overlay(core: &mut NesCore, overlay_open: bool) -> Result<(), String> {
+    let command = if overlay_open {
+        Command::Pause
+    } else {
+        Command::Resume
+    };
+    core.execute(command).map_err(|err| {
+        format!(
+            "Failed to {} emulation: {err}",
+            if overlay_open { "pause" } else { "resume" }
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn dispatch_app_action(
+    action: AppAction,
+    core: &mut NesCore,
+    session: &mut LoadedRomSession,
+    overlay: &mut OverlayModel,
+    rollback_enabled: bool,
+    runtime: &RuntimeConfig,
+    audio_output: Option<&AudioOutput>,
+    time_machine: &mut TimeMachine,
+    rewind_held: &mut bool,
+    metrics: &mut PerfMetrics,
+    keyboard_bits: u8,
+    gamepad_bits: &mut [u8; 2],
+    window: &Window,
+    rta_manager: &mut Option<RtaManager>,
+    frame_index: u64,
+    control_flow: &mut ControlFlow,
+) -> bool {
+    match execute_app_action(
+        action,
+        core,
+        session,
+        overlay,
+        rollback_enabled,
+        runtime,
+        audio_output,
+        time_machine,
+        rewind_held,
+        metrics,
+        keyboard_bits,
+        gamepad_bits,
+        window,
+        rta_manager,
+        frame_index,
+    ) {
+        Ok(true) => {
+            *control_flow = ControlFlow::Exit;
+            true
+        }
+        Ok(false) => {
+            window.request_redraw();
+            false
+        }
+        Err(err) => {
+            overlay.set_status_message(err);
+            let _ = set_overlay_open(overlay, true, core, audio_output, window, session);
+            window.request_redraw();
+            false
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_app_action(
+    action: AppAction,
+    core: &mut NesCore,
+    session: &mut LoadedRomSession,
+    overlay: &mut OverlayModel,
+    rollback_enabled: bool,
+    runtime: &RuntimeConfig,
+    audio_output: Option<&AudioOutput>,
+    time_machine: &mut TimeMachine,
+    rewind_held: &mut bool,
+    metrics: &mut PerfMetrics,
+    keyboard_bits: u8,
+    gamepad_bits: &mut [u8; 2],
+    window: &Window,
+    rta_manager: &mut Option<RtaManager>,
+    frame_index: u64,
+) -> Result<bool, String> {
+    validate_action_allowed(action, rollback_enabled)?;
+
+    match action {
+        AppAction::ToggleOverlay => {
+            set_overlay_open(
+                overlay,
+                !overlay.is_open(),
+                core,
+                audio_output,
+                window,
+                session,
+            )?;
+            Ok(false)
+        }
+        AppAction::Resume => {
+            set_overlay_open(overlay, false, core, audio_output, window, session)?;
+            Ok(false)
+        }
+        AppAction::OpenRom => {
+            if rta_manager.is_some() {
+                overlay.set_status_message("Open ROM is unavailable while RTA mode is active");
+                return Ok(false);
+            }
+            if !rom_picker_supported() {
+                overlay.set_status_message("Open ROM picker is unavailable on this platform build");
+                return Ok(false);
+            }
+            let Some(path) = pick_rom_path() else {
+                overlay.set_status_message("Open ROM cancelled");
+                return Ok(false);
+            };
+            *session = load_rom_session(core, &path, &runtime.cheat_codes)?;
+            if let Some(output) = audio_output {
+                output.clear();
+            }
+            *rewind_held = false;
+            *time_machine = TimeMachine::new(TimeMachineConfig::default());
+            time_machine.record_frame(core);
+            *metrics = PerfMetrics::new(
+                runtime.metrics_enabled,
+                runtime.metrics_every_frames,
+                core.ppu_frame_counter(),
+            );
+            resync_restored_inputs(core, keyboard_bits, gamepad_bits)?;
+            overlay.clear_status_message();
+            set_overlay_open(overlay, false, core, audio_output, window, session)?;
+            Ok(false)
+        }
+        AppAction::SaveSlot(slot) => {
+            if let Some(rta) = rta_manager.as_mut() {
+                let _ = rta.mark_forbidden_action(
+                    ForbiddenAction::SaveLoad,
+                    frame_index,
+                    Instant::now(),
+                );
+            }
+            let snapshot = core.save_state();
+            let slot_path = slot_path_for_selection(session, slot);
+            save_state_file(&slot_path, &session.rom_hash, &snapshot)?;
+            refresh_slot_metadata(session)?;
+            overlay.focus_slot(slot, true);
+            overlay.set_status_message(format!("[state] saved {}", slot_path.display()));
+            Ok(false)
+        }
+        AppAction::LoadSlot(slot) => {
+            if let Some(rta) = rta_manager.as_mut() {
+                let _ = rta.mark_forbidden_action(
+                    ForbiddenAction::SaveLoad,
+                    frame_index,
+                    Instant::now(),
+                );
+            }
+            let slot_path = slot_path_for_selection(session, slot);
+            let snapshot = load_state_file(&slot_path, &session.rom_hash)?;
+            core.load_state(&snapshot);
+            reconcile_core_pause_with_overlay(core, overlay.is_open())?;
+            resync_restored_inputs(core, keyboard_bits, gamepad_bits)?;
+            if let Some(output) = audio_output {
+                output.clear();
+            }
+            *rewind_held = false;
+            *time_machine = TimeMachine::new(TimeMachineConfig::default());
+            time_machine.record_frame(core);
+            *metrics = PerfMetrics::new(
+                runtime.metrics_enabled,
+                runtime.metrics_every_frames,
+                core.ppu_frame_counter(),
+            );
+            refresh_slot_metadata(session)?;
+            overlay.focus_slot(slot, false);
+            overlay.set_status_message(format!("[state] loaded {}", slot_path.display()));
+            Ok(false)
+        }
+        AppAction::Reset => {
+            core.execute(Command::Reset)
+                .map_err(|err| format!("Reset failed: {err}"))?;
+            *rewind_held = false;
+            *time_machine = TimeMachine::new(TimeMachineConfig::default());
+            time_machine.record_frame(core);
+            *metrics = PerfMetrics::new(
+                runtime.metrics_enabled,
+                runtime.metrics_every_frames,
+                core.ppu_frame_counter(),
+            );
+            overlay.set_status_message("System reset");
+            set_overlay_open(overlay, false, core, audio_output, window, session)?;
+            Ok(false)
+        }
+        AppAction::Quit => Ok(true),
     }
 }
 
@@ -819,23 +1291,19 @@ fn run() -> Result<(), String> {
         ));
     }
 
-    let rom_path = runtime.rom_path.clone();
-    let rom_bytes = fs::read(&rom_path).map_err(|err| format_rom_read_error(&rom_path, &err))?;
-
     let mut core = NesCore::new();
-    let info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {err}"))?;
+    let mut session = load_rom_session(
+        &mut core,
+        Path::new(&runtime.rom_path),
+        &runtime.cheat_codes,
+    )?;
     let step_mode = runtime.step_mode;
-    let rom_hash = compute_rom_hash(&rom_bytes);
-    let manual_state_path =
-        quicksave_path_for_rom(std::path::Path::new(&runtime.rom_path), &rom_hash);
     let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
         let profiles = load_profiles(&rta_config.profiles_dir)?;
         let profile = if rta_config.calibrate {
             match select_profile(
                 &profiles,
-                &rom_hash,
+                &session.rom_hash,
                 rta_config.profile_id_override.as_deref(),
                 true,
             ) {
@@ -848,13 +1316,14 @@ fn run() -> Result<(), String> {
                         );
                         RtaProfile {
                             id: profile_id.clone(),
-                            rom_hashes: vec![rom_hash.clone()],
+                            rom_hashes: vec![session.rom_hash.clone()],
                             status: ProfileStatus::Published,
                             ..RtaProfile::default()
                         }
                     } else {
                         return Err(format!(
-                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {rom_hash}: {err}"
+                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
+                            session.rom_hash
                         ));
                     }
                 }
@@ -862,13 +1331,14 @@ fn run() -> Result<(), String> {
         } else {
             select_profile(
                 &profiles,
-                &rom_hash,
+                &session.rom_hash,
                 rta_config.profile_id_override.as_deref(),
                 false,
             )
             .map_err(|err| {
                 format!(
-                    "Failed to enter RTA mode for ROM hash {rom_hash}: {err}. Provide --rta-profile <id> to override."
+                    "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
+                    session.rom_hash
                 )
             })?
             .selected
@@ -881,7 +1351,7 @@ fn run() -> Result<(), String> {
         };
         Some(RtaManager::new(
             profile,
-            rom_hash.clone(),
+            session.rom_hash.clone(),
             rta_config.runs_dir.clone(),
             calibration,
         ))
@@ -897,13 +1367,13 @@ fn run() -> Result<(), String> {
 
     table.add_row(vec![
         Cell::new("ROM Path"),
-        Cell::new(&rom_path).fg(TableColor::Green),
+        Cell::new(session.rom_path.display().to_string()).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("ROM Info"),
         Cell::new(format!(
             "Mapper {}, PRG {} bytes, reset vector ${:04X}",
-            info.mapper_id, info.prg_rom_bytes, info.reset_pc
+            session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
         )),
     ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
@@ -915,8 +1385,16 @@ fn run() -> Result<(), String> {
     table.add_row(vec![
         Cell::new("Controls"),
         Cell::new(
-            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save, F8=Load, Esc=Quit",
+            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
         ),
+    ]);
+    table.add_row(vec![
+        Cell::new("Menu"),
+        Cell::new(if native_menu_supported() {
+            "native menu bar + Esc overlay"
+        } else {
+            "Esc overlay only on this platform"
+        }),
     ]);
     table.add_row(vec![
         Cell::new("Gamepad"),
@@ -1014,14 +1492,19 @@ fn run() -> Result<(), String> {
     let mut netplay_ping_nonce = 1_u64;
     let mut netplay_pending_pings = BTreeMap::<u64, Instant>::new();
 
-    let event_loop = EventLoop::new();
+    let mut event_loop_builder = EventLoopBuilder::new();
+    #[cfg(target_os = "macos")]
+    event_loop_builder.with_default_menu(false);
+    let event_loop = event_loop_builder.build();
     let (window_width, window_height) = scaled_window_dimensions(runtime.window_scale);
     let window = WindowBuilder::new()
-        .with_title("nes-desktop")
+        .with_title(window_title(&session, false))
         .with_inner_size(LogicalSize::new(window_width, window_height))
         .with_min_inner_size(LogicalSize::new(FRAME_WIDTH as f64, FRAME_HEIGHT as f64))
         .build(&event_loop)
         .map_err(|err| format!("Failed to create window: {err}"))?;
+    let desktop_menu = build_native_menu(SAVE_SLOT_COUNT);
+    desktop_menu.install_for_window(&window)?;
 
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
@@ -1031,7 +1514,7 @@ fn run() -> Result<(), String> {
     let mut frame_index = 0_u64;
     let mut frame_rgba = vec![0_u8; FRAME_RGBA_BYTES];
     let mut next_frame_deadline = Instant::now();
-    let capture = runtime.capture;
+    let capture = runtime.capture.clone();
     let mut metrics = PerfMetrics::new(
         runtime.metrics_enabled,
         runtime.metrics_every_frames,
@@ -1087,6 +1570,13 @@ fn run() -> Result<(), String> {
 
     let mut time_machine = TimeMachine::new(TimeMachineConfig::default());
     let mut rewind_held = false;
+    let mut overlay = OverlayModel::new(SAVE_SLOT_COUNT);
+    sync_native_menu_state(
+        &desktop_menu,
+        overlay.is_open(),
+        rollback.is_some(),
+        rta_manager.is_some(),
+    );
 
     #[cfg(feature = "nova")]
     let mut auto_player = if runtime.auto_player_enabled {
@@ -1113,6 +1603,34 @@ fn run() -> Result<(), String> {
                 let Some(key) = key else {
                     return;
                 };
+                if overlay.is_open() {
+                    let action =
+                        apply_overlay_keyboard_input(&mut overlay, key, pressed, &mut keyboard_bits);
+                    if overlay_input_requires_redraw(key, pressed) {
+                        window.request_redraw();
+                    }
+                    if let Some(action) = action {
+                        let _ = dispatch_app_action(
+                            action,
+                            &mut core,
+                            &mut session,
+                            &mut overlay,
+                            rollback.is_some(),
+                            &runtime,
+                            audio_output.as_ref(),
+                            &mut time_machine,
+                            &mut rewind_held,
+                            &mut metrics,
+                            keyboard_bits,
+                            &mut gamepad_bits,
+                            &window,
+                            &mut rta_manager,
+                            frame_index,
+                            control_flow,
+                        );
+                    }
+                    return;
+                }
                 track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
                 match classify_keyboard_input(
                     key,
@@ -1121,82 +1639,68 @@ fn run() -> Result<(), String> {
                     rta_manager.is_some(),
                     rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 ) {
-                    KeyboardDecision::Exit => {
-                        if let Some(rta) = rta_manager.as_mut() {
-                            if rta.is_calibrating() && rta.is_active() {
-                                let _ = rta.force_finish(frame_index, Instant::now());
-                            }
-                            let _ = rta.write_artifacts_if_finished();
-                            if let Some(rta_config) = runtime.rta.as_ref() {
-                                let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
-                            }
-                        }
-                        *control_flow = ControlFlow::Exit;
+                    KeyboardDecision::ToggleOverlay => {
+                        let _ = dispatch_app_action(
+                            AppAction::ToggleOverlay,
+                            &mut core,
+                            &mut session,
+                            &mut overlay,
+                            rollback.is_some(),
+                            &runtime,
+                            audio_output.as_ref(),
+                            &mut time_machine,
+                            &mut rewind_held,
+                            &mut metrics,
+                            keyboard_bits,
+                            &mut gamepad_bits,
+                            &window,
+                            &mut rta_manager,
+                            frame_index,
+                            control_flow,
+                        );
                     }
                     KeyboardDecision::ManualSaveState => {
-                        if rollback.is_some() {
-                            eprintln!(
-                                "[state] manual save-state is unavailable while netplay/rollback is active"
-                            );
-                            return;
-                        }
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.mark_forbidden_action(
-                                ForbiddenAction::SaveLoad,
+                        if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
+                            let _ = dispatch_app_action(
+                                action,
+                                &mut core,
+                                &mut session,
+                                &mut overlay,
+                                rollback.is_some(),
+                                &runtime,
+                                audio_output.as_ref(),
+                                &mut time_machine,
+                                &mut rewind_held,
+                                &mut metrics,
+                                keyboard_bits,
+                                &mut gamepad_bits,
+                                &window,
+                                &mut rta_manager,
                                 frame_index,
-                                Instant::now(),
+                                control_flow,
                             );
-                        }
-                        let snapshot = core.save_state();
-                        match save_state_file(&manual_state_path, &rom_hash, &snapshot) {
-                            Ok(()) => {
-                                eprintln!("[state] saved {}", manual_state_path.display());
-                            }
-                            Err(err) => {
-                                eprintln!("[state] save failed: {err}");
-                            }
                         }
                     }
                     KeyboardDecision::ManualLoadState => {
-                        if rollback.is_some() {
-                            eprintln!(
-                                "[state] manual load-state is unavailable while netplay/rollback is active"
-                            );
-                            return;
-                        }
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.mark_forbidden_action(
-                                ForbiddenAction::SaveLoad,
+                        if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
+                            let _ = dispatch_app_action(
+                                action,
+                                &mut core,
+                                &mut session,
+                                &mut overlay,
+                                rollback.is_some(),
+                                &runtime,
+                                audio_output.as_ref(),
+                                &mut time_machine,
+                                &mut rewind_held,
+                                &mut metrics,
+                                keyboard_bits,
+                                &mut gamepad_bits,
+                                &window,
+                                &mut rta_manager,
                                 frame_index,
-                                Instant::now(),
+                                control_flow,
                             );
-                        }
-                        match load_state_file(&manual_state_path, &rom_hash) {
-                            Ok(snapshot) => {
-                                core.load_state(&snapshot);
-                                if let Err(err) =
-                                    resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
-                                {
-                                    eprintln!("Input resync failed: {err}");
-                                    *control_flow = ControlFlow::Exit;
-                                    return;
-                                }
-                                if let Some(output) = audio_output.as_ref() {
-                                    output.clear();
-                                }
-                                rewind_held = false;
-                                time_machine = TimeMachine::new(TimeMachineConfig::default());
-                                time_machine.record_frame(&core);
-                                metrics = PerfMetrics::new(
-                                    runtime.metrics_enabled,
-                                    runtime.metrics_every_frames,
-                                    core.ppu_frame_counter(),
-                                );
-                                eprintln!("[state] loaded {}", manual_state_path.display());
-                            }
-                            Err(err) => {
-                                eprintln!("[state] load failed: {err}");
-                            }
                         }
                     }
                     KeyboardDecision::SetRewindHeld(held) => {
@@ -1275,6 +1779,35 @@ fn run() -> Result<(), String> {
                 host.drain(&mut core);
             }
 
+            sync_native_menu_state(
+                &desktop_menu,
+                overlay.is_open(),
+                rollback.is_some(),
+                rta_manager.is_some(),
+            );
+            while let Some(action) = desktop_menu.poll_action() {
+                if dispatch_app_action(
+                    action,
+                    &mut core,
+                    &mut session,
+                    &mut overlay,
+                    rollback.is_some(),
+                    &runtime,
+                    audio_output.as_ref(),
+                    &mut time_machine,
+                    &mut rewind_held,
+                    &mut metrics,
+                    keyboard_bits,
+                    &mut gamepad_bits,
+                    &window,
+                    &mut rta_manager,
+                    frame_index,
+                    control_flow,
+                ) {
+                    return;
+                }
+            }
+
             if let Some(gilrs_state) = gilrs.as_mut() {
                 while gilrs_state.next_event().is_some() {}
                 let connected = connected_gamepad_ids(
@@ -1322,6 +1855,7 @@ fn run() -> Result<(), String> {
                         })
                         .unwrap_or_default();
                     if rollback.is_none()
+                        && !overlay.is_open()
                         && let Err(err) = apply_gamepad_delta_commands(
                             &mut core,
                             gamepad_bits[player],
@@ -1335,6 +1869,11 @@ fn run() -> Result<(), String> {
                     }
                     gamepad_bits[player] = next_gamepad_bits;
                 }
+            }
+
+            if overlay.is_open() {
+                *control_flow = ControlFlow::Wait;
+                return;
             }
 
             let now = Instant::now();
@@ -1540,6 +2079,16 @@ fn run() -> Result<(), String> {
             let render_start = Instant::now();
             core.fill_framebuffer_rgba(&mut frame_rgba);
             pixels.frame_mut().copy_from_slice(&frame_rgba);
+            if overlay.is_open() {
+                let slot_summaries = overlay_slot_summaries(&session.slot_metadata);
+                draw_overlay(
+                    pixels.frame_mut(),
+                    FRAME_WIDTH,
+                    FRAME_HEIGHT,
+                    &overlay,
+                    &slot_summaries,
+                );
+            }
             if let Some(config) = capture.as_ref()
                 && should_capture_frame(config.every_n_frames, frame_index)
             {
@@ -1676,6 +2225,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 
     Ok(RuntimeConfig {
         rom_path,
+        cheat_codes: runtime_args.cheat_codes,
         window_scale,
         step_mode,
         audio_enabled: config.desktop.audio_enabled,
@@ -1696,6 +2246,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     let mut parsed = RuntimeArgs {
         rom_path: None,
+        cheat_codes: Vec::new(),
         mcp_enabled: false,
         mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
         netplay_enabled: false,
@@ -1718,8 +2269,16 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
             return Err(format!(
-                "Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
             ));
+        }
+        if arg == "--cheat-code" {
+            let Some(code) = args.get(idx + 1) else {
+                return Err("missing value after --cheat-code".to_owned());
+            };
+            parsed.cheat_codes.push(code.clone());
+            idx += 2;
+            continue;
         }
         if arg == "--mcp-host" {
             parsed.mcp_enabled = true;
@@ -1837,6 +2396,14 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
+        if let Some(code) = arg.strip_prefix("--cheat-code=") {
+            if code.is_empty() {
+                return Err("missing value after --cheat-code=".to_owned());
+            }
+            parsed.cheat_codes.push(code.to_owned());
+            idx += 1;
+            continue;
+        }
         if let Some(relay_addr) = arg.strip_prefix("--netplay-relay=") {
             if relay_addr.is_empty() {
                 return Err("missing value after --netplay-relay=".to_owned());
@@ -1912,9 +2479,7 @@ fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             continue;
         }
         if arg.starts_with("--") {
-            return Err(format!(
-                "unknown flag '{arg}'. Usage: nes-desktop [--config <path>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]"
-            ));
+            return Err(format!("unknown flag '{arg}'. {RUNTIME_USAGE}"));
         }
         if parsed.rom_path.is_some() {
             return Err(
@@ -2184,22 +2749,26 @@ mod tests {
         GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
         MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs, StepMode,
         TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, audio_queue_dropped, capture_config_from_parts,
-        capture_path_for_frame, classify_keyboard_input, classify_window_event,
-        compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, frame_signature,
-        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
-        handle_netplay_server_message, is_player_two_slot, map_virtual_keycode,
-        merge_local_input_bits, netplay_feature_enabled, parse_runtime_args,
-        recommended_input_delay_frames, resync_restored_inputs, scaled_window_dimensions,
-        schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
-        should_trace_frame, should_update_input_delay, track_keyboard_bits_for_key,
-        update_button_bits, write_frame_ppm,
+        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
+        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
+        classify_keyboard_input, classify_window_event, compute_local_netplay_bits,
+        compute_metrics_snapshot, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        frame_signature, gamepad_assignments_changed, gamepad_slot_changed,
+        gamepad_snapshot_to_bits, handle_netplay_server_message, is_player_two_slot,
+        map_virtual_keycode, menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
+        overlay_input_requires_redraw, parse_runtime_args, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, schedule_netplay_ping, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_send_netplay_hash, should_trace_frame, should_update_input_delay,
+        slot_action_for_hotkey, track_keyboard_bits_for_key, update_button_bits,
+        validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
+    use nes_desktop::actions::AppAction;
+    use nes_desktop::overlay::OverlayModel;
     use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
     use rodio::Sink;
     use std::collections::BTreeMap;
@@ -2331,6 +2900,7 @@ mod tests {
         let args = vec!["game.nes".to_owned()];
         let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+        assert!(parsed.cheat_codes.is_empty());
         assert!(!parsed.mcp_enabled);
         assert_eq!(parsed.mcp_bind_addr, DEFAULT_MCP_BIND_ADDR);
     }
@@ -2360,6 +2930,7 @@ mod tests {
         let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         let expected = RuntimeArgs {
             rom_path: None,
+            cheat_codes: Vec::new(),
             mcp_enabled: false,
             mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
             netplay_enabled: true,
@@ -2378,6 +2949,23 @@ mod tests {
             auto_player_enabled: false,
         };
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_repeated_cheat_code_flags() {
+        let args = vec![
+            "--cheat-code".to_owned(),
+            "gossip".to_owned(),
+            "--cheat-code=ZEXPYGLA".to_owned(),
+            "rom.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("cheat code args should parse");
+
+        assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
+        assert_eq!(
+            parsed.cheat_codes,
+            vec!["gossip".to_owned(), "ZEXPYGLA".to_owned()]
+        );
     }
 
     #[test]
@@ -2647,7 +3235,7 @@ mod tests {
     fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
         assert_eq!(
             classify_keyboard_input(VirtualKeyCode::Escape, true, false, false, false),
-            KeyboardDecision::Exit
+            KeyboardDecision::ToggleOverlay
         );
         assert_eq!(
             classify_keyboard_input(VirtualKeyCode::F5, true, false, false, false),
@@ -2692,6 +3280,87 @@ mod tests {
             classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
             KeyboardDecision::Noop
         );
+    }
+
+    #[test]
+    fn selected_slot_hotkeys_target_current_slot() {
+        assert_eq!(
+            slot_action_for_hotkey(true, 3),
+            Some(AppAction::SaveSlot(3))
+        );
+        assert_eq!(
+            slot_action_for_hotkey(false, 3),
+            Some(AppAction::LoadSlot(3))
+        );
+    }
+
+    #[test]
+    fn overlay_blocks_gameplay_button_commands_while_open() {
+        let mut overlay = OverlayModel::new(5);
+        overlay.open();
+        let mut keyboard_bits = 0_u8;
+
+        let action =
+            apply_overlay_keyboard_input(&mut overlay, VirtualKeyCode::Z, true, &mut keyboard_bits);
+
+        assert_eq!(action, None);
+        assert_eq!(keyboard_bits, 0);
+    }
+
+    #[test]
+    fn overlay_input_requires_redraw_for_navigation_and_action_keys() {
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Up, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Down, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Escape, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Return, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::F5, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::F8, true));
+        assert!(!overlay_input_requires_redraw(VirtualKeyCode::Z, true));
+        assert!(!overlay_input_requires_redraw(VirtualKeyCode::Up, false));
+    }
+
+    #[test]
+    fn rollback_disables_stateful_menu_actions() {
+        let err = validate_action_allowed(AppAction::OpenRom, true)
+            .expect_err("open rom should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+
+        let err = validate_action_allowed(AppAction::SaveSlot(2), true)
+            .expect_err("save slot should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+    }
+
+    #[test]
+    fn open_rom_menu_action_requires_platform_picker_support() {
+        assert_eq!(
+            menu_action_enabled(AppAction::OpenRom, false, false, false),
+            rom_picker_supported()
+        );
+    }
+
+    #[test]
+    fn reconcile_core_pause_with_overlay_matches_overlay_visibility() {
+        let mut core = NesCore::new();
+        core.execute(Command::Pause)
+            .expect("pause command should succeed");
+
+        reconcile_core_pause_with_overlay(&mut core, false)
+            .expect("closed overlay should force resume");
+        assert!(!core.is_paused());
+
+        reconcile_core_pause_with_overlay(&mut core, true)
+            .expect("open overlay should force pause");
+        assert!(core.is_paused());
+    }
+
+    #[test]
+    fn applying_runtime_cheat_codes_replaces_existing_codes() {
+        let mut core = NesCore::new();
+        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+            .expect("first cheat application should succeed");
+        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+            .expect("second cheat application should succeed");
+        assert_eq!(core.cheat_codes().len(), 1);
     }
 
     #[test]
@@ -3127,10 +3796,15 @@ mod tests {
             .expect_err("help returns usage");
         assert!(help.contains("Usage: nes-desktop"));
         assert!(help.contains("Default config path"));
+        assert!(help.contains("--cheat-code <code>"));
 
         let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
             .expect_err("missing mcp bind");
         assert!(missing_bind.contains("missing value after --mcp-bind"));
+
+        let missing_code = parse_runtime_args_with_timeout(vec!["--cheat-code".to_owned()])
+            .expect_err("missing cheat code");
+        assert!(missing_code.contains("missing value after --cheat-code"));
 
         let missing_relay = parse_runtime_args_with_timeout(vec!["--netplay-relay".to_owned()])
             .expect_err("missing netplay relay");
