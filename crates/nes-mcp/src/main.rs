@@ -72,6 +72,30 @@ fn main() {
     }
 }
 
+fn build_startup_table(protocol_version: &str, num_tools: usize) -> Table {
+    let mut table = Table::new();
+    table
+        .load_preset(comfy_table::presets::UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
+        .set_content_arrangement(comfy_table::ContentArrangement::Dynamic);
+
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan).add_attribute(comfy_table::Attribute::Bold),
+        Cell::new("Value").fg(TableColor::White).add_attribute(comfy_table::Attribute::Bold),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Protocol Version").fg(TableColor::DarkGrey),
+        Cell::new(protocol_version).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("Tools Loaded").fg(TableColor::DarkGrey),
+        Cell::new(num_tools.to_string()).fg(TableColor::Yellow),
+    ]);
+
+    table
+}
+
 fn run() -> Result<(), McpError> {
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -79,20 +103,7 @@ fn run() -> Result<(), McpError> {
     let mut writer = stdout.lock();
     let mut state = ServerState::new();
 
-    let mut table = Table::new();
-    table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
-        Cell::new("Value").fg(TableColor::White),
-    ]);
-
-    table.add_row(vec![
-        Cell::new("Protocol Version"),
-        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Tools Loaded"),
-        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
-    ]);
+    let table = build_startup_table(DEFAULT_PROTOCOL_VERSION, tool_catalog().len());
 
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
@@ -637,6 +648,17 @@ mod tests {
     fn call(state: &mut ServerState, request: Value) -> Value {
         let payload = serde_json::to_vec(&request).expect("request serializes");
         handle_message(state, &payload).expect("request produces response")
+    }
+
+    #[test]
+    fn test_build_startup_table_includes_expected_strings() {
+        let table = build_startup_table("2024-01-01", 42);
+        let output = table.to_string();
+
+        assert!(output.contains("Protocol Version"));
+        assert!(output.contains("2024-01-01"));
+        assert!(output.contains("Tools Loaded"));
+        assert!(output.contains("42"));
     }
 
     #[test]
