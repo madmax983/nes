@@ -53,6 +53,8 @@ struct ServerState {
     core: NesCore,
     protocol_version: String,
     initialized: bool,
+    #[cfg(feature = "nova")]
+    scanner: nes_core::experimental::scanner::MemoryScanner,
 }
 
 impl ServerState {
@@ -61,6 +63,8 @@ impl ServerState {
             core: NesCore::new(),
             protocol_version: DEFAULT_PROTOCOL_VERSION.to_owned(),
             initialized: false,
+            #[cfg(feature = "nova")]
+            scanner: nes_core::experimental::scanner::MemoryScanner::new(),
         }
     }
 }
@@ -233,6 +237,66 @@ fn handle_tools_call(
         _ => Default::default(),
     };
     let tool_params = map_tool_arguments(args);
+
+    #[cfg(feature = "nova")]
+    if tool_name == "scan_memory" {
+        return match nes_mcp::experimental::scanner_tool::handle_scan_memory(
+            &state.core,
+            &mut state.scanner,
+            &tool_params,
+        ) {
+            Ok(output) => {
+                let structured = dispatch_output_value(output);
+                Ok(Some(json!({
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": format!("ok: {tool_name}")
+                        }
+                    ],
+                    "structuredContent": structured,
+                    "isError": false
+                })))
+            }
+            Err(err) => Ok(Some(json!({
+                "content": [
+                    {
+                        "type": "text",
+                        "text": format!("{err}")
+                    }
+                ],
+                "isError": true
+            }))),
+        };
+    }
+
+    #[cfg(feature = "nova")]
+    if tool_name == "reset_scanner" {
+        return match nes_mcp::experimental::scanner_tool::handle_reset_scanner(&mut state.scanner) {
+            Ok(output) => {
+                let structured = dispatch_output_value(output);
+                Ok(Some(json!({
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": format!("ok: {tool_name}")
+                        }
+                    ],
+                    "structuredContent": structured,
+                    "isError": false
+                })))
+            }
+            Err(err) => Ok(Some(json!({
+                "content": [
+                    {
+                        "type": "text",
+                        "text": format!("{err}")
+                    }
+                ],
+                "isError": true
+            }))),
+        };
+    }
 
     let call_result = match dispatch_tool(&mut state.core, &tool_name, &tool_params) {
         Ok(output) => {
@@ -431,6 +495,17 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "prg_rom_bytes": prg_rom_bytes,
             })
         }
+        #[cfg(feature = "nova")]
+        DispatchOutput::ScanResults {
+            candidate_count,
+            candidates,
+        } => {
+            json!({
+                "kind": "scan_results",
+                "candidate_count": candidate_count,
+                "candidates": candidates,
+            })
+        }
     }
 }
 
@@ -544,6 +619,16 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "chr_hex": { "type": "string", "minLength": 2 }
             },
             "required": ["source"],
+            "additionalProperties": false
+        }),
+        #[cfg(feature = "nova")]
+        "scan_memory" => json!({
+            "type": "object",
+            "properties": {
+                "condition": { "type": "string", "enum": ["exact", "decreased", "increased", "changed", "unchanged"] },
+                "value": { "type": "string", "description": "The target value (e.g. 3 or 0x03), required when condition is 'exact'" }
+            },
+            "required": ["condition"],
             "additionalProperties": false
         }),
         _ => json!({

@@ -419,6 +419,17 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "prg_rom_bytes": prg_rom_bytes,
             })
         }
+        #[cfg(feature = "nova")]
+        DispatchOutput::ScanResults {
+            candidate_count,
+            candidates,
+        } => {
+            json!({
+                "kind": "scan_results",
+                "candidate_count": candidate_count,
+                "candidates": candidates,
+            })
+        }
     }
 }
 

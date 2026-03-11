@@ -152,6 +152,23 @@ const TOOL_CATALOG: [ToolDefinition; 30] = [
     },
 ];
 
+#[cfg(feature = "nova")]
+const NOVA_TOOL_CATALOG: [ToolDefinition; 2] = [
+    ToolDefinition {
+        name: "scan_memory",
+        description: "Scan the emulator RAM to find a value (like lives or score) using a cheat-engine style scanner",
+    },
+    ToolDefinition {
+        name: "reset_scanner",
+        description: "Reset the memory scanner to start a fresh search",
+    },
+];
+
+#[cfg(not(feature = "nova"))]
+const TOOL_CATALOG_LEN: usize = 30;
+#[cfg(feature = "nova")]
+const TOOL_CATALOG_LEN: usize = 32;
+
 /// Returns the static catalog of all registered MCP tools.
 ///
 /// The MCP daemon uses this list during the `tools/list` initialization phase to
@@ -170,5 +187,22 @@ const TOOL_CATALOG: [ToolDefinition; 30] = [
 /// ```
 #[must_use]
 pub fn tool_catalog() -> &'static [ToolDefinition] {
-    &TOOL_CATALOG
+    #[cfg(feature = "nova")]
+    {
+        static LAZY_CATALOG: std::sync::OnceLock<[ToolDefinition; TOOL_CATALOG_LEN]> =
+            std::sync::OnceLock::new();
+        LAZY_CATALOG.get_or_init(|| {
+            let mut all = [ToolDefinition {
+                name: "",
+                description: "",
+            }; TOOL_CATALOG_LEN];
+            all[..30].copy_from_slice(&TOOL_CATALOG);
+            all[30..].copy_from_slice(&NOVA_TOOL_CATALOG);
+            all
+        })
+    }
+    #[cfg(not(feature = "nova"))]
+    {
+        &TOOL_CATALOG
+    }
 }

@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = []
 mcp-host = ["dep:nes-mcp"]
-nova = ["dep:rand"]
+nova = ["dep:rand", "nes-core/nova", "nes-mcp/nova"]
 
 [dependencies]
 gilrs = "0.10"

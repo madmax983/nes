@@ -200,6 +200,14 @@ pub enum DispatchOutput {
         /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
+    /// Result of scanning memory for specific values.
+    #[cfg(feature = "nova")]
+    ScanResults {
+        /// Number of candidate addresses found.
+        candidate_count: usize,
+        /// The list of candidate addresses (if small enough).
+        candidates: Vec<u16>,
+    },
 }
 
 /// Errors raised when parsing or executing MCP tools.
@@ -312,6 +320,10 @@ pub fn dispatch_tool(
         "load_6502_dsl" => handle_load_6502_dsl(core, params),
         "export_6502_dsl_rom" => handle_export_6502_dsl_rom(params),
         "export_6502_dsl_rom_base64" => handle_export_6502_dsl_rom_base64(params),
+        #[cfg(feature = "nova")]
+        "scan_memory" | "reset_scanner" => {
+            Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
+        }
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }

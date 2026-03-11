@@ -1,6 +1,7 @@
 //! Model Context Protocol (MCP) server integration for the NES emulator.
 
 mod dispatch;
+pub mod experimental;
 pub mod macro_engine;
 mod output;
 pub mod protocol;
