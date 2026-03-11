@@ -54,83 +54,88 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
     let mut frames_elapsed = 0;
 
     for (line_num, line) in script.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
-            continue;
-        }
+        frames_elapsed += execute_macro_line(core, line, line_num)?;
+    }
 
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() {
-            continue;
-        }
+    Ok(frames_elapsed)
+}
 
-        let command_name = parts[0].to_uppercase();
-        match command_name.as_str() {
-            "WAIT" => {
-                if parts.len() < 2 {
-                    return Err(format!("Line {}: WAIT needs a frame count", line_num + 1));
-                }
-                let frames: u64 = parts[1].parse().map_err(|_| {
-                    format!("Line {}: Invalid frame count '{}'", line_num + 1, parts[1])
-                })?;
-                for _ in 0..frames {
-                    core.execute(Command::StepFrame)
-                        .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
-                    frames_elapsed += 1;
-                }
-            }
-            "PRESS" | "HOLD" => {
-                if parts.len() < 2 {
-                    return Err(format!(
-                        "Line {}: {} needs a button",
-                        line_num + 1,
-                        command_name
-                    ));
-                }
-                let btn = parse_btn(parts[1]).ok_or_else(|| {
-                    format!("Line {}: Invalid button '{}'", line_num + 1, parts[1])
-                })?;
-                core.execute(Command::PressButton(btn))
-                    .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
-            }
-            "RELEASE" => {
-                if parts.len() < 2 {
-                    return Err(format!("Line {}: RELEASE needs a button", line_num + 1));
-                }
-                let btn = parse_btn(parts[1]).ok_or_else(|| {
-                    format!("Line {}: Invalid button '{}'", line_num + 1, parts[1])
-                })?;
-                core.execute(Command::ReleaseButton(btn))
-                    .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
-            }
-            "RESET" => {
-                core.execute(Command::Reset)
-                    .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
-            }
-            _ => {
-                return Err(format!(
-                    "Line {}: Unknown command '{}'",
-                    line_num + 1,
-                    parts[0]
-                ));
-            }
+fn execute_macro_line(core: &mut NesCore, line: &str, line_num: usize) -> Result<u64, String> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
+        return Ok(0);
+    }
+
+    let mut parts = line.split_whitespace();
+    let Some(command_name) = parts.next() else {
+        return Ok(0);
+    };
+
+    let mut frames_elapsed = 0;
+
+    if command_name.eq_ignore_ascii_case("WAIT") {
+        let arg = parts
+            .next()
+            .ok_or_else(|| format!("Line {}: WAIT needs a frame count", line_num + 1))?;
+        let frames: u64 = arg
+            .parse()
+            .map_err(|_| format!("Line {}: Invalid frame count '{}'", line_num + 1, arg))?;
+        for _ in 0..frames {
+            core.execute(Command::StepFrame)
+                .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
+            frames_elapsed += 1;
         }
+    } else if command_name.eq_ignore_ascii_case("PRESS")
+        || command_name.eq_ignore_ascii_case("HOLD")
+    {
+        let arg = parts
+            .next()
+            .ok_or_else(|| format!("Line {}: {} needs a button", line_num + 1, command_name))?;
+        let btn = parse_btn(arg)
+            .ok_or_else(|| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
+        core.execute(Command::PressButton(btn))
+            .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
+    } else if command_name.eq_ignore_ascii_case("RELEASE") {
+        let arg = parts
+            .next()
+            .ok_or_else(|| format!("Line {}: RELEASE needs a button", line_num + 1))?;
+        let btn = parse_btn(arg)
+            .ok_or_else(|| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
+        core.execute(Command::ReleaseButton(btn))
+            .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
+    } else if command_name.eq_ignore_ascii_case("RESET") {
+        core.execute(Command::Reset)
+            .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
+    } else {
+        return Err(format!(
+            "Line {}: Unknown command '{}'",
+            line_num + 1,
+            command_name
+        ));
     }
 
     Ok(frames_elapsed)
 }
 
 fn parse_btn(s: &str) -> Option<Button> {
-    match s.to_uppercase().as_str() {
-        "A" => Some(Button::A),
-        "B" => Some(Button::B),
-        "SELECT" => Some(Button::Select),
-        "START" => Some(Button::Start),
-        "UP" => Some(Button::Up),
-        "DOWN" => Some(Button::Down),
-        "LEFT" => Some(Button::Left),
-        "RIGHT" => Some(Button::Right),
-        _ => None,
+    if s.eq_ignore_ascii_case("A") {
+        Some(Button::A)
+    } else if s.eq_ignore_ascii_case("B") {
+        Some(Button::B)
+    } else if s.eq_ignore_ascii_case("SELECT") {
+        Some(Button::Select)
+    } else if s.eq_ignore_ascii_case("START") {
+        Some(Button::Start)
+    } else if s.eq_ignore_ascii_case("UP") {
+        Some(Button::Up)
+    } else if s.eq_ignore_ascii_case("DOWN") {
+        Some(Button::Down)
+    } else if s.eq_ignore_ascii_case("LEFT") {
+        Some(Button::Left)
+    } else if s.eq_ignore_ascii_case("RIGHT") {
+        Some(Button::Right)
+    } else {
+        None
     }
 }
 
