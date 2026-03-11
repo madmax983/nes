@@ -705,19 +705,10 @@ fn write_frame_image(
     let image = if path.to_ascii_lowercase().ends_with(".bmp") {
         nes_core::bmp::encode_bmp(width, height, rgba).map_err(DispatchError::Internal)?
     } else {
-        encode_ppm(width, height, rgba)
+        nes_core::ppm::encode_ppm(width, height, rgba)
     };
     fs::write(path, image)
         .map_err(|err| DispatchError::InvalidParams(format!("unable to write '{path}': {err}")))
-}
-
-fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
-    let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    ppm.extend_from_slice(format!("P6\n{width} {height}\n255\n").as_bytes());
-    for px in rgba.chunks_exact(4) {
-        ppm.extend_from_slice(&px[..3]);
-    }
-    ppm
 }
 
 fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
@@ -727,19 +718,9 @@ fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
         ));
     };
 
-    match button {
-        "A" => Ok(Button::A),
-        "B" => Ok(Button::B),
-        "Select" => Ok(Button::Select),
-        "Start" => Ok(Button::Start),
-        "Up" => Ok(Button::Up),
-        "Down" => Ok(Button::Down),
-        "Left" => Ok(Button::Left),
-        "Right" => Ok(Button::Right),
-        _ => Err(DispatchError::InvalidParams(format!(
-            "unknown button '{button}'"
-        ))),
-    }
+    button
+        .parse()
+        .map_err(|err: String| DispatchError::InvalidParams(err))
 }
 
 fn parse_u8(params: &ToolParams, key: &str) -> Result<u8, DispatchError> {

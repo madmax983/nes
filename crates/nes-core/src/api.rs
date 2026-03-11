@@ -1543,3 +1543,31 @@ impl Default for NesCore {
         Self::new()
     }
 }
+
+impl std::str::FromStr for Button {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("A") {
+            Ok(Button::A)
+        } else if s.eq_ignore_ascii_case("B") {
+            Ok(Button::B)
+        } else if s.eq_ignore_ascii_case("Select") {
+            Ok(Button::Select)
+        } else if s.eq_ignore_ascii_case("Start") {
+            Ok(Button::Start)
+        } else if s.eq_ignore_ascii_case("Up") {
+            Ok(Button::Up)
+        } else if s.eq_ignore_ascii_case("Down") {
+            Ok(Button::Down)
+        } else if s.eq_ignore_ascii_case("Left") {
+            Ok(Button::Left)
+        } else if s.eq_ignore_ascii_case("Right") {
+            Ok(Button::Right)
+        } else {
+            Err(format!(
+                "unknown button '{s}'. expected one of: A, B, Select, Start, Up, Down, Left, Right"
+            ))
+        }
+    }
+}

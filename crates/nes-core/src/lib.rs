@@ -10,6 +10,8 @@ pub mod bus;
 pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
 pub mod mapper;
+/// PPM image encoding utilities.
+pub mod ppm;
 mod ppu;
 mod rom;
 mod scheduler;

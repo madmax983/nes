@@ -2151,18 +2151,9 @@ fn write_frame_ppm(path: &str, rgba: &[u8]) -> Result<(), String> {
     let bytes = if path.to_ascii_lowercase().ends_with(".bmp") {
         nes_core::bmp::encode_bmp(FRAME_WIDTH, FRAME_HEIGHT, rgba)?
     } else {
-        encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba)
+        nes_core::ppm::encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba)
     };
     fs::write(path, bytes).map_err(|err| format!("unable to write '{path}': {err}"))
-}
-
-fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
-    let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    ppm.extend_from_slice(format!("P6\n{width} {height}\n255\n").as_bytes());
-    for px in rgba.chunks_exact(4) {
-        ppm.extend_from_slice(&px[..3]);
-    }
-    ppm
 }
 
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
@@ -2187,11 +2178,10 @@ mod tests {
         apply_gamepad_delta_commands, audio_queue_dropped, capture_config_from_parts,
         capture_path_for_frame, classify_keyboard_input, classify_window_event,
         compute_local_netplay_bits, compute_metrics_snapshot, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, frame_signature,
-        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
-        handle_netplay_server_message, is_player_two_slot, map_virtual_keycode,
-        merge_local_input_bits, netplay_feature_enabled, parse_runtime_args,
+        controller_state_delta_for_player, element_state_pressed, evaluate_frame_deadline,
+        format_rom_read_error, frame_signature, gamepad_assignments_changed, gamepad_slot_changed,
+        gamepad_snapshot_to_bits, handle_netplay_server_message, is_player_two_slot,
+        map_virtual_keycode, merge_local_input_bits, netplay_feature_enabled, parse_runtime_args,
         recommended_input_delay_frames, resync_restored_inputs, scaled_window_dimensions,
         schedule_netplay_ping, select_active_gamepad_ids, should_capture_frame,
         should_log_rollback, should_resume_after_rewind_hold, should_send_netplay_hash,
@@ -3471,13 +3461,6 @@ mod tests {
             "snap-000042.ppm"
         );
         assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
-    }
-
-    #[test]
-    fn encode_ppm_emits_expected_headers_and_pixel_layout() {
-        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
-        assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
-        assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
     }
 
     #[test]

@@ -122,17 +122,7 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
 }
 
 fn parse_btn(s: &str) -> Option<Button> {
-    match s.to_uppercase().as_str() {
-        "A" => Some(Button::A),
-        "B" => Some(Button::B),
-        "SELECT" => Some(Button::Select),
-        "START" => Some(Button::Start),
-        "UP" => Some(Button::Up),
-        "DOWN" => Some(Button::Down),
-        "LEFT" => Some(Button::Left),
-        "RIGHT" => Some(Button::Right),
-        _ => None,
-    }
+    s.parse().ok()
 }
 
 #[cfg(test)]
