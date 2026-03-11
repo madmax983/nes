@@ -270,3 +270,103 @@ fn expected_frame_len(width: u32, height: u32) -> Option<usize> {
     let height = usize::try_from(height).ok()?;
     width.checked_mul(height)?.checked_mul(4)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_return_none_when_expected_frame_len_overflows() {
+        assert_eq!(
+            expected_frame_len(u32::MAX, u32::MAX),
+            None,
+            "Expected None due to width * height overflow"
+        );
+        // On 32-bit platforms, an overflow happens earlier (width * height),
+        // whereas on 64-bit platforms it happens later (during * 4).
+    }
+
+    #[test]
+    fn should_calculate_correct_frame_length_for_valid_dimensions() {
+        assert_eq!(
+            expected_frame_len(256, 240),
+            Some(245_760),
+            "Expected 256 * 240 * 4 = 245760"
+        );
+    }
+
+    #[test]
+    fn should_ignore_publish_frame_if_rgba_length_is_invalid() {
+        let initial_meta = latest_output_metadata();
+
+        // Pass an array that is definitely wrong sized (1 byte)
+        publish_frame(256, 240, vec![0]);
+
+        let final_meta = latest_output_metadata();
+        assert_eq!(
+            initial_meta.frame_seq, final_meta.frame_seq,
+            "Frame sequence should not increment for invalid frame lengths"
+        );
+    }
+
+    #[test]
+    fn should_fast_forward_frame_chunk_sequence_when_requested_seq_is_newer() {
+        let initial_meta = latest_output_metadata();
+        let future_seq = initial_meta.frame_seq + 10;
+
+        let chunk = frame_chunk(future_seq).expect("Frame chunk must exist");
+        assert_eq!(
+            chunk.seq, future_seq,
+            "Frame chunk sequence should fast-forward to the requested future sequence"
+        );
+
+        let final_meta = latest_output_metadata();
+        assert_eq!(
+            final_meta.frame_seq, future_seq,
+            "Global metadata frame sequence should be fast-forwarded"
+        );
+    }
+
+    #[test]
+    fn should_fast_forward_audio_chunk_sequence_when_requested_seq_is_newer() {
+        let initial_meta = latest_output_metadata();
+        let future_seq = initial_meta.audio_seq + 5;
+
+        let chunk = audio_chunk(future_seq).expect("Audio chunk must exist");
+        assert_eq!(
+            chunk.seq, future_seq,
+            "Audio chunk sequence should fast-forward to the requested future sequence"
+        );
+
+        let final_meta = latest_output_metadata();
+        assert_eq!(
+            final_meta.audio_seq, future_seq,
+            "Global metadata audio sequence should be fast-forwarded"
+        );
+    }
+
+    #[test]
+    fn should_increment_audio_seq_and_update_samples_on_publish_audio() {
+        let initial_meta = latest_output_metadata();
+
+        publish_audio(vec![42; 735]);
+
+        let final_meta = latest_output_metadata();
+        assert_eq!(
+            final_meta.audio_seq,
+            initial_meta.audio_seq + 1,
+            "Audio sequence should increment by 1"
+        );
+
+        let chunk = audio_chunk(final_meta.audio_seq).expect("Audio chunk must exist");
+        assert_eq!(
+            chunk.samples.len(),
+            735,
+            "Audio chunk should contain the newly published samples"
+        );
+        assert_eq!(
+            chunk.samples[0], 42,
+            "Sample content should match what was published"
+        );
+    }
+}
