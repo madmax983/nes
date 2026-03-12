@@ -1,4 +1,9 @@
 //! Maps MCP tool invocations to NES core execution and output queries.
+//!
+//! This module forms the central routing layer between the raw JSON-RPC string
+//! maps provided by the MCP client and the strongly typed `nes-core` APIs. It
+//! parses incoming `ToolParams`, validates them against the expected schema,
+//! and translates emulator state back into the `DispatchOutput` enum for serialization.
 
 use core::fmt;
 use std::collections::{BTreeMap, HashMap};

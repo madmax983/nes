@@ -13,9 +13,17 @@ use serde_json::{Map, Value, json};
 const JSONRPC_VERSION: &str = "2.0";
 const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 
+/// Fatal errors encountered by the MCP daemon process.
+///
+/// These errors represent conditions where the JSON-RPC server can no longer
+/// continue operating, such as when `stdin`/`stdout` pipes are closed or when
+/// incoming payloads severely violate the protocol boundaries (e.g. content
+/// length headers are malformed).
 #[derive(Debug)]
 pub enum McpError {
+    /// An underlying I/O error reading from or writing to stdio.
     Io(std::io::Error),
+    /// A violation of the MCP framing or JSON-RPC specification.
     Protocol(String),
 }
 
