@@ -30,12 +30,15 @@ use nes_desktop::manual_state::{
 use nes_desktop::menu::{
     DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
 };
-use nes_desktop::overlay::{OverlayModel, OverlaySelection, OverlaySlotSummary, draw_overlay};
+use nes_desktop::overlay::{
+    OverlayCheatSummary, OverlayCommand, OverlayModel, OverlaySlotSummary, draw_overlay,
+};
 use nes_desktop::rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
     ProfileStatus, RtaEvent, RtaManager, RtaProfile, compute_rom_hash, load_profiles,
     select_profile,
 };
+use nes_desktop::session_cheats::SessionCheats;
 use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
@@ -610,10 +613,14 @@ fn apply_runtime_cheat_codes(core: &mut NesCore, cheat_codes: &[String]) -> Resu
     Ok(())
 }
 
+fn apply_session_cheats(core: &mut NesCore, cheats: &SessionCheats) -> Result<(), String> {
+    apply_runtime_cheat_codes(core, &cheats.enabled_codes())
+}
+
 fn load_rom_session(
     core: &mut NesCore,
     rom_path: &Path,
-    cheat_codes: &[String],
+    cheats: &SessionCheats,
 ) -> Result<LoadedRomSession, String> {
     let rom_bytes = fs::read(rom_path)
         .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
@@ -621,7 +628,7 @@ fn load_rom_session(
     let info = core
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
-    apply_runtime_cheat_codes(core, cheat_codes)?;
+    apply_session_cheats(core, cheats)?;
     let rom_hash = compute_rom_hash(&rom_bytes);
     let slot_metadata = load_slot_metadata_for_rom(rom_path, &rom_hash)?;
     Ok(LoadedRomSession {
@@ -671,6 +678,17 @@ fn overlay_slot_summaries(metadata: &[SaveSlotMetadata]) -> Vec<OverlaySlotSumma
     metadata.iter().map(format_slot_status).collect()
 }
 
+fn overlay_cheat_summaries(cheats: &SessionCheats) -> Vec<OverlayCheatSummary> {
+    cheats
+        .entries()
+        .iter()
+        .map(|entry| OverlayCheatSummary {
+            raw_code: entry.raw_code.clone(),
+            enabled: entry.enabled,
+        })
+        .collect()
+}
+
 fn rom_display_name(path: &Path) -> String {
     path.file_name()
         .and_then(|name| name.to_str())
@@ -687,48 +705,24 @@ fn window_title(session: &LoadedRomSession, overlay_open: bool) -> String {
     )
 }
 
-fn overlay_action_from_selection(selection: OverlaySelection) -> AppAction {
-    match selection {
-        OverlaySelection::Resume => AppAction::Resume,
-        OverlaySelection::OpenRom => AppAction::OpenRom,
-        OverlaySelection::SaveSlot(slot) => AppAction::SaveSlot(slot),
-        OverlaySelection::LoadSlot(slot) => AppAction::LoadSlot(slot),
-        OverlaySelection::Reset => AppAction::Reset,
-        OverlaySelection::Quit => AppAction::Quit,
-    }
-}
-
 fn apply_overlay_keyboard_input(
     overlay: &mut OverlayModel,
     key: VirtualKeyCode,
     pressed: bool,
+    cheat_count: usize,
     _keyboard_bits: &mut u8,
-) -> Option<AppAction> {
-    if !overlay.is_open() || !pressed {
-        return None;
-    }
-    match key {
-        VirtualKeyCode::Escape => Some(AppAction::Resume),
-        VirtualKeyCode::Up => {
-            overlay.move_prev();
-            None
-        }
-        VirtualKeyCode::Down => {
-            overlay.move_next();
-            None
-        }
-        VirtualKeyCode::Return => Some(overlay_action_from_selection(overlay.activate())),
-        VirtualKeyCode::F5 => slot_action_for_hotkey(true, overlay.selected_slot()),
-        VirtualKeyCode::F8 => slot_action_for_hotkey(false, overlay.selected_slot()),
-        _ => None,
-    }
+) -> Option<OverlayCommand> {
+    overlay.handle_key(key, pressed, cheat_count)
 }
 
 fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<(), String> {
     if rollback_enabled
         && matches!(
             action,
-            AppAction::OpenRom | AppAction::SaveSlot(_) | AppAction::LoadSlot(_)
+            AppAction::OpenRom
+                | AppAction::OpenCheats
+                | AppAction::SaveSlot(_)
+                | AppAction::LoadSlot(_)
         )
     {
         return Err(
@@ -740,15 +734,36 @@ fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<
 
 fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
     pressed
-        && matches!(
+        && (matches!(
             key,
             VirtualKeyCode::Up
                 | VirtualKeyCode::Down
                 | VirtualKeyCode::Escape
                 | VirtualKeyCode::Return
+                | VirtualKeyCode::Space
+                | VirtualKeyCode::Delete
+                | VirtualKeyCode::Back
                 | VirtualKeyCode::F5
                 | VirtualKeyCode::F8
-        )
+        ) || matches!(
+            key,
+            VirtualKeyCode::A
+                | VirtualKeyCode::E
+                | VirtualKeyCode::G
+                | VirtualKeyCode::I
+                | VirtualKeyCode::K
+                | VirtualKeyCode::L
+                | VirtualKeyCode::N
+                | VirtualKeyCode::O
+                | VirtualKeyCode::P
+                | VirtualKeyCode::S
+                | VirtualKeyCode::T
+                | VirtualKeyCode::U
+                | VirtualKeyCode::V
+                | VirtualKeyCode::X
+                | VirtualKeyCode::Y
+                | VirtualKeyCode::Z
+        ))
 }
 
 fn menu_action_enabled(
@@ -760,6 +775,7 @@ fn menu_action_enabled(
     match action {
         AppAction::Resume => overlay_open,
         AppAction::OpenRom => !rollback_enabled && !rta_active && rom_picker_supported(),
+        AppAction::OpenCheats => !rollback_enabled && !rta_active,
         AppAction::SaveSlot(_) | AppAction::LoadSlot(_) => !rollback_enabled,
         AppAction::ToggleOverlay | AppAction::Reset | AppAction::Quit => true,
     }
@@ -784,6 +800,15 @@ fn sync_native_menu_state(
         AppAction::OpenRom,
         menu_action_enabled(
             AppAction::OpenRom,
+            overlay_open,
+            rollback_enabled,
+            rta_active,
+        ),
+    );
+    menu.set_action_enabled(
+        AppAction::OpenCheats,
+        menu_action_enabled(
+            AppAction::OpenCheats,
             overlay_open,
             rollback_enabled,
             rta_active,
@@ -860,6 +885,7 @@ fn dispatch_app_action(
     action: AppAction,
     core: &mut NesCore,
     session: &mut LoadedRomSession,
+    session_cheats: &mut SessionCheats,
     overlay: &mut OverlayModel,
     rollback_enabled: bool,
     runtime: &RuntimeConfig,
@@ -878,6 +904,7 @@ fn dispatch_app_action(
         action,
         core,
         session,
+        session_cheats,
         overlay,
         rollback_enabled,
         runtime,
@@ -909,10 +936,119 @@ fn dispatch_app_action(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn dispatch_overlay_command(
+    command: OverlayCommand,
+    core: &mut NesCore,
+    session: &mut LoadedRomSession,
+    session_cheats: &mut SessionCheats,
+    overlay: &mut OverlayModel,
+    rollback_enabled: bool,
+    runtime: &RuntimeConfig,
+    audio_output: Option<&AudioOutput>,
+    time_machine: &mut TimeMachine,
+    rewind_held: &mut bool,
+    metrics: &mut PerfMetrics,
+    keyboard_bits: u8,
+    gamepad_bits: &mut [u8; 2],
+    window: &Window,
+    rta_manager: &mut Option<RtaManager>,
+    frame_index: u64,
+    control_flow: &mut ControlFlow,
+) -> bool {
+    match command {
+        OverlayCommand::AppAction(action) => dispatch_app_action(
+            action,
+            core,
+            session,
+            session_cheats,
+            overlay,
+            rollback_enabled,
+            runtime,
+            audio_output,
+            time_machine,
+            rewind_held,
+            metrics,
+            keyboard_bits,
+            gamepad_bits,
+            window,
+            rta_manager,
+            frame_index,
+            control_flow,
+        ),
+        OverlayCommand::ToggleCheat(index) => {
+            let Some(raw_code) = session_cheats
+                .entries()
+                .get(index)
+                .map(|entry| entry.raw_code.clone())
+            else {
+                overlay.set_status_message(format!("No cheat entry exists at index {index}"));
+                window.request_redraw();
+                return false;
+            };
+            match session_cheats.toggle(index) {
+                Ok(()) => {
+                    if let Err(err) = apply_session_cheats(core, session_cheats) {
+                        overlay.set_status_message(err);
+                    } else {
+                        let enabled = session_cheats
+                            .entries()
+                            .get(index)
+                            .is_some_and(|entry| entry.enabled);
+                        overlay.set_status_message(format!(
+                            "[cheat] {} {raw_code}",
+                            if enabled { "enabled" } else { "disabled" }
+                        ));
+                    }
+                }
+                Err(err) => overlay.set_status_message(err.to_string()),
+            }
+            window.request_redraw();
+            false
+        }
+        OverlayCommand::RemoveCheat(index) => {
+            match session_cheats.remove(index) {
+                Ok(removed) => {
+                    if let Err(err) = apply_session_cheats(core, session_cheats) {
+                        overlay.set_status_message(err);
+                    } else {
+                        overlay.set_status_message(format!("[cheat] removed {}", removed.raw_code));
+                    }
+                }
+                Err(err) => overlay.set_status_message(err.to_string()),
+            }
+            window.request_redraw();
+            false
+        }
+        OverlayCommand::SubmitCheatCode(raw_code) => {
+            match session_cheats.add(&raw_code) {
+                Ok(()) => {
+                    if let Err(err) = apply_session_cheats(core, session_cheats) {
+                        overlay.set_status_message(err);
+                    } else {
+                        let new_index = session_cheats.len().saturating_sub(1);
+                        overlay.close_add_cheat_modal();
+                        overlay.focus_cheat(new_index);
+                        overlay.set_status_message(format!(
+                            "[cheat] added {}",
+                            session_cheats.entries()[new_index].raw_code
+                        ));
+                    }
+                }
+                Err(err) => overlay
+                    .set_status_message(format!("Invalid cheat code '{}': {err}", raw_code.trim())),
+            }
+            window.request_redraw();
+            false
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn execute_app_action(
     action: AppAction,
     core: &mut NesCore,
     session: &mut LoadedRomSession,
+    session_cheats: &mut SessionCheats,
     overlay: &mut OverlayModel,
     rollback_enabled: bool,
     runtime: &RuntimeConfig,
@@ -944,6 +1080,18 @@ fn execute_app_action(
             set_overlay_open(overlay, false, core, audio_output, window, session)?;
             Ok(false)
         }
+        AppAction::OpenCheats => {
+            if rta_manager.is_some() {
+                overlay.set_status_message("Cheats are unavailable while RTA mode is active");
+                return Ok(false);
+            }
+            if !overlay.is_open() {
+                set_overlay_open(overlay, true, core, audio_output, window, session)?;
+            }
+            overlay.open_cheats_panel();
+            window.set_title(&window_title(session, true));
+            Ok(false)
+        }
         AppAction::OpenRom => {
             if rta_manager.is_some() {
                 overlay.set_status_message("Open ROM is unavailable while RTA mode is active");
@@ -957,7 +1105,9 @@ fn execute_app_action(
                 overlay.set_status_message("Open ROM cancelled");
                 return Ok(false);
             };
-            *session = load_rom_session(core, &path, &runtime.cheat_codes)?;
+            let cleared_cheats = SessionCheats::new();
+            *session = load_rom_session(core, &path, &cleared_cheats)?;
+            session_cheats.clear();
             if let Some(output) = audio_output {
                 output.clear();
             }
@@ -1001,6 +1151,7 @@ fn execute_app_action(
             let slot_path = slot_path_for_selection(session, slot);
             let snapshot = load_state_file(&slot_path, &session.rom_hash)?;
             core.load_state(&snapshot);
+            apply_session_cheats(core, session_cheats)?;
             reconcile_core_pause_with_overlay(core, overlay.is_open())?;
             resync_restored_inputs(core, keyboard_bits, gamepad_bits)?;
             if let Some(output) = audio_output {
@@ -1292,11 +1443,9 @@ fn run() -> Result<(), String> {
     }
 
     let mut core = NesCore::new();
-    let mut session = load_rom_session(
-        &mut core,
-        Path::new(&runtime.rom_path),
-        &runtime.cheat_codes,
-    )?;
+    let mut session_cheats = SessionCheats::from_raw_codes(&runtime.cheat_codes)
+        .map_err(|err| format!("Invalid cheat code in runtime config: {err}"))?;
+    let mut session = load_rom_session(&mut core, Path::new(&runtime.rom_path), &session_cheats)?;
     let step_mode = runtime.step_mode;
     let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
         let profiles = load_profiles(&rta_config.profiles_dir)?;
@@ -1604,16 +1753,22 @@ fn run() -> Result<(), String> {
                     return;
                 };
                 if overlay.is_open() {
-                    let action =
-                        apply_overlay_keyboard_input(&mut overlay, key, pressed, &mut keyboard_bits);
+                    let action = apply_overlay_keyboard_input(
+                        &mut overlay,
+                        key,
+                        pressed,
+                        session_cheats.len(),
+                        &mut keyboard_bits,
+                    );
                     if overlay_input_requires_redraw(key, pressed) {
                         window.request_redraw();
                     }
-                    if let Some(action) = action {
-                        let _ = dispatch_app_action(
-                            action,
+                    if let Some(command) = action {
+                        let _ = dispatch_overlay_command(
+                            command,
                             &mut core,
                             &mut session,
+                            &mut session_cheats,
                             &mut overlay,
                             rollback.is_some(),
                             &runtime,
@@ -1644,6 +1799,7 @@ fn run() -> Result<(), String> {
                             AppAction::ToggleOverlay,
                             &mut core,
                             &mut session,
+                            &mut session_cheats,
                             &mut overlay,
                             rollback.is_some(),
                             &runtime,
@@ -1665,6 +1821,7 @@ fn run() -> Result<(), String> {
                                 action,
                                 &mut core,
                                 &mut session,
+                                &mut session_cheats,
                                 &mut overlay,
                                 rollback.is_some(),
                                 &runtime,
@@ -1687,6 +1844,7 @@ fn run() -> Result<(), String> {
                                 action,
                                 &mut core,
                                 &mut session,
+                                &mut session_cheats,
                                 &mut overlay,
                                 rollback.is_some(),
                                 &runtime,
@@ -1790,6 +1948,7 @@ fn run() -> Result<(), String> {
                     action,
                     &mut core,
                     &mut session,
+                    &mut session_cheats,
                     &mut overlay,
                     rollback.is_some(),
                     &runtime,
@@ -2081,12 +2240,14 @@ fn run() -> Result<(), String> {
             pixels.frame_mut().copy_from_slice(&frame_rgba);
             if overlay.is_open() {
                 let slot_summaries = overlay_slot_summaries(&session.slot_metadata);
+                let cheat_summaries = overlay_cheat_summaries(&session_cheats);
                 draw_overlay(
                     pixels.frame_mut(),
                     FRAME_WIDTH,
                     FRAME_HEIGHT,
                     &overlay,
                     &slot_summaries,
+                    &cheat_summaries,
                 );
             }
             if let Some(config) = capture.as_ref()
@@ -3300,22 +3461,29 @@ mod tests {
         overlay.open();
         let mut keyboard_bits = 0_u8;
 
-        let action =
-            apply_overlay_keyboard_input(&mut overlay, VirtualKeyCode::Z, true, &mut keyboard_bits);
+        let action = apply_overlay_keyboard_input(
+            &mut overlay,
+            VirtualKeyCode::Z,
+            true,
+            0,
+            &mut keyboard_bits,
+        );
 
         assert_eq!(action, None);
         assert_eq!(keyboard_bits, 0);
     }
 
     #[test]
-    fn overlay_input_requires_redraw_for_navigation_and_action_keys() {
+    fn overlay_input_requires_redraw_for_navigation_action_and_text_entry_keys() {
         assert!(overlay_input_requires_redraw(VirtualKeyCode::Up, true));
         assert!(overlay_input_requires_redraw(VirtualKeyCode::Down, true));
         assert!(overlay_input_requires_redraw(VirtualKeyCode::Escape, true));
         assert!(overlay_input_requires_redraw(VirtualKeyCode::Return, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Space, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Delete, true));
         assert!(overlay_input_requires_redraw(VirtualKeyCode::F5, true));
         assert!(overlay_input_requires_redraw(VirtualKeyCode::F8, true));
-        assert!(!overlay_input_requires_redraw(VirtualKeyCode::Z, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Z, true));
         assert!(!overlay_input_requires_redraw(VirtualKeyCode::Up, false));
     }
 
@@ -3323,6 +3491,10 @@ mod tests {
     fn rollback_disables_stateful_menu_actions() {
         let err = validate_action_allowed(AppAction::OpenRom, true)
             .expect_err("open rom should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+
+        let err = validate_action_allowed(AppAction::OpenCheats, true)
+            .expect_err("open cheats should be blocked during rollback");
         assert!(err.contains("unavailable while netplay/rollback is active"));
 
         let err = validate_action_allowed(AppAction::SaveSlot(2), true)
@@ -3336,6 +3508,24 @@ mod tests {
             menu_action_enabled(AppAction::OpenRom, false, false, false),
             rom_picker_supported()
         );
+        assert!(menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            true,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            true
+        ));
     }
 
     #[test]

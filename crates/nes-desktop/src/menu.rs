@@ -129,6 +129,10 @@ pub fn build_native_menu(slot_count: u8) -> DesktopMenu {
     ];
 
     let mut emulation_entries = vec![DesktopMenuEntry::Item(item(AppAction::Resume, "Resume"))];
+    emulation_entries.push(DesktopMenuEntry::Item(item(
+        AppAction::OpenCheats,
+        "Cheats...",
+    )));
     emulation_entries.extend(slot_entries(AppAction::SaveSlot, "Save Slot", slot_count));
     emulation_entries.extend(slot_entries(AppAction::LoadSlot, "Load Slot", slot_count));
     emulation_entries.push(DesktopMenuEntry::Separator);
@@ -191,7 +195,10 @@ pub fn action_is_enabled_for_runtime(action: AppAction, rollback_enabled: bool) 
     !(rollback_enabled
         && matches!(
             action,
-            AppAction::OpenRom | AppAction::SaveSlot(_) | AppAction::LoadSlot(_)
+            AppAction::OpenRom
+                | AppAction::OpenCheats
+                | AppAction::SaveSlot(_)
+                | AppAction::LoadSlot(_)
         ))
 }
 
@@ -316,6 +323,10 @@ mod tests {
             Some(AppAction::LoadSlot(2))
         );
         assert_eq!(
+            action_from_menu_event_id("emulation.cheats"),
+            Some(AppAction::OpenCheats)
+        );
+        assert_eq!(
             action_from_menu_event_id("file.quit"),
             Some(AppAction::Quit)
         );
@@ -337,8 +348,25 @@ mod tests {
     }
 
     #[test]
+    fn native_menu_emulation_section_contains_cheats_entry() {
+        let menu = build_native_menu(2);
+        let DesktopMenuEntry::Submenu { entries, .. } = &menu.entries()[1] else {
+            panic!("expected emulation submenu");
+        };
+
+        assert!(entries.iter().any(|entry| {
+            matches!(
+                entry,
+                DesktopMenuEntry::Item(spec)
+                    if spec.id == "emulation.cheats" && spec.label == "Cheats..."
+            )
+        }));
+    }
+
+    #[test]
     fn rollback_disables_open_and_slot_actions() {
         assert!(!action_is_enabled_for_runtime(AppAction::OpenRom, true));
+        assert!(!action_is_enabled_for_runtime(AppAction::OpenCheats, true));
         assert!(!action_is_enabled_for_runtime(AppAction::SaveSlot(2), true));
         assert!(!action_is_enabled_for_runtime(AppAction::LoadSlot(4), true));
         assert!(action_is_enabled_for_runtime(AppAction::Reset, true));
