@@ -2066,6 +2066,12 @@ mod tests {
         let dangling_escape =
             decode_string_literal("\"abc\\\"").expect_err("dangling escape should fail");
         assert!(dangling_escape.contains("dangling escape sequence"));
+
+        let invalid_hex = decode_string_literal(r#""\xG1""#).expect_err("invalid hex escape");
+        assert!(invalid_hex.contains("invalid hex escape sequence"));
+
+        let invalid_hex2 = decode_string_literal(r#""\x1Z""#).expect_err("invalid hex escape");
+        assert!(invalid_hex2.contains("invalid hex escape sequence"));
     }
 
     #[test]
