@@ -2,3 +2,6 @@
 ## 2026-03-01 - [MMC3 Edge Case Coverage]
 **Learning:** The MMC3 mapper logic in `crates/nes-core/src/mapper/mmc3.rs` had missing coverage for scanline IRQ conditions (e.g., dot matching, scanline matching, rendering disabled) and PRG writes below `0x8000`, as well as PRG RAM protection.
 **Action:** Added targeted integration tests in `crates/nes-core/tests/mapper_mmc3.rs` that explicitly check each condition (e.g., calling `on_ppu_dot` with different scanlines/dots/rendering states, and writing to `0x7FFF`).
+## 2026-03-12 - [LoadedMapper Coverage Improvements]
+**Learning:** `LoadedMapper` in `crates/nes-core/src/api.rs` is an internal enum wrapping various mapper variants. Many of its methods (`chr_window`, `mirroring_override`, `irq_pending`, etc.) were missing unit test coverage, which allowed mutations to survive.
+**Action:** Wrote explicit unit tests instantiating mapper implementations directly (`Mmc3::from_prg_chr`, `Axrom::from_prg_rom`, etc.) and wrapping them in `LoadedMapper` variants to assert execution paths, reducing mutation survivability and ensuring correct integration behavior.
