@@ -531,8 +531,9 @@ mod tests {
     use nes_netplay::{ClientMessage, ServerMessage};
 
     use super::{
-        DEFAULT_BIND_ADDR, LinkCondition, RelayNetSim, RelayState, RoomState, cleanup_client,
-        forward_to_room_peers, handle_client, parse_args, read_client_message, build_startup_table, RelayArgs,
+        DEFAULT_BIND_ADDR, LinkCondition, RelayArgs, RelayNetSim, RelayState, RoomState,
+        build_startup_table, cleanup_client, forward_to_room_peers, handle_client, parse_args,
+        read_client_message,
     };
 
     fn make_net_sim(link: LinkCondition, seed: u64) -> Arc<RelayNetSim> {
@@ -615,7 +616,7 @@ mod tests {
                 jitter_ms: 45,
                 loss_pct: 6,
                 reorder_pct: 7,
-            }
+            },
         };
         let table = build_startup_table(&args);
         let output = table.to_string();
