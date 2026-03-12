@@ -13,6 +13,7 @@ members = [
     "crates/nes-netplay",
     "crates/nes-relay",
     "crates/nes-rewind",
+    "crates/nes-ai",
 ]
 
 [profile.dev.package.nes-core]
