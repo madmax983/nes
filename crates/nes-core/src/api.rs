@@ -1605,3 +1605,108 @@ impl Default for NesCore {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_loaded_mapper_mmc3_chr_window_and_writable() {
+        let mmc3 = Mmc3::from_prg_chr(vec![0; 32768], vec![0; 8192], NametableMirroring::Vertical);
+        let mapper = LoadedMapper::Mmc3(mmc3);
+
+        let window = mapper.chr_window();
+        assert!(window.is_some());
+        assert_eq!(window.unwrap().1, mapper.chr_writable());
+
+        let cnrom = Cnrom::from_prg_chr(vec![0; 32768], vec![]);
+        let mapper_cnrom = LoadedMapper::Cnrom(cnrom);
+        assert!(mapper_cnrom.chr_writable());
+        assert!(mapper_cnrom.chr_window().is_some());
+
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32768], vec![]);
+        let mapper_gxrom = LoadedMapper::Gxrom(gxrom);
+        assert!(mapper_gxrom.chr_writable());
+        assert!(mapper_gxrom.chr_window().is_some());
+    }
+
+    #[test]
+    fn test_loaded_mapper_mirroring_override() {
+        let axrom = Axrom::from_prg_rom(vec![0; 32768]);
+        let mapper_axrom = LoadedMapper::Axrom(axrom);
+        assert!(mapper_axrom.mirroring_override().is_some());
+
+        let mmc3 = Mmc3::from_prg_chr(vec![0; 32768], vec![], NametableMirroring::Vertical);
+        let mapper_mmc3 = LoadedMapper::Mmc3(mmc3);
+        assert!(mapper_mmc3.mirroring_override().is_some());
+
+        let nrom = Nrom::from_prg_rom(vec![0; 16384]);
+        let mapper_nrom = LoadedMapper::Nrom(nrom);
+        assert!(mapper_nrom.mirroring_override().is_none());
+    }
+
+    #[test]
+    fn test_loaded_mapper_mmc3_irq_and_ppu_dot() {
+        let mmc3 = Mmc3::from_prg_chr(vec![0; 32768], vec![0; 8192], NametableMirroring::Vertical);
+        let mut mapper = LoadedMapper::Mmc3(mmc3);
+
+        assert!(!mapper.irq_pending());
+
+        // Latch = 2
+        mapper.write_prg(0xC000, 2);
+        // Reload
+        mapper.write_prg(0xC001, 0);
+        // Enable
+        mapper.write_prg(0xE001, 0);
+
+        // First dot: reloads to 2
+        mapper.on_ppu_dot(0, 260, true);
+        assert!(!mapper.irq_pending());
+
+        // Second dot: decrements to 1
+        mapper.on_ppu_dot(0, 260, true);
+        assert!(!mapper.irq_pending());
+
+        // Third dot: decrements to 0 and triggers IRQ
+        mapper.on_ppu_dot(0, 260, true);
+        assert!(mapper.irq_pending());
+    }
+
+    #[test]
+    fn test_loaded_mapper_sync_chr_ram_from_ppu_window() {
+        let mut cnrom = LoadedMapper::Cnrom(Cnrom::from_prg_chr(vec![0; 32768], vec![]));
+        let mut gxrom = LoadedMapper::Gxrom(Gxrom::from_prg_chr(vec![0; 32768], vec![]));
+        let mut mmc3 = LoadedMapper::Mmc3(Mmc3::from_prg_chr(
+            vec![0; 32768],
+            vec![],
+            NametableMirroring::Vertical,
+        ));
+        let mut nrom = LoadedMapper::Nrom(Nrom::from_prg_rom(vec![0; 16384]));
+
+        let mut dummy_window = [0_u8; CHR_8K_BYTES];
+        dummy_window[0] = 42;
+        dummy_window[1024] = 43;
+
+        cnrom.sync_chr_ram_from_ppu_window(&dummy_window);
+        gxrom.sync_chr_ram_from_ppu_window(&dummy_window);
+        mmc3.sync_chr_ram_from_ppu_window(&dummy_window);
+
+        // NROM should do nothing
+        nrom.sync_chr_ram_from_ppu_window(&dummy_window);
+
+        // Before verifying, we need to apply the side effects directly.
+        // Since we wrap the mapper in `LoadedMapper`, `sync_chr_ram_from_ppu_window` uses the internal mutable ref.
+        let cnrom_window = match &cnrom { LoadedMapper::Cnrom(m) => m.chr_window(), _ => unreachable!() };
+        assert_eq!(cnrom_window[0], 42);
+
+        let gxrom_window = match &gxrom { LoadedMapper::Gxrom(m) => m.chr_window(), _ => unreachable!() };
+        assert_eq!(gxrom_window[0], 42);
+
+        let mmc3_window = match &mmc3 { LoadedMapper::Mmc3(m) => m.chr_window(), _ => unreachable!() };
+        // MMC3 doesn't blindly copy, it diffs slices and queues updates.
+        // By using dummy_window initialized entirely to 0, it differs from the internal 0 array?
+        // Wait, MMC3 chr_window defaults to 0. If dummy_window is 0, it won't update if it's identical.
+        // We set dummy_window[0] = 42, which forces an update.
+        assert_eq!(mmc3_window[0], 42);
+    }
+}
