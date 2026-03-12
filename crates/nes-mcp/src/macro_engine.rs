@@ -90,8 +90,9 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
                         command_name
                     ));
                 };
-                let btn = parse_btn(arg)
-                    .ok_or_else(|| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
+                let btn: Button = arg
+                    .parse()
+                    .map_err(|_| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
                 core.execute(Command::PressButton(btn))
                     .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
             }
@@ -99,8 +100,9 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
                 let Some(arg) = parts.next() else {
                     return Err(format!("Line {}: RELEASE needs a button", line_num + 1));
                 };
-                let btn = parse_btn(arg)
-                    .ok_or_else(|| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
+                let btn: Button = arg
+                    .parse()
+                    .map_err(|_| format!("Line {}: Invalid button '{}'", line_num + 1, arg))?;
                 core.execute(Command::ReleaseButton(btn))
                     .map_err(|e| format!("Line {}: Core error: {}", line_num + 1, e))?;
             }
@@ -119,20 +121,6 @@ pub fn execute_macro_script(core: &mut NesCore, script: &str) -> Result<u64, Str
     }
 
     Ok(frames_elapsed)
-}
-
-fn parse_btn(s: &str) -> Option<Button> {
-    match s.to_uppercase().as_str() {
-        "A" => Some(Button::A),
-        "B" => Some(Button::B),
-        "SELECT" => Some(Button::Select),
-        "START" => Some(Button::Start),
-        "UP" => Some(Button::Up),
-        "DOWN" => Some(Button::Down),
-        "LEFT" => Some(Button::Left),
-        "RIGHT" => Some(Button::Right),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

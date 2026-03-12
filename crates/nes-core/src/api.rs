@@ -5,6 +5,7 @@
 //! main entry point for host applications.
 
 use core::fmt;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +59,44 @@ pub enum Button {
     Left,
     /// Right direction.
     Right,
+}
+
+/// Error returned when parsing a [`Button`] from a string fails.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseButtonError(String);
+
+impl fmt::Display for ParseButtonError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid button: {}", self.0)
+    }
+}
+
+impl std::error::Error for ParseButtonError {}
+
+impl FromStr for Button {
+    type Err = ParseButtonError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("A") {
+            Ok(Self::A)
+        } else if s.eq_ignore_ascii_case("B") {
+            Ok(Self::B)
+        } else if s.eq_ignore_ascii_case("Select") {
+            Ok(Self::Select)
+        } else if s.eq_ignore_ascii_case("Start") {
+            Ok(Self::Start)
+        } else if s.eq_ignore_ascii_case("Up") {
+            Ok(Self::Up)
+        } else if s.eq_ignore_ascii_case("Down") {
+            Ok(Self::Down)
+        } else if s.eq_ignore_ascii_case("Left") {
+            Ok(Self::Left)
+        } else if s.eq_ignore_ascii_case("Right") {
+            Ok(Self::Right)
+        } else {
+            Err(ParseButtonError(s.to_owned()))
+        }
+    }
 }
 
 impl Button {
@@ -1708,5 +1747,29 @@ mod tests {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Cnrom(cnrom);
         assert!(mapper.chr_writable());
+    }
+
+    #[test]
+    fn test_button_from_str() {
+        assert_eq!("A".parse::<Button>().unwrap(), Button::A);
+        assert_eq!("a".parse::<Button>().unwrap(), Button::A);
+        assert_eq!("B".parse::<Button>().unwrap(), Button::B);
+        assert_eq!("b".parse::<Button>().unwrap(), Button::B);
+        assert_eq!("Select".parse::<Button>().unwrap(), Button::Select);
+        assert_eq!("SELECT".parse::<Button>().unwrap(), Button::Select);
+        assert_eq!("Start".parse::<Button>().unwrap(), Button::Start);
+        assert_eq!("START".parse::<Button>().unwrap(), Button::Start);
+        assert_eq!("Up".parse::<Button>().unwrap(), Button::Up);
+        assert_eq!("UP".parse::<Button>().unwrap(), Button::Up);
+        assert_eq!("Down".parse::<Button>().unwrap(), Button::Down);
+        assert_eq!("DOWN".parse::<Button>().unwrap(), Button::Down);
+        assert_eq!("Left".parse::<Button>().unwrap(), Button::Left);
+        assert_eq!("LEFT".parse::<Button>().unwrap(), Button::Left);
+        assert_eq!("Right".parse::<Button>().unwrap(), Button::Right);
+        assert_eq!("RIGHT".parse::<Button>().unwrap(), Button::Right);
+
+        let err = "Invalid".parse::<Button>().unwrap_err();
+        assert_eq!(err, ParseButtonError("Invalid".to_owned()));
+        assert_eq!(err.to_string(), "invalid button: Invalid");
     }
 }
