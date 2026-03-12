@@ -1,7 +1,15 @@
-## [Performance] Removed heap allocation in audio sample generation
-**Learning:** Intermediate buffers with `Vec::with_capacity` in public-facing apis (like `apu::drain_samples`) forces a heap allocation on every single frame. This was found in `audio_chunk_i16`.
-**Action:** Switch public APIs that yield buffers (like audio samples) to accept a `&mut [T]` to fill, pushing the allocation decision to the caller and removing intermediate allocations entirely.
+**[Avoiding heap allocation in string comparisons]**
+**Learning:** `to_uppercase()` creates a newly allocated `String`, which incurs a heap allocation overhead. In hot paths or parsers (like macro engine command parsing or controller button parsing), this allocation is unnecessary.
+**Action:** Use `.eq_ignore_ascii_case()` on `&str` directly instead of allocating a new string via `.to_uppercase()`. This achieves the same result with zero allocations.
 
-**[Performance] Removed heap allocation in macro engine parser**
-**Learning:** `split_whitespace().collect::<Vec<&str>>()` forces a heap allocation for `Vec<&str>` per non-empty line parsed when only sequential reading is required.
-**Action:** Used an iterator directly over `split_whitespace()` using `next()` to retrieve tokens sequentially instead of instantiating an intermediate vector.
+**[Avoiding heap allocation in string comparisons]**
+**Learning:** `to_uppercase()` creates a newly allocated `String`, which incurs a heap allocation overhead. In hot paths or parsers (like macro engine command parsing or controller button parsing), this allocation is unnecessary.
+**Action:** Use `.eq_ignore_ascii_case()` on `&str` directly instead of allocating a new string via `.to_uppercase()`. This achieves the same result with zero allocations.
+
+**[Avoiding heap allocation in string comparisons]**
+**Learning:** `to_uppercase()` creates a newly allocated `String`, which incurs a heap allocation overhead. In hot paths or parsers (like macro engine command parsing or controller button parsing), this allocation is unnecessary.
+**Action:** Use `.eq_ignore_ascii_case()` on `&str` directly instead of allocating a new string via `.to_uppercase()`. This achieves the same result with zero allocations.
+
+**[Avoiding heap allocation in string comparisons]**
+**Learning:** `to_uppercase()` creates a newly allocated `String`, which incurs a heap allocation overhead. In hot paths or parsers (like macro engine command parsing or controller button parsing), this allocation is unnecessary.
+**Action:** Use `.eq_ignore_ascii_case()` on `&str` directly instead of allocating a new string via `.to_uppercase()`. This achieves the same result with zero allocations.
