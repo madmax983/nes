@@ -2725,6 +2725,8 @@ version = "0.1.0"
 name = "nes-relay"
 version = "0.1.0"
 dependencies = [
+ "comfy-table",
+ "crossterm 0.28.1",
  "loom",
  "nes-netplay",
  "proptest",

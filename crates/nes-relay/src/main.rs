@@ -1,3 +1,5 @@
+use comfy_table::{Cell, Color as TableColor, Table};
+use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -125,18 +127,44 @@ fn main() {
     }
 }
 
+fn build_startup_table(args: &RelayArgs) -> Table {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Bind Address"),
+        Cell::new(&args.bind_addr).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("Latency"),
+        Cell::new(format!("{}ms", args.link.latency_ms)).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("Jitter"),
+        Cell::new(format!("{}ms", args.link.jitter_ms)).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("Packet Loss"),
+        Cell::new(format!("{}%", args.link.loss_pct)).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("Reorder"),
+        Cell::new(format!("{}%", args.link.reorder_pct)).fg(TableColor::Yellow),
+    ]);
+
+    table
+}
+
 fn run() -> Result<(), String> {
     let args = parse_args(std::env::args().skip(1).collect())?;
     let listener = TcpListener::bind(&args.bind_addr)
         .map_err(|err| format!("failed to bind {}: {err}", args.bind_addr))?;
-    println!(
-        "nes-relay listening on {} (latency={}ms jitter={}ms loss={}%% reorder={}%%)",
-        args.bind_addr,
-        args.link.latency_ms,
-        args.link.jitter_ms,
-        args.link.loss_pct,
-        args.link.reorder_pct
-    );
+
+    println!("{}", "nes-relay".with(Color::Cyan).bold());
+    println!("{}\n", build_startup_table(&args));
 
     let state = Arc::new(Mutex::new(RelayState::default()));
     let net_sim = Arc::new(RelayNetSim::new(args.link));
@@ -503,8 +531,9 @@ mod tests {
     use nes_netplay::{ClientMessage, ServerMessage};
 
     use super::{
-        DEFAULT_BIND_ADDR, LinkCondition, RelayNetSim, RelayState, RoomState, cleanup_client,
-        forward_to_room_peers, handle_client, parse_args, read_client_message,
+        DEFAULT_BIND_ADDR, LinkCondition, RelayArgs, RelayNetSim, RelayState, RoomState,
+        build_startup_table, cleanup_client, forward_to_room_peers, handle_client, parse_args,
+        read_client_message,
     };
 
     fn make_net_sim(link: LinkCondition, seed: u64) -> Arc<RelayNetSim> {
@@ -576,6 +605,27 @@ mod tests {
         assert_eq!(parsed.link.jitter_ms, 12);
         assert_eq!(parsed.link.loss_pct, 7);
         assert_eq!(parsed.link.reorder_pct, 11);
+    }
+
+    #[test]
+    fn build_startup_table_includes_all_parameters() {
+        let args = RelayArgs {
+            bind_addr: "127.0.0.1:4545".to_owned(),
+            link: LinkCondition {
+                latency_ms: 123,
+                jitter_ms: 45,
+                loss_pct: 6,
+                reorder_pct: 7,
+            },
+        };
+        let table = build_startup_table(&args);
+        let output = table.to_string();
+
+        assert!(output.contains("127.0.0.1:4545"));
+        assert!(output.contains("123ms"));
+        assert!(output.contains("45ms"));
+        assert!(output.contains("6%"));
+        assert!(output.contains("7%"));
     }
 
     #[test]
