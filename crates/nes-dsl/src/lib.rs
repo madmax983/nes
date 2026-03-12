@@ -1455,10 +1455,16 @@ fn decode_string_literal(literal: &str) -> Result<Vec<u8>, String> {
                 let lo = chars
                     .next()
                     .ok_or_else(|| "expected two hex digits after \\x".to_owned())?;
-                let pair = [hi, lo].iter().collect::<String>();
-                let value = u8::from_str_radix(&pair, 16)
-                    .map_err(|_| "invalid hex escape sequence".to_owned())?;
-                bytes.push(value);
+
+                // **Performance optimization:** Replaced intermediate string allocation
+                // during hex escape parsing with direct character parsing.
+                let hi_val = hi
+                    .to_digit(16)
+                    .ok_or_else(|| "invalid hex escape sequence".to_owned())?;
+                let lo_val = lo
+                    .to_digit(16)
+                    .ok_or_else(|| "invalid hex escape sequence".to_owned())?;
+                bytes.push((hi_val << 4 | lo_val) as u8);
             }
             _ => return Err(format!("unsupported escape '\\{esc}'")),
         }
