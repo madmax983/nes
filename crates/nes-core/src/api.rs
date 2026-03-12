@@ -1696,13 +1696,22 @@ mod tests {
 
         // Before verifying, we need to apply the side effects directly.
         // Since we wrap the mapper in `LoadedMapper`, `sync_chr_ram_from_ppu_window` uses the internal mutable ref.
-        let cnrom_window = match &cnrom { LoadedMapper::Cnrom(m) => m.chr_window(), _ => unreachable!() };
+        let cnrom_window = match &cnrom {
+            LoadedMapper::Cnrom(m) => m.chr_window(),
+            _ => unreachable!(),
+        };
         assert_eq!(cnrom_window[0], 42);
 
-        let gxrom_window = match &gxrom { LoadedMapper::Gxrom(m) => m.chr_window(), _ => unreachable!() };
+        let gxrom_window = match &gxrom {
+            LoadedMapper::Gxrom(m) => m.chr_window(),
+            _ => unreachable!(),
+        };
         assert_eq!(gxrom_window[0], 42);
 
-        let mmc3_window = match &mmc3 { LoadedMapper::Mmc3(m) => m.chr_window(), _ => unreachable!() };
+        let mmc3_window = match &mmc3 {
+            LoadedMapper::Mmc3(m) => m.chr_window(),
+            _ => unreachable!(),
+        };
         // MMC3 doesn't blindly copy, it diffs slices and queues updates.
         // By using dummy_window initialized entirely to 0, it differs from the internal 0 array?
         // Wait, MMC3 chr_window defaults to 0. If dummy_window is 0, it won't update if it's identical.
