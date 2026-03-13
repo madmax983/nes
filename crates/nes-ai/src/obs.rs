@@ -2,6 +2,12 @@ use std::collections::VecDeque;
 
 use nes_core::{FRAME_HEIGHT, FRAME_WIDTH};
 
+/// Converts the NES RGBA framebuffer into a grayscale image at the requested size.
+///
+/// # Panics
+///
+/// Panics if `width` or `height` is zero, or if `rgba` does not match the
+/// expected NES framebuffer size.
 #[must_use]
 pub fn downsample_grayscale(rgba: &[u8], width: usize, height: usize) -> Vec<f32> {
     assert!(width > 0, "downsample width must be greater than zero");
@@ -37,6 +43,11 @@ pub struct FrameStack {
 }
 
 impl FrameStack {
+    /// Creates a bounded frame stack with a fixed per-frame element count.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `max_frames` or `frame_len` is zero.
     #[must_use]
     pub fn new(max_frames: usize, frame_len: usize) -> Self {
         assert!(max_frames > 0, "frame stack must keep at least one frame");
@@ -48,6 +59,11 @@ impl FrameStack {
         }
     }
 
+    /// Pushes one preprocessed frame into the stack, evicting the oldest frame if full.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `frame.len()` does not match the configured frame length.
     pub fn push(&mut self, frame: Vec<f32>) {
         assert_eq!(frame.len(), self.frame_len);
         if self.frames.len() == self.max_frames {

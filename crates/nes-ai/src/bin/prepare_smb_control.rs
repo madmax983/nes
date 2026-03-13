@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fmt::Write as _, fs, path::PathBuf};
 
 use nes_ai::snapshot::write_snapshot_bundle;
 use nes_core::{NesCore, tas::TasMovie};
@@ -32,7 +32,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     let mut out = String::with_capacity(digest.len() * 2);
     for byte in digest {
-        out.push_str(&format!("{byte:02x}"));
+        let _ = write!(out, "{byte:02x}");
     }
     out
 }

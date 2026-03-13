@@ -57,6 +57,11 @@ where
         }
     }
 
+    /// Restores the configured snapshot and seeds the frame stack for a new episode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if the emulator state cannot be restored.
     pub fn reset(&mut self) -> Result<P::Features, AiError> {
         self.core.load_state(&self.snapshot.snapshot);
         self.recorder = TasRecorder::new();
@@ -82,6 +87,12 @@ where
         Ok(features)
     }
 
+    /// Applies one discrete action and advances the emulator by the configured frame skip.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if called before [`Self::reset`] or if controller/frame
+    /// commands cannot be executed by the emulator core.
     pub fn step(&mut self, action: ControlAction) -> Result<StepOutput<P::Features>, AiError> {
         let prev = self
             .last_features
@@ -142,6 +153,11 @@ where
 }
 
 impl ProfileEnv<SmbProfile> {
+    /// Builds an SMB control environment from a validated AI profile config.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if the configured snapshot bundle cannot be loaded.
     pub fn from_config(cfg: AiProfileConfig) -> Result<Self, AiError> {
         let snapshot = load_snapshot_bundle(&cfg.snapshot_path)?;
         let profile = SmbProfile::new(cfg);

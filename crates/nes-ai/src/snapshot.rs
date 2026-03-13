@@ -17,6 +17,12 @@ pub struct SnapshotBundle {
     pub snapshot: CoreSnapshot,
 }
 
+/// Writes a snapshot bundle containing the ROM hash, snapshot id, and emulator state.
+///
+/// # Errors
+///
+/// Returns [`AiError`] if the parent directory cannot be created, the bundle
+/// cannot be serialized, or the file cannot be written.
 pub fn write_snapshot_bundle(
     path: &Path,
     rom_hash: &str,
@@ -48,6 +54,12 @@ pub fn write_snapshot_bundle(
     Ok(())
 }
 
+/// Loads and validates a snapshot bundle from disk.
+///
+/// # Errors
+///
+/// Returns [`AiError`] if the file cannot be read, parsed, or if the bundle
+/// version does not match [`SNAPSHOT_BUNDLE_VERSION`].
 pub fn load_snapshot_bundle(path: &Path) -> Result<SnapshotBundle, AiError> {
     let bytes = fs::read(path).map_err(|source| AiError::SnapshotRead {
         path: path.to_path_buf(),

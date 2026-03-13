@@ -33,6 +33,12 @@ impl EpisodeArtifactWriter {
         Self { output_dir }
     }
 
+    /// Writes TAS, run metadata, and optional macro playback artifacts for one episode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if the prefix is invalid, the output directory cannot be
+    /// created, serialization fails, or any artifact cannot be written.
     pub fn write(
         &self,
         prefix: &str,
