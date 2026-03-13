@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
+#[cfg(feature = "nova")]
+mod experimental;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 mod netplay;
@@ -494,9 +496,14 @@ enum KeyboardDecision {
     SetRewindHeld(bool),
     RtaManualSplit,
     RtaFinish,
-    UpdateKeyboardBits { mask: u8, pressed: bool },
+    UpdateKeyboardBits {
+        mask: u8,
+        pressed: bool,
+    },
     ExecuteCore(Command),
     Noop,
+    #[cfg(feature = "nova")]
+    CycleChromaMode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -571,6 +578,10 @@ fn classify_keyboard_input(
     }
     if rta_enabled && rta_calibrate && pressed && key == VirtualKeyCode::F10 {
         return KeyboardDecision::RtaFinish;
+    }
+    #[cfg(feature = "nova")]
+    if pressed && key == VirtualKeyCode::F11 {
+        return KeyboardDecision::CycleChromaMode;
     }
 
     let Some(key_code) = map_virtual_keycode(key) else {
@@ -1291,6 +1302,9 @@ fn run() -> Result<(), String> {
         ));
     }
 
+    #[cfg(feature = "nova")]
+    let mut chroma_mode = experimental::chroma::ChromaMode::Normal;
+
     let mut core = NesCore::new();
     let mut session = load_rom_session(
         &mut core,
@@ -1756,6 +1770,10 @@ fn run() -> Result<(), String> {
                             *control_flow = ControlFlow::Exit;
                         }
                     }
+                    #[cfg(feature = "nova")]
+                    KeyboardDecision::CycleChromaMode => {
+                        chroma_mode = chroma_mode.next();
+                    }
                     KeyboardDecision::Noop => {}
                 }
             }
@@ -2078,6 +2096,10 @@ fn run() -> Result<(), String> {
         Event::RedrawRequested(_) => {
             let render_start = Instant::now();
             core.fill_framebuffer_rgba(&mut frame_rgba);
+
+            #[cfg(feature = "nova")]
+            experimental::chroma::apply_filter(chroma_mode, &mut frame_rgba);
+
             pixels.frame_mut().copy_from_slice(&frame_rgba);
             if overlay.is_open() {
                 let slot_summaries = overlay_slot_summaries(&session.slot_metadata);
@@ -3275,6 +3297,11 @@ mod tests {
         assert_eq!(
             classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
             KeyboardDecision::RtaFinish
+        );
+        #[cfg(feature = "nova")]
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F11, true, false, false, false),
+            KeyboardDecision::CycleChromaMode
         );
         assert_eq!(
             classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
