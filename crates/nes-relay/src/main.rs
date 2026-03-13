@@ -482,15 +482,6 @@ mod tests {
         assert!(output.contains("7%"));
     }
 
-    #[test]
-    fn parse_args_defaults_to_zero_faults() {
-        let parsed = parse_args(Vec::new()).expect("parse default args");
-        assert_eq!(parsed.bind_addr, "127.0.0.1:4545");
-        assert_eq!(parsed.link.latency_ms, 0);
-        assert_eq!(parsed.link.jitter_ms, 0);
-        assert_eq!(parsed.link.loss_pct, 0);
-        assert_eq!(parsed.link.reorder_pct, 0);
-    }
 
     #[test]
     fn parse_args_help_flags_return_usage_text() {
@@ -504,6 +495,76 @@ mod tests {
         assert!(short_help.contains("Usage:"));
         assert!(short_help.contains("Default bind:"));
         assert!(!short_help.contains("unknown argument"));
+    }
+
+    #[test]
+    fn parse_args_rejects_missing_split_flag_values() {
+        for flag in [
+            "--bind",
+            "--latency-ms",
+            "--jitter-ms",
+            "--loss-pct",
+            "--reorder-pct",
+        ] {
+            let err = parse_args(vec![flag.to_owned()]).expect_err("missing value must fail");
+            assert!(err.contains("missing value"), "flag={flag} err={err}");
+        }
+    }
+
+    #[test]
+    fn parse_args_rejects_empty_equals_flag_values() {
+        for flag in [
+            "--bind=",
+            "--latency-ms=",
+            "--jitter-ms=",
+            "--loss-pct=",
+            "--reorder-pct=",
+        ] {
+            let err = parse_args(vec![flag.to_owned()]).expect_err("missing value must fail");
+            assert!(err.contains("missing value"), "flag={flag} err={err}");
+        }
+    }
+
+    #[test]
+    fn parse_args_rejects_invalid_numbers_and_unknown_flags() {
+        let latency_err = parse_args(vec!["--latency-ms=not-a-number".to_owned()])
+            .expect_err("invalid latency must fail");
+        assert!(latency_err.contains("non-negative integer"));
+
+        let loss_err =
+            parse_args(vec!["--loss-pct=101".to_owned()]).expect_err("percent over 100 must fail");
+        assert!(loss_err.contains("[0, 100]"));
+
+        let unknown =
+            parse_args(vec!["--definitely-not-a-flag".to_owned()]).expect_err("unknown flag");
+        assert!(unknown.contains("unknown argument"));
+    }
+
+    #[test]
+    fn parse_args_accepts_100_percent_values() {
+        let parsed = parse_args(vec![
+            "--loss-pct=100".to_owned(),
+            "--reorder-pct=100".to_owned(),
+        ])
+        .expect("100 percent should parse");
+        assert_eq!(parsed.link.loss_pct, 100);
+        assert_eq!(parsed.link.reorder_pct, 100);
+    }
+
+    #[test]
+    fn parse_args_mixed_equals_and_split_flags_progress_index_correctly() {
+        let parsed = parse_args(vec![
+            "--bind=127.0.0.1:1111".to_owned(),
+            "--latency-ms".to_owned(),
+            "55".to_owned(),
+            "--reorder-pct".to_owned(),
+            "11".to_owned(),
+            "--bind=127.0.0.1:2222".to_owned(),
+        ])
+        .expect("mixed syntax should parse");
+        assert_eq!(parsed.bind_addr, "127.0.0.1:2222");
+        assert_eq!(parsed.link.latency_ms, 55);
+        assert_eq!(parsed.link.reorder_pct, 11);
     }
 
     #[test]
