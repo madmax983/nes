@@ -1,3 +1,5 @@
+use std::fs;
+
 use nes_core::{Command, NesCore, tas::TasRecorder};
 
 use crate::{
@@ -9,7 +11,7 @@ use crate::{
     profile::TaskProfile,
     profiles::smb::SmbProfile,
     reward::{RewardBreakdown, RewardFeatures, RewardModel},
-    snapshot::{SnapshotBundle, load_snapshot_bundle},
+    snapshot::{SnapshotBundle, load_snapshot_bundle, sha256_hex},
 };
 
 #[derive(Debug, Clone)]
@@ -210,12 +212,29 @@ impl ProfileEnv<SmbProfile> {
     ///
     /// # Errors
     ///
-    /// Returns [`AiError`] if the configured snapshot bundle cannot be loaded.
+    /// Returns [`AiError`] if the configured snapshot bundle cannot be loaded,
+    /// the ROM cannot be read, or the ROM hash does not match the snapshot.
     pub fn from_config(cfg: AiProfileConfig) -> Result<Self, AiError> {
+        cfg.validate()?;
         let snapshot = load_snapshot_bundle(&cfg.snapshot_path)?;
+        let rom_hash = read_rom_hash(&cfg.rom_path)?;
+        if snapshot.rom_hash != rom_hash {
+            return Err(AiError::RomHashMismatch {
+                expected: snapshot.rom_hash,
+                found: rom_hash,
+            });
+        }
         let profile = SmbProfile::new(cfg);
         Ok(Self::new(profile, snapshot))
     }
 }
 
 pub type SmbControlEnv = ProfileEnv<SmbProfile>;
+
+fn read_rom_hash(path: &std::path::Path) -> Result<String, AiError> {
+    let rom = fs::read(path).map_err(|source| AiError::RomRead {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(sha256_hex(&rom))
+}

@@ -364,11 +364,12 @@ pub fn evaluate_smb_control(
             );
             let device = <InferBackend as Backend>::Device::default();
             let recorder = DefaultRecorder::new();
+            let checkpoint_base = checkpoint_base_path(checkpoint_base);
             let model = model_cfg
                 .init::<InferBackend>(&device)
-                .load_file(checkpoint_base.to_path_buf(), &recorder, &device)
+                .load_file(checkpoint_base.clone(), &recorder, &device)
                 .map_err(|source| AiError::CheckpointLoad {
-                    path: checkpoint_path(checkpoint_base),
+                    path: checkpoint_file_path(&checkpoint_base),
                     source,
                 })?;
             evaluate_model_with_factory(cfg, episodes, &model, make_env)
@@ -742,16 +743,29 @@ fn save_checkpoint(
         .valid()
         .save_file(base_path.clone(), &recorder)
         .map_err(|source| AiError::CheckpointSave {
-            path: checkpoint_path(&base_path),
+            path: checkpoint_file_path(&base_path),
             source,
         })?;
-    Ok(checkpoint_path(&base_path))
+    Ok(base_path)
 }
 
-fn checkpoint_path(base_path: &Path) -> PathBuf {
+fn checkpoint_file_path(base_path: &Path) -> PathBuf {
     let mut path = base_path.to_path_buf();
     path.set_extension(<DefaultRecorder as FileRecorder<InferBackend>>::file_extension());
     path
+}
+
+fn checkpoint_base_path(path: &Path) -> PathBuf {
+    let expected_extension = <DefaultRecorder as FileRecorder<InferBackend>>::file_extension();
+    if path
+        .extension()
+        .is_some_and(|extension| extension == expected_extension)
+    {
+        let mut base = path.to_path_buf();
+        let _ = base.set_extension("");
+        return base;
+    }
+    path.to_path_buf()
 }
 
 fn greedy_policy_decision(

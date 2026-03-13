@@ -50,10 +50,13 @@ fn smb_control_training_stack_can_emit_checkpoint_and_eval_artifacts() {
     };
 
     let trained = train_smb_control(&cfg, &trainer_cfg, 1).unwrap();
+    let mut checkpoint_file = trained.checkpoint_paths[0].clone();
+    checkpoint_file.set_extension("mpk");
 
     assert_eq!(trained.checkpoint_paths.len(), 1);
     assert_eq!(trained.artifact_paths.len(), 1);
-    assert!(trained.checkpoint_paths[0].exists());
+    assert!(trained.checkpoint_paths[0].extension().is_none());
+    assert!(checkpoint_file.exists());
     assert!(trained.artifact_paths[0].tas_json_path.exists());
     assert!(trained.artifact_paths[0].run_json_path.exists());
 }

@@ -1,8 +1,9 @@
-use std::fs;
 use std::path::Path;
+use std::{fmt::Write as _, fs};
 
 use nes_core::CoreSnapshot;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::error::AiError;
 
@@ -77,4 +78,14 @@ pub fn load_snapshot_bundle(path: &Path) -> Result<SnapshotBundle, AiError> {
         });
     }
     Ok(bundle)
+}
+
+#[must_use]
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
 }

@@ -25,6 +25,24 @@ fn profile_config_rejects_zero_observation_width() {
     assert!(err.to_string().contains("greater than zero"));
 }
 
+#[test]
+fn profile_config_rejects_too_small_observation_width() {
+    let profile = sample_profile_toml().replace("width = 84", "width = 19");
+
+    let err = toml::from_str::<AiProfileConfig>(&profile).expect_err("width below 20 should fail");
+
+    assert!(err.to_string().contains("at least 20"));
+}
+
+#[test]
+fn profile_config_rejects_too_small_observation_height() {
+    let profile = sample_profile_toml().replace("height = 84", "height = 19");
+
+    let err = toml::from_str::<AiProfileConfig>(&profile).expect_err("height below 20 should fail");
+
+    assert!(err.to_string().contains("at least 20"));
+}
+
 fn sample_profile_toml() -> &'static str {
     r#"
 id = "smb-control"

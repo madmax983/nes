@@ -6,9 +6,7 @@ use burn_nn::{
     pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig},
 };
 
-use crate::env::ObservationSnapshot;
-
-const MIN_OBSERVATION_DIM: usize = 20;
+use crate::{config::MIN_OBSERVATION_DIM, env::ObservationSnapshot};
 
 #[derive(Config, Debug)]
 pub struct HybridPolicyValueConfig {

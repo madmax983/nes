@@ -1,7 +1,18 @@
 mod support;
 
-use nes_ai::actions::ControlAction;
+use std::{fs, path::PathBuf};
+
+use nes_ai::{
+    actions::ControlAction,
+    config::{AiProfileConfig, ObservationConfig, RewardConfig},
+    env::SmbControlEnv,
+    error::AiError,
+    snapshot::write_snapshot_bundle,
+};
+use nes_core::NesCore;
+use sha2::{Digest, Sha256};
 use support::mock_profile::make_mock_env;
+use tempfile::tempdir;
 
 #[test]
 fn reset_and_replayed_action_sequence_are_deterministic() {
@@ -51,4 +62,86 @@ fn env_exposes_tensor_ready_observation_and_stops_at_frame_budget() {
         "mock env should stop once max_episode_frames is reached"
     );
     assert_eq!(env.recorded_movie().total_frames(), 60);
+}
+
+#[test]
+fn from_config_rejects_observation_dims_below_model_minimum() {
+    let cfg = AiProfileConfig {
+        id: "mock-control".to_owned(),
+        rom_path: PathBuf::from("mock.nes"),
+        snapshot_path: PathBuf::from("mock.state.json"),
+        bootstrap_tas_path: PathBuf::from("mock.tas.json"),
+        frame_stack: 4,
+        frame_skip: 1,
+        max_episode_frames: 60,
+        observation: ObservationConfig {
+            width: 19,
+            height: 84,
+        },
+        reward: RewardConfig {
+            forward_progress: 1.0,
+            alive_bonus: 0.01,
+            stall_penalty: -0.02,
+            death_penalty: -1.0,
+            stall_frames: 30,
+        },
+    };
+
+    let Err(err) = SmbControlEnv::from_config(cfg) else {
+        panic!("observation dims below model minimum should fail fast");
+    };
+
+    assert!(matches!(
+        err,
+        AiError::Unsupported("observation width must be at least 20 pixels")
+    ));
+}
+
+#[test]
+fn from_config_rejects_rom_hash_mismatch() {
+    let dir = tempdir().unwrap();
+    let rom_path = dir.path().join("mock.nes");
+    let snapshot_path = dir.path().join("mock.state.json");
+    fs::write(&rom_path, b"live-rom").unwrap();
+
+    let snapshot = NesCore::new().save_state();
+    let expected_hash = sha256_hex(b"snapshot-rom");
+    let found_hash = sha256_hex(b"live-rom");
+    write_snapshot_bundle(&snapshot_path, &expected_hash, "mock-v1", &snapshot).unwrap();
+
+    let cfg = AiProfileConfig {
+        id: "mock-control".to_owned(),
+        rom_path,
+        snapshot_path,
+        bootstrap_tas_path: PathBuf::from("mock.tas.json"),
+        frame_stack: 4,
+        frame_skip: 1,
+        max_episode_frames: 60,
+        observation: ObservationConfig {
+            width: 84,
+            height: 84,
+        },
+        reward: RewardConfig {
+            forward_progress: 1.0,
+            alive_bonus: 0.01,
+            stall_penalty: -0.02,
+            death_penalty: -1.0,
+            stall_frames: 30,
+        },
+    };
+
+    let Err(err) = SmbControlEnv::from_config(cfg) else {
+        panic!("mismatched ROM should fail fast");
+    };
+
+    assert!(matches!(
+        err,
+        AiError::RomHashMismatch { expected, found }
+            if expected == expected_hash && found == found_hash
+    ));
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!("{digest:x}")
 }

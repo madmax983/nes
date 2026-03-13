@@ -1,8 +1,7 @@
-use std::{env, fmt::Write as _, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
-use nes_ai::snapshot::write_snapshot_bundle;
+use nes_ai::snapshot::{sha256_hex, write_snapshot_bundle};
 use nes_core::{NesCore, tas::TasMovie};
-use sha2::{Digest, Sha256};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = env::args().collect::<Vec<_>>();
@@ -26,13 +25,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     write_snapshot_bundle(&out_path, &rom_hash, "smb-control-v1", &core.save_state())?;
     println!("{}", out_path.display());
     Ok(())
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut out = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        let _ = write!(out, "{byte:02x}");
-    }
-    out
 }

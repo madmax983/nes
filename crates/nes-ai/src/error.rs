@@ -70,6 +70,12 @@ pub enum AiError {
         #[source]
         source: RecorderError,
     },
+    #[error("failed to read ROM '{path}': {source}")]
+    RomRead {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("ROM hash mismatch: expected {expected}, found {found}")]
     RomHashMismatch { expected: String, found: String },
 }

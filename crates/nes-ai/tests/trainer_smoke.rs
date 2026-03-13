@@ -1,8 +1,16 @@
+use burn_core::{
+    module::Module,
+    record::{DefaultRecorder, FileRecorder},
+};
+use burn_ndarray::NdArray;
+use burn_tensor::backend::Backend;
 use tempfile::tempdir;
 
 use nes_ai::{
     actions::ControlAction,
+    env::ObservationSnapshot,
     error::AiError,
+    model::HybridPolicyValueConfig,
     trainer::{TrainerConfig, action_from_arg, evaluate_random_policy, run_mock_ppo_smoke},
 };
 
@@ -42,12 +50,72 @@ fn ppo_smoke_writes_checkpoints_and_eval_artifacts() {
     };
 
     let trained = run_mock_ppo_smoke(&cfg, 2).unwrap();
+    let mut checkpoint_file = trained.checkpoint_paths[0].clone();
+    checkpoint_file.set_extension("mpk");
 
     assert_eq!(trained.checkpoint_paths.len(), 1);
     assert_eq!(trained.artifact_paths.len(), 2);
-    assert!(trained.checkpoint_paths[0].exists());
+    assert!(checkpoint_file.exists());
     assert!(trained.artifact_paths[0].tas_json_path.exists());
     assert!(trained.artifact_paths[0].run_json_path.exists());
+}
+
+#[test]
+fn ppo_smoke_returns_checkpoint_base_paths() {
+    let dir = tempdir().unwrap();
+    let cfg = TrainerConfig {
+        training_updates: 1,
+        checkpoint_interval: 1,
+        checkpoint_dir: Some(dir.path().join("checkpoints")),
+        ..TrainerConfig::smoke()
+    };
+
+    let trained = run_mock_ppo_smoke(&cfg, 1).unwrap();
+    let checkpoint_base = &trained.checkpoint_paths[0];
+    let mut checkpoint_file = checkpoint_base.clone();
+    checkpoint_file.set_extension("mpk");
+
+    assert!(
+        checkpoint_base.extension().is_none(),
+        "training should return checkpoint base paths that evaluate_smb_control can reload"
+    );
+    assert!(checkpoint_file.exists());
+}
+
+#[test]
+fn ppo_smoke_returned_checkpoint_base_round_trips_through_burn_load_file() {
+    let dir = tempdir().unwrap();
+    let cfg = TrainerConfig {
+        training_updates: 1,
+        checkpoint_interval: 1,
+        checkpoint_dir: Some(dir.path().join("checkpoints")),
+        ..TrainerConfig::smoke()
+    };
+
+    let trained = run_mock_ppo_smoke(&cfg, 1).unwrap();
+    let checkpoint_base = trained.checkpoint_paths[0].clone();
+    let checkpoint_file = checkpoint_base
+        .with_extension(<DefaultRecorder as FileRecorder<NdArray<f32>>>::file_extension());
+    let observation = ObservationSnapshot {
+        frame_stack: 4,
+        width: 20,
+        height: 20,
+        frames: vec![0.0; 4 * 20 * 20],
+        features: vec![0.0; 6],
+    };
+    let model_cfg =
+        HybridPolicyValueConfig::from_observation(&observation, ControlAction::action_count());
+    let device = <NdArray<f32> as Backend>::Device::default();
+    let recorder = DefaultRecorder::new();
+
+    assert!(checkpoint_file.exists());
+    assert!(
+        model_cfg
+            .init::<NdArray<f32>>(&device)
+            .load_file(checkpoint_base, &recorder, &device)
+            .is_ok(),
+        "returned checkpoint path should be reusable as evaluate_smb_control input"
+    );
 }
 
 #[test]
