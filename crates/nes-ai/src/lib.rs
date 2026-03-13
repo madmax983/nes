@@ -1,3 +1,7 @@
 pub mod actions;
+pub mod config;
 pub mod error;
+pub mod obs;
+pub mod profile;
+pub mod profiles;
 pub mod snapshot;
