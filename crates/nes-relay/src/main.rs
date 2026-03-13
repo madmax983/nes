@@ -616,39 +616,6 @@ mod tests {
         assert_eq!(net_sim.next_u64(), 7_273_575_876_580_499_574);
     }
 
-    #[test]
-    #[ignore = "Havoc DoS Attack"]
-    fn havoc_test_read_client_message_dos() {
-        let (mut client, server) = connected_pair();
-
-        let thread_handle = thread::spawn(move || {
-            // A streaming DoS payload using a very long string without allocating 100MB up-front to prevent CI OOMs.
-            for _ in 0..1_000_000 {
-                if client.write_all(b"{\"type\":\"ping\",\"nonce\":").is_err() {
-                    break;
-                }
-            }
-            let _ = client.write_all(b"0}\n");
-        });
-
-        let mut reader = BufReader::new(server);
-        let _ = read_client_message(&mut reader);
-        thread_handle.join().unwrap();
-    }
-
-    #[test]
-    #[ignore = "Havoc Memory/Overflow Attack"]
-    fn havoc_test_parse_args_overflow() {
-        // Create an input string that's an extremely long integer sequence to blow up standard string parsing
-        let large_number = "9".repeat(100_000);
-        let args = vec![
-            "--bind".to_owned(),
-            "0.0.0.0:9999".to_owned(),
-            "--latency-ms".to_owned(),
-            large_number,
-        ];
-        let _ = parse_args(args);
-    }
 
     proptest! {
         #[test]
@@ -867,47 +834,6 @@ mod tests {
         assert!(!guard.rooms.contains_key("room"));
     }
 
-    #[test]
-    #[ignore = "Havoc Concurrency Attack"]
-    fn havoc_test_cleanup_client_deadlock() {
-        use std::sync::{Arc, Mutex};
-        use std::thread;
-
-        let mut initial = RelayState::default();
-        let mut room_state = RoomState::default();
-        let (tx1, _rx1) = std::sync::mpsc::channel();
-        room_state.players.insert(1, tx1);
-        initial.rooms.insert("room".to_owned(), room_state);
-        let state = Arc::new(Mutex::new(initial));
-
-        let mut handles = vec![];
-        for _ in 0..10 {
-            let t_state = state.clone();
-            handles.push(thread::spawn(move || {
-                let _ = cleanup_client(&t_state, "room", 1);
-            }));
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-    }
-
-    #[test]
-    #[ignore = "Havoc Payload Crash Attack"]
-    fn havoc_test_forward_to_room_peers_large_payload() {
-        let (state, _, _) = room_with_two_players("duel");
-        let net_sim = make_net_sim(LinkCondition::default(), 58);
-
-        let large_string = "A".repeat(100_000); // 100KB string to prevent CI crashes while still testing payload handling
-
-        let message = ServerMessage::Error {
-            message: large_string,
-        };
-
-        // This might cause memory bloat or a crash depending on how it's handled internally
-        forward_to_room_peers(&state, &net_sim, "duel", 1, message).expect("forward");
-    }
 
     #[test]
     fn seed_entropy_varies_and_mixes_bits_with_pid_component() {
