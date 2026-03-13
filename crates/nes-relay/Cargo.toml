@@ -3,10 +3,6 @@ name = "nes-relay"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
-name = "nes_relay"
-path = "src/lib.rs"
-
 [dependencies]
 comfy-table = "7.1"
 crossterm = "0.28"
