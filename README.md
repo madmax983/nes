@@ -1,3 +1,5 @@
+# REQUIRES FEATURE NOVA
+
 # NES Emulator (Proof-Forward + MCP-First)
 
 This repository hosts a Rust NES emulator workspace focused on systems learning, deterministic behavior, and strong correctness checks.
