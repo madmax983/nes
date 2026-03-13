@@ -1411,4 +1411,41 @@ unexpected = "boom"
         assert!(super::compare_rom_hashes(a, b));
         assert!(!super::compare_rom_hashes(a, c));
     }
+
+    #[test]
+    fn select_profile_handles_multiple_matches_and_empty_matches() {
+        let dir = unique_temp_dir("select-profile-edge");
+        let pub1 = dir.join("pub1.toml");
+        let pub2 = dir.join("pub2.toml");
+
+        fs::write(
+            &pub1,
+            sample_profile_text()
+                .replace("abc123", "samehash")
+                .replace("smb-any", "pub1"),
+        )
+        .expect("pub1 write");
+
+        fs::write(
+            &pub2,
+            sample_profile_text()
+                .replace("abc123", "samehash")
+                .replace("smb-any", "pub2"),
+        )
+        .expect("pub2 write");
+
+        let profiles = load_profiles(&dir).expect("profiles should load");
+
+        let empty_err = select_profile(&profiles, "nomatch", None, false)
+            .expect_err("should fail with empty matches");
+        assert!(empty_err.contains("No RTA profile matched ROM hash nomatch"));
+        assert!(empty_err.contains("pub1"));
+        assert!(empty_err.contains("pub2"));
+
+        let multi_err = select_profile(&profiles, "samehash", None, false)
+            .expect_err("should fail with multiple matches");
+        assert!(multi_err.contains("Multiple RTA profiles matched ROM hash samehash"));
+        assert!(multi_err.contains("pub1"));
+        assert!(multi_err.contains("pub2"));
+    }
 }
