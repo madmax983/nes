@@ -616,7 +616,6 @@ mod tests {
         assert_eq!(net_sim.next_u64(), 7_273_575_876_580_499_574);
     }
 
-
     proptest! {
         #[test]
         fn havoc_test_parse_args_proptest(
@@ -833,7 +832,6 @@ mod tests {
         let guard = state.lock().expect("lock relay state");
         assert!(!guard.rooms.contains_key("room"));
     }
-
 
     #[test]
     fn seed_entropy_varies_and_mixes_bits_with_pid_component() {

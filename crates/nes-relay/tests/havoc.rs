@@ -23,7 +23,9 @@ fn havoc_test_read_client_message_dos() {
     let thread_handle = thread::spawn(move || {
         // A streaming DoS payload using a very long string without allocating 100MB up-front to prevent CI OOMs.
         for _ in 0..1_000_000 {
-            if client.write_all(b"{\"type\":\"ping\",\"nonce\":").is_err() { break; }
+            if client.write_all(b"{\"type\":\"ping\",\"nonce\":").is_err() {
+                break;
+            }
         }
         let _ = client.write_all(b"0}\n");
     });
