@@ -1,7 +1,11 @@
 use crate::bmp::encode_bmp;
 
 /// Renders a waveform of the given f32 audio samples into a BMP byte vector.
-pub fn render_waveform_bmp(samples: &[f32], width: usize, height: usize) -> Result<Vec<u8>, String> {
+pub fn render_waveform_bmp(
+    samples: &[f32],
+    width: usize,
+    height: usize,
+) -> Result<Vec<u8>, String> {
     if samples.is_empty() || width == 0 || height == 0 {
         return Err("Invalid dimensions or empty samples".to_string());
     }
@@ -13,10 +17,10 @@ pub fn render_waveform_bmp(samples: &[f32], width: usize, height: usize) -> Resu
     let center_y = height / 2;
     for x in 0..width {
         let idx = (center_y * width + x) * 4;
-        rgba[idx] = 50;     // R
+        rgba[idx] = 50; // R
         rgba[idx + 1] = 50; // G
         rgba[idx + 2] = 50; // B
-        rgba[idx + 3] = 255;// A
+        rgba[idx + 3] = 255; // A
     }
 
     // Determine how many samples per pixel width
@@ -36,8 +40,12 @@ pub fn render_waveform_bmp(samples: &[f32], width: usize, height: usize) -> Resu
         let mut min_val = f32::MAX;
         let mut max_val = f32::MIN;
         for &sample in &samples[start_idx..end_idx] {
-            if sample < min_val { min_val = sample; }
-            if sample > max_val { max_val = sample; }
+            if sample < min_val {
+                min_val = sample;
+            }
+            if sample > max_val {
+                max_val = sample;
+            }
         }
 
         // Clamp to [-1.0, 1.0]
@@ -53,10 +61,10 @@ pub fn render_waveform_bmp(samples: &[f32], width: usize, height: usize) -> Resu
 
         for y in y_start..=y_end {
             let idx = (y * width + x) * 4;
-            rgba[idx] = 0;      // R
-            rgba[idx + 1] = 255;// G
-            rgba[idx + 2] = 0;  // B
-            rgba[idx + 3] = 255;// A
+            rgba[idx] = 0; // R
+            rgba[idx + 1] = 255; // G
+            rgba[idx + 2] = 0; // B
+            rgba[idx + 3] = 255; // A
         }
     }
 
@@ -72,9 +80,7 @@ mod tests {
         // Create a sine wave
         let width = 100;
         let height = 50;
-        let samples: Vec<f32> = (0..width)
-            .map(|i| (i as f32 * 0.1).sin())
-            .collect();
+        let samples: Vec<f32> = (0..width).map(|i| (i as f32 * 0.1).sin()).collect();
 
         let result = render_waveform_bmp(&samples, width, height);
         assert!(result.is_ok(), "Expected render_waveform_bmp to return Ok");
@@ -82,6 +88,9 @@ mod tests {
 
         // Basic BMP validation
         assert_eq!(&bmp_data[0..2], b"BM", "Must be a valid BMP file");
-        assert!(bmp_data.len() > 54, "BMP must include header and pixel data");
+        assert!(
+            bmp_data.len() > 54,
+            "BMP must include header and pixel data"
+        );
     }
 }
