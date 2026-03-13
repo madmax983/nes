@@ -1359,91 +1359,7 @@ fn run() -> Result<(), String> {
         None
     };
 
-    let mut table = Table::new();
-    table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
-        Cell::new("Value").fg(TableColor::White),
-    ]);
-
-    table.add_row(vec![
-        Cell::new("ROM Path"),
-        Cell::new(session.rom_path.display().to_string()).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("ROM Info"),
-        Cell::new(format!(
-            "Mapper {}, PRG {} bytes, reset vector ${:04X}",
-            session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
-        )),
-    ]);
-    if let Some(config_path) = runtime.loaded_config_path.as_ref() {
-        table.add_row(vec![
-            Cell::new("Config"),
-            Cell::new(config_path.display().to_string()),
-        ]);
-    }
-    table.add_row(vec![
-        Cell::new("Controls"),
-        Cell::new(
-            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
-        ),
-    ]);
-    table.add_row(vec![
-        Cell::new("Menu"),
-        Cell::new(if native_menu_supported() {
-            "native menu bar + Esc overlay"
-        } else {
-            "Esc overlay only on this platform"
-        }),
-    ]);
-    table.add_row(vec![
-        Cell::new("Gamepad"),
-        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
-    ]);
-    match step_mode {
-        StepMode::Frame => {
-            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
-        }
-        StepMode::CpuBudget(steps) => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new(format!("cpu ({steps} instructions/frame)")),
-            ]);
-        }
-    }
-    if let Some(netplay) = runtime.netplay.as_ref() {
-        table.add_row(vec![
-            Cell::new("Netplay"),
-            Cell::new(format!(
-                "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
-                netplay.relay_addr,
-                netplay.room,
-                netplay.player,
-                netplay.input_delay_frames,
-                netplay.max_rollback_frames,
-                netplay.hash_check_every_frames
-            )),
-        ]);
-    }
-    if let Some(rta) = rta_manager.as_ref() {
-        table.add_row(vec![
-            Cell::new("RTA"),
-            Cell::new(format!(
-                "enabled profile='{}' calibrate={}",
-                rta.profile_id(),
-                rta.is_calibrating()
-            )),
-        ]);
-    }
-    #[cfg(feature = "nova")]
-    {
-        if runtime.auto_player_enabled {
-            table.add_row(vec![
-                Cell::new("Nova"),
-                Cell::new("Auto Player Chaos Fuzzing Enabled"),
-            ]);
-        }
-    }
+    let table = build_startup_table(&runtime, &session, &step_mode, rta_manager.as_ref());
 
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
     println!("{table}\n");
@@ -2739,6 +2655,101 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     } else {
         format!("Error: Failed to read ROM at '{}': {}", rom_path, err)
     }
+}
+
+fn build_startup_table(
+    runtime: &RuntimeConfig,
+    session: &LoadedRomSession,
+    step_mode: &StepMode,
+    rta_manager: Option<&RtaManager>,
+) -> Table {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("ROM Path"),
+        Cell::new(session.rom_path.display().to_string()).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("ROM Info"),
+        Cell::new(format!(
+            "Mapper {}, PRG {} bytes, reset vector ${:04X}",
+            session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
+        )),
+    ]);
+    if let Some(config_path) = runtime.loaded_config_path.as_ref() {
+        table.add_row(vec![
+            Cell::new("Config"),
+            Cell::new(config_path.display().to_string()),
+        ]);
+    }
+    table.add_row(vec![
+        Cell::new("Controls"),
+        Cell::new(
+            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
+        ),
+    ]);
+    table.add_row(vec![
+        Cell::new("Menu"),
+        Cell::new(if native_menu_supported() {
+            "native menu bar + Esc overlay"
+        } else {
+            "Esc overlay only on this platform"
+        }),
+    ]);
+    table.add_row(vec![
+        Cell::new("Gamepad"),
+        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
+    ]);
+    match step_mode {
+        StepMode::Frame => {
+            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
+        }
+        StepMode::CpuBudget(steps) => {
+            table.add_row(vec![
+                Cell::new("Step Mode"),
+                Cell::new(format!("cpu ({steps} instructions/frame)")),
+            ]);
+        }
+    }
+    if let Some(netplay) = runtime.netplay.as_ref() {
+        table.add_row(vec![
+            Cell::new("Netplay"),
+            Cell::new(format!(
+                "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
+                netplay.relay_addr,
+                netplay.room,
+                netplay.player,
+                netplay.input_delay_frames,
+                netplay.max_rollback_frames,
+                netplay.hash_check_every_frames
+            )),
+        ]);
+    }
+    if let Some(rta) = rta_manager.as_ref() {
+        table.add_row(vec![
+            Cell::new("RTA"),
+            Cell::new(format!(
+                "enabled profile='{}' calibrate={}",
+                rta.profile_id(),
+                rta.is_calibrating()
+            )),
+        ]);
+    }
+    #[cfg(feature = "nova")]
+    {
+        if runtime.auto_player_enabled {
+            table.add_row(vec![
+                Cell::new("Nova"),
+                Cell::new("Auto Player Chaos Fuzzing Enabled"),
+            ]);
+        }
+    }
+
+    table
 }
 
 #[cfg(test)]
