@@ -7,4 +7,6 @@ pub trait TaskProfile {
 
     fn config(&self) -> &AiProfileConfig;
     fn decode_features(&self, core: &NesCore) -> Self::Features;
+    fn encode_features(&self, features: &Self::Features) -> Vec<f32>;
+    fn feature_count(&self) -> usize;
 }

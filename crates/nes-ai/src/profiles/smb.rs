@@ -42,6 +42,21 @@ impl TaskProfile for SmbProfile {
             lives: core.read_memory(0x075A),
         }
     }
+
+    fn encode_features(&self, features: &Self::Features) -> Vec<f32> {
+        vec![
+            features.level_progress / 4_096.0,
+            features.horizontal_speed / 16.0,
+            features.vertical_speed / 16.0,
+            if features.airborne { 1.0 } else { 0.0 },
+            f32::from(features.player_state) / 16.0,
+            f32::from(features.lives) / 10.0,
+        ]
+    }
+
+    fn feature_count(&self) -> usize {
+        6
+    }
 }
 
 fn decode_signed_byte(value: u8) -> i16 {

@@ -6,6 +6,8 @@ use burn_nn::{
     pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig},
 };
 
+use crate::env::ObservationSnapshot;
+
 const MIN_OBSERVATION_DIM: usize = 20;
 
 #[derive(Config, Debug)]
@@ -20,6 +22,17 @@ pub struct HybridPolicyValueConfig {
 }
 
 impl HybridPolicyValueConfig {
+    #[must_use]
+    pub fn from_observation(observation: &ObservationSnapshot, action_count: usize) -> Self {
+        Self::new(
+            observation.frame_stack,
+            observation.features.len(),
+            action_count,
+        )
+        .with_observation_width(observation.width)
+        .with_observation_height(observation.height)
+    }
+
     #[must_use]
     pub fn init<B: Backend>(&self, device: &B::Device) -> HybridPolicyValueNet<B> {
         self.validate();

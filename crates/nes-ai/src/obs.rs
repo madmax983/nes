@@ -76,4 +76,13 @@ impl FrameStack {
     pub fn as_slices(&self) -> Vec<&[f32]> {
         self.frames.iter().map(Vec::as_slice).collect()
     }
+
+    #[must_use]
+    pub fn flattened(&self) -> Vec<f32> {
+        let mut out = Vec::with_capacity(self.frames.len() * self.frame_len);
+        for frame in &self.frames {
+            out.extend_from_slice(frame);
+        }
+        out
+    }
 }

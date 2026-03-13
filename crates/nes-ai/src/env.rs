@@ -19,6 +19,15 @@ pub struct StepOutput<F> {
     pub done: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObservationSnapshot {
+    pub frame_stack: usize,
+    pub width: usize,
+    pub height: usize,
+    pub frames: Vec<f32>,
+    pub features: Vec<f32>,
+}
+
 pub struct ProfileEnv<P>
 where
     P: TaskProfile,
@@ -30,6 +39,8 @@ where
     frame_stack: FrameStack,
     reward: RewardModel,
     recorder: TasRecorder,
+    episode_frames: u32,
+    episode_done: bool,
     stalled_frames: u32,
     last_features: Option<P::Features>,
 }
@@ -52,6 +63,8 @@ where
             ),
             reward: RewardModel::new(cfg.reward),
             recorder: TasRecorder::new(),
+            episode_frames: 0,
+            episode_done: false,
             stalled_frames: 0,
             last_features: None,
         }
@@ -66,6 +79,8 @@ where
         self.core.load_state(&self.snapshot.snapshot);
         self.recorder = TasRecorder::new();
         self.recorder.start();
+        self.episode_frames = 0;
+        self.episode_done = false;
         self.stalled_frames = 0;
         self.frame_stack = FrameStack::new(
             self.profile.config().frame_stack,
@@ -94,6 +109,9 @@ where
     /// Returns [`AiError`] if called before [`Self::reset`] or if controller/frame
     /// commands cannot be executed by the emulator core.
     pub fn step(&mut self, action: ControlAction) -> Result<StepOutput<P::Features>, AiError> {
+        if self.episode_done {
+            return Err(AiError::Unsupported("step after episode done"));
+        }
         let prev = self
             .last_features
             .clone()
@@ -103,11 +121,17 @@ where
             .execute(Command::SetControllerState(controller1_bits))
             .map_err(|_| AiError::Unsupported("step controller"))?;
 
+        let mut budget_done = false;
         for _ in 0..self.profile.config().frame_skip {
+            if self.episode_frames >= self.profile.config().max_episode_frames {
+                budget_done = true;
+                break;
+            }
             self.recorder.record_frame(controller1_bits);
             self.core
                 .execute(Command::StepFrame)
                 .map_err(|_| AiError::Unsupported("step frame"))?;
+            self.episode_frames = self.episode_frames.saturating_add(1);
         }
 
         let frame = downsample_grayscale(
@@ -124,11 +148,15 @@ where
             self.stalled_frames
                 .saturating_add(self.profile.config().frame_skip)
         };
-        let reward = self.reward.score(&prev, &next, self.stalled_frames);
+        let mut reward = self.reward.score(&prev, &next, self.stalled_frames);
+        reward.done = reward.done
+            || budget_done
+            || self.episode_frames >= self.profile.config().max_episode_frames;
         self.last_features = Some(next.clone());
+        self.episode_done = reward.done;
 
         Ok(StepOutput {
-            done: reward.done,
+            done: self.episode_done,
             reward,
             features: next,
         })
@@ -139,14 +167,39 @@ where
         &self.core
     }
 
+    /// Returns the current observation as flattened stacked frames and encoded numeric features.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError::Unsupported`] if called before [`Self::reset`].
+    pub fn observation(&self) -> Result<ObservationSnapshot, AiError> {
+        let features = self
+            .last_features
+            .as_ref()
+            .ok_or(AiError::Unsupported("observation before reset"))?;
+
+        Ok(ObservationSnapshot {
+            frame_stack: self.profile.config().frame_stack,
+            width: self.profile.config().observation.width,
+            height: self.profile.config().observation.height,
+            frames: self.frame_stack.flattened(),
+            features: self.profile.encode_features(features),
+        })
+    }
+
     #[must_use]
-    pub fn finish_episode(&mut self, total_reward: f32) -> EpisodeMetadata {
+    pub fn recorded_movie(&self) -> &nes_core::tas::TasMovie {
+        self.recorder.movie()
+    }
+
+    #[must_use]
+    pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         EpisodeMetadata {
             profile_id: self.profile.config().id.clone(),
             snapshot_id: self.snapshot.snapshot_id.clone(),
             rom_hash: self.snapshot.rom_hash.clone(),
             total_reward,
-            episode_frames: self.recorder.movie().total_frames(),
+            episode_frames: u64::from(self.episode_frames),
             final_state_hash: self.core.state_hash(),
         }
     }

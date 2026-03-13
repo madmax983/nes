@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use burn_core::record::RecorderError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -57,6 +58,18 @@ pub enum AiError {
     },
     #[error("invalid artifact prefix '{prefix}'")]
     ArtifactPrefixInvalid { prefix: String },
+    #[error("failed to save checkpoint '{path}': {source}")]
+    CheckpointSave {
+        path: PathBuf,
+        #[source]
+        source: RecorderError,
+    },
+    #[error("failed to load checkpoint '{path}': {source}")]
+    CheckpointLoad {
+        path: PathBuf,
+        #[source]
+        source: RecorderError,
+    },
     #[error("ROM hash mismatch: expected {expected}, found {found}")]
     RomHashMismatch { expected: String, found: String },
 }
