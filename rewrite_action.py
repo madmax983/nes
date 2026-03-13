@@ -73,7 +73,8 @@ body = content[fn_body_start:fn_body_end]
 
 for v in vars_to_replace:
     # Use regex to only replace whole words, not if part of another word or if it already has ctx.
-    body = re.sub(r'\b(?<!ctx\.)' + v + r'\b', f'ctx.{v}', body)
+    # make sure not to replace inside a macro or import that accidentally matched
+    body = re.sub(r'\b(?<!ctx\.)(?<!::)' + v + r'\b', f'ctx.{v}', body)
 
 content = content[:fn_body_start] + body + content[fn_body_end:]
 
