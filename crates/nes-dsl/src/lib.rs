@@ -178,6 +178,62 @@ enum Expr {
     Symbol(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum OperandSyntax {
+    Implied,
+    Accumulator,
+    Immediate(Expr),
+    IndirectX(Expr),
+    IndirectY(Expr),
+    Indirect(Expr),
+    AbsoluteX(Expr),
+    AbsoluteY(Expr),
+    AbsoluteOrZeroPage(Expr),
+}
+
+fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, DslError> {
+    if operand.is_empty() {
+        return Ok(OperandSyntax::Implied);
+    }
+    if operand.eq_ignore_ascii_case("A") {
+        return Ok(OperandSyntax::Accumulator);
+    }
+    if let Some(raw) = operand.strip_prefix('#') {
+        return Ok(OperandSyntax::Immediate(parse_expr(raw.trim(), line_no)?));
+    }
+    if let Some(inner) = operand
+        .strip_prefix('(')
+        .and_then(|v| v.strip_suffix(",X)"))
+    {
+        return Ok(OperandSyntax::IndirectX(parse_expr(inner.trim(), line_no)?));
+    }
+    if let Some(inner) = operand
+        .strip_prefix('(')
+        .and_then(|v| v.strip_suffix("),Y"))
+    {
+        return Ok(OperandSyntax::IndirectY(parse_expr(inner.trim(), line_no)?));
+    }
+    if let Some(inner) = operand.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
+        return Ok(OperandSyntax::Indirect(parse_expr(inner.trim(), line_no)?));
+    }
+    if let Some(prefix) = operand.strip_suffix(",X") {
+        return Ok(OperandSyntax::AbsoluteX(parse_expr(
+            prefix.trim(),
+            line_no,
+        )?));
+    }
+    if let Some(prefix) = operand.strip_suffix(",Y") {
+        return Ok(OperandSyntax::AbsoluteY(parse_expr(
+            prefix.trim(),
+            line_no,
+        )?));
+    }
+    Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(
+        operand.trim(),
+        line_no,
+    )?))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AddressingMode {
     Implied,
@@ -490,99 +546,48 @@ impl Assembler {
             return Ok(());
         }
 
-        if operand.is_empty() {
-            let opcode = opcode_for(&mnemonic, AddressingMode::Implied).ok_or_else(|| {
-                unknown_or_mode_error(line_no, &mnemonic, AddressingMode::Implied)
-            })?;
-            self.emit_u8(opcode)?;
-            return Ok(());
-        }
+        let syntax = parse_operand_syntax(operand, line_no)?;
 
-        if operand.eq_ignore_ascii_case("A") {
-            let opcode = opcode_for(&mnemonic, AddressingMode::Accumulator).ok_or_else(|| {
-                unknown_or_mode_error(line_no, &mnemonic, AddressingMode::Accumulator)
-            })?;
-            self.emit_u8(opcode)?;
-            return Ok(());
-        }
-
-        if let Some(raw) = operand.strip_prefix('#') {
-            let mode = AddressingMode::Immediate;
-            let opcode = opcode_for(&mnemonic, mode)
-                .ok_or_else(|| unknown_or_mode_error(line_no, &mnemonic, mode))?;
-            self.emit_u8(opcode)?;
-            self.emit_expr_byte(parse_expr(raw.trim(), line_no)?, line_no, FixupKind::Byte)?;
-            return Ok(());
-        }
-
-        if let Some(inner) = operand
-            .strip_prefix('(')
-            .and_then(|v| v.strip_suffix(",X)"))
-        {
-            let mode = AddressingMode::IndirectX;
-            let opcode = opcode_for(&mnemonic, mode)
-                .ok_or_else(|| unknown_or_mode_error(line_no, &mnemonic, mode))?;
-            self.emit_u8(opcode)?;
-            self.emit_expr_byte(parse_expr(inner.trim(), line_no)?, line_no, FixupKind::Byte)?;
-            return Ok(());
-        }
-
-        if let Some(inner) = operand
-            .strip_prefix('(')
-            .and_then(|v| v.strip_suffix("),Y"))
-        {
-            let mode = AddressingMode::IndirectY;
-            let opcode = opcode_for(&mnemonic, mode)
-                .ok_or_else(|| unknown_or_mode_error(line_no, &mnemonic, mode))?;
-            self.emit_u8(opcode)?;
-            self.emit_expr_byte(parse_expr(inner.trim(), line_no)?, line_no, FixupKind::Byte)?;
-            return Ok(());
-        }
-
-        if let Some(inner) = operand.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
-            let mode = AddressingMode::Indirect;
-            let opcode = opcode_for(&mnemonic, mode)
-                .ok_or_else(|| unknown_or_mode_error(line_no, &mnemonic, mode))?;
-            self.emit_u8(opcode)?;
-            self.emit_expr_word(parse_expr(inner.trim(), line_no)?, line_no)?;
-            return Ok(());
-        }
-
-        let (expr_text, indexed_mode) = if let Some(prefix) = operand.strip_suffix(",X") {
-            (prefix.trim_end(), Some(AddressingMode::AbsoluteX))
-        } else if let Some(prefix) = operand.strip_suffix(",Y") {
-            (prefix.trim_end(), Some(AddressingMode::AbsoluteY))
-        } else {
-            (operand, None)
-        };
-
-        let expr = parse_expr(expr_text.trim(), line_no)?;
-        let (mode, kind) = match indexed_mode {
-            Some(AddressingMode::AbsoluteX) => {
+        let (mode, kind, expr_opt) = match syntax {
+            OperandSyntax::Implied => (AddressingMode::Implied, None, None),
+            OperandSyntax::Accumulator => (AddressingMode::Accumulator, None, None),
+            OperandSyntax::Immediate(expr) => {
+                (AddressingMode::Immediate, Some(FixupKind::Byte), Some(expr))
+            }
+            OperandSyntax::IndirectX(expr) => {
+                (AddressingMode::IndirectX, Some(FixupKind::Byte), Some(expr))
+            }
+            OperandSyntax::IndirectY(expr) => {
+                (AddressingMode::IndirectY, Some(FixupKind::Byte), Some(expr))
+            }
+            OperandSyntax::Indirect(expr) => {
+                (AddressingMode::Indirect, Some(FixupKind::Word), Some(expr))
+            }
+            OperandSyntax::AbsoluteX(expr) => {
                 if self.can_use_zeropage(&expr)
                     && opcode_for(&mnemonic, AddressingMode::ZeroPageX).is_some()
                 {
-                    (AddressingMode::ZeroPageX, FixupKind::Byte)
+                    (AddressingMode::ZeroPageX, Some(FixupKind::Byte), Some(expr))
                 } else {
-                    (AddressingMode::AbsoluteX, FixupKind::Word)
+                    (AddressingMode::AbsoluteX, Some(FixupKind::Word), Some(expr))
                 }
             }
-            Some(AddressingMode::AbsoluteY) => {
+            OperandSyntax::AbsoluteY(expr) => {
                 if self.can_use_zeropage(&expr)
                     && opcode_for(&mnemonic, AddressingMode::ZeroPageY).is_some()
                 {
-                    (AddressingMode::ZeroPageY, FixupKind::Byte)
+                    (AddressingMode::ZeroPageY, Some(FixupKind::Byte), Some(expr))
                 } else {
-                    (AddressingMode::AbsoluteY, FixupKind::Word)
+                    (AddressingMode::AbsoluteY, Some(FixupKind::Word), Some(expr))
                 }
             }
-            _ => {
+            OperandSyntax::AbsoluteOrZeroPage(expr) => {
                 if self.can_use_zeropage(&expr)
                     && opcode_for(&mnemonic, AddressingMode::ZeroPage).is_some()
                 {
-                    (AddressingMode::ZeroPage, FixupKind::Byte)
+                    (AddressingMode::ZeroPage, Some(FixupKind::Byte), Some(expr))
                 } else {
-                    (AddressingMode::Absolute, FixupKind::Word)
+                    (AddressingMode::Absolute, Some(FixupKind::Word), Some(expr))
                 }
             }
         };
@@ -590,11 +595,16 @@ impl Assembler {
         let opcode = opcode_for(&mnemonic, mode)
             .ok_or_else(|| unknown_or_mode_error(line_no, &mnemonic, mode))?;
         self.emit_u8(opcode)?;
-        match kind {
-            FixupKind::Byte => self.emit_expr_byte(expr, line_no, FixupKind::Byte),
-            FixupKind::Word => self.emit_expr_word(expr, line_no),
-            FixupKind::Relative => unreachable!("relative mode handled earlier"),
+
+        if let (Some(kind), Some(expr)) = (kind, expr_opt) {
+            match kind {
+                FixupKind::Byte => self.emit_expr_byte(expr, line_no, FixupKind::Byte)?,
+                FixupKind::Word => self.emit_expr_word(expr, line_no)?,
+                FixupKind::Relative => unreachable!("relative mode handled earlier"),
+            }
         }
+
+        Ok(())
     }
 
     fn can_use_zeropage(&self, expr: &Expr) -> bool {
