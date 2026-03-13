@@ -605,10 +605,32 @@ impl NesCore {
         self.controller2_bits
     }
 
-    /// Loads raw bytes into CPU memory image.
+    /// Loads raw bytes directly into the CPU's memory image.
     ///
-    /// When writing into PRG space (`>= 0x8000`), active mapper state is
-    /// cleared so raw memory execution semantics remain explicit.
+    /// This bypasses standard cartridge loading and mapper interception, allowing
+    /// you to construct synthetic memory environments. It is extremely useful for
+    /// writing isolated instruction tests, executing headless machine code snippets,
+    /// or bootstrapping a minimal runtime without needing a full `.nes` file header.
+    ///
+    /// When writing into PRG space (`>= 0x8000`), any previously active mapper state
+    /// is intentionally cleared and the default reset vector is reset. This guarantees
+    /// that raw memory execution semantics remain explicitly predictable.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command};
+    ///
+    /// let mut core = NesCore::new();
+    /// // Load a simple program: LDA #$42
+    /// core.load_cpu_bytes(0xC000, &[0xA9, 0x42]);
+    ///
+    /// // Execute a single instruction
+    /// core.execute(Command::StepCpu).unwrap();
+    ///
+    /// // The accumulator should now hold the loaded literal
+    /// assert_eq!(core.cpu_a(), 0x42);
+    /// ```
     pub fn load_cpu_bytes(&mut self, start: u16, bytes: &[u8]) {
         if start >= 0x8000 {
             self.mapper = None;
