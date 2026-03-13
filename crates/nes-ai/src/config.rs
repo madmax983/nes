@@ -28,7 +28,7 @@ pub struct ObservationConfig {
     pub height: usize,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RewardConfig {
     pub forward_progress: f32,

@@ -37,6 +37,26 @@ pub enum AiError {
     },
     #[error("unsupported snapshot bundle version: expected {expected}, found {found}")]
     SnapshotVersionMismatch { expected: u32, found: u32 },
+    #[error("failed to create artifact directory '{path}': {source}")]
+    ArtifactDirCreate {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to serialize {kind}: {source}")]
+    ArtifactSerialize {
+        kind: &'static str,
+        #[source]
+        source: serde_json::Error,
+    },
+    #[error("failed to write artifact '{path}': {source}")]
+    ArtifactWrite {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("invalid artifact prefix '{prefix}'")]
+    ArtifactPrefixInvalid { prefix: String },
     #[error("ROM hash mismatch: expected {expected}, found {found}")]
     RomHashMismatch { expected: String, found: String },
 }
