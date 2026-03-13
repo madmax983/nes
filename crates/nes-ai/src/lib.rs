@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod config;
+pub mod env;
 pub mod episode;
 pub mod error;
 pub mod obs;
