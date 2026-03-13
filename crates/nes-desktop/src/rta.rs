@@ -248,8 +248,10 @@ pub fn compute_rom_hash(rom_bytes: &[u8]) -> String {
     out
 }
 
-fn normalize_hash(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
+/// **Performance optimization:** Directly compares strings case-insensitively, avoiding
+/// unnecessary heap allocations that would occur from creating lowercased `String` copies.
+pub fn compare_rom_hashes(a: &str, b: &str) -> bool {
+    a.trim().eq_ignore_ascii_case(b.trim())
 }
 
 pub fn load_profiles(dir: &Path) -> Result<Vec<LoadedProfile>, String> {
@@ -319,7 +321,6 @@ pub fn select_profile(
         });
     }
 
-    let normalized_hash = normalize_hash(rom_hash);
     let mut matches = profiles
         .iter()
         .filter(|profile| {
@@ -327,36 +328,36 @@ pub fn select_profile(
                 .profile
                 .rom_hashes
                 .iter()
-                .any(|value| normalize_hash(value) == normalized_hash)
+                .any(|value| compare_rom_hashes(value, rom_hash))
         })
-        .cloned()
         .collect::<Vec<_>>();
 
     if matches.is_empty() {
         let known = profiles
             .iter()
-            .map(|profile| profile.profile.id.clone())
+            .map(|profile| profile.profile.id.as_str())
             .collect::<Vec<_>>()
             .join(", ");
         return Err(format!(
-            "No RTA profile matched ROM hash {normalized_hash}. Known profiles: [{}]",
+            "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
             known
         ));
     }
     if matches.len() > 1 {
         let conflict = matches
             .iter()
-            .map(|profile| profile.profile.id.clone())
+            .map(|profile| profile.profile.id.as_str())
             .collect::<Vec<_>>()
             .join(", ");
         return Err(format!(
-            "Multiple RTA profiles matched ROM hash {normalized_hash}: {conflict}"
+            "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
     }
 
     let selected = matches
         .pop()
-        .expect("non-empty matches must have one entry");
+        .expect("non-empty matches must have one entry")
+        .clone();
     if !allow_draft && selected.profile.status == ProfileStatus::Draft {
         return Err(format!(
             "RTA profile '{}' is draft and cannot be used in strict mode",
@@ -1016,7 +1017,7 @@ impl CalibrationRecorder {
             category: None,
             version: Some("draft-v1".to_owned()),
             status: ProfileStatus::Draft,
-            rom_hashes: vec![normalize_hash(rom_hash)],
+            rom_hashes: vec![rom_hash.trim().to_ascii_lowercase()],
             timer: TimerPolicy::default(),
             invalidation: InvalidationPolicy::default(),
             split_policy: SplitPolicy::default(),
@@ -1399,5 +1400,52 @@ unexpected = "boom"
                 .chars()
                 .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase())
         );
+    }
+
+    #[test]
+    fn compare_rom_hashes_ignores_case_without_allocation() {
+        let a = "abc123DEF";
+        let b = "  ABC123def  ";
+        let c = "abc123DEX";
+
+        assert!(super::compare_rom_hashes(a, b));
+        assert!(!super::compare_rom_hashes(a, c));
+    }
+
+    #[test]
+    fn select_profile_handles_multiple_matches_and_empty_matches() {
+        let dir = unique_temp_dir("select-profile-edge");
+        let pub1 = dir.join("pub1.toml");
+        let pub2 = dir.join("pub2.toml");
+
+        fs::write(
+            &pub1,
+            sample_profile_text()
+                .replace("abc123", "samehash")
+                .replace("smb-any", "pub1"),
+        )
+        .expect("pub1 write");
+
+        fs::write(
+            &pub2,
+            sample_profile_text()
+                .replace("abc123", "samehash")
+                .replace("smb-any", "pub2"),
+        )
+        .expect("pub2 write");
+
+        let profiles = load_profiles(&dir).expect("profiles should load");
+
+        let empty_err = select_profile(&profiles, "nomatch", None, false)
+            .expect_err("should fail with empty matches");
+        assert!(empty_err.contains("No RTA profile matched ROM hash nomatch"));
+        assert!(empty_err.contains("pub1"));
+        assert!(empty_err.contains("pub2"));
+
+        let multi_err = select_profile(&profiles, "samehash", None, false)
+            .expect_err("should fail with multiple matches");
+        assert!(multi_err.contains("Multiple RTA profiles matched ROM hash samehash"));
+        assert!(multi_err.contains("pub1"));
+        assert!(multi_err.contains("pub2"));
     }
 }
