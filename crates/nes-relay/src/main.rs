@@ -11,11 +11,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use nes_netplay::{ClientMessage, ServerMessage};
 
-const DEFAULT_BIND_ADDR: &str = "127.0.0.1:4545";
-const DEFAULT_LATENCY_MS: u64 = 0;
-const DEFAULT_JITTER_MS: u64 = 0;
-const DEFAULT_LOSS_PCT: u8 = 0;
-const DEFAULT_REORDER_PCT: u8 = 0;
+use nes_relay::config::{LinkCondition, RelayArgs, parse_args};
 
 #[derive(Default)]
 struct RelayState {
@@ -25,31 +21,6 @@ struct RelayState {
 #[derive(Default)]
 struct RoomState {
     players: HashMap<u8, Sender<ServerMessage>>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct LinkCondition {
-    pub latency_ms: u64,
-    pub jitter_ms: u64,
-    pub loss_pct: u8,
-    pub reorder_pct: u8,
-}
-
-impl Default for LinkCondition {
-    fn default() -> Self {
-        Self {
-            latency_ms: DEFAULT_LATENCY_MS,
-            jitter_ms: DEFAULT_JITTER_MS,
-            loss_pct: DEFAULT_LOSS_PCT,
-            reorder_pct: DEFAULT_REORDER_PCT,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RelayArgs {
-    pub bind_addr: String,
-    pub link: LinkCondition,
 }
 
 struct RelayNetSim {
@@ -189,122 +160,6 @@ fn run() -> Result<(), String> {
         });
     }
     Ok(())
-}
-
-pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
-    let mut parsed = RelayArgs {
-        bind_addr: DEFAULT_BIND_ADDR.to_owned(),
-        link: LinkCondition::default(),
-    };
-    let mut idx = 0_usize;
-    while idx < args.len() {
-        let arg = &args[idx];
-        if arg == "--help" || arg == "-h" {
-            return Err(format!(
-                "Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: {DEFAULT_BIND_ADDR}"
-            ));
-        }
-        if arg == "--bind" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --bind".to_owned());
-            };
-            parsed.bind_addr = value.clone();
-            idx += 2;
-            continue;
-        }
-        if arg == "--latency-ms" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --latency-ms".to_owned());
-            };
-            parsed.link.latency_ms = parse_u64_arg(value, "--latency-ms")?;
-            idx += 2;
-            continue;
-        }
-        if arg == "--jitter-ms" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --jitter-ms".to_owned());
-            };
-            parsed.link.jitter_ms = parse_u64_arg(value, "--jitter-ms")?;
-            idx += 2;
-            continue;
-        }
-        if arg == "--loss-pct" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --loss-pct".to_owned());
-            };
-            parsed.link.loss_pct = parse_percent_arg(value, "--loss-pct")?;
-            idx += 2;
-            continue;
-        }
-        if arg == "--reorder-pct" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --reorder-pct".to_owned());
-            };
-            parsed.link.reorder_pct = parse_percent_arg(value, "--reorder-pct")?;
-            idx += 2;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--bind=") {
-            if value.is_empty() {
-                return Err("missing value after --bind=".to_owned());
-            }
-            parsed.bind_addr = value.to_owned();
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--latency-ms=") {
-            if value.is_empty() {
-                return Err("missing value after --latency-ms=".to_owned());
-            }
-            parsed.link.latency_ms = parse_u64_arg(value, "--latency-ms")?;
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--jitter-ms=") {
-            if value.is_empty() {
-                return Err("missing value after --jitter-ms=".to_owned());
-            }
-            parsed.link.jitter_ms = parse_u64_arg(value, "--jitter-ms")?;
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--loss-pct=") {
-            if value.is_empty() {
-                return Err("missing value after --loss-pct=".to_owned());
-            }
-            parsed.link.loss_pct = parse_percent_arg(value, "--loss-pct")?;
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--reorder-pct=") {
-            if value.is_empty() {
-                return Err("missing value after --reorder-pct=".to_owned());
-            }
-            parsed.link.reorder_pct = parse_percent_arg(value, "--reorder-pct")?;
-            idx += 1;
-            continue;
-        }
-        return Err(format!(
-            "unknown argument '{arg}'. Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]"
-        ));
-    }
-    Ok(parsed)
-}
-
-pub fn parse_u64_arg(value: &str, flag: &str) -> Result<u64, String> {
-    value
-        .parse::<u64>()
-        .map_err(|_| format!("{flag} must be a non-negative integer"))
-}
-
-pub fn parse_percent_arg(value: &str, flag: &str) -> Result<u8, String> {
-    let parsed = value
-        .parse::<u8>()
-        .map_err(|_| format!("{flag} must be an integer in [0, 100]"))?;
-    if parsed > 100 {
-        return Err(format!("{flag} must be in [0, 100]"));
-    }
-    Ok(parsed)
 }
 
 fn handle_client(
@@ -531,9 +386,8 @@ mod tests {
     use nes_netplay::{ClientMessage, ServerMessage};
 
     use super::{
-        DEFAULT_BIND_ADDR, LinkCondition, RelayArgs, RelayNetSim, RelayState, RoomState,
-        build_startup_table, cleanup_client, forward_to_room_peers, handle_client, parse_args,
-        read_client_message,
+        LinkCondition, RelayArgs, RelayNetSim, RelayState, RoomState, build_startup_table,
+        cleanup_client, forward_to_room_peers, handle_client, parse_args, read_client_message,
     };
 
     fn make_net_sim(link: LinkCondition, seed: u64) -> Arc<RelayNetSim> {
@@ -631,7 +485,7 @@ mod tests {
     #[test]
     fn parse_args_defaults_to_zero_faults() {
         let parsed = parse_args(Vec::new()).expect("parse default args");
-        assert_eq!(parsed.bind_addr, DEFAULT_BIND_ADDR);
+        assert_eq!(parsed.bind_addr, "127.0.0.1:4545");
         assert_eq!(parsed.link.latency_ms, 0);
         assert_eq!(parsed.link.jitter_ms, 0);
         assert_eq!(parsed.link.loss_pct, 0);
@@ -650,76 +504,6 @@ mod tests {
         assert!(short_help.contains("Usage:"));
         assert!(short_help.contains("Default bind:"));
         assert!(!short_help.contains("unknown argument"));
-    }
-
-    #[test]
-    fn parse_args_rejects_missing_split_flag_values() {
-        for flag in [
-            "--bind",
-            "--latency-ms",
-            "--jitter-ms",
-            "--loss-pct",
-            "--reorder-pct",
-        ] {
-            let err = parse_args(vec![flag.to_owned()]).expect_err("missing value must fail");
-            assert!(err.contains("missing value"), "flag={flag} err={err}");
-        }
-    }
-
-    #[test]
-    fn parse_args_rejects_empty_equals_flag_values() {
-        for flag in [
-            "--bind=",
-            "--latency-ms=",
-            "--jitter-ms=",
-            "--loss-pct=",
-            "--reorder-pct=",
-        ] {
-            let err = parse_args(vec![flag.to_owned()]).expect_err("missing value must fail");
-            assert!(err.contains("missing value"), "flag={flag} err={err}");
-        }
-    }
-
-    #[test]
-    fn parse_args_rejects_invalid_numbers_and_unknown_flags() {
-        let latency_err = parse_args(vec!["--latency-ms=not-a-number".to_owned()])
-            .expect_err("invalid latency must fail");
-        assert!(latency_err.contains("non-negative integer"));
-
-        let loss_err =
-            parse_args(vec!["--loss-pct=101".to_owned()]).expect_err("percent over 100 must fail");
-        assert!(loss_err.contains("[0, 100]"));
-
-        let unknown =
-            parse_args(vec!["--definitely-not-a-flag".to_owned()]).expect_err("unknown flag");
-        assert!(unknown.contains("unknown argument"));
-    }
-
-    #[test]
-    fn parse_args_accepts_100_percent_values() {
-        let parsed = parse_args(vec![
-            "--loss-pct=100".to_owned(),
-            "--reorder-pct=100".to_owned(),
-        ])
-        .expect("100 percent should parse");
-        assert_eq!(parsed.link.loss_pct, 100);
-        assert_eq!(parsed.link.reorder_pct, 100);
-    }
-
-    #[test]
-    fn parse_args_mixed_equals_and_split_flags_progress_index_correctly() {
-        let parsed = parse_args(vec![
-            "--bind=127.0.0.1:1111".to_owned(),
-            "--latency-ms".to_owned(),
-            "55".to_owned(),
-            "--reorder-pct".to_owned(),
-            "11".to_owned(),
-            "--bind=127.0.0.1:2222".to_owned(),
-        ])
-        .expect("mixed syntax should parse");
-        assert_eq!(parsed.bind_addr, "127.0.0.1:2222");
-        assert_eq!(parsed.link.latency_ms, 55);
-        assert_eq!(parsed.link.reorder_pct, 11);
     }
 
     #[test]
@@ -780,7 +564,9 @@ mod tests {
         let thread_handle = thread::spawn(move || {
             // A streaming DoS payload using a very long string without allocating 100MB up-front to prevent CI OOMs.
             for _ in 0..1_000_000 {
-                if client.write_all(b"{\"type\":\"ping\",\"nonce\":").is_err() { break; }
+                if client.write_all(b"{\"type\":\"ping\",\"nonce\":").is_err() {
+                    break;
+                }
             }
             let _ = client.write_all(b"0}\n");
         });

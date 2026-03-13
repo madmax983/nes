@@ -1201,15 +1201,14 @@ impl Ppu {
     fn write_ppu_data(&mut self, addr: u16, value: u8) {
         let mut changed = false;
         match addr & PPU_ADDR_MASK {
-            0x0000..=0x1FFF => {
-                if self.chr_writable {
-                    let index = addr as usize;
-                    if self.chr[index] != value {
-                        self.chr[index] = value;
-                        changed = true;
-                    }
+            0x0000..=0x1FFF if self.chr_writable => {
+                let index = addr as usize;
+                if self.chr[index] != value {
+                    self.chr[index] = value;
+                    changed = true;
                 }
             }
+            0x0000..=0x1FFF => {}
             0x2000..=0x3EFF => {
                 let index = self.nametable_index(addr);
                 if self.nametable_ram[index] != value {

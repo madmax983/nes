@@ -105,10 +105,7 @@ fn run() -> Result<(), McpError> {
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
 
-    loop {
-        let Some(payload) = read_stdio_message(&mut reader)? else {
-            break;
-        };
+    while let Some(payload) = read_stdio_message(&mut reader)? {
         let Some(response) = handle_message(&mut state, &payload) else {
             continue;
         };

@@ -5,7 +5,7 @@ edition = "2024"
 
 [lib]
 name = "nes_relay"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [dependencies]
 comfy-table = "7.1"
