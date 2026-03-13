@@ -270,3 +270,35 @@ fn expected_frame_len(width: u32, height: u32) -> Option<usize> {
     let height = usize::try_from(height).ok()?;
     width.checked_mul(height)?.checked_mul(4)
 }
+
+#[cfg(test)]
+mod havoc_loom_output {
+    use super::*;
+    use loom::thread;
+    use loom::sync::Arc;
+
+    #[test]
+    fn havoc_loom_publish_frame_contention() {
+        loom::model(|| {
+            let width = 256;
+            let height = 240;
+            let rgba = vec![0; width as usize * height as usize * 4];
+
+            let t1 = thread::spawn(move || {
+                publish_frame(width, height, rgba.clone());
+            });
+
+            let t2 = thread::spawn(|| {
+                latest_output_metadata();
+            });
+
+            let t3 = thread::spawn(|| {
+                frame_chunk(1);
+            });
+
+            t1.join().unwrap();
+            t2.join().unwrap();
+            t3.join().unwrap();
+        });
+    }
+}

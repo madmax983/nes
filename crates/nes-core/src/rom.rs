@@ -460,3 +460,17 @@ mod havoc_fuzz_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_rom {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_parse_ines(raw in proptest::collection::vec(any::<u8>(), 0..1024)) {
+            let _ = parse_ines(&raw);
+        }
+    }
+}

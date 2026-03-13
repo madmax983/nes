@@ -145,3 +145,67 @@ fn daemon_stdio_round_trip_supports_initialize_and_tools() {
         json!("emulator_state")
     );
 }
+
+#[test]
+fn havoc_crash_mcp_daemon_bad_json() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nes-mcp"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn nes-mcp daemon");
+
+    let payload = b"Content-Length: 5\r\n\r\n{bad}";
+    {
+        let stdin = child.stdin.as_mut().expect("child stdin");
+        stdin
+            .write_all(payload)
+            .expect("write bad payload");
+        stdin.flush().expect("flush stdin");
+    }
+    drop(child.stdin.take());
+
+    let mut stdout = Vec::new();
+    child
+        .stdout
+        .take()
+        .expect("child stdout")
+        .read_to_end(&mut stdout)
+        .expect("read daemon responses");
+
+    let status = child.wait().expect("wait on daemon");
+    assert!(status.success(), "daemon exited with status: {status}");
+
+    let responses = parse_responses(&stdout);
+    assert_eq!(responses.len(), 1);
+    assert_eq!(responses[0]["error"]["code"], json!(-32700));
+}
+
+#[test]
+fn havoc_crash_mcp_daemon_bad_json_payload() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nes-mcp"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn nes-mcp daemon");
+
+    let payload = b"Content-Length: 1000\r\n\r\n{bad}";
+    {
+        let stdin = child.stdin.as_mut().expect("child stdin");
+        stdin
+            .write_all(payload)
+            .expect("write bad payload");
+        stdin.flush().expect("flush stdin");
+    }
+    drop(child.stdin.take());
+
+    let mut stdout = Vec::new();
+    child
+        .stdout
+        .take()
+        .expect("child stdout")
+        .read_to_end(&mut stdout)
+        .expect("read daemon responses");
+
+    let status = child.wait().expect("wait on daemon");
+    assert!(!status.success());
+}

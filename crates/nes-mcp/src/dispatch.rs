@@ -1153,3 +1153,46 @@ mod havoc_fuzz_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_dispatch {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_parse_integer(raw in ".*") {
+            let _ = parse_integer(&raw);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_loom_dispatch {
+    use super::*;
+    use loom::thread;
+
+    #[test]
+    fn havoc_loom_save_state_contention() {
+        loom::model(|| {
+            let mut core = nes_core::NesCore::new();
+            let mut core2 = nes_core::NesCore::new();
+            let mut params1 = ToolParams::new();
+            params1.insert("slot".to_owned(), "slot1".to_owned());
+            let mut params2 = ToolParams::new();
+            params2.insert("slot".to_owned(), "slot1".to_owned());
+
+            let t1 = thread::spawn(move || {
+                let _ = dispatch_tool(&mut core, "save_state", &params1);
+            });
+
+            let t2 = thread::spawn(move || {
+                let _ = dispatch_tool(&mut core2, "load_state", &params2);
+            });
+
+            t1.join().unwrap();
+            t2.join().unwrap();
+        });
+    }
+}

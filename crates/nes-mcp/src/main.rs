@@ -873,3 +873,18 @@ mod tests {
         assert!(err.to_string().contains("failed reading payload body"));
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_main {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_read_stdio_message(raw in "\\PC*") {
+            let mut cursor = std::io::Cursor::new(raw);
+            let _ = read_stdio_message(&mut cursor);
+        }
+    }
+}

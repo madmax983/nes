@@ -6,5 +6,6 @@ edition = "2024"
 [dependencies]
 
 [dev-dependencies]
+arbitrary = "1.4.2"
 nes-core = { path = "../nes-core" }
 proptest = "1.10.0"

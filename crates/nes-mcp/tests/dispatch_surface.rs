@@ -559,3 +559,37 @@ fn export_6502_dsl_rom_base64_returns_ines_payload() {
         other => panic!("unexpected export_6502_dsl_rom_base64 output: {other:?}"),
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_dispatch_surface {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_dispatch_tool_names(name in "\\PC*") {
+            let mut core = nes_core::NesCore::new();
+            let _ = nes_mcp::dispatch_tool(&mut core, &name, &nes_mcp::ToolParams::new());
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_fuzz_dispatch_tool {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(5000))]
+        #[test]
+        fn havoc_fuzz_tool_params(key in "\\PC*", val in "\\PC*") {
+            let mut core = nes_core::NesCore::new();
+            for tool in nes_mcp::tool_catalog() {
+                let mut params = nes_mcp::ToolParams::new();
+                params.insert(key.clone(), val.clone());
+                let _ = nes_mcp::dispatch_tool(&mut core, tool.name, &params);
+            }
+        }
+    }
+}

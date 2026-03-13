@@ -2160,3 +2160,17 @@ mod tests {
         assert_eq!(decoded, vec![0xFF]);
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_dsl {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_assemble(source in "\\PC*") {
+            let _ = assemble(&source);
+        }
+    }
+}

@@ -241,3 +241,18 @@ mod tests {
         assert_eq!(core.controller_bits(), 0);
     }
 }
+
+#[cfg(test)]
+mod havoc_fuzz_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10000))]
+        #[test]
+        fn havoc_fuzz_macro_engine(script in "\\PC*") {
+            let mut core = nes_core::NesCore::new();
+            let _ = execute_macro_script(&mut core, &script);
+        }
+    }
+}

@@ -1800,7 +1800,9 @@ dependencies = [
 name = "nes-core"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
  "itoa",
+ "loom",
  "proptest",
  "serde",
  "serde_json",
@@ -1832,6 +1834,7 @@ dependencies = [
 name = "nes-dsl"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
  "nes-core",
  "proptest",
 ]
@@ -1840,6 +1843,7 @@ dependencies = [
 name = "nes-mcp"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
  "comfy-table",
  "crossterm 0.28.1",
  "loom",
