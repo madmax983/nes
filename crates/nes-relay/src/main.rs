@@ -482,7 +482,6 @@ mod tests {
         assert!(output.contains("7%"));
     }
 
-
     #[test]
     fn parse_args_help_flags_return_usage_text() {
         let long_help =
