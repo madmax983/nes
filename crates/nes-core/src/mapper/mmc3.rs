@@ -445,4 +445,114 @@ mod tests {
         m.write_prg(0xA000, 0x01);
         assert_eq!(m.mirroring(), NametableMirroring::Horizontal);
     }
+
+    #[test]
+    fn prg_bank_for_slot_prg_mode_true() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x8000, 0x40); // Set PRG mode to true (bit 6 set)
+        m.write_prg(0x8001, 0x03); // Write something (doesn't matter)
+
+        m.bank_registers[6] = 4;
+        m.bank_registers[7] = 5;
+
+        assert_eq!(m.prg_bank_for_slot(0), 6); // fixed_hi
+        assert_eq!(m.prg_bank_for_slot(1), 5); // reg7
+        assert_eq!(m.prg_bank_for_slot(2), 4); // reg6
+        assert_eq!(m.prg_bank_for_slot(3), 7); // fixed_last
+    }
+
+    #[test]
+    fn sync_chr_ram_returns_early_when_not_writable() {
+        let mut m = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![0; 8 * 1024], // Non-empty chr_rom implies chr_writable is false
+            NametableMirroring::Vertical,
+        );
+        let window = [1; CHR_WINDOW_BYTES];
+        m.sync_chr_ram_from_ppu_window(&window);
+        assert_eq!(m.chr_data[0], 0);
+    }
+
+    #[test]
+    fn sync_chr_ram_with_chr_inversion() {
+        let mut m = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![], // Empty chr_rom implies chr_writable is true
+            NametableMirroring::Vertical,
+        );
+        m.write_prg(0x8000, 0x80); // Set CHR inversion (bit 7 set)
+
+        // Setup bank registers to distinct values
+        m.bank_registers[0] = 0;
+        m.bank_registers[1] = 2;
+        m.bank_registers[2] = 4;
+        m.bank_registers[3] = 5;
+        m.bank_registers[4] = 6;
+        m.bank_registers[5] = 7;
+
+        let mut window = [0; CHR_WINDOW_BYTES];
+        for (i, v) in window.iter_mut().enumerate() {
+            *v = (i / CHR_BANK_1K) as u8 + 1;
+        }
+
+        m.sync_chr_ram_from_ppu_window(&window);
+
+        // Based on chr_inversion mapping:
+        // window[0..1k] goes to bank_registers[2] (bank 4)
+        assert_eq!(m.chr_data[4 * CHR_BANK_1K], 1);
+        // window[1k..2k] goes to bank_registers[3] (bank 5)
+        assert_eq!(m.chr_data[5 * CHR_BANK_1K], 2);
+        // window[2k..3k] goes to bank_registers[4] (bank 6)
+        assert_eq!(m.chr_data[6 * CHR_BANK_1K], 3);
+        // window[3k..4k] goes to bank_registers[5] (bank 7)
+        assert_eq!(m.chr_data[7 * CHR_BANK_1K], 4);
+
+        // window[4k..6k] goes to bank_registers[0] (bank 0)
+        assert_eq!(m.chr_data[0], 5);
+        assert_eq!(m.chr_data[CHR_BANK_1K], 6);
+
+        // window[6k..8k] goes to bank_registers[1] (bank 2)
+        assert_eq!(m.chr_data[2 * CHR_BANK_1K], 7);
+        assert_eq!(m.chr_data[3 * CHR_BANK_1K], 8);
+    }
+
+    #[test]
+    fn state_and_restore_state_round_trip() {
+        let mut original = Mmc3::new(8, 8);
+        original.bank_select = 0x55;
+        original.bank_registers = [1, 2, 3, 4, 5, 6, 7, 8];
+        original.mirroring = NametableMirroring::Horizontal;
+        original.irq_latch = 42;
+        original.irq_counter = 17;
+        original.irq_reload = true;
+        original.irq_enabled = true;
+        original.irq_pending = true;
+
+        let state = original.state();
+
+        let mut restored = Mmc3::new(8, 8);
+        restored.restore_state(state);
+
+        assert_eq!(restored.bank_select, 0x55);
+        assert_eq!(restored.bank_registers, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(restored.mirroring, NametableMirroring::Horizontal);
+        assert_eq!(restored.irq_latch, 42);
+        assert_eq!(restored.irq_counter, 17);
+        assert!(restored.irq_reload);
+        assert!(restored.irq_enabled);
+        assert!(restored.irq_pending);
+    }
+
+    #[test]
+    fn write_prg_unmapped_address() {
+        let mut m = Mmc3::new(8, 8);
+        // Write to $7FFF (unmapped/fallthrough in MMC3 since it only cares about $8000+)
+        // Ensure it doesn't panic or modify expected state
+        let original_state = m.state();
+        m.write_prg(0x7FFF, 0xFF);
+        let new_state = m.state();
+
+        assert_eq!(original_state.bank_select, new_state.bank_select);
+        assert_eq!(original_state.bank_registers, new_state.bank_registers);
+    }
 }
