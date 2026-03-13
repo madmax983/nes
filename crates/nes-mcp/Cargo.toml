@@ -3,7 +3,11 @@ name = "nes-mcp"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+nova = ["nes-core/nova"]
+
 [dependencies]
+base64 = "0.22"
 comfy-table = "7.1"
 crossterm = "0.28"
 nes-core = { path = "../nes-core" }
