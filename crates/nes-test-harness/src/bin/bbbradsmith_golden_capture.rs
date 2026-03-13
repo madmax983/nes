@@ -208,6 +208,10 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
 fn build_summary_table(rows: &[RowData]) -> Table {
     let mut table = Table::new();
+    table
+        .load_preset(comfy_table::presets::UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS);
+
     table.set_header(vec![
         Cell::new("ROM").fg(TableColor::Cyan),
         Cell::new("Status").fg(TableColor::Cyan),

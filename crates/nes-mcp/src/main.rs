@@ -87,20 +87,7 @@ fn run() -> Result<(), McpError> {
     let mut writer = stdout.lock();
     let mut state = ServerState::new();
 
-    let mut table = Table::new();
-    table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
-        Cell::new("Value").fg(TableColor::White),
-    ]);
-
-    table.add_row(vec![
-        Cell::new("Protocol Version"),
-        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Tools Loaded"),
-        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
-    ]);
+    let table = build_startup_table();
 
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
@@ -115,6 +102,29 @@ fn run() -> Result<(), McpError> {
         write_stdio_message(&mut writer, &response)?;
     }
     Ok(())
+}
+
+fn build_startup_table() -> Table {
+    let mut table = Table::new();
+    table
+        .load_preset(comfy_table::presets::UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS);
+
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Protocol Version"),
+        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("Tools Loaded"),
+        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
+    ]);
+
+    table
 }
 
 fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
@@ -632,6 +642,16 @@ fn jsonrpc_error_response(id: Value, err: RpcError) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_startup_table_includes_expected_fields() {
+        let table = build_startup_table();
+        let output = table.to_string();
+        assert!(output.contains("Protocol Version"));
+        assert!(output.contains(DEFAULT_PROTOCOL_VERSION));
+        assert!(output.contains("Tools Loaded"));
+        assert!(output.contains(&tool_catalog().len().to_string()));
+    }
 
     fn request(method: &str, id: Value, params: Value) -> Value {
         json!({

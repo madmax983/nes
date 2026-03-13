@@ -46,6 +46,10 @@ fn run() -> Result<(), String> {
 
 fn build_success_table(out_path: &std::path::Path) -> Table {
     let mut table = Table::new();
+    table
+        .load_preset(comfy_table::presets::UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS);
+
     table.set_header(vec![
         Cell::new("Metric").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
