@@ -1,0 +1,68 @@
+use std::fs;
+use std::path::Path;
+
+use nes_core::CoreSnapshot;
+use serde::{Deserialize, Serialize};
+
+use crate::error::AiError;
+
+pub const SNAPSHOT_BUNDLE_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotBundle {
+    pub version: u32,
+    pub rom_hash: String,
+    pub snapshot_id: String,
+    pub snapshot: CoreSnapshot,
+}
+
+pub fn write_snapshot_bundle(
+    path: &Path,
+    rom_hash: &str,
+    snapshot_id: &str,
+    snapshot: &CoreSnapshot,
+) -> Result<(), AiError> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|source| AiError::SnapshotDirCreate {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+
+    let bundle = SnapshotBundle {
+        version: SNAPSHOT_BUNDLE_VERSION,
+        rom_hash: rom_hash.to_owned(),
+        snapshot_id: snapshot_id.to_owned(),
+        snapshot: snapshot.clone(),
+    };
+    let json = serde_json::to_vec_pretty(&bundle)
+        .map_err(|source| AiError::SnapshotSerialize { source })?;
+    fs::write(path, json).map_err(|source| AiError::SnapshotWrite {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    Ok(())
+}
+
+pub fn load_snapshot_bundle(path: &Path) -> Result<SnapshotBundle, AiError> {
+    let bytes = fs::read(path).map_err(|source| AiError::SnapshotRead {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let bundle: SnapshotBundle =
+        serde_json::from_slice(&bytes).map_err(|source| AiError::SnapshotParse {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if bundle.version != SNAPSHOT_BUNDLE_VERSION {
+        return Err(AiError::SnapshotVersionMismatch {
+            expected: SNAPSHOT_BUNDLE_VERSION,
+            found: bundle.version,
+        });
+    }
+    Ok(bundle)
+}
