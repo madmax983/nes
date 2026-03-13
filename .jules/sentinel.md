@@ -23,3 +23,8 @@
 **Mutant:** `replace | with ^` on lines 139, 141, 158, 159, and 163 in `parse_ines`
 **Diagnosis:** The bitwise OR operations `|` are combining strictly disjoint bits (e.g., `(flags6 >> 4) | (flags7 & 0xF0)`). Since the fields do not overlap, `|` is mathematically identical to `^` (and `+`).
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+
+## YYYY-MM-DD - Equivalent Mutant / Suspected Bug in `nes-netplay` RollbackEngine
+**Mutant:** `replace RollbackEngine::clear_from with ()` in `crates/nes-netplay/src/rollback.rs`
+**Diagnosis:** `EQUIVALENT_MUTANT` / `SUSPECTED_BUG`. The `clear_from` method uses `BTreeMap::split_off` to remove all state mappings for frames `>= start_frame`. However, immediately after `clear_from` is called in `rollback_from`, the logic iterates up to `self.next_frame - 1`, calling `simulate_frame` which re-inserts and perfectly overwrites all of these "cleared" future values. Therefore, replacing `clear_from` with `()` does not change any observable state, leaving the mutant alive. The operation is mathematically functionally redundant and adds unnecessary `BTreeMap` node deallocation/reallocation overhead compared to simply overwriting the values.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT` / `SUSPECTED_BUG`. No test can assert the absence of `clear_from` because the state is fully overwritten in standard execution.
