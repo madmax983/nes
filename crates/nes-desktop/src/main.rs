@@ -1063,10 +1063,7 @@ struct AppActionContext<'a> {
     frame_index: u64,
 }
 
-fn execute_app_action(
-    action: AppAction,
-    ctx: AppActionContext<'_>,
-) -> Result<bool, String> {
+fn execute_app_action(action: AppAction, ctx: AppActionContext<'_>) -> Result<bool, String> {
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
     match action {
@@ -1082,16 +1079,31 @@ fn execute_app_action(
             Ok(false)
         }
         AppAction::Resume => {
-            set_overlay_open(ctx.overlay, false, ctx.core, ctx.audio_output, ctx.window, ctx.session)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::OpenCheats => {
             if ctx.rta_manager.is_some() {
-                ctx.overlay.set_status_message("Cheats are unavailable while RTA mode is active");
+                ctx.overlay
+                    .set_status_message("Cheats are unavailable while RTA mode is active");
                 return Ok(false);
             }
             if !ctx.overlay.is_open() {
-                set_overlay_open(ctx.overlay, true, ctx.core, ctx.audio_output, ctx.window, ctx.session)?;
+                set_overlay_open(
+                    ctx.overlay,
+                    true,
+                    ctx.core,
+                    ctx.audio_output,
+                    ctx.window,
+                    ctx.session,
+                )?;
             }
             ctx.overlay.open_cheats_panel();
             ctx.window.set_title(&window_title(ctx.session, true));
@@ -1099,11 +1111,13 @@ fn execute_app_action(
         }
         AppAction::OpenRom => {
             if ctx.rta_manager.is_some() {
-                ctx.overlay.set_status_message("Open ROM is unavailable while RTA mode is active");
+                ctx.overlay
+                    .set_status_message("Open ROM is unavailable while RTA mode is active");
                 return Ok(false);
             }
             if !rom_picker_supported() {
-                ctx.overlay.set_status_message("Open ROM picker is unavailable on this platform build");
+                ctx.overlay
+                    .set_status_message("Open ROM picker is unavailable on this platform build");
                 return Ok(false);
             }
             let Some(path) = pick_rom_path() else {
@@ -1126,7 +1140,14 @@ fn execute_app_action(
             );
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
-            set_overlay_open(ctx.overlay, false, ctx.core, ctx.audio_output, ctx.window, ctx.session)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::SaveSlot(slot) => {
@@ -1142,7 +1163,8 @@ fn execute_app_action(
             save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
             refresh_slot_metadata(ctx.session)?;
             ctx.overlay.focus_slot(slot, true);
-            ctx.overlay.set_status_message(format!("[state] saved {}", slot_path.display()));
+            ctx.overlay
+                .set_status_message(format!("[state] saved {}", slot_path.display()));
             Ok(false)
         }
         AppAction::LoadSlot(slot) => {
@@ -1172,11 +1194,13 @@ fn execute_app_action(
             );
             refresh_slot_metadata(ctx.session)?;
             ctx.overlay.focus_slot(slot, false);
-            ctx.overlay.set_status_message(format!("[state] loaded {}", slot_path.display()));
+            ctx.overlay
+                .set_status_message(format!("[state] loaded {}", slot_path.display()));
             Ok(false)
         }
         AppAction::Reset => {
-            ctx.core.execute(Command::Reset)
+            ctx.core
+                .execute(Command::Reset)
                 .map_err(|err| format!("Reset failed: {err}"))?;
             *ctx.rewind_held = false;
             *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
@@ -1187,7 +1211,14 @@ fn execute_app_action(
                 ctx.core.ppu_frame_counter(),
             );
             ctx.overlay.set_status_message("System reset");
-            set_overlay_open(ctx.overlay, false, ctx.core, ctx.audio_output, ctx.window, ctx.session)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::Quit => Ok(true),
