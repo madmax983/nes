@@ -2754,6 +2754,50 @@ fn build_startup_table(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn build_startup_table_creates_expected_table_with_all_options() {
+        use super::*;
+        use std::path::PathBuf;
+
+        let runtime = RuntimeConfig {
+            rom_path: "test.nes".to_string(),
+            loaded_config_path: Some(PathBuf::from("config.toml")),
+            step_mode: StepMode::Frame,
+            audio_enabled: true,
+            cheat_codes: vec![],
+            rta: None,
+            netplay: None,
+            window_scale: 2,
+            trace_every_frames: 0,
+            metrics_enabled: false,
+            metrics_every_frames: 0,
+            capture: None,
+            mcp_enabled: false,
+            mcp_bind_addr: "".to_string(),
+            #[cfg(feature = "nova")]
+            auto_player_enabled: true,
+        };
+
+        let session = LoadedRomSession {
+            rom_path: PathBuf::from("test.nes"),
+            rom_hash: "hash".to_string(),
+            info: nes_core::RomLoadInfo {
+                mapper_id: 0,
+                prg_rom_bytes: 16384,
+                reset_pc: 0x8000,
+            },
+            slot_metadata: vec![],
+        };
+
+        let rta_manager = None;
+        let table = build_startup_table(&runtime, &session, &runtime.step_mode, rta_manager);
+
+        assert!(table.to_string().contains("ROM Path"));
+        assert!(table.to_string().contains("test.nes"));
+        assert!(table.to_string().contains("config.toml"));
+    }
+
     use super::{
         AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
         DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
