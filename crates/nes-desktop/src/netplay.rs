@@ -145,6 +145,171 @@ fn write_message(stream: &mut TcpStream, message: &ClientMessage) -> Result<(), 
         .map_err(|err| format!("failed to write relay message: {err}"))
 }
 
+pub struct NetplayRuntimeStats {
+    pub latest_rtt_ms: Option<f64>,
+    pub jitter_ms: f64,
+    pub rollback_count: u64,
+    pub max_rollback_distance: u64,
+    pub desync_count: u64,
+    pub input_delay_frames: u32,
+}
+
+impl NetplayRuntimeStats {
+    pub fn new(input_delay_frames: u32) -> Self {
+        Self {
+            latest_rtt_ms: None,
+            jitter_ms: 0.0,
+            rollback_count: 0,
+            max_rollback_distance: 0,
+            desync_count: 0,
+            input_delay_frames,
+        }
+    }
+
+    pub fn observe_rtt_ms(&mut self, rtt_ms: f64) {
+        if let Some(previous) = self.latest_rtt_ms {
+            let delta = (rtt_ms - previous).abs();
+            if self.jitter_ms <= f64::EPSILON {
+                self.jitter_ms = delta;
+            } else {
+                // RFC3550-style EWMA jitter estimator.
+                self.jitter_ms += (delta - self.jitter_ms) * 0.125;
+            }
+        }
+        self.latest_rtt_ms = Some(rtt_ms);
+    }
+
+    pub fn observe_rollback(&mut self, distance: u64) {
+        if distance == 0 {
+            return;
+        }
+        self.rollback_count = self.rollback_count.saturating_add(1);
+        self.max_rollback_distance = self.max_rollback_distance.max(distance);
+    }
+
+    pub fn observe_desync(&mut self) {
+        self.desync_count = self.desync_count.saturating_add(1);
+    }
+
+    pub fn latest_rtt_ms_or_zero(&self) -> f64 {
+        self.latest_rtt_ms.unwrap_or(0.0)
+    }
+}
+
+pub fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
+    let local_slot = usize::from(local_player.saturating_sub(1));
+    gamepad_bits.get(local_slot).copied().unwrap_or_else(|| {
+        gamepad_bits
+            .iter()
+            .copied()
+            .find(|bits| *bits != 0)
+            .unwrap_or(0)
+    })
+}
+
+pub fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
+    hash_check_every != 0 && frame != 0 && frame.is_multiple_of(hash_check_every)
+}
+
+pub fn schedule_netplay_ping(
+    now: std::time::Instant,
+    next_ping_at: &mut std::time::Instant,
+    ping_nonce: &mut u64,
+    pending_pings: &mut std::collections::BTreeMap<u64, std::time::Instant>,
+    ping_interval: Duration,
+    max_pending: usize,
+) -> Option<u64> {
+    if now < *next_ping_at {
+        return None;
+    }
+
+    let nonce = *ping_nonce;
+    *ping_nonce = ping_nonce.wrapping_add(1);
+    pending_pings.insert(nonce, now);
+    while pending_pings.len() > max_pending {
+        if let Some(oldest_nonce) = pending_pings.keys().next().copied() {
+            pending_pings.remove(&oldest_nonce);
+        }
+    }
+    *next_ping_at = now + ping_interval;
+    Some(nonce)
+}
+
+pub fn handle_netplay_server_message(
+    message: ServerMessage,
+    rollback_engine: &mut nes_netplay::RollbackEngine,
+    netplay_local_player: u8,
+    netplay_stats: &mut Option<NetplayRuntimeStats>,
+    netplay_pending_pings: &mut std::collections::BTreeMap<u64, std::time::Instant>,
+) -> Result<(), String> {
+    match message {
+        ServerMessage::PeerInput {
+            player,
+            frame,
+            bits,
+        } => {
+            if player != netplay_local_player {
+                let ingest = rollback_engine.ingest_remote_input(frame, bits);
+                if ingest.rollback_queued {
+                    eprintln!(
+                        "[netplay] queued rollback from frame {} due to late remote input",
+                        frame
+                    );
+                }
+            }
+        }
+        ServerMessage::PeerHash {
+            player,
+            frame,
+            state_hash,
+        } => {
+            if player != netplay_local_player {
+                match rollback_engine.compare_remote_hash(frame, state_hash) {
+                    nes_netplay::HashComparison::Match => {}
+                    nes_netplay::HashComparison::Mismatch => {
+                        eprintln!(
+                            "[netplay] desync detected at frame {} (remote hash {:016X})",
+                            frame, state_hash
+                        );
+                        if let Some(stats) = netplay_stats.as_mut() {
+                            stats.observe_desync();
+                        }
+                    }
+                    nes_netplay::HashComparison::PendingLocalFrame => {}
+                }
+            }
+        }
+        ServerMessage::Joined {
+            room,
+            player,
+            peer_present,
+        } => {
+            println!(
+                "[netplay] joined room '{}' as P{} (peer_present={})",
+                room, player, peer_present
+            );
+        }
+        ServerMessage::PeerJoined { player } => {
+            println!("[netplay] peer joined as P{}", player);
+        }
+        ServerMessage::PeerLeft { player } => {
+            println!("[netplay] peer left (P{})", player);
+        }
+        ServerMessage::Error { message } => {
+            return Err(format!("[netplay] relay error: {message}"));
+        }
+        ServerMessage::Pong { nonce } => {
+            if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
+                let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
+                if let Some(stats) = netplay_stats.as_mut() {
+                    stats.observe_rtt_ms(rtt_ms);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,5 +489,161 @@ mod tests {
             .expect("join reader thread")
             .expect_err("reader loop should report EOF as an error");
         assert!(close_err.contains("relay closed connection"));
+    }
+
+    fn sample_ines(mapper: u8, prg_banks: u8) -> Vec<u8> {
+        let mut rom = vec![0; 16 + (prg_banks as usize) * 16384];
+        rom[0..4].copy_from_slice(b"NES\x1A");
+        rom[4] = prg_banks;
+        rom[5] = 0; // 0 CHR banks (uses CHR RAM)
+        rom[6] = (mapper << 4) & 0xF0;
+        rom[7] = mapper & 0xF0;
+        rom
+    }
+
+    use crate::netplay::{
+        NetplayRuntimeStats, compute_local_netplay_bits, handle_netplay_server_message,
+        schedule_netplay_ping, should_send_netplay_hash,
+    };
+
+    #[test]
+    fn netplay_helper_functions_choose_local_bits_and_hash_schedule() {
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 1), 0x12);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 2), 0x34);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 3), 0x12);
+        assert_eq!(compute_local_netplay_bits([0, 0], 9), 0);
+
+        assert!(!should_send_netplay_hash(0, 120));
+        assert!(!should_send_netplay_hash(60, 0));
+        assert!(should_send_netplay_hash(60, 120));
+        assert!(!should_send_netplay_hash(60, 121));
+    }
+
+    #[test]
+    fn schedule_netplay_ping_enforces_deadline_nonce_and_pending_cap() {
+        let now = std::time::Instant::now();
+        let mut next_ping_at = now + Duration::from_millis(10);
+        let mut nonce = 5_u64;
+        let mut pending = std::collections::BTreeMap::<u64, std::time::Instant>::new();
+        pending.insert(1, now - Duration::from_millis(20));
+        pending.insert(2, now - Duration::from_millis(10));
+
+        assert_eq!(
+            schedule_netplay_ping(
+                now,
+                &mut next_ping_at,
+                &mut nonce,
+                &mut pending,
+                Duration::from_millis(500),
+                2
+            ),
+            None
+        );
+        assert_eq!(nonce, 5);
+        assert_eq!(pending.len(), 2);
+
+        let due_now = now + Duration::from_millis(10);
+        let scheduled = schedule_netplay_ping(
+            due_now,
+            &mut next_ping_at,
+            &mut nonce,
+            &mut pending,
+            Duration::from_millis(500),
+            2,
+        );
+        assert_eq!(scheduled, Some(5));
+        assert_eq!(nonce, 6);
+        assert_eq!(next_ping_at, due_now + Duration::from_millis(500));
+        assert_eq!(pending.len(), 2, "pending set should be capped to max");
+        assert!(
+            !pending.contains_key(&1),
+            "oldest nonce should be evicted first"
+        );
+        assert!(pending.contains_key(&5), "new nonce should be tracked");
+    }
+
+    #[test]
+    fn handle_netplay_server_message_updates_stats_and_errors() {
+        let mut core = nes_core::NesCore::new();
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start + 0x3FFC] = 0x00;
+        rom[prg_start + 0x3FFD] = 0x80;
+        core.load_ines_rom(&rom).expect("sample rom should load");
+
+        let mut rollback_engine = nes_netplay::RollbackEngine::new(nes_netplay::RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 2,
+            max_rollback_frames: 16,
+        })
+        .expect("rollback config should be valid");
+        let first_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("initial rollback step should succeed");
+
+        let mut stats = Some(NetplayRuntimeStats::new(2));
+        let mut pending = std::collections::BTreeMap::<u64, std::time::Instant>::new();
+        pending.insert(7, std::time::Instant::now() - Duration::from_millis(10));
+
+        handle_netplay_server_message(
+            ServerMessage::Pong { nonce: 7 },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("pong message should process");
+        assert!(pending.is_empty());
+        let rtt_ms = stats.as_ref().and_then(|s| s.latest_rtt_ms).unwrap_or(0.0);
+        assert!(
+            (1.0..=500.0).contains(&rtt_ms),
+            "expected plausible RTT ms value, got {rtt_ms}"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerInput {
+                player: 2,
+                frame: first_step.frame,
+                bits: 0x01,
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer input should process");
+        let rollback_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("post-input rollback step should succeed");
+        assert!(
+            rollback_step.rollback_distance > 0,
+            "late remote input should queue rollback"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerHash {
+                player: 2,
+                frame: rollback_step.frame,
+                state_hash: rollback_step.state_hash.wrapping_add(1),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer hash should process");
+        assert_eq!(stats.as_ref().map_or(0, |s| s.desync_count), 1);
+
+        let err = handle_netplay_server_message(
+            ServerMessage::Error {
+                message: "boom".to_owned(),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect_err("relay errors should propagate");
+        assert!(err.contains("relay error"));
     }
 }

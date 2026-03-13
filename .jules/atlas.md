@@ -1,3 +1,5 @@
-**Extracted MCP Protocol Structs**
-**Tangle:** Duplicated JSON-RPC request and error structs between `nes-mcp` and `nes-desktop`.
-**Blueprint:** Extracted shared structs (`RpcRequest`, `RpcError`) into `nes-mcp/src/protocol.rs` and re-exported them.
+# Atlas Journal
+
+**Refactor `main.rs` in `nes-desktop`**
+**Tangle:** The `main.rs` file was very large and contained netplay-specific logic mixed with core desktop concerns.
+**Blueprint:** Extracted `NetplayRuntimeStats` and associated helper functions (like `handle_netplay_server_message`, `schedule_netplay_ping`, `compute_local_netplay_bits`, `should_send_netplay_hash`) along with their unit tests from `main.rs` and moved them to `netplay.rs`. Updated imports and function calls to use `crate::netplay::*`.

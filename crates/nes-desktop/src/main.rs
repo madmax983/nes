@@ -39,7 +39,7 @@ use nes_desktop::rta::{
     select_profile,
 };
 use nes_desktop::session_cheats::SessionCheats;
-use nes_netplay::{HashComparison, RollbackConfig, RollbackEngine, ServerMessage};
+use nes_netplay::{RollbackConfig, RollbackEngine};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
 use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
@@ -53,7 +53,7 @@ use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
-use crate::netplay::{NetplayClient, NetplayRuntimeConfig};
+use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
 
 const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
 const DEFAULT_WINDOW_SCALE: u32 = 3;
@@ -185,57 +185,6 @@ impl AudioSinkControl for RodioSinkAdapter {
 struct AudioOutput {
     sink: Box<dyn AudioSinkControl>,
     _stream: Option<OutputStream>,
-}
-
-struct NetplayRuntimeStats {
-    latest_rtt_ms: Option<f64>,
-    jitter_ms: f64,
-    rollback_count: u64,
-    max_rollback_distance: u64,
-    desync_count: u64,
-    input_delay_frames: u32,
-}
-
-impl NetplayRuntimeStats {
-    fn new(input_delay_frames: u32) -> Self {
-        Self {
-            latest_rtt_ms: None,
-            jitter_ms: 0.0,
-            rollback_count: 0,
-            max_rollback_distance: 0,
-            desync_count: 0,
-            input_delay_frames,
-        }
-    }
-
-    fn observe_rtt_ms(&mut self, rtt_ms: f64) {
-        if let Some(previous) = self.latest_rtt_ms {
-            let delta = (rtt_ms - previous).abs();
-            if self.jitter_ms <= f64::EPSILON {
-                self.jitter_ms = delta;
-            } else {
-                // RFC3550-style EWMA jitter estimator.
-                self.jitter_ms += (delta - self.jitter_ms) * 0.125;
-            }
-        }
-        self.latest_rtt_ms = Some(rtt_ms);
-    }
-
-    fn observe_rollback(&mut self, distance: u64) {
-        if distance == 0 {
-            return;
-        }
-        self.rollback_count = self.rollback_count.saturating_add(1);
-        self.max_rollback_distance = self.max_rollback_distance.max(distance);
-    }
-
-    fn observe_desync(&mut self) {
-        self.desync_count = self.desync_count.saturating_add(1);
-    }
-
-    fn latest_rtt_ms_or_zero(&self) -> f64 {
-        self.latest_rtt_ms.unwrap_or(0.0)
-    }
 }
 
 struct PerfMetrics {
@@ -1296,45 +1245,6 @@ fn should_capture_frame(every_n_frames: u64, frame_index: u64) -> bool {
     every_n_frames != 0 && frame_index.is_multiple_of(every_n_frames)
 }
 
-fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
-    let local_slot = usize::from(local_player.saturating_sub(1));
-    gamepad_bits.get(local_slot).copied().unwrap_or_else(|| {
-        gamepad_bits
-            .iter()
-            .copied()
-            .find(|bits| *bits != 0)
-            .unwrap_or(0)
-    })
-}
-
-fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
-    hash_check_every != 0 && frame != 0 && frame.is_multiple_of(hash_check_every)
-}
-
-fn schedule_netplay_ping(
-    now: Instant,
-    next_ping_at: &mut Instant,
-    ping_nonce: &mut u64,
-    pending_pings: &mut BTreeMap<u64, Instant>,
-    ping_interval: Duration,
-    max_pending: usize,
-) -> Option<u64> {
-    if now < *next_ping_at {
-        return None;
-    }
-
-    let nonce = *ping_nonce;
-    *ping_nonce = ping_nonce.wrapping_add(1);
-    pending_pings.insert(nonce, now);
-    while pending_pings.len() > max_pending {
-        if let Some(oldest_nonce) = pending_pings.keys().next().copied() {
-            pending_pings.remove(&oldest_nonce);
-        }
-    }
-    *next_ping_at = now + ping_interval;
-    Some(nonce)
-}
-
 fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
     if pressed {
         current | mask
@@ -1352,81 +1262,6 @@ fn apply_gamepad_delta_commands(
     for command in controller_state_delta_for_player(previous_bits, next_bits, player2) {
         core.execute(command)
             .map_err(|err| format!("Gamepad command failed: {err}"))?;
-    }
-    Ok(())
-}
-
-fn handle_netplay_server_message(
-    message: ServerMessage,
-    rollback_engine: &mut RollbackEngine,
-    netplay_local_player: u8,
-    netplay_stats: &mut Option<NetplayRuntimeStats>,
-    netplay_pending_pings: &mut BTreeMap<u64, Instant>,
-) -> Result<(), String> {
-    match message {
-        ServerMessage::PeerInput {
-            player,
-            frame,
-            bits,
-        } => {
-            if player != netplay_local_player {
-                let ingest = rollback_engine.ingest_remote_input(frame, bits);
-                if ingest.rollback_queued {
-                    eprintln!(
-                        "[netplay] queued rollback from frame {} due to late remote input",
-                        frame
-                    );
-                }
-            }
-        }
-        ServerMessage::PeerHash {
-            player,
-            frame,
-            state_hash,
-        } => {
-            if player != netplay_local_player {
-                match rollback_engine.compare_remote_hash(frame, state_hash) {
-                    HashComparison::Match => {}
-                    HashComparison::Mismatch => {
-                        eprintln!(
-                            "[netplay] desync detected at frame {} (remote hash {:016X})",
-                            frame, state_hash
-                        );
-                        if let Some(stats) = netplay_stats.as_mut() {
-                            stats.observe_desync();
-                        }
-                    }
-                    HashComparison::PendingLocalFrame => {}
-                }
-            }
-        }
-        ServerMessage::Joined {
-            room,
-            player,
-            peer_present,
-        } => {
-            println!(
-                "[netplay] joined room '{}' as P{} (peer_present={})",
-                room, player, peer_present
-            );
-        }
-        ServerMessage::PeerJoined { player } => {
-            println!("[netplay] peer joined as P{}", player);
-        }
-        ServerMessage::PeerLeft { player } => {
-            println!("[netplay] peer left (P{})", player);
-        }
-        ServerMessage::Error { message } => {
-            return Err(format!("[netplay] relay error: {message}"));
-        }
-        ServerMessage::Pong { nonce } => {
-            if let Some(sent_at) = netplay_pending_pings.remove(&nonce) {
-                let rtt_ms = sent_at.elapsed().as_secs_f64() * 1_000.0;
-                if let Some(stats) = netplay_stats.as_mut() {
-                    stats.observe_rtt_ms(rtt_ms);
-                }
-            }
-        }
     }
     Ok(())
 }
@@ -2058,7 +1893,7 @@ fn run() -> Result<(), String> {
 
             if let Some(rollback_engine) = rollback.as_mut() {
                 let local_gamepad_bits =
-                    compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
                 let scheduled = rollback_engine
                     .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
                 if let Some(client) = netplay_client.as_ref()
@@ -2069,7 +1904,7 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 if let Some(client) = netplay_client.as_ref() {
-                    if let Some(nonce) = schedule_netplay_ping(
+                    if let Some(nonce) = crate::netplay::schedule_netplay_ping(
                         now,
                         &mut netplay_next_ping_at,
                         &mut netplay_ping_nonce,
@@ -2095,7 +1930,7 @@ fn run() -> Result<(), String> {
                         let Some(message) = message else {
                             break;
                         };
-                        if let Err(err) = handle_netplay_server_message(
+                        if let Err(err) = crate::netplay::handle_netplay_server_message(
                             message,
                             rollback_engine,
                             netplay_local_player,
@@ -2157,7 +1992,7 @@ fn run() -> Result<(), String> {
                             stats.input_delay_frames = current_delay;
                         }
 
-                        if should_send_netplay_hash(netplay_hash_check_every, step.frame)
+                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
                             && let Some(client) = netplay_client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
@@ -2912,27 +2747,23 @@ mod tests {
         TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
         apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
         audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, compute_local_netplay_bits,
-        compute_metrics_snapshot, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
-        frame_signature, gamepad_assignments_changed, gamepad_slot_changed,
-        gamepad_snapshot_to_bits, handle_netplay_server_message, is_player_two_slot,
-        map_virtual_keycode, menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
-        overlay_input_requires_redraw, parse_runtime_args, recommended_input_delay_frames,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
-        scaled_window_dimensions, schedule_netplay_ping, select_active_gamepad_ids,
+        classify_keyboard_input, classify_window_event, compute_metrics_snapshot,
+        connected_gamepad_ids, controller_state_delta_for_player, element_state_pressed,
+        encode_ppm, evaluate_frame_deadline, format_rom_read_error, frame_signature,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        netplay_feature_enabled, overlay_input_requires_redraw, parse_runtime_args,
+        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
+        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
         should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_send_netplay_hash, should_trace_frame, should_update_input_delay,
-        slot_action_for_hotkey, track_keyboard_bits_for_key, update_button_bits,
-        validate_action_allowed, write_frame_ppm,
+        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
+        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
     use nes_desktop::actions::AppAction;
     use nes_desktop::overlay::OverlayModel;
-    use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
     use rodio::Sink;
-    use std::collections::BTreeMap;
     use std::fs;
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
@@ -3589,19 +3420,6 @@ mod tests {
     }
 
     #[test]
-    fn netplay_helper_functions_choose_local_bits_and_hash_schedule() {
-        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 1), 0x12);
-        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 2), 0x34);
-        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 3), 0x12);
-        assert_eq!(compute_local_netplay_bits([0, 0], 9), 0);
-
-        assert!(!should_send_netplay_hash(0, 120));
-        assert!(!should_send_netplay_hash(60, 0));
-        assert!(should_send_netplay_hash(60, 120));
-        assert!(!should_send_netplay_hash(60, 121));
-    }
-
-    #[test]
     fn desktop_loop_helper_primitives_cover_window_scale_and_player_flags() {
         assert_eq!(
             scaled_window_dimensions(1),
@@ -3734,49 +3552,6 @@ mod tests {
     }
 
     #[test]
-    fn schedule_netplay_ping_enforces_deadline_nonce_and_pending_cap() {
-        let now = Instant::now();
-        let mut next_ping_at = now + Duration::from_millis(10);
-        let mut nonce = 5_u64;
-        let mut pending = BTreeMap::<u64, Instant>::new();
-        pending.insert(1, now - Duration::from_millis(20));
-        pending.insert(2, now - Duration::from_millis(10));
-
-        assert_eq!(
-            schedule_netplay_ping(
-                now,
-                &mut next_ping_at,
-                &mut nonce,
-                &mut pending,
-                Duration::from_millis(500),
-                2
-            ),
-            None
-        );
-        assert_eq!(nonce, 5);
-        assert_eq!(pending.len(), 2);
-
-        let due_now = now + Duration::from_millis(10);
-        let scheduled = schedule_netplay_ping(
-            due_now,
-            &mut next_ping_at,
-            &mut nonce,
-            &mut pending,
-            Duration::from_millis(500),
-            2,
-        );
-        assert_eq!(scheduled, Some(5));
-        assert_eq!(nonce, 6);
-        assert_eq!(next_ping_at, due_now + Duration::from_millis(500));
-        assert_eq!(pending.len(), 2, "pending set should be capped to max");
-        assert!(
-            !pending.contains_key(&1),
-            "oldest nonce should be evicted first"
-        );
-        assert!(pending.contains_key(&5), "new nonce should be tracked");
-    }
-
-    #[test]
     fn update_button_bits_sets_and_clears_masks() {
         let with_a = update_button_bits(0, Button::A.bit_mask(), true);
         assert_eq!(with_a, Button::A.bit_mask());
@@ -3861,91 +3636,6 @@ mod tests {
         apply_gamepad_delta_commands(&mut core, 0, Button::Start.bit_mask(), true)
             .expect("applying player-2 gamepad delta should succeed");
         assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
-    }
-
-    #[test]
-    fn handle_netplay_server_message_updates_stats_and_errors() {
-        let mut core = NesCore::new();
-        let mut rom = sample_ines(0, 1);
-        let prg_start = 16;
-        rom[prg_start + 0x3FFC] = 0x00;
-        rom[prg_start + 0x3FFD] = 0x80;
-        core.load_ines_rom(&rom).expect("sample rom should load");
-
-        let mut rollback_engine = RollbackEngine::new(RollbackConfig {
-            local_player: 1,
-            input_delay_frames: 2,
-            max_rollback_frames: 16,
-        })
-        .expect("rollback config should be valid");
-        let first_step = rollback_engine
-            .advance_frame(&mut core)
-            .expect("initial rollback step should succeed");
-
-        let mut stats = Some(NetplayRuntimeStats::new(2));
-        let mut pending = BTreeMap::<u64, Instant>::new();
-        pending.insert(7, Instant::now() - Duration::from_millis(10));
-
-        handle_netplay_server_message(
-            ServerMessage::Pong { nonce: 7 },
-            &mut rollback_engine,
-            1,
-            &mut stats,
-            &mut pending,
-        )
-        .expect("pong message should process");
-        assert!(pending.is_empty());
-        let rtt_ms = stats.as_ref().and_then(|s| s.latest_rtt_ms).unwrap_or(0.0);
-        assert!(
-            (1.0..=500.0).contains(&rtt_ms),
-            "expected plausible RTT ms value, got {rtt_ms}"
-        );
-
-        handle_netplay_server_message(
-            ServerMessage::PeerInput {
-                player: 2,
-                frame: first_step.frame,
-                bits: 0x01,
-            },
-            &mut rollback_engine,
-            1,
-            &mut stats,
-            &mut pending,
-        )
-        .expect("peer input should process");
-        let rollback_step = rollback_engine
-            .advance_frame(&mut core)
-            .expect("post-input rollback step should succeed");
-        assert!(
-            rollback_step.rollback_distance > 0,
-            "late remote input should queue rollback"
-        );
-
-        handle_netplay_server_message(
-            ServerMessage::PeerHash {
-                player: 2,
-                frame: rollback_step.frame,
-                state_hash: rollback_step.state_hash.wrapping_add(1),
-            },
-            &mut rollback_engine,
-            1,
-            &mut stats,
-            &mut pending,
-        )
-        .expect("peer hash should process");
-        assert_eq!(stats.as_ref().map_or(0, |s| s.desync_count), 1);
-
-        let err = handle_netplay_server_message(
-            ServerMessage::Error {
-                message: "boom".to_owned(),
-            },
-            &mut rollback_engine,
-            1,
-            &mut stats,
-            &mut pending,
-        )
-        .expect_err("relay errors should propagate");
-        assert!(err.contains("relay error"));
     }
 
     #[test]
