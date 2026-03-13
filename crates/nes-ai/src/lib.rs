@@ -9,3 +9,4 @@ pub mod profile;
 pub mod profiles;
 pub mod reward;
 pub mod snapshot;
+pub mod trainer;
