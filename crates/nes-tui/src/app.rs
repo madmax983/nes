@@ -20,10 +20,10 @@ impl BridgeCommand {
 #[must_use]
 pub fn map_key_event_to_command(key_code: KeyCode, pressed: bool) -> Option<BridgeCommand> {
     let button = match key_code {
-        KeyCode::Char('z') | KeyCode::Char('Z') => Button::A,
-        KeyCode::Char('x') | KeyCode::Char('X') => Button::B,
+        KeyCode::Char('z' | 'Z') => Button::A,
+        KeyCode::Char('x' | 'X') => Button::B,
         KeyCode::Enter => Button::Start,
-        KeyCode::Tab | KeyCode::Char('c') | KeyCode::Char('C') => Button::Select,
+        KeyCode::Tab | KeyCode::Char('c' | 'C') => Button::Select,
         KeyCode::Up => Button::Up,
         KeyCode::Down => Button::Down,
         KeyCode::Left => Button::Left,

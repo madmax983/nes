@@ -239,7 +239,7 @@ impl PulseChannel {
         let period = i32::from(self.timer_reload);
         let delta = period >> self.sweep_shift;
         if self.sweep_negate {
-            period - delta - if self.is_pulse1 { 1 } else { 0 }
+            period - delta - i32::from(self.is_pulse1)
         } else {
             period + delta
         }

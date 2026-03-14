@@ -143,10 +143,12 @@ fn every_catalog_tool_has_dispatch_path() {
         let result = dispatch_tool(&mut core, tool.name, &params);
         match result {
             Ok(_) => {}
-            Err(DispatchError::InvalidParams(_))
-            | Err(DispatchError::Core(_))
-            | Err(DispatchError::StateSlotNotFound(_))
-            | Err(DispatchError::Internal(_)) => {}
+            Err(
+                DispatchError::InvalidParams(_)
+                | DispatchError::Core(_)
+                | DispatchError::StateSlotNotFound(_)
+                | DispatchError::Internal(_),
+            ) => {}
             Err(DispatchError::UnsupportedTool(name)) => assert_eq!(name, tool.name),
             Err(DispatchError::UnknownTool(name)) => {
                 panic!("catalog tool {name} has no dispatch mapping")

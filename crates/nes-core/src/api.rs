@@ -848,7 +848,7 @@ impl NesCore {
     /// Returns a compact hash of emulation state for regression checks.
     #[must_use]
     pub fn state_hash(&self) -> u64 {
-        let paused = if self.paused { 1_u64 } else { 0_u64 };
+        let paused = u64::from(self.paused);
         let cpu = self.cpu.snapshot();
         paused
             ^ self.scheduler.cpu_cycles().rotate_left(13)
@@ -857,7 +857,7 @@ impl NesCore {
             ^ (self.speed_permille as u64).rotate_left(3)
             ^ (self.controller_bits as u64).rotate_left(7)
             ^ (self.controller2_bits as u64).rotate_left(27)
-            ^ ((if self.controller_strobe { 1_u64 } else { 0_u64 }).rotate_left(15))
+            ^ u64::from(self.controller_strobe).rotate_left(15)
             ^ (self.controller_shift as u64).rotate_left(21)
             ^ (self.controller2_shift as u64).rotate_left(33)
             ^ (cpu.pc as u64).rotate_left(19)
@@ -870,7 +870,7 @@ impl NesCore {
             ^ self.apu.total_cycles().rotate_left(59)
             ^ self.apu.quarter_frame_ticks().rotate_left(5)
             ^ self.apu.half_frame_ticks().rotate_left(9)
-            ^ ((if self.apu.irq_pending() { 1_u64 } else { 0_u64 }).rotate_left(57))
+            ^ u64::from(self.apu.irq_pending()).rotate_left(57)
             ^ self.cheat_code_hash_component().rotate_left(25)
             ^ self.mapper_hash_component().rotate_left(53)
     }
