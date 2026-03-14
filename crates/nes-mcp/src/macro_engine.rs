@@ -227,7 +227,8 @@ mod tests {
             PRESS A trailing
             RELEASE A trailing
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).expect("script with extra args");
+        let elapsed =
+            execute_macro_script(&mut core, script, None).expect("script with extra args");
         assert_eq!(elapsed, 2);
         assert_eq!(core.ppu_frame_counter(), initial_frames + 2);
         assert_eq!(core.controller_bits(), 0);
