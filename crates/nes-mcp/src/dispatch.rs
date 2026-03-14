@@ -460,7 +460,7 @@ fn handle_run_macro(
             "script must be provided".to_owned(),
         ));
     };
-    let frames_elapsed = crate::macro_engine::execute_macro_script(core, script)
+    let frames_elapsed = crate::macro_engine::execute_macro_script(core, script, None)
         .map_err(DispatchError::InvalidParams)?;
     Ok(DispatchOutput::MacroExecuted {
         frames_elapsed,
