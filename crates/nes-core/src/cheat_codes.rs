@@ -12,6 +12,23 @@ use serde::{Deserialize, Serialize};
 const CHEAT_CODE_ALPHABET: &str = "APZLGITYEOXUKSVN";
 
 /// Decoded NES cheat patch.
+///
+/// This struct holds the parsed representation of a standard NES "Game Genie" cheat code.
+/// It decodes 6-character and 8-character codes into the underlying address, value,
+/// and optional compare byte.
+///
+/// # Examples
+///
+/// ```
+/// use std::str::FromStr;
+/// use nes_core::CheatCode;
+///
+/// // Parse a 6-character code (Super Mario Bros: Infinite Lives)
+/// let code = CheatCode::from_str("SXTPOU").unwrap();
+/// assert_eq!(code.address(), 0x9BE1);
+/// assert_eq!(code.value(), 0xAD);
+/// assert_eq!(code.compare(), None);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheatCode {
     raw: String,

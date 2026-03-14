@@ -974,6 +974,31 @@ impl NesCore {
     /// # Errors
     ///
     /// Returns [`CoreError::RomLoadFailed`] when parsing or mapper validation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command};
+    ///
+    /// let mut core = NesCore::new();
+    ///
+    /// // Construct a minimal 16-byte iNES header for a 16KB PRG ROM (NROM)
+    /// let mut rom = vec![
+    ///     0x4E, 0x45, 0x53, 0x1A, // "NES\x1A"
+    ///     0x01,                   // 1x 16KB PRG
+    ///     0x00,                   // 0x 8KB CHR (Uses CHR-RAM)
+    ///     0x00, 0x00, 0x00, 0x00, // Flags
+    ///     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    /// ];
+    ///
+    /// // Append the actual PRG ROM bytes
+    /// rom.extend(vec![0x00; 16 * 1024]);
+    ///
+    /// // Load the constructed ROM
+    /// let info = core.load_ines_rom(&rom).unwrap();
+    /// assert_eq!(info.mapper_id, 0);
+    /// assert_eq!(info.prg_rom_bytes, 16 * 1024);
+    /// ```
     pub fn load_ines_rom(&mut self, rom_bytes: &[u8]) -> Result<RomLoadInfo, CoreError> {
         let rom = parse_ines(rom_bytes).map_err(CoreError::RomLoadFailed)?;
         let mapper = self.build_mapper(rom.mapper_id, rom.prg_rom, rom.chr_rom, rom.mirroring)?;
