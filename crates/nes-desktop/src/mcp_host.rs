@@ -81,10 +81,7 @@ fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Res
             .map_err(|err| format!("failed to clone client socket: {err}"))?,
     );
 
-    loop {
-        let Some(payload) = read_framed_message(&mut reader)? else {
-            break;
-        };
+    while let Some(payload) = read_framed_message(&mut reader)? {
         let Some(response) = handle_message(&payload, request_tx) else {
             continue;
         };
