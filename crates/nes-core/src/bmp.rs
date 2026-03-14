@@ -1,4 +1,40 @@
+//! Uncompressed BMP image encoding.
+//!
+//! This module provides a minimal, allocation-efficient encoder for transforming
+//! raw RGBA framebuffer slices into standard 24-bit uncompressed Windows BMP
+//! byte vectors. It is primarily used for generating emulator screenshots.
+
 /// Encodes RGB(A) pixel data into a BMP image byte vector.
+///
+/// The BMP format stores pixels "bottom-up" in `BGR` order. This function
+/// strips the alpha channel from the input `rgba` slice and handles the
+/// necessary 4-byte row padding required by the BMP specification.
+///
+/// # Parameters
+///
+/// * `width` - The image width in pixels.
+/// * `height` - The image height in pixels.
+/// * `rgba` - The raw pixel data in `RGBA8` format. The slice length must be exactly `width * height * 4`.
+///
+/// # Errors
+///
+/// Returns a descriptive string error if the dimensions are too large and cause
+/// internal size calculations to overflow `usize` or `u32` bounds.
+///
+/// # Examples
+///
+/// ```
+/// use nes_core::bmp::encode_bmp;
+///
+/// // A 2x2 image containing 4 pixels in RGBA format (Red, Green, Blue, White).
+/// let rgba = vec![
+///     255, 0, 0, 255,   0, 255, 0, 255,
+///     0, 0, 255, 255,   255, 255, 255, 255,
+/// ];
+///
+/// let bmp_bytes = encode_bmp(2, 2, &rgba).unwrap();
+/// assert_eq!(&bmp_bytes[0..2], b"BM");
+/// ```
 pub fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
     let row_bytes = width
         .checked_mul(3)
