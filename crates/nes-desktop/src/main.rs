@@ -1045,6 +1045,8 @@ fn dispatch_overlay_command(
     }
 }
 
+#[cfg(not(tarpaulin_include))]
+#[cfg_attr(coverage_nightly, coverage(off))]
 struct AppActionContext<'a> {
     core: &'a mut NesCore,
     session: &'a mut LoadedRomSession,
