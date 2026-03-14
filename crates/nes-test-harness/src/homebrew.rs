@@ -235,12 +235,66 @@ irq:
 
 #[cfg(test)]
 mod tests {
-    use super::build_homebrew_rom;
+    use super::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
+    use std::fs;
 
     #[test]
     fn homebrew_rom_has_expected_ines_geometry() {
         let rom = build_homebrew_rom().expect("homebrew rom should build");
         assert!(rom.starts_with(b"NES\x1A"));
         assert_eq!(rom.len(), 16 + 16 * 1024 + 8 * 1024);
+    }
+
+    #[test]
+    fn default_homebrew_rom_path_ends_with_homebrew_nes() {
+        let path = default_homebrew_rom_path();
+        assert!(
+            path.ends_with("roms/homebrew/homebrew.nes"),
+            "path did not end with roms/homebrew/homebrew.nes, got: {:?}",
+            path
+        );
+    }
+
+    #[test]
+    fn build_homebrew_rom_includes_custom_chr_rom_tile() {
+        let rom = build_homebrew_rom().expect("homebrew rom should build");
+
+        // CHR ROM starts after 16 byte header and 16KB PRG ROM
+        let prg_size = 16 * 1024;
+        let chr_offset = 16 + prg_size;
+
+        let expected_tile_1 = [
+            0x18, 0x3C, 0x7E, 0xFF, 0xFF, 0x7E, 0x3C, 0x18, // plane 0
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // plane 1
+        ];
+
+        let tile_start = chr_offset + 16;
+        let actual_tile = &rom[tile_start..tile_start + 16];
+        assert_eq!(
+            actual_tile, expected_tile_1,
+            "CHR ROM did not contain the expected tile data"
+        );
+    }
+
+    #[test]
+    fn write_homebrew_rom_creates_file_and_parent_directories() {
+        let temp_dir = std::env::temp_dir().join("nes_test_harness_homebrew_test");
+        let rom_path = temp_dir.join("nested").join("folder").join("test.nes");
+
+        // Clean up any previous runs
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        write_homebrew_rom(&rom_path).expect("should write successfully");
+
+        let written_bytes = fs::read(&rom_path).expect("file should exist");
+        let generated_rom = build_homebrew_rom().unwrap();
+
+        assert_eq!(
+            written_bytes, generated_rom,
+            "written bytes should match generated ROM bytes"
+        );
+
+        // Clean up after test
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
