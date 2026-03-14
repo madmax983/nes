@@ -292,6 +292,13 @@ pub fn load_profiles(dir: &Path) -> Result<Vec<LoadedProfile>, String> {
     Ok(profiles)
 }
 
+/// Selects an RTA profile given a ROM hash, or uses a manual override.
+///
+/// ⚡ Bolt Optimization:
+/// Instead of filtering the profile list and collecting matches into a `Vec`,
+/// this implementation directly uses iterators with `.next()` to search for
+/// matches. This completely eliminates an unnecessary heap allocation on the
+/// hot path when a single matching profile is found, reducing memory pressure.
 pub fn select_profile(
     profiles: &[LoadedProfile],
     rom_hash: &str,
@@ -321,18 +328,17 @@ pub fn select_profile(
         });
     }
 
-    let mut matches = profiles
-        .iter()
-        .filter(|profile| {
-            profile
-                .profile
-                .rom_hashes
-                .iter()
-                .any(|value| compare_rom_hashes(value, rom_hash))
-        })
-        .collect::<Vec<_>>();
+    let mut match_iter = profiles.iter().filter(|profile| {
+        profile
+            .profile
+            .rom_hashes
+            .iter()
+            .any(|value| compare_rom_hashes(value, rom_hash))
+    });
 
-    if matches.is_empty() {
+    let first_match = match_iter.next();
+
+    if first_match.is_none() {
         let known = profiles
             .iter()
             .map(|profile| profile.profile.id.as_str())
@@ -343,9 +349,19 @@ pub fn select_profile(
             known
         ));
     }
-    if matches.len() > 1 {
-        let conflict = matches
+
+    let second_match = match_iter.next();
+
+    if second_match.is_some() {
+        let conflict = profiles
             .iter()
+            .filter(|profile| {
+                profile
+                    .profile
+                    .rom_hashes
+                    .iter()
+                    .any(|value| compare_rom_hashes(value, rom_hash))
+            })
             .map(|profile| profile.profile.id.as_str())
             .collect::<Vec<_>>()
             .join(", ");
@@ -354,10 +370,7 @@ pub fn select_profile(
         ));
     }
 
-    let selected = matches
-        .pop()
-        .expect("non-empty matches must have one entry")
-        .clone();
+    let selected = first_match.expect("first_match must be Some").clone();
     if !allow_draft && selected.profile.status == ProfileStatus::Draft {
         return Err(format!(
             "RTA profile '{}' is draft and cannot be used in strict mode",
@@ -999,18 +1012,6 @@ impl CalibrationRecorder {
                 ..TriggerRule::default()
             });
 
-        let splits = candidates
-            .iter()
-            .map(|candidate| SplitRule {
-                name: candidate.split_name.clone(),
-                trigger: TriggerRule {
-                    address: candidate.address,
-                    value: u32::from(candidate.value),
-                    ..TriggerRule::default()
-                },
-            })
-            .collect::<Vec<_>>();
-
         let draft_profile = RtaProfile {
             id: self.profile_id.clone(),
             game: None,
@@ -1026,7 +1027,17 @@ impl CalibrationRecorder {
             pause: None,
             resume: None,
             end: end_rule,
-            splits,
+            splits: candidates
+                .iter()
+                .map(|candidate| SplitRule {
+                    name: candidate.split_name.clone(),
+                    trigger: TriggerRule {
+                        address: candidate.address,
+                        value: u32::from(candidate.value),
+                        ..TriggerRule::default()
+                    },
+                })
+                .collect(),
         };
 
         let profile_path = profiles_dir.join(format!("{}.draft.toml", self.profile_id));
