@@ -350,9 +350,7 @@ fn handle_runtime_key_event(runtime: &mut TuiRuntime, key: KeyEvent) -> Result<L
             .core
             .execute(Command::Reset)
             .map_err(|err| format!("Reset failed: {err}"))?;
-    } else if key_is_pressed(key.kind)
-        && matches!(key.code, KeyCode::Char('i' | 'I'))
-    {
+    } else if key_is_pressed(key.kind) && matches!(key.code, KeyCode::Char('i' | 'I')) {
         runtime.show_hud = !runtime.show_hud;
     }
 
