@@ -14,6 +14,8 @@ use nes_core::{
     Button, Command, CoreQuery, CoreSnapshot, FRAME_HEIGHT, FRAME_WIDTH, NesCore, QueryResult,
 };
 use nes_dsl::{Mirroring, RomBuildOptions};
+#[cfg(feature = "nova")]
+use nes_rewind::{TimeMachine, TimeMachineConfig};
 
 use crate::output::{
     audio_chunk, frame_chunk, latest_output_metadata, publish_audio, publish_frame,
@@ -205,6 +207,14 @@ pub enum DispatchOutput {
         /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
+    /// Result of rewinding the emulator state.
+    #[cfg(feature = "nova")]
+    Rewound {
+        /// The number of frames rewound.
+        frames_rewound: u64,
+        /// The remaining frames in the rewind buffer.
+        buffer_frames_remaining: u64,
+    },
 }
 
 /// Errors raised when parsing or executing MCP tools.
@@ -257,6 +267,18 @@ impl std::error::Error for DispatchError {}
 fn saved_states() -> &'static Mutex<HashMap<String, CoreSnapshot>> {
     static STATE: OnceLock<Mutex<HashMap<String, CoreSnapshot>>> = OnceLock::new();
     STATE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(feature = "nova")]
+fn rewind_machine() -> &'static Mutex<TimeMachine> {
+    static MACHINE: OnceLock<Mutex<TimeMachine>> = OnceLock::new();
+    MACHINE.get_or_init(|| {
+        Mutex::new(TimeMachine::new(TimeMachineConfig {
+            max_history_seconds: 60,
+            keyframe_base_interval: 60,
+            delta_spike_threshold: 2048,
+        }))
+    })
 }
 
 /// Dispatches an MCP tool call to the provided [`NesCore`] instance.
@@ -317,6 +339,8 @@ pub fn dispatch_tool(
         "load_6502_dsl" => handle_load_6502_dsl(core, params),
         "export_6502_dsl_rom" => handle_export_6502_dsl_rom(params),
         "export_6502_dsl_rom_base64" => handle_export_6502_dsl_rom_base64(params),
+        #[cfg(feature = "nova")]
+        "rewind" => handle_rewind(core, params),
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }
@@ -341,6 +365,13 @@ fn handle_step_scanline(core: &mut NesCore) -> Result<DispatchOutput, DispatchEr
 
 fn handle_step_frame(core: &mut NesCore) -> Result<DispatchOutput, DispatchError> {
     execute_command(core, Command::StepFrame)?;
+
+    #[cfg(feature = "nova")]
+    // Automatically record frames to the rewind machine
+    if let Ok(mut machine) = rewind_machine().lock() {
+        machine.record_frame(core);
+    }
+
     Ok(DispatchOutput::CycleCount {
         cpu_cycles: core.total_cycles(),
     })
@@ -667,10 +698,56 @@ fn handle_load_rom(
     let info = core
         .load_ines_rom(&rom_bytes)
         .map_err(|err| DispatchError::Core(err.to_string()))?;
+
+    #[cfg(feature = "nova")]
+    if let Ok(mut machine) = rewind_machine().lock() {
+        // Since TimeMachine uses an internal channel and cursor,
+        // we recreate it to clear state cleanly on new ROM load.
+        *machine = TimeMachine::new(TimeMachineConfig {
+            max_history_seconds: 60,
+            keyframe_base_interval: 60,
+            delta_spike_threshold: 2048,
+        });
+        machine.record_frame(core);
+    }
+
     Ok(DispatchOutput::RomLoaded {
         mapper_id: info.mapper_id,
         prg_rom_bytes: info.prg_rom_bytes,
         reset_pc: info.reset_pc,
+    })
+}
+
+#[cfg(feature = "nova")]
+fn handle_rewind(
+    core: &mut NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let frames = parse_u64(params, "frames").unwrap_or(60);
+
+    let mut machine = rewind_machine()
+        .lock()
+        .map_err(|_| DispatchError::Internal("rewind machine lock poisoned".to_owned()))?;
+
+    // Wait for the background worker to catch up (up to 50ms)
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    let mut frames_rewound = 0;
+    for _ in 0..frames {
+        if machine.rewind_step(core).is_some() {
+            frames_rewound += 1;
+        } else {
+            break;
+        }
+    }
+
+    // Put the time machine back into recording mode from the new position
+    machine.resume();
+
+    Ok(DispatchOutput::Rewound {
+        frames_rewound,
+        // Calculate remaining seconds approximately
+        buffer_frames_remaining: (machine.history_seconds() * 60.0) as u64,
     })
 }
 

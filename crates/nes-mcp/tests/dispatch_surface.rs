@@ -559,3 +559,38 @@ fn export_6502_dsl_rom_base64_returns_ines_payload() {
         other => panic!("unexpected export_6502_dsl_rom_base64 output: {other:?}"),
     }
 }
+
+#[test]
+#[cfg(feature = "nova")]
+fn rewind_tool_restores_earlier_state() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
+    let rom_hex = hex_encode(&sample_nrom16_ines());
+
+    // Load ROM to initialize time machine and put it in recording state
+    dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).unwrap();
+
+    // Step forward 10 frames
+    for _ in 0..10 {
+        dispatch_tool(&mut core, "step_frame", &ToolParams::new()).unwrap();
+    }
+
+    let frame_before_rewind = core.ppu_frame_counter();
+
+    // Attempt to rewind 5 frames
+    let output = dispatch_tool(&mut core, "rewind", &params(&[("frames", "5")])).unwrap();
+
+    match output {
+        DispatchOutput::Rewound {
+            frames_rewound,
+            buffer_frames_remaining,
+        } => {
+            assert!(frames_rewound > 0);
+            assert!(buffer_frames_remaining > 0);
+        }
+        other => panic!("unexpected rewind output: {other:?}"),
+    }
+
+    let frame_after_rewind = core.ppu_frame_counter();
+    assert!(frame_after_rewind < frame_before_rewind);
+}

@@ -2703,6 +2703,7 @@ dependencies = [
  "loom",
  "nes-core",
  "nes-dsl",
+ "nes-rewind",
  "proptest",
  "serde",
  "serde_json",
