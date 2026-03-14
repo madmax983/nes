@@ -36,8 +36,24 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
 
     println!("{}", "Executing Macro Script...".with(Color::Cyan).bold());
 
-    let frames_elapsed = execute_macro_script(&mut core, &script_content)
+    let mut callback = |current_line: usize, total_lines: usize| {
+        let pct = if total_lines > 0 {
+            (current_line as f64 / total_lines as f64) * 100.0
+        } else {
+            0.0
+        };
+        print!(
+            "\r\x1B[2K{}",
+            format!("Running line {} / {} ({:.1}%)", current_line, total_lines, pct)
+                .with(Color::Yellow)
+        );
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+    };
+
+    let frames_elapsed = execute_macro_script(&mut core, &script_content, Some(&mut callback))
         .map_err(|err| format!("Macro execution failed: {}", err))?;
+
+    println!("\r\x1B[2K{}", "Execution Complete".with(Color::Green).bold());
 
     let rom_name = Path::new(rom_path)
         .file_name()
