@@ -4387,3 +4387,14 @@ mod tests {
         let _ = fs::remove_file(bmp_path);
     }
 }
+
+#[cfg(test)]
+mod tests_action_context {
+    use super::*;
+
+    #[test]
+    fn test_execute_app_action_context_type() {
+        let size = std::mem::size_of::<AppActionContext>();
+        assert!(size > 0);
+    }
+}
