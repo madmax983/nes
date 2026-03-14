@@ -272,6 +272,35 @@ mod tests {
         }
     }
 
+    /// A helper function to poll the TimeMachine until it processes all queued
+    /// frames. Returns `true` if it synced successfully, or `false` if it timed out.
+    /// This avoids flaky hardcoded sleep delays in tests.
+    fn wait_for_sync(tm: &mut TimeMachine) -> bool {
+        let start = std::time::Instant::now();
+        // Give it up to 250ms to process the queue.
+        while start.elapsed() < Duration::from_millis(250) {
+            // To check if the worker has caught up, we can ask for a reconstruct
+            // of the last recorded frame. If it succeeds, the worker has processed it.
+            if tm.last_recorded_frame == 0 {
+                return true;
+            }
+            let _ = tm.tx.send(WorkerMsg::Reconstruct {
+                target_frame: tm.last_recorded_frame,
+            });
+            if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
+                tm.rx.recv_timeout(Duration::from_millis(10))
+            {
+                // The test core isn't mutated until `tm.rewind_step` does it.
+                // But we just sent a raw message.
+                // Since we received the reply, the worker is caught up.
+                if frame_id == tm.last_recorded_frame {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     #[test]
     fn record_and_rewind_restores_earlier_frame() {
         let mut core = make_core();
@@ -284,8 +313,8 @@ mod tests {
         }
         let frame_before_rewind = core.ppu_frame_counter();
 
-        // Flush the worker channel: give it time to process all records.
-        std::thread::sleep(Duration::from_millis(50));
+        // Flush the worker channel.
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
 
         // Rewind 30 frames.
         for _ in 0..30 {
@@ -320,11 +349,104 @@ mod tests {
             core.execute(Command::StepFrame).unwrap();
             tm.record_frame(&core);
         }
-        std::thread::sleep(Duration::from_millis(50));
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
 
         tm.rewind_step(&mut core);
         tm.resume();
 
         assert_eq!(tm.state(), TimeMachineState::Recording);
+    }
+
+    #[test]
+    fn record_frame_does_nothing_when_not_recording() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        core.execute(Command::StepFrame).unwrap();
+        tm.record_frame(&core);
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+
+        let last_frame = tm.last_recorded_frame;
+        assert!(last_frame > 0);
+
+        // Enter rewinding state
+        tm.rewind_step(&mut core);
+        assert!(matches!(
+            tm.state(),
+            TimeMachineState::Rewinding { .. } | TimeMachineState::Exhausted
+        ));
+
+        // Advance core and try to record
+        core.execute(Command::StepFrame).unwrap();
+        tm.record_frame(&core);
+
+        // Frame should not be recorded
+        assert_eq!(tm.last_recorded_frame, last_frame);
+    }
+
+    #[test]
+    fn rewind_faster_accelerates_speed_and_clamps() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        // Need to record at least one frame to enter Rewinding properly (otherwise it hits an early None return without setting up the cursor)
+        core.execute(Command::StepFrame).unwrap();
+        tm.record_frame(&core);
+        core.execute(Command::StepFrame).unwrap();
+        tm.record_frame(&core);
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+
+        tm.rewind_step(&mut core);
+        assert!(matches!(tm.state(), TimeMachineState::Rewinding { .. }));
+
+        // Should start at Normal
+        assert_eq!(tm.cursor.as_ref().unwrap().speed, RewindSpeed::Normal);
+
+        tm.rewind_faster();
+        assert_eq!(tm.cursor.as_ref().unwrap().speed, RewindSpeed::Fast);
+
+        tm.rewind_faster();
+        assert_eq!(tm.cursor.as_ref().unwrap().speed, RewindSpeed::Faster);
+
+        // Clamps at Faster
+        tm.rewind_faster();
+        assert_eq!(tm.cursor.as_ref().unwrap().speed, RewindSpeed::Faster);
+    }
+
+    #[test]
+    fn history_seconds_returns_expected_value() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        for _ in 0..60 {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(&core);
+        }
+
+        let expected = tm.last_recorded_frame as f32 / 60.0;
+        assert_eq!(tm.history_seconds(), expected);
+    }
+
+    #[test]
+    fn rewind_exhausted_state_on_timeout() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        // Record a few frames so that we have a target frame > 0
+        for _ in 0..5 {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(&core);
+        }
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+
+        // Artificially replace the receiver with a black hole to force a timeout
+        let (_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
+        tm.rx = dummy_rx;
+
+        // This call will time out waiting for the dummy_rx
+        let result = tm.rewind_step(&mut core);
+
+        assert_eq!(result, None);
+        assert_eq!(tm.state(), TimeMachineState::Exhausted);
     }
 }

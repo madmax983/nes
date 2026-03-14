@@ -66,3 +66,41 @@ impl RewindCursor {
         Some(frame)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::NesCore;
+
+    #[test]
+    fn test_rewind_speed_lookahead_depth() {
+        assert_eq!(RewindSpeed::Single.lookahead_depth(), 1);
+        assert_eq!(RewindSpeed::Normal.lookahead_depth(), 16);
+        assert_eq!(RewindSpeed::Fast.lookahead_depth(), 32);
+        assert_eq!(RewindSpeed::Faster.lookahead_depth(), 64);
+    }
+
+    #[test]
+    fn test_rewind_speed_frame_skip() {
+        assert_eq!(RewindSpeed::Single.frame_skip(), 1);
+        assert_eq!(RewindSpeed::Normal.frame_skip(), 1);
+        assert_eq!(RewindSpeed::Fast.frame_skip(), 2);
+        assert_eq!(RewindSpeed::Faster.frame_skip(), 4);
+    }
+
+    #[test]
+    fn test_rewind_cursor_pop_frame() {
+        let core = NesCore::new();
+        let snapshot = core.save_state();
+        let mut cursor = RewindCursor::new(100, RewindSpeed::Normal);
+
+        cursor.lookahead.push_back((99, snapshot.clone()));
+
+        let popped = cursor.pop_frame().unwrap();
+        assert_eq!(popped.0, 99);
+        assert_eq!(cursor.current_frame, 99);
+
+        // Empty pop
+        assert!(cursor.pop_frame().is_none());
+    }
+}
