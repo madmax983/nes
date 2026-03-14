@@ -321,43 +321,42 @@ pub fn select_profile(
         });
     }
 
-    let mut matches = profiles
-        .iter()
-        .filter(|profile| {
-            profile
-                .profile
-                .rom_hashes
+    let mut matches = profiles.iter().filter(|profile| {
+        profile
+            .profile
+            .rom_hashes
+            .iter()
+            .any(|value| compare_rom_hashes(value, rom_hash))
+    });
+
+    let selected = match matches.next() {
+        None => {
+            let known = profiles
                 .iter()
-                .any(|value| compare_rom_hashes(value, rom_hash))
-        })
-        .collect::<Vec<_>>();
-
-    if matches.is_empty() {
-        let known = profiles
-            .iter()
-            .map(|profile| profile.profile.id.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(format!(
-            "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
-            known
-        ));
-    }
-    if matches.len() > 1 {
-        let conflict = matches
-            .iter()
-            .map(|profile| profile.profile.id.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-        return Err(format!(
-            "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
-        ));
-    }
-
-    let selected = matches
-        .pop()
-        .expect("non-empty matches must have one entry")
-        .clone();
+                .map(|profile| profile.profile.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(format!(
+                "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
+                known
+            ));
+        }
+        Some(first_match) => {
+            if let Some(second_match) = matches.next() {
+                let mut conflict_ids = vec![
+                    first_match.profile.id.as_str(),
+                    second_match.profile.id.as_str(),
+                ];
+                conflict_ids.extend(matches.map(|profile| profile.profile.id.as_str()));
+                return Err(format!(
+                    "Multiple RTA profiles matched ROM hash {rom_hash}: {}",
+                    conflict_ids.join(", ")
+                ));
+            } else {
+                first_match.clone()
+            }
+        }
+    };
     if !allow_draft && selected.profile.status == ProfileStatus::Draft {
         return Err(format!(
             "RTA profile '{}' is draft and cannot be used in strict mode",
