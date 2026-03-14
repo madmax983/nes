@@ -719,10 +719,7 @@ fn handle_load_rom(
 }
 
 #[cfg(feature = "nova")]
-fn handle_rewind(
-    core: &mut NesCore,
-    params: &ToolParams,
-) -> Result<DispatchOutput, DispatchError> {
+fn handle_rewind(core: &mut NesCore, params: &ToolParams) -> Result<DispatchOutput, DispatchError> {
     let frames = parse_u64(params, "frames").unwrap_or(60);
 
     let mut machine = rewind_machine()
