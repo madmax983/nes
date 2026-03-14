@@ -2907,3 +2907,1483 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{
+        AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
+        DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
+        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
+        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs, StepMode,
+        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
+        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
+        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
+        classify_keyboard_input, classify_window_event, compute_local_netplay_bits,
+        compute_metrics_snapshot, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        frame_signature, gamepad_assignments_changed, gamepad_slot_changed,
+        gamepad_snapshot_to_bits, handle_netplay_server_message, is_player_two_slot,
+        map_virtual_keycode, menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
+        overlay_input_requires_redraw, parse_runtime_args, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, schedule_netplay_ping, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_send_netplay_hash, should_trace_frame, should_update_input_delay,
+        slot_action_for_hotkey, track_keyboard_bits_for_key, update_button_bits,
+        validate_action_allowed, write_frame_ppm,
+    };
+    use gilrs::GamepadId;
+    use nes_core::{Button, Command, NesCore};
+    use nes_desktop::actions::AppAction;
+    use nes_desktop::overlay::OverlayModel;
+    use nes_netplay::{RollbackConfig, RollbackEngine, ServerMessage};
+    use rodio::Sink;
+    use std::collections::BTreeMap;
+    use std::fs;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    use winit::dpi::PhysicalSize;
+    use winit::event::{
+        DeviceId, ElementState, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
+    };
+
+    fn parse_runtime_args_with_timeout(args: Vec<String>) -> Result<RuntimeArgs, String> {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(parse_runtime_args(&args));
+        });
+        rx.recv_timeout(Duration::from_millis(250))
+            .expect("parse_runtime_args should complete without hanging")
+    }
+
+    fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
+        let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
+        rom[0] = 0x4E; // N
+        rom[1] = 0x45; // E
+        rom[2] = 0x53; // S
+        rom[3] = 0x1A;
+        rom[4] = prg_banks;
+        rom[5] = 0; // CHR RAM
+        rom[6] = (mapper_id & 0x0F) << 4;
+        rom[7] = mapper_id & 0xF0;
+        rom
+    }
+
+    fn fake_gamepad_id(raw: usize) -> GamepadId {
+        // SAFETY: Test-only helper to synthesize opaque identifiers for equality checks.
+        unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
+    }
+
+    #[derive(Debug, Default)]
+    struct FakeAudioState {
+        queue_len: usize,
+        append_calls: usize,
+        appended_sample_count: usize,
+        clear_calls: usize,
+        stop_calls: usize,
+    }
+
+    struct FakeAudioSink {
+        state: Arc<Mutex<FakeAudioState>>,
+    }
+
+    impl FakeAudioSink {
+        fn with_len(initial_len: usize) -> (Self, Arc<Mutex<FakeAudioState>>) {
+            let state = Arc::new(Mutex::new(FakeAudioState {
+                queue_len: initial_len,
+                ..Default::default()
+            }));
+            (
+                Self {
+                    state: Arc::clone(&state),
+                },
+                state,
+            )
+        }
+    }
+
+    impl AudioSinkControl for FakeAudioSink {
+        fn queue_len(&self) -> usize {
+            self.state
+                .lock()
+                .expect("fake audio state lock should not poison")
+                .queue_len
+        }
+
+        fn append_i16(&self, samples: Vec<i16>) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.append_calls = state.append_calls.saturating_add(1);
+            state.appended_sample_count = state.appended_sample_count.saturating_add(samples.len());
+            state.queue_len = state.queue_len.saturating_add(1);
+        }
+
+        fn stop(&self) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.stop_calls = state.stop_calls.saturating_add(1);
+        }
+
+        fn clear(&self) {
+            let mut state = self
+                .state
+                .lock()
+                .expect("fake audio state lock should not poison");
+            state.clear_calls = state.clear_calls.saturating_add(1);
+            state.queue_len = 0;
+        }
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_mcp_host_and_bind_flags() {
+        let args = vec![
+            "--mcp-host".to_owned(),
+            "--mcp-bind".to_owned(),
+            "127.0.0.1:7777".to_owned(),
+            "game.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+        assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+        assert!(parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_equals_bind_form() {
+        let args = vec!["--mcp-bind=127.0.0.1:7000".to_owned()];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+        assert!(parsed.rom_path.is_none());
+        assert!(!parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7000");
+    }
+
+    #[test]
+    fn parse_runtime_args_defaults_bind_when_flag_absent() {
+        let args = vec!["game.nes".to_owned()];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+        assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+        assert!(parsed.cheat_codes.is_empty());
+        assert!(!parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, DEFAULT_MCP_BIND_ADDR);
+    }
+
+    #[test]
+    fn parse_runtime_args_rejects_unknown_flags() {
+        let args = vec!["--bogus".to_owned()];
+        let err = parse_runtime_args_with_timeout(args).expect_err("unknown flag should fail");
+        assert!(err.contains("unknown flag"));
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_netplay_flags() {
+        let args = vec![
+            "--netplay".to_owned(),
+            "--netplay-relay=relay.example:4545".to_owned(),
+            "--netplay-room".to_owned(),
+            "river-city".to_owned(),
+            "--netplay-player".to_owned(),
+            "2".to_owned(),
+            "--netplay-delay=3".to_owned(),
+            "--netplay-max-rollback".to_owned(),
+            "360".to_owned(),
+            "--netplay-hash-every".to_owned(),
+            "90".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+        let expected = RuntimeArgs {
+            rom_path: None,
+            cheat_codes: Vec::new(),
+            mcp_enabled: false,
+            mcp_bind_addr: DEFAULT_MCP_BIND_ADDR.to_owned(),
+            netplay_enabled: true,
+            netplay_relay_addr: Some("relay.example:4545".to_owned()),
+            netplay_room: Some("river-city".to_owned()),
+            netplay_player: Some(2),
+            netplay_input_delay_frames: Some(3),
+            netplay_max_rollback_frames: Some(360),
+            netplay_hash_check_every_frames: Some(90),
+            rta_enabled: false,
+            rta_profile_id: None,
+            rta_profiles_dir: None,
+            rta_runs_dir: None,
+            rta_calibrate: false,
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
+        };
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_repeated_cheat_code_flags() {
+        let args = vec![
+            "--cheat-code".to_owned(),
+            "gossip".to_owned(),
+            "--cheat-code=ZEXPYGLA".to_owned(),
+            "rom.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("cheat code args should parse");
+
+        assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
+        assert_eq!(
+            parsed.cheat_codes,
+            vec!["gossip".to_owned(), "ZEXPYGLA".to_owned()]
+        );
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_rta_flags() {
+        let args = vec![
+            "--rta".to_owned(),
+            "--rta-profile=smb-any".to_owned(),
+            "--rta-profiles-dir".to_owned(),
+            "config/rta/profiles".to_owned(),
+            "--rta-runs-dir=runs/rta".to_owned(),
+            "--rta-calibrate".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+
+        assert!(parsed.rta_enabled);
+        assert_eq!(parsed.rta_profile_id.as_deref(), Some("smb-any"));
+        assert_eq!(
+            parsed.rta_profiles_dir.as_deref(),
+            Some("config/rta/profiles")
+        );
+        assert_eq!(parsed.rta_runs_dir.as_deref(), Some("runs/rta"));
+        assert!(parsed.rta_calibrate);
+    }
+
+    #[test]
+    fn adaptive_delay_reacts_to_rtt_and_jitter() {
+        let increased = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+        assert!(
+            increased >= 4,
+            "expected higher delay for higher RTT+jitter"
+        );
+
+        let unchanged = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, increased);
+        assert!(
+            unchanged == increased || unchanged + 1 == increased,
+            "hysteresis should avoid abrupt downshifts"
+        );
+    }
+
+    #[test]
+    fn adaptive_delay_uses_current_when_no_rtt_sample() {
+        let delay = recommended_input_delay_frames(None, 0.0, 1, 12, 3);
+        assert_eq!(delay, 3);
+    }
+
+    #[test]
+    fn adaptive_delay_exact_targets_and_hysteresis_behave_as_expected() {
+        let raised = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+        assert_eq!(raised, 5);
+
+        let clamped = recommended_input_delay_frames(Some(400.0), 100.0, 1, 6, 2);
+        assert_eq!(clamped, 6);
+
+        let drops_by_one = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 6);
+        assert_eq!(drops_by_one, 5);
+
+        let holds_within_hysteresis = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 4);
+        assert_eq!(holds_within_hysteresis, 4);
+
+        let jitter_weighted = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 1);
+        assert_eq!(jitter_weighted, 3);
+
+        let equal_target_holds_current = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 3);
+        assert_eq!(equal_target_holds_current, 3);
+    }
+
+    #[test]
+    fn adaptive_delay_returns_min_when_bounds_are_invalid() {
+        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
+        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_derives_expected_rates() {
+        let snapshot = compute_metrics_snapshot(
+            2,
+            0.25,
+            100,
+            130,
+            Duration::from_millis(10),
+            Duration::from_millis(8),
+        )
+        .expect("non-zero frames and elapsed should yield snapshot");
+        assert_eq!(
+            snapshot,
+            MetricsSnapshot {
+                wall_fps: 8.0,
+                emu_fps: 120.0,
+                avg_step_ms: 5.0,
+                avg_render_ms: 4.0,
+            }
+        );
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_handles_guard_conditions_and_saturating_ppu_delta() {
+        assert!(compute_metrics_snapshot(0, 1.0, 10, 20, Duration::ZERO, Duration::ZERO).is_none());
+        assert!(
+            compute_metrics_snapshot(1, f64::EPSILON, 10, 20, Duration::ZERO, Duration::ZERO)
+                .is_none()
+        );
+        let snapshot = compute_metrics_snapshot(
+            1,
+            1.0,
+            200,
+            100,
+            Duration::from_millis(3),
+            Duration::from_millis(2),
+        )
+        .expect("valid input should produce snapshot");
+        assert_eq!(snapshot.emu_fps, 0.0);
+    }
+
+    #[test]
+    fn audio_output_queue_and_drop_behave_with_fake_sink() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS - 1);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        assert!(output.queue_samples(vec![1_i16, 2, 3]));
+        assert_eq!(output.queue_len(), MAX_AUDIO_QUEUE_CHUNKS);
+
+        let state_after_queue = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state_after_queue.append_calls, 1);
+        assert_eq!(state_after_queue.appended_sample_count, 3);
+        drop(state_after_queue);
+
+        drop(output);
+        let state_after_drop = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state_after_drop.stop_calls, 1);
+    }
+
+    #[test]
+    fn audio_output_rejects_samples_when_queue_is_full() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        assert!(!output.queue_samples(vec![1_i16, 2, 3]));
+        assert_eq!(output.queue_len(), MAX_AUDIO_QUEUE_CHUNKS);
+
+        let state = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state.append_calls, 0);
+    }
+
+    #[test]
+    fn audio_output_clear_forwards_to_sink_and_empties_queue() {
+        let (fake_sink, shared_state) = FakeAudioSink::with_len(3);
+        let output = AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        output.clear();
+
+        let state = shared_state
+            .lock()
+            .expect("fake audio state lock should not poison");
+        assert_eq!(state.clear_calls, 1);
+        assert_eq!(state.queue_len, 0);
+    }
+
+    #[test]
+    fn rodio_sink_adapter_forwards_append_and_queue_len() {
+        let (sink, _queue_rx) = Sink::new_idle();
+        let adapter = RodioSinkAdapter { inner: sink };
+
+        assert_eq!(adapter.queue_len(), 0);
+        adapter.append_i16(vec![1_i16, 2, 3, 4]);
+        assert_eq!(adapter.queue_len(), 1);
+        adapter.append_i16(vec![5_i16, 6, 7, 8]);
+        assert_eq!(adapter.queue_len(), 2);
+    }
+
+    #[test]
+    fn rodio_sink_adapter_stop_mutes_idle_queue_output() {
+        let (sink, mut queue_rx) = Sink::new_idle();
+        let adapter = RodioSinkAdapter { inner: sink };
+
+        adapter.append_i16(vec![i16::MAX; 5_000]);
+        assert_eq!(
+            queue_rx.next(),
+            Some(0.999_969_5),
+            "i16::MAX should map to a non-zero sample before stop"
+        );
+
+        adapter.stop();
+
+        let saw_silence = (0..600).any(|_| queue_rx.next() == Some(0.0));
+        assert!(saw_silence, "stop should silence the queued source");
+    }
+
+    #[test]
+    fn map_virtual_keycode_maps_all_supported_keys() {
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::RShift),
+            Some("ShiftRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::Right),
+            Some("ArrowRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn classify_window_event_maps_window_variants_to_decisions() {
+        assert_eq!(
+            classify_window_event(&WindowEvent::CloseRequested),
+            WindowEventDecision::CloseRequested
+        );
+
+        let key_event = WindowEvent::KeyboardInput {
+            // SAFETY: winit explicitly exposes dummy IDs for unit testing.
+            device_id: unsafe { DeviceId::dummy() },
+            input: KeyboardInput {
+                scancode: 0,
+                state: ElementState::Pressed,
+                virtual_keycode: Some(VirtualKeyCode::Z),
+                modifiers: ModifiersState::empty(),
+            },
+            is_synthetic: false,
+        };
+        assert_eq!(
+            classify_window_event(&key_event),
+            WindowEventDecision::KeyboardInput {
+                key: Some(VirtualKeyCode::Z),
+                pressed: true
+            }
+        );
+
+        let resized = WindowEvent::Resized(PhysicalSize::new(640, 480));
+        assert_eq!(
+            classify_window_event(&resized),
+            WindowEventDecision::Resized {
+                width: 640,
+                height: 480
+            }
+        );
+
+        let mut scale_size = PhysicalSize::new(800, 600);
+        let scale_changed = WindowEvent::ScaleFactorChanged {
+            scale_factor: 1.25,
+            new_inner_size: &mut scale_size,
+        };
+        assert_eq!(
+            classify_window_event(&scale_changed),
+            WindowEventDecision::ScaleFactorChanged {
+                width: 800,
+                height: 600
+            }
+        );
+
+        let ignored = WindowEvent::Focused(true);
+        assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
+    }
+
+    #[test]
+    fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Escape, true, false, false, false),
+            KeyboardDecision::ToggleOverlay
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F5, true, false, false, false),
+            KeyboardDecision::ManualSaveState
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F8, true, false, false, false),
+            KeyboardDecision::ManualLoadState
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::R, true, false, false, false),
+            KeyboardDecision::SetRewindHeld(true)
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::R, false, true, false, false),
+            KeyboardDecision::SetRewindHeld(false)
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Z, true, true, false, false),
+            KeyboardDecision::UpdateKeyboardBits {
+                mask: Button::A.bit_mask(),
+                pressed: true
+            }
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::X, false, false, false, false),
+            KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Escape, false, false, false, false),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F9, true, false, true, false),
+            KeyboardDecision::RtaManualSplit
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
+            KeyboardDecision::RtaFinish
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
+            KeyboardDecision::Noop
+        );
+    }
+
+    #[test]
+    fn selected_slot_hotkeys_target_current_slot() {
+        assert_eq!(
+            slot_action_for_hotkey(true, 3),
+            Some(AppAction::SaveSlot(3))
+        );
+        assert_eq!(
+            slot_action_for_hotkey(false, 3),
+            Some(AppAction::LoadSlot(3))
+        );
+    }
+
+    #[test]
+    fn overlay_blocks_gameplay_button_commands_while_open() {
+        let mut overlay = OverlayModel::new(5);
+        overlay.open();
+        let mut keyboard_bits = 0_u8;
+
+        let action = apply_overlay_keyboard_input(
+            &mut overlay,
+            VirtualKeyCode::Z,
+            true,
+            0,
+            &mut keyboard_bits,
+        );
+
+        assert_eq!(action, None);
+        assert_eq!(keyboard_bits, 0);
+    }
+
+    #[test]
+    fn overlay_input_requires_redraw_for_navigation_action_and_text_entry_keys() {
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Up, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Down, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Escape, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Return, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Space, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Delete, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::F5, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::F8, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Z, true));
+        assert!(!overlay_input_requires_redraw(VirtualKeyCode::Up, false));
+    }
+
+    #[test]
+    fn rollback_disables_stateful_menu_actions() {
+        let err = validate_action_allowed(AppAction::OpenRom, true)
+            .expect_err("open rom should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+
+        let err = validate_action_allowed(AppAction::OpenCheats, true)
+            .expect_err("open cheats should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+
+        let err = validate_action_allowed(AppAction::SaveSlot(2), true)
+            .expect_err("save slot should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+    }
+
+    #[test]
+    fn open_rom_menu_action_requires_platform_picker_support() {
+        assert_eq!(
+            menu_action_enabled(AppAction::OpenRom, false, false, false),
+            rom_picker_supported()
+        );
+        assert!(menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            true,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            true
+        ));
+    }
+
+    #[test]
+    fn reconcile_core_pause_with_overlay_matches_overlay_visibility() {
+        let mut core = NesCore::new();
+        core.execute(Command::Pause)
+            .expect("pause command should succeed");
+
+        reconcile_core_pause_with_overlay(&mut core, false)
+            .expect("closed overlay should force resume");
+        assert!(!core.is_paused());
+
+        reconcile_core_pause_with_overlay(&mut core, true)
+            .expect("open overlay should force pause");
+        assert!(core.is_paused());
+    }
+
+    #[test]
+    fn applying_runtime_cheat_codes_replaces_existing_codes() {
+        let mut core = NesCore::new();
+        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+            .expect("first cheat application should succeed");
+        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+            .expect("second cheat application should succeed");
+        assert_eq!(core.cheat_codes().len(), 1);
+    }
+
+    #[test]
+    fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
+        let now = Instant::now();
+        let future = now + Duration::from_millis(2);
+        match evaluate_frame_deadline(now, future) {
+            FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
+            FrameDecision::Step { .. } => panic!("expected wait branch"),
+        }
+
+        match evaluate_frame_deadline(now, now) {
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                assert!(!missed_deadline);
+                assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
+            }
+            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+        }
+
+        match evaluate_frame_deadline(now + Duration::from_millis(1), now) {
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                assert!(missed_deadline);
+                assert_eq!(
+                    next_deadline,
+                    (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
+                );
+            }
+            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+        }
+    }
+
+    #[test]
+    fn netplay_helper_functions_choose_local_bits_and_hash_schedule() {
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 1), 0x12);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 2), 0x34);
+        assert_eq!(compute_local_netplay_bits([0x12, 0x34], 3), 0x12);
+        assert_eq!(compute_local_netplay_bits([0, 0], 9), 0);
+
+        assert!(!should_send_netplay_hash(0, 120));
+        assert!(!should_send_netplay_hash(60, 0));
+        assert!(should_send_netplay_hash(60, 120));
+        assert!(!should_send_netplay_hash(60, 121));
+    }
+
+    #[test]
+    fn desktop_loop_helper_primitives_cover_window_scale_and_player_flags() {
+        assert_eq!(
+            scaled_window_dimensions(1),
+            (FRAME_WIDTH as f64, FRAME_HEIGHT as f64)
+        );
+        assert_eq!(
+            scaled_window_dimensions(3),
+            (
+                f64::from(FRAME_WIDTH as u32 * 3),
+                f64::from(FRAME_HEIGHT as u32 * 3)
+            )
+        );
+
+        assert!(element_state_pressed(ElementState::Pressed));
+        assert!(!element_state_pressed(ElementState::Released));
+        assert!(should_resume_after_rewind_hold(false));
+        assert!(!should_resume_after_rewind_hold(true));
+
+        assert!(!is_player_two_slot(0));
+        assert!(is_player_two_slot(1));
+        assert_eq!(
+            merge_local_input_bits(0b0000_0011, 0b0000_0101),
+            0b0000_0111
+        );
+
+        assert!(netplay_feature_enabled(true, false));
+        assert!(netplay_feature_enabled(false, true));
+        assert!(!netplay_feature_enabled(false, false));
+
+        assert!(!should_log_rollback(0));
+        assert!(should_log_rollback(1));
+        assert!(!should_update_input_delay(2, 2));
+        assert!(should_update_input_delay(3, 2));
+
+        assert!(!should_trace_frame(0, 120));
+        assert!(!should_trace_frame(60, 0));
+        assert!(should_trace_frame(60, 120));
+        assert!(!should_trace_frame(60, 121));
+
+        assert!(!audio_queue_dropped(true));
+        assert!(audio_queue_dropped(false));
+
+        assert!(!should_capture_frame(0, 120));
+        assert!(should_capture_frame(60, 120));
+        assert!(!should_capture_frame(60, 121));
+    }
+
+    #[test]
+    fn gamepad_assignment_helpers_detect_global_and_slot_level_changes() {
+        let none = [None, None];
+        assert!(!gamepad_assignments_changed(none, none));
+        assert!(!gamepad_slot_changed(none, none, 0));
+        assert!(!gamepad_slot_changed(none, none, 1));
+
+        let next = [Some(fake_gamepad_id(1)), None];
+        let current = [None, Some(fake_gamepad_id(2))];
+        assert!(gamepad_assignments_changed(next, current));
+        assert!(gamepad_slot_changed(next, current, 0));
+        assert!(gamepad_slot_changed(next, current, 1));
+    }
+
+    #[test]
+    fn gamepad_source_helpers_select_connected_ids_without_duplicates() {
+        let id1 = fake_gamepad_id(1);
+        let id2 = fake_gamepad_id(2);
+        let id3 = fake_gamepad_id(3);
+        let connected = connected_gamepad_ids(vec![(id1, true), (id2, false), (id3, true)]);
+        assert_eq!(connected, vec![id1, id3]);
+
+        let next = select_active_gamepad_ids(&connected, [Some(id1), Some(id2)]);
+        assert_eq!(next, [Some(id1), Some(id3)]);
+
+        let deduped = select_active_gamepad_ids(&connected, [Some(id3), Some(id3)]);
+        assert_eq!(deduped, [Some(id3), Some(id1)]);
+    }
+
+    #[test]
+    fn gamepad_sampling_helpers_map_buttons_and_axis_thresholds() {
+        let bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            east_pressed: true,
+            north_pressed: true,
+            select_pressed: true,
+            start_pressed: true,
+            dpad_down_pressed: true,
+            dpad_right_pressed: true,
+            left_x: -0.75,
+            left_y: -0.75,
+            ..GamepadSnapshot::default()
+        });
+        let expected = Button::A.bit_mask()
+            | Button::B.bit_mask()
+            | Button::Select.bit_mask()
+            | Button::Start.bit_mask()
+            | Button::Up.bit_mask()
+            | Button::Down.bit_mask()
+            | Button::Left.bit_mask()
+            | Button::Right.bit_mask();
+        assert_eq!(bits, expected);
+
+        let boundary_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            left_x: GAMEPAD_AXIS_THRESHOLD,
+            left_y: -GAMEPAD_AXIS_THRESHOLD,
+            ..GamepadSnapshot::default()
+        });
+        assert_eq!(
+            boundary_bits,
+            Button::Up.bit_mask() | Button::Right.bit_mask()
+        );
+
+        let neutral_axis_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+            connected: true,
+            left_x: 0.0,
+            left_y: GAMEPAD_AXIS_THRESHOLD * 0.5,
+            ..GamepadSnapshot::default()
+        });
+        assert_eq!(neutral_axis_bits, 0);
+
+        assert_eq!(
+            gamepad_snapshot_to_bits(GamepadSnapshot {
+                connected: false,
+                east_pressed: true,
+                left_x: 1.0,
+                left_y: -1.0,
+                ..GamepadSnapshot::default()
+            }),
+            0
+        );
+    }
+
+    #[test]
+    fn schedule_netplay_ping_enforces_deadline_nonce_and_pending_cap() {
+        let now = Instant::now();
+        let mut next_ping_at = now + Duration::from_millis(10);
+        let mut nonce = 5_u64;
+        let mut pending = BTreeMap::<u64, Instant>::new();
+        pending.insert(1, now - Duration::from_millis(20));
+        pending.insert(2, now - Duration::from_millis(10));
+
+        assert_eq!(
+            schedule_netplay_ping(
+                now,
+                &mut next_ping_at,
+                &mut nonce,
+                &mut pending,
+                Duration::from_millis(500),
+                2
+            ),
+            None
+        );
+        assert_eq!(nonce, 5);
+        assert_eq!(pending.len(), 2);
+
+        let due_now = now + Duration::from_millis(10);
+        let scheduled = schedule_netplay_ping(
+            due_now,
+            &mut next_ping_at,
+            &mut nonce,
+            &mut pending,
+            Duration::from_millis(500),
+            2,
+        );
+        assert_eq!(scheduled, Some(5));
+        assert_eq!(nonce, 6);
+        assert_eq!(next_ping_at, due_now + Duration::from_millis(500));
+        assert_eq!(pending.len(), 2, "pending set should be capped to max");
+        assert!(
+            !pending.contains_key(&1),
+            "oldest nonce should be evicted first"
+        );
+        assert!(pending.contains_key(&5), "new nonce should be tracked");
+    }
+
+    #[test]
+    fn update_button_bits_sets_and_clears_masks() {
+        let with_a = update_button_bits(0, Button::A.bit_mask(), true);
+        assert_eq!(with_a, Button::A.bit_mask());
+        // Pressing an already-set bit should be idempotent.
+        assert_eq!(
+            update_button_bits(with_a, Button::A.bit_mask(), true),
+            Button::A.bit_mask()
+        );
+        let with_ab = update_button_bits(with_a, Button::B.bit_mask(), true);
+        assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
+        let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
+        assert_eq!(cleared_a, Button::B.bit_mask());
+    }
+
+    #[test]
+    fn track_keyboard_bits_for_key_updates_controller_bits_and_ignores_hotkeys() {
+        let mut keyboard_bits = 0_u8;
+
+        track_keyboard_bits_for_key(VirtualKeyCode::Z, true, &mut keyboard_bits);
+        assert_eq!(keyboard_bits, Button::A.bit_mask());
+
+        track_keyboard_bits_for_key(VirtualKeyCode::F5, true, &mut keyboard_bits);
+        assert_eq!(
+            keyboard_bits,
+            Button::A.bit_mask(),
+            "manual save hotkey must not alter controller state"
+        );
+
+        track_keyboard_bits_for_key(VirtualKeyCode::Z, false, &mut keyboard_bits);
+        assert_eq!(keyboard_bits, 0);
+    }
+
+    #[test]
+    fn resync_restored_inputs_reapplies_keyboard_and_resets_gamepad_cache() {
+        let mut core = NesCore::new();
+        let mut gamepad_bits = [Button::Right.bit_mask(), Button::Start.bit_mask()];
+
+        resync_restored_inputs(&mut core, Button::A.bit_mask(), &mut gamepad_bits)
+            .expect("restored inputs should resync");
+
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask(),
+            "held keyboard input should be re-applied immediately"
+        );
+        assert_eq!(
+            core.controller2_bits(),
+            0,
+            "player-2 gamepad state should be cleared until the next poll replays it"
+        );
+        assert_eq!(
+            gamepad_bits,
+            [0, 0],
+            "gamepad cache must reset so held pads generate deltas on the next poll"
+        );
+    }
+
+    #[test]
+    fn apply_gamepad_delta_commands_updates_controller_bits() {
+        let mut core = NesCore::new();
+        apply_gamepad_delta_commands(
+            &mut core,
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            false,
+        )
+        .expect("applying player-1 gamepad delta should succeed");
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask() | Button::Right.bit_mask()
+        );
+
+        apply_gamepad_delta_commands(
+            &mut core,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            Button::Right.bit_mask(),
+            false,
+        )
+        .expect("releasing one player-1 button should succeed");
+        assert_eq!(core.controller_bits(), Button::Right.bit_mask());
+
+        apply_gamepad_delta_commands(&mut core, 0, Button::Start.bit_mask(), true)
+            .expect("applying player-2 gamepad delta should succeed");
+        assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
+    }
+
+    #[test]
+    fn handle_netplay_server_message_updates_stats_and_errors() {
+        let mut core = NesCore::new();
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start + 0x3FFC] = 0x00;
+        rom[prg_start + 0x3FFD] = 0x80;
+        core.load_ines_rom(&rom).expect("sample rom should load");
+
+        let mut rollback_engine = RollbackEngine::new(RollbackConfig {
+            local_player: 1,
+            input_delay_frames: 2,
+            max_rollback_frames: 16,
+        })
+        .expect("rollback config should be valid");
+        let first_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("initial rollback step should succeed");
+
+        let mut stats = Some(NetplayRuntimeStats::new(2));
+        let mut pending = BTreeMap::<u64, Instant>::new();
+        pending.insert(7, Instant::now() - Duration::from_millis(10));
+
+        handle_netplay_server_message(
+            ServerMessage::Pong { nonce: 7 },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("pong message should process");
+        assert!(pending.is_empty());
+        let rtt_ms = stats.as_ref().and_then(|s| s.latest_rtt_ms).unwrap_or(0.0);
+        assert!(
+            (1.0..=500.0).contains(&rtt_ms),
+            "expected plausible RTT ms value, got {rtt_ms}"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerInput {
+                player: 2,
+                frame: first_step.frame,
+                bits: 0x01,
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer input should process");
+        let rollback_step = rollback_engine
+            .advance_frame(&mut core)
+            .expect("post-input rollback step should succeed");
+        assert!(
+            rollback_step.rollback_distance > 0,
+            "late remote input should queue rollback"
+        );
+
+        handle_netplay_server_message(
+            ServerMessage::PeerHash {
+                player: 2,
+                frame: rollback_step.frame,
+                state_hash: rollback_step.state_hash.wrapping_add(1),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect("peer hash should process");
+        assert_eq!(stats.as_ref().map_or(0, |s| s.desync_count), 1);
+
+        let err = handle_netplay_server_message(
+            ServerMessage::Error {
+                message: "boom".to_owned(),
+            },
+            &mut rollback_engine,
+            1,
+            &mut stats,
+            &mut pending,
+        )
+        .expect_err("relay errors should propagate");
+        assert!(err.contains("relay error"));
+    }
+
+    #[test]
+    fn controller_state_delta_emits_press_and_release() {
+        let press = controller_state_delta_for_player(
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            false,
+        );
+        assert_eq!(
+            press,
+            vec![
+                Command::PressButton(Button::A),
+                Command::PressButton(Button::Right)
+            ]
+        );
+
+        let release = controller_state_delta_for_player(
+            Button::A.bit_mask() | Button::B.bit_mask(),
+            Button::B.bit_mask(),
+            false,
+        );
+        assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
+    }
+
+    #[test]
+    fn controller_state_delta_for_player2_uses_player2_commands() {
+        let press = controller_state_delta_for_player(0, Button::A.bit_mask(), true);
+        assert_eq!(press, vec![Command::PressButton2(Button::A)]);
+
+        let release = controller_state_delta_for_player(Button::Start.bit_mask(), 0, true);
+        assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
+    }
+
+    #[test]
+    fn parse_runtime_args_help_and_validation_paths() {
+        let help = parse_runtime_args_with_timeout(vec!["--help".to_owned()])
+            .expect_err("help returns usage");
+        assert!(help.contains("Usage: nes-desktop"));
+        assert!(help.contains("Default config path"));
+        assert!(help.contains("--cheat-code <code>"));
+
+        let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
+            .expect_err("missing mcp bind");
+        assert!(missing_bind.contains("missing value after --mcp-bind"));
+
+        let missing_code = parse_runtime_args_with_timeout(vec!["--cheat-code".to_owned()])
+            .expect_err("missing cheat code");
+        assert!(missing_code.contains("missing value after --cheat-code"));
+
+        let missing_relay = parse_runtime_args_with_timeout(vec!["--netplay-relay".to_owned()])
+            .expect_err("missing netplay relay");
+        assert!(missing_relay.contains("missing value after --netplay-relay"));
+
+        let invalid_player =
+            parse_runtime_args_with_timeout(vec!["--netplay-player".to_owned(), "bad".to_owned()])
+                .expect_err("invalid player value");
+        assert!(invalid_player.contains("--netplay-player"));
+
+        let multi_rom =
+            parse_runtime_args_with_timeout(vec!["a.nes".to_owned(), "b.nes".to_owned()])
+                .expect_err("multiple roms should fail");
+        assert!(multi_rom.contains("multiple ROM paths"));
+    }
+
+    #[test]
+    fn parse_runtime_args_accepts_all_equals_forms_for_netplay_flags() {
+        let args = vec![
+            "--mcp-host".to_owned(),
+            "--mcp-bind=127.0.0.1:7777".to_owned(),
+            "--netplay".to_owned(),
+            "--netplay-relay=relay.example:4545".to_owned(),
+            "--netplay-room=arena".to_owned(),
+            "--netplay-player=2".to_owned(),
+            "--netplay-delay=3".to_owned(),
+            "--netplay-max-rollback=360".to_owned(),
+            "--netplay-hash-every=90".to_owned(),
+            "rom.nes".to_owned(),
+        ];
+        let parsed = parse_runtime_args_with_timeout(args).expect("equals forms should parse");
+        assert_eq!(parsed.rom_path.as_deref(), Some("rom.nes"));
+        assert!(parsed.mcp_enabled);
+        assert_eq!(parsed.mcp_bind_addr, "127.0.0.1:7777");
+        assert!(parsed.netplay_enabled);
+        assert_eq!(
+            parsed.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+        assert_eq!(parsed.netplay_room.as_deref(), Some("arena"));
+        assert_eq!(parsed.netplay_player, Some(2));
+        assert_eq!(parsed.netplay_input_delay_frames, Some(3));
+        assert_eq!(parsed.netplay_max_rollback_frames, Some(360));
+        assert_eq!(parsed.netplay_hash_check_every_frames, Some(90));
+    }
+
+    #[test]
+    fn parse_runtime_args_control_flow_branches_do_not_hang() {
+        let mcp_host = parse_runtime_args_with_timeout(vec!["--mcp-host".to_owned()])
+            .expect("mcp host branch should parse");
+        assert!(mcp_host.mcp_enabled);
+
+        let netplay = parse_runtime_args_with_timeout(vec!["--netplay".to_owned()])
+            .expect("netplay branch should parse");
+        assert!(netplay.netplay_enabled);
+
+        let relay = parse_runtime_args_with_timeout(vec![
+            "--netplay-relay".to_owned(),
+            "relay.example:4545".to_owned(),
+        ])
+        .expect("netplay relay branch should parse");
+        assert_eq!(
+            relay.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+
+        let room =
+            parse_runtime_args_with_timeout(vec!["--netplay-room".to_owned(), "arena".to_owned()])
+                .expect("netplay room branch should parse");
+        assert_eq!(room.netplay_room.as_deref(), Some("arena"));
+
+        let player =
+            parse_runtime_args_with_timeout(vec!["--netplay-player".to_owned(), "2".to_owned()])
+                .expect("netplay player branch should parse");
+        assert_eq!(player.netplay_player, Some(2));
+
+        let delay =
+            parse_runtime_args_with_timeout(vec!["--netplay-delay".to_owned(), "3".to_owned()])
+                .expect("netplay delay branch should parse");
+        assert_eq!(delay.netplay_input_delay_frames, Some(3));
+
+        let hash_every = parse_runtime_args_with_timeout(vec![
+            "--netplay-hash-every".to_owned(),
+            "90".to_owned(),
+        ])
+        .expect("netplay hash-every branch should parse");
+        assert_eq!(hash_every.netplay_hash_check_every_frames, Some(90));
+
+        let bind_equals =
+            parse_runtime_args_with_timeout(vec!["--mcp-bind=127.0.0.1:7777".to_owned()])
+                .expect("mcp bind equals branch should parse");
+        assert_eq!(bind_equals.mcp_bind_addr, "127.0.0.1:7777");
+
+        let relay_equals =
+            parse_runtime_args_with_timeout(vec!["--netplay-relay=relay.example:4545".to_owned()])
+                .expect("netplay relay equals branch should parse");
+        assert_eq!(
+            relay_equals.netplay_relay_addr.as_deref(),
+            Some("relay.example:4545")
+        );
+
+        let room_equals = parse_runtime_args_with_timeout(vec!["--netplay-room=arena".to_owned()])
+            .expect("netplay room equals branch should parse");
+        assert_eq!(room_equals.netplay_room.as_deref(), Some("arena"));
+
+        let player_equals = parse_runtime_args_with_timeout(vec!["--netplay-player=2".to_owned()])
+            .expect("netplay player equals branch should parse");
+        assert_eq!(player_equals.netplay_player, Some(2));
+
+        let delay_equals = parse_runtime_args_with_timeout(vec!["--netplay-delay=3".to_owned()])
+            .expect("netplay delay equals branch should parse");
+        assert_eq!(delay_equals.netplay_input_delay_frames, Some(3));
+    }
+
+    #[test]
+    fn netplay_runtime_stats_tracks_rtt_jitter_rollbacks_and_desyncs() {
+        let mut stats = NetplayRuntimeStats::new(2);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 0.0);
+        assert_eq!(stats.input_delay_frames, 2);
+        assert_eq!(stats.rollback_count, 0);
+        assert_eq!(stats.max_rollback_distance, 0);
+        assert_eq!(stats.desync_count, 0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(20.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 20.0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(28.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 28.0);
+        assert_eq!(stats.jitter_ms, 8.0);
+
+        stats.observe_rtt_ms(40.0);
+        assert!((stats.jitter_ms - 8.5).abs() < 1e-9);
+
+        stats.observe_rollback(0);
+        assert_eq!(stats.rollback_count, 0);
+        stats.observe_rollback(2);
+        stats.observe_rollback(5);
+        assert_eq!(stats.rollback_count, 2);
+        assert_eq!(stats.max_rollback_distance, 5);
+
+        stats.observe_desync();
+        stats.observe_desync();
+        assert_eq!(stats.desync_count, 2);
+    }
+
+    #[test]
+    fn perf_metrics_on_step_tracks_stalls_and_recovers_on_pc_change() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 0, 0);
+        assert_eq!(metrics.every_n_frames, DEFAULT_METRICS_EVERY_FRAMES);
+
+        metrics.on_step(&core, Duration::from_millis(4), true);
+        assert_eq!(metrics.report_frames, 1);
+        assert_eq!(metrics.step_work, Duration::from_millis(4));
+        assert_eq!(metrics.late_frames, 1);
+        assert_eq!(metrics.last_pc, Some(core.cpu_pc()));
+        assert_eq!(metrics.pc_stall_frames, 0);
+
+        metrics.on_step(&core, Duration::from_millis(2), false);
+        assert_eq!(metrics.report_frames, 2);
+        assert_eq!(metrics.step_work, Duration::from_millis(6));
+        assert_eq!(metrics.pc_stall_frames, 1);
+
+        metrics.pc_stall_frames = 239;
+        metrics.last_pc = Some(core.cpu_pc());
+        metrics.warned_stall = false;
+        metrics.on_step(&core, Duration::from_millis(1), false);
+        assert_eq!(metrics.pc_stall_frames, 240);
+        assert!(metrics.warned_stall);
+
+        metrics.last_pc = Some(core.cpu_pc().wrapping_add(1));
+        metrics.pc_stall_frames = 77;
+        metrics.warned_stall = true;
+        metrics.on_step(&core, Duration::from_millis(1), false);
+        assert_eq!(metrics.pc_stall_frames, 0);
+        assert!(!metrics.warned_stall);
+    }
+
+    #[test]
+    fn perf_metrics_render_audio_and_netplay_observation_update_fields() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
+        let frame = vec![0_u8; 256 * 240 * 4];
+
+        metrics.on_render(&frame, Duration::from_millis(3));
+        assert_eq!(metrics.render_work, Duration::from_millis(3));
+        assert_eq!(metrics.unchanged_frame_count, 0);
+
+        metrics.on_render(&frame, Duration::from_millis(2));
+        assert_eq!(metrics.render_work, Duration::from_millis(5));
+        assert_eq!(metrics.unchanged_frame_count, 1);
+
+        metrics.on_audio_queue(3, false);
+        metrics.on_audio_queue(2, true);
+        assert_eq!(metrics.audio_queue_peak, 3);
+        assert_eq!(metrics.audio_queue_drops, 1);
+
+        let mut net = NetplayRuntimeStats::new(4);
+        net.observe_rtt_ms(42.0);
+        net.observe_rtt_ms(46.0);
+        net.observe_rollback(3);
+        net.observe_desync();
+        metrics.on_netplay_stats(&net);
+        assert_eq!(metrics.netplay_rtt_ms, 46.0);
+        assert_eq!(metrics.netplay_jitter_ms, 4.0);
+        assert_eq!(metrics.netplay_rollbacks, 1);
+        assert_eq!(metrics.netplay_max_rollback_distance, 3);
+        assert_eq!(metrics.netplay_desyncs, 1);
+        assert_eq!(metrics.netplay_input_delay_frames, 4);
+    }
+
+    #[test]
+    fn perf_metrics_maybe_report_resets_window_after_threshold() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
+        metrics.report_frames = 2;
+        metrics.step_work = Duration::from_millis(8);
+        metrics.render_work = Duration::from_millis(6);
+        metrics.late_frames = 1;
+        metrics.audio_queue_peak = 4;
+        metrics.audio_queue_drops = 2;
+        metrics.netplay_rollbacks = 5;
+        metrics.netplay_max_rollback_distance = 7;
+        metrics.netplay_desyncs = 3;
+        metrics.report_start = Instant::now() - Duration::from_millis(20);
+
+        metrics.maybe_report(&core);
+
+        assert_eq!(metrics.report_frames, 0);
+        assert_eq!(metrics.step_work, Duration::ZERO);
+        assert_eq!(metrics.render_work, Duration::ZERO);
+        assert_eq!(metrics.late_frames, 0);
+        assert_eq!(metrics.audio_queue_peak, 0);
+        assert_eq!(metrics.audio_queue_drops, 0);
+        assert_eq!(metrics.netplay_rollbacks, 0);
+        assert_eq!(metrics.netplay_max_rollback_distance, 0);
+        assert_eq!(metrics.netplay_desyncs, 0);
+    }
+
+    #[test]
+    fn perf_metrics_maybe_report_guard_paths_skip_when_disabled_or_under_threshold() {
+        let core = NesCore::new();
+
+        let mut disabled = PerfMetrics::new(false, 1, core.ppu_frame_counter());
+        disabled.report_frames = 1;
+        disabled.step_work = Duration::from_millis(4);
+        disabled.report_start = Instant::now() - Duration::from_millis(20);
+        disabled.maybe_report(&core);
+        assert_eq!(disabled.report_frames, 1);
+        assert_eq!(disabled.step_work, Duration::from_millis(4));
+
+        let mut under_threshold = PerfMetrics::new(true, 5, core.ppu_frame_counter());
+        under_threshold.report_frames = 2;
+        under_threshold.step_work = Duration::from_millis(6);
+        under_threshold.report_start = Instant::now() - Duration::from_millis(20);
+        under_threshold.maybe_report(&core);
+        assert_eq!(under_threshold.report_frames, 2);
+        assert_eq!(under_threshold.step_work, Duration::from_millis(6));
+    }
+
+    #[test]
+    fn perf_metrics_disabled_mode_does_not_mutate_tracking_fields() {
+        let core = NesCore::new();
+        let frame = vec![0_u8; 256 * 240 * 4];
+        let mut metrics = PerfMetrics::new(false, 1, 0);
+
+        metrics.on_step(&core, Duration::from_millis(3), true);
+        metrics.on_render(&frame, Duration::from_millis(2));
+        metrics.on_audio_queue(10, true);
+        let mut net = NetplayRuntimeStats::new(3);
+        net.observe_rtt_ms(10.0);
+        net.observe_rollback(2);
+        net.observe_desync();
+        metrics.on_netplay_stats(&net);
+        metrics.maybe_report(&core);
+
+        assert_eq!(metrics.report_frames, 0);
+        assert_eq!(metrics.step_work, Duration::ZERO);
+        assert_eq!(metrics.render_work, Duration::ZERO);
+        assert_eq!(metrics.audio_queue_peak, 0);
+        assert_eq!(metrics.audio_queue_drops, 0);
+        assert_eq!(metrics.netplay_rtt_ms, 0.0);
+        assert_eq!(metrics.netplay_rollbacks, 0);
+        assert_eq!(metrics.netplay_desyncs, 0);
+    }
+
+    #[test]
+    fn advance_core_for_host_frame_steps_cpu_budget() {
+        let mut rom = sample_ines(0, 1);
+        let prg_start = 16;
+        rom[prg_start] = 0xA9; // LDA #$42
+        rom[prg_start + 1] = 0x42;
+        rom[prg_start + 0x3FFC] = 0x00; // reset vector low
+        rom[prg_start + 0x3FFD] = 0x80; // reset vector high
+
+        let mut core = NesCore::new();
+        core.load_ines_rom(&rom).expect("sample rom should load");
+        assert_eq!(core.cpu_a(), 0x00);
+        assert_eq!(core.cpu_pc(), 0x8000);
+
+        advance_core_for_host_frame(&mut core, StepMode::CpuBudget(1))
+            .expect("cpu budget stepping should succeed");
+        assert_eq!(core.cpu_a(), 0x42);
+        assert_eq!(core.cpu_pc(), 0x8002);
+    }
+
+    #[test]
+    fn frame_signature_matches_reference_and_changes_on_sampled_byte() {
+        let mut frame = vec![0_u8; 256];
+        let signature_a = frame_signature(&frame);
+
+        let mut reference = 0xcbf2_9ce4_8422_2325_u64;
+        for idx in (0..frame.len()).step_by(64) {
+            reference ^= u64::from(frame[idx]);
+            reference = reference.wrapping_mul(0x0000_0001_0000_01b3);
+        }
+        assert_eq!(signature_a, reference);
+
+        frame[64] = 7;
+        let signature_b = frame_signature(&frame);
+        assert_ne!(signature_a, signature_b);
+    }
+
+    #[test]
+    fn capture_config_helpers_handle_placeholders_and_defaults() {
+        assert!(capture_config_from_parts(None, 10).is_none());
+        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
+
+        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
+            .expect("valid template should produce config");
+        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
+        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
+
+        assert_eq!(
+            capture_path_for_frame("snap-{frame}.ppm", 42),
+            "snap-000042.ppm"
+        );
+        assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
+    }
+
+    #[test]
+    fn encode_ppm_emits_expected_headers_and_pixel_layout() {
+        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
+        assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
+        assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
+    }
+
+    #[test]
+    fn format_rom_read_error_handles_not_found_and_other_errors() {
+        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let msg = format_rom_read_error("bad.nes", &not_found);
+        assert!(msg.contains("Could not find the ROM file at 'bad.nes'"));
+        assert!(msg.contains("homebrew.nes"));
+
+        let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = format_rom_read_error("bad.nes", &other);
+        assert!(msg.contains("Failed to read ROM at 'bad.nes'"));
+        assert!(msg.contains("permission denied"));
+    }
+
+    #[test]
+    fn write_frame_ppm_validates_frame_size_and_writes_output_files() {
+        let bad = write_frame_ppm("ignored.ppm", &[0_u8; 3]).expect_err("invalid size should fail");
+        assert!(bad.contains("frame length mismatch"));
+
+        let frame = vec![0_u8; 256 * 240 * 4];
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should be monotonic")
+            .as_nanos();
+        let ppm_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.ppm"));
+        let bmp_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.bmp"));
+
+        write_frame_ppm(&ppm_path.to_string_lossy(), &frame).expect("ppm write should succeed");
+        write_frame_ppm(&bmp_path.to_string_lossy(), &frame).expect("bmp write should succeed");
+
+        let ppm_bytes = fs::read(&ppm_path).expect("ppm bytes should be readable");
+        let bmp_bytes = fs::read(&bmp_path).expect("bmp bytes should be readable");
+        assert!(ppm_bytes.starts_with(b"P6\n256 240\n255\n"));
+        assert_eq!(&bmp_bytes[0..2], b"BM");
+
+        let _ = fs::remove_file(ppm_path);
+        let _ = fs::remove_file(bmp_path);
+    }
+}
