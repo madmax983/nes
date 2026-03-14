@@ -160,6 +160,30 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_macro_script_with_progress_callback() {
+        let mut core = NesCore::new();
+        let script = "
+            WAIT 1
+            PRESS A
+            RELEASE A
+        ";
+
+        let mut lines_reported = 0;
+        let mut max_total_lines = 0;
+        let mut callback = |current: usize, total: usize| {
+            lines_reported += 1;
+            max_total_lines = total;
+            // The script has 5 lines total (including empty lines).
+            assert!(current <= total);
+        };
+
+        execute_macro_script(&mut core, script, Some(&mut callback)).unwrap();
+
+        assert_eq!(lines_reported, 5);
+        assert_eq!(max_total_lines, 5);
+    }
+
+    #[test]
     fn test_execute_macro_script_buttons() {
         let mut core = NesCore::new();
         assert_eq!(core.controller_bits(), 0);
