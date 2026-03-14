@@ -167,8 +167,10 @@ pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     envelope
 }
 
+/// Calculates the Pearson correlation coefficient between two audio waveforms.
+/// Avoids unnecessary heap allocations by converting `i16` to `f64` on the fly.
 #[must_use]
-pub fn pearson_correlation(lhs: &[f64], rhs: &[f64]) -> f64 {
+pub fn pearson_correlation(lhs: &[i16], rhs: &[i16]) -> f64 {
     let n = lhs.len().min(rhs.len());
     if n < 2 {
         return 0.0;
@@ -177,15 +179,15 @@ pub fn pearson_correlation(lhs: &[f64], rhs: &[f64]) -> f64 {
     let lhs = &lhs[..n];
     let rhs = &rhs[..n];
 
-    let lhs_mean = lhs.iter().sum::<f64>() / n as f64;
-    let rhs_mean = rhs.iter().sum::<f64>() / n as f64;
+    let lhs_mean = lhs.iter().map(|&v| f64::from(v)).sum::<f64>() / n as f64;
+    let rhs_mean = rhs.iter().map(|&v| f64::from(v)).sum::<f64>() / n as f64;
 
     let mut numerator = 0.0_f64;
     let mut lhs_var = 0.0_f64;
     let mut rhs_var = 0.0_f64;
     for (left, right) in lhs.iter().zip(rhs.iter()) {
-        let left_centered = *left - lhs_mean;
-        let right_centered = *right - rhs_mean;
+        let left_centered = f64::from(*left) - lhs_mean;
+        let right_centered = f64::from(*right) - rhs_mean;
         numerator += left_centered * right_centered;
         lhs_var += left_centered * left_centered;
         rhs_var += right_centered * right_centered;
@@ -238,15 +240,6 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
     let lhs = &lhs[..n];
     let rhs = &rhs[..n];
 
-    let lhs_f64 = lhs
-        .iter()
-        .map(|sample| f64::from(*sample))
-        .collect::<Vec<_>>();
-    let rhs_f64 = rhs
-        .iter()
-        .map(|sample| f64::from(*sample))
-        .collect::<Vec<_>>();
-
     let lhs_stats = audio_stats(lhs);
     let rhs_stats = audio_stats(rhs);
     let rms_ratio = if rhs_stats.rms <= f64::EPSILON {
@@ -271,7 +264,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 
     WaveformComparison {
         samples_compared: n,
-        correlation: pearson_correlation(&lhs_f64, &rhs_f64),
+        correlation: pearson_correlation(lhs, rhs),
         rms_ratio,
         fft_mean_abs_db_diff,
     }
@@ -369,7 +362,7 @@ mod tests {
 
     #[test]
     fn pearson_correlation_is_one_for_identical_sequences() {
-        let lhs = [1.0_f64, 2.0, 3.0, 4.0, 5.0];
+        let lhs = [1_i16, 2, 3, 4, 5];
         assert_eq!(pearson_correlation(&lhs, &lhs), 1.0);
     }
 
