@@ -10,3 +10,8 @@ crates/nes-test-harness/fuzz/target
 crates/nes-test-harness/fuzz/corpus
 crates/nes-test-harness/fuzz/artifacts
 /.claude/
+
+# Local nes-ai SMB training artifacts and machine-specific profiles.
+/artifacts/ai/snapshots/smb-1-1-control.state.json
+/config/ai/profiles/smb-control.toml
+/crates/nes-ai/config/ai/profiles/smb-control.toml
