@@ -35,8 +35,8 @@ fn run() -> Result<(), String> {
 
     let profile_str = fs::read_to_string(&profile_path)
         .map_err(|e| format!("Failed to read profile config: {e}"))?;
-    let profile_cfg: AiProfileConfig = toml::from_str(&profile_str)
-        .map_err(|e| format!("Failed to parse profile config: {e}"))?;
+    let profile_cfg: AiProfileConfig =
+        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
 
     let trainer_cfg = TrainerConfig {
         artifact_dir: artifact_dir.clone(),
@@ -49,7 +49,10 @@ fn run() -> Result<(), String> {
         evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
             .map_err(|e| format!("Evaluation failed: {e}"))?;
 
-    println!("\n{}", build_summary_table(summary.average_return, summary.artifact_paths.len()));
+    println!(
+        "\n{}",
+        build_summary_table(summary.average_return, summary.artifact_paths.len())
+    );
 
     Ok(())
 }

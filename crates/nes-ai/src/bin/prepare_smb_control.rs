@@ -25,19 +25,18 @@ fn run() -> Result<(), String> {
     let movie_path = PathBuf::from(&args[2]);
     let out_path = PathBuf::from(&args[3]);
 
-    let rom = fs::read(&rom_path)
-        .map_err(|e| format!("Failed to read ROM: {e}"))?;
+    let rom = fs::read(&rom_path).map_err(|e| format!("Failed to read ROM: {e}"))?;
     let rom_hash = sha256_hex(&rom);
 
-    let movie_json = fs::read(&movie_path)
-        .map_err(|e| format!("Failed to read TAS json: {e}"))?;
+    let movie_json = fs::read(&movie_path).map_err(|e| format!("Failed to read TAS json: {e}"))?;
     let movie: TasMovie = serde_json::from_slice(&movie_json)
         .map_err(|e| format!("Failed to parse TAS json: {e}"))?;
 
     let mut core = NesCore::new();
     core.load_ines_rom(&rom)
         .map_err(|e| format!("Failed to load ROM: {e}"))?;
-    movie.replay(&mut core)
+    movie
+        .replay(&mut core)
         .map_err(|e| format!("Failed to replay TAS: {e}"))?;
 
     write_snapshot_bundle(&out_path, &rom_hash, "smb-control-v1", &core.save_state())

@@ -35,8 +35,8 @@ fn run() -> Result<(), String> {
 
     let profile_str = fs::read_to_string(&profile_path)
         .map_err(|e| format!("Failed to read profile config: {e}"))?;
-    let profile_cfg: AiProfileConfig = toml::from_str(&profile_str)
-        .map_err(|e| format!("Failed to parse profile config: {e}"))?;
+    let profile_cfg: AiProfileConfig =
+        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
 
     let trainer_cfg = TrainerConfig {
         checkpoint_dir: checkpoint_dir.clone(),
@@ -49,12 +49,23 @@ fn run() -> Result<(), String> {
     let summary = train_smb_control(&profile_cfg, &trainer_cfg, episodes)
         .map_err(|e| format!("Training failed: {e}"))?;
 
-    println!("\n{}", build_summary_table(summary.average_return, summary.checkpoint_paths.len(), summary.artifact_paths.len()));
+    println!(
+        "\n{}",
+        build_summary_table(
+            summary.average_return,
+            summary.checkpoint_paths.len(),
+            summary.artifact_paths.len()
+        )
+    );
 
     Ok(())
 }
 
-fn build_summary_table(average_return: f32, checkpoint_paths_len: usize, artifact_paths_len: usize) -> Table {
+fn build_summary_table(
+    average_return: f32,
+    checkpoint_paths_len: usize,
+    artifact_paths_len: usize,
+) -> Table {
     let mut table = Table::new();
     table.set_header(vec![
         Cell::new("Metric").fg(TableColor::Cyan),
