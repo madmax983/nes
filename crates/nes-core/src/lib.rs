@@ -20,6 +20,10 @@ mod serde_array;
 #[cfg(feature = "tas")]
 pub mod tas;
 
+/// Experimental modules containing new features and tools.
+#[cfg(feature = "nova")]
+pub mod experimental;
+
 pub use api::{
     AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, Button, Command, CoreError, CoreQuery, CoreSnapshot,
     EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, MapperDelta, NesCore, QueryResult,
