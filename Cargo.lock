@@ -1210,9 +1210,13 @@ checksum = "d8b9f2e4c67f833b660cdb0a3523065869fb35570177239812ed4c905aeff87b"
 dependencies = [
  "bitflags 2.11.0",
  "crossterm_winapi",
+ "derive_more",
  "document-features",
+ "mio 1.1.1",
  "parking_lot",
  "rustix 1.1.4",
+ "signal-hook",
+ "signal-hook-mio",
  "winapi",
 ]
 
@@ -3125,6 +3129,8 @@ dependencies = [
  "burn-ndarray",
  "burn-nn",
  "burn-tensor",
+ "comfy-table",
+ "crossterm 0.29.0",
  "nes-core",
  "rand 0.8.5",
  "serde",

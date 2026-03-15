@@ -17,6 +17,8 @@ burn-core = { version = "0.19.1", default-features = false, features = ["std"] }
 burn-ndarray = { version = "0.19.1", default-features = false, features = ["std"] }
 burn-nn = { version = "0.19.1", default-features = false, features = ["std"] }
 burn-tensor = { version = "0.19.1", default-features = false, features = ["std"] }
+comfy-table = "7.2.2"
+crossterm = "0.29.0"
 nes-core = { path = "../nes-core", features = ["tas"] }
 rand = "0.8.5"
 serde = { version = "1", features = ["derive"] }
