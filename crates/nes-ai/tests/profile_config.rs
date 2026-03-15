@@ -1,12 +1,30 @@
-use nes_ai::config::AiProfileConfig;
+use nes_ai::config::{AiProfileConfig, GameProfileId};
 
 #[test]
 fn profile_config_parses_expected_control_defaults() {
     let cfg: AiProfileConfig = toml::from_str(sample_profile_toml()).unwrap();
 
+    assert_eq!(cfg.game, GameProfileId::Smb);
     assert_eq!(cfg.frame_stack, 4);
     assert_eq!(cfg.observation.width, 84);
     assert_eq!(cfg.reward.stall_frames, 120);
+}
+
+#[test]
+fn profile_config_parses_explicit_game_id() {
+    let profile = format!("game = \"smb\"\n{}", sample_profile_toml());
+
+    let cfg: AiProfileConfig = toml::from_str(&profile).unwrap();
+
+    assert_eq!(cfg.game, GameProfileId::Smb);
+}
+
+#[test]
+fn profile_config_rejects_unknown_game_id() {
+    let profile = format!("game = \"metroid\"\n{}", sample_profile_toml());
+    let err = toml::from_str::<AiProfileConfig>(&profile).unwrap_err();
+
+    assert!(err.to_string().contains("game"));
 }
 
 #[test]

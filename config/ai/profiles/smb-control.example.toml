@@ -1,3 +1,4 @@
+game = "smb"
 id = "smb-control"
 rom_path = "./roms/Super Mario Bros.nes"
 snapshot_path = "./artifacts/ai/snapshots/smb-1-1-control.state.json"

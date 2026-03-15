@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use nes_ai::{
-    config::{AiProfileConfig, ObservationConfig, RewardConfig},
+    config::{AiProfileConfig, GameProfileId, ObservationConfig, RewardConfig},
     env::ProfileEnv,
     profiles::smb::SmbProfile,
     snapshot::{SNAPSHOT_BUNDLE_VERSION, SnapshotBundle},
@@ -13,6 +13,7 @@ pub fn make_mock_env() -> ProfileEnv<SmbProfile> {
     core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
 
     let cfg = AiProfileConfig {
+        game: GameProfileId::Smb,
         id: "mock-control".to_owned(),
         rom_path: PathBuf::from("mock.nes"),
         snapshot_path: PathBuf::from("mock.state.json"),

@@ -1,10 +1,13 @@
 use std::fs;
 
-use nes_core::{Command, NesCore, tas::TasRecorder};
+use nes_core::{
+    Command, NesCore,
+    tas::{TasMovie, TasRecorder},
+};
 
 use crate::{
     actions::ControlAction,
-    config::AiProfileConfig,
+    config::{AiProfileConfig, GameProfileId},
     episode::EpisodeMetadata,
     error::AiError,
     obs::{FrameStack, downsample_grayscale},
@@ -28,6 +31,12 @@ pub struct ObservationSnapshot {
     pub height: usize,
     pub frames: Vec<f32>,
     pub features: Vec<f32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ControlStepOutput {
+    pub reward: RewardBreakdown,
+    pub done: bool,
 }
 
 pub struct ProfileEnv<P>
@@ -215,21 +224,102 @@ impl ProfileEnv<SmbProfile> {
     /// Returns [`AiError`] if the configured snapshot bundle cannot be loaded,
     /// the ROM cannot be read, or the ROM hash does not match the snapshot.
     pub fn from_config(cfg: AiProfileConfig) -> Result<Self, AiError> {
-        cfg.validate()?;
-        let snapshot = load_snapshot_bundle(&cfg.snapshot_path)?;
-        let rom_hash = read_rom_hash(&cfg.rom_path)?;
-        if snapshot.rom_hash != rom_hash {
-            return Err(AiError::RomHashMismatch {
-                expected: snapshot.rom_hash,
-                found: rom_hash,
-            });
+        if cfg.game != GameProfileId::Smb {
+            return Err(AiError::Unsupported("smb env requires game = \"smb\""));
         }
+        let snapshot = load_verified_snapshot(&cfg)?;
         let profile = SmbProfile::new(cfg);
         Ok(Self::new(profile, snapshot))
     }
 }
 
 pub type SmbControlEnv = ProfileEnv<SmbProfile>;
+
+pub enum AnyControlEnv {
+    Smb(Box<SmbControlEnv>),
+}
+
+impl AnyControlEnv {
+    /// Builds the appropriate control environment for the configured game profile.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if config validation, snapshot loading, or ROM validation fails.
+    pub fn from_config(cfg: AiProfileConfig) -> Result<Self, AiError> {
+        match cfg.game {
+            GameProfileId::Smb => Ok(Self::Smb(Box::new(SmbControlEnv::from_config(cfg)?))),
+        }
+    }
+
+    /// Resets the current control environment and seeds its observation state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if the concrete environment cannot restore its snapshot.
+    pub fn reset(&mut self) -> Result<(), AiError> {
+        match self {
+            Self::Smb(env) => {
+                env.reset()?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Applies one control action and returns reward/done state independent of game-specific features.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if the concrete environment cannot step.
+    pub fn step(&mut self, action: ControlAction) -> Result<ControlStepOutput, AiError> {
+        match self {
+            Self::Smb(env) => {
+                let step = env.step(action)?;
+                Ok(ControlStepOutput {
+                    reward: step.reward,
+                    done: step.done,
+                })
+            }
+        }
+    }
+
+    /// Returns the current observation for the active control environment.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AiError`] if called before reset.
+    pub fn observation(&self) -> Result<ObservationSnapshot, AiError> {
+        match self {
+            Self::Smb(env) => env.observation(),
+        }
+    }
+
+    #[must_use]
+    pub fn recorded_movie(&self) -> &TasMovie {
+        match self {
+            Self::Smb(env) => env.recorded_movie(),
+        }
+    }
+
+    #[must_use]
+    pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
+        match self {
+            Self::Smb(env) => env.finish_episode(total_reward),
+        }
+    }
+}
+
+fn load_verified_snapshot(cfg: &AiProfileConfig) -> Result<SnapshotBundle, AiError> {
+    cfg.validate()?;
+    let snapshot = load_snapshot_bundle(&cfg.snapshot_path)?;
+    let rom_hash = read_rom_hash(&cfg.rom_path)?;
+    if snapshot.rom_hash != rom_hash {
+        return Err(AiError::RomHashMismatch {
+            expected: snapshot.rom_hash,
+            found: rom_hash,
+        });
+    }
+    Ok(snapshot)
+}
 
 fn read_rom_hash(path: &std::path::Path) -> Result<String, AiError> {
     let rom = fs::read(path).map_err(|source| AiError::RomRead {

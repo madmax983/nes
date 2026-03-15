@@ -1,17 +1,25 @@
+use std::{fs, path::PathBuf};
+
 use burn_core::{
     module::Module,
     record::{DefaultRecorder, FileRecorder},
 };
 use burn_ndarray::NdArray;
 use burn_tensor::backend::Backend;
+use nes_core::NesCore;
 use tempfile::tempdir;
 
 use nes_ai::{
     actions::ControlAction,
+    config::{AiProfileConfig, GameProfileId, ObservationConfig, RewardConfig},
     env::ObservationSnapshot,
     error::AiError,
     model::HybridPolicyValueConfig,
-    trainer::{TrainerConfig, action_from_arg, evaluate_random_policy, run_mock_ppo_smoke},
+    snapshot::{sha256_hex, write_snapshot_bundle},
+    trainer::{
+        TrainerConfig, action_from_arg, evaluate_control_profile, evaluate_random_policy,
+        run_mock_ppo_smoke,
+    },
 };
 
 #[test]
@@ -128,6 +136,51 @@ fn trainer_rejects_zero_episode_requests() {
         err,
         AiError::Unsupported("episodes must be greater than zero")
     ));
+}
+
+#[test]
+fn generic_profile_evaluator_dispatches_smb_configs() {
+    let dir = tempdir().unwrap();
+    let rom_path = dir.path().join("mock.nes");
+    let snapshot_path = dir.path().join("mock.state.json");
+    let rom_bytes = b"mock-rom";
+    fs::write(&rom_path, rom_bytes).unwrap();
+
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
+    write_snapshot_bundle(
+        &snapshot_path,
+        &sha256_hex(rom_bytes),
+        "mock-v1",
+        &core.save_state(),
+    )
+    .unwrap();
+
+    let cfg = AiProfileConfig {
+        game: GameProfileId::Smb,
+        id: "mock-control".to_owned(),
+        rom_path,
+        snapshot_path,
+        bootstrap_tas_path: PathBuf::from("mock.tas.json"),
+        frame_stack: 4,
+        frame_skip: 1,
+        max_episode_frames: 30,
+        observation: ObservationConfig {
+            width: 84,
+            height: 84,
+        },
+        reward: RewardConfig {
+            forward_progress: 1.0,
+            alive_bonus: 0.01,
+            stall_penalty: -0.02,
+            death_penalty: -1.0,
+            stall_frames: 30,
+        },
+    };
+
+    let summary = evaluate_control_profile(&cfg, &TrainerConfig::smoke(), 1, None).unwrap();
+
+    assert!(summary.average_return.is_finite());
 }
 
 #[test]

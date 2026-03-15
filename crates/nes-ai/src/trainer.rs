@@ -16,8 +16,8 @@ use rand::{Rng, SeedableRng, rngs::StdRng, seq::SliceRandom};
 
 use crate::{
     actions::ControlAction,
-    config::AiProfileConfig,
-    env::{ObservationSnapshot, ProfileEnv, SmbControlEnv},
+    config::{AiProfileConfig, GameProfileId},
+    env::{AnyControlEnv, ObservationSnapshot, ProfileEnv},
     episode::{EpisodeArtifactPaths, EpisodeArtifactWriter, EpisodeMetadata},
     error::AiError,
     model::{HybridObservationBatch, HybridPolicyValueConfig, HybridPolicyValueNet},
@@ -162,6 +162,30 @@ where
 
     fn recorded_movie(&self) -> &TasMovie {
         self.recorded_movie()
+    }
+}
+
+impl TrainerEnv for AnyControlEnv {
+    fn reset_env(&mut self) -> Result<ObservationSnapshot, AiError> {
+        self.reset()?;
+        self.observation()
+    }
+
+    fn step_env(&mut self, action: ControlAction) -> Result<TrainerStep, AiError> {
+        let step = self.step(action)?;
+        Ok(TrainerStep {
+            observation: self.observation()?,
+            reward_total: step.reward.total,
+            done: step.done,
+        })
+    }
+
+    fn finish_episode_meta(&self, total_reward: f32) -> EpisodeMetadata {
+        AnyControlEnv::finish_episode(self, total_reward)
+    }
+
+    fn recorded_movie(&self) -> &TasMovie {
+        AnyControlEnv::recorded_movie(self)
     }
 }
 
@@ -326,7 +350,7 @@ pub fn run_mock_ppo_smoke(cfg: &TrainerConfig, episodes: usize) -> Result<TrainS
 ///
 /// Returns [`AiError`] if the profile cannot be loaded, training fails, or
 /// checkpoint/artifact emission fails.
-pub fn train_smb_control(
+pub fn train_control_profile(
     profile_cfg: &AiProfileConfig,
     cfg: &TrainerConfig,
     episodes: usize,
@@ -334,17 +358,36 @@ pub fn train_smb_control(
     validate_request(cfg, episodes)?;
     let profile_cfg = profile_cfg.clone();
     train_with_factory(cfg, episodes, move || {
-        SmbControlEnv::from_config(profile_cfg.clone())
+        AnyControlEnv::from_config(profile_cfg.clone())
     })
 }
 
-/// Evaluates SMB control either from a saved checkpoint or with a random baseline.
+/// Runs PPO training against the SMB control profile.
+///
+/// # Errors
+///
+/// Returns [`AiError`] if `profile_cfg` is not an SMB profile, the profile
+/// cannot be loaded, training fails, or checkpoint/artifact emission fails.
+pub fn train_smb_control(
+    profile_cfg: &AiProfileConfig,
+    cfg: &TrainerConfig,
+    episodes: usize,
+) -> Result<TrainSummary, AiError> {
+    if profile_cfg.game != GameProfileId::Smb {
+        return Err(AiError::Unsupported(
+            "train_smb_control requires game = \"smb\"",
+        ));
+    }
+    train_control_profile(profile_cfg, cfg, episodes)
+}
+
+/// Evaluates a configured control profile either from a saved checkpoint or with a random baseline.
 ///
 /// # Errors
 ///
 /// Returns [`AiError`] if the profile cannot be loaded, the checkpoint cannot be
 /// loaded, or evaluation artifacts cannot be emitted.
-pub fn evaluate_smb_control(
+pub fn evaluate_control_profile(
     profile_cfg: &AiProfileConfig,
     cfg: &TrainerConfig,
     episodes: usize,
@@ -352,7 +395,7 @@ pub fn evaluate_smb_control(
 ) -> Result<EvalSummary, AiError> {
     validate_request(cfg, episodes)?;
     let profile_cfg_for_eval = profile_cfg.clone();
-    let make_env = move || SmbControlEnv::from_config(profile_cfg_for_eval.clone());
+    let make_env = move || AnyControlEnv::from_config(profile_cfg_for_eval.clone());
 
     match checkpoint_base {
         Some(checkpoint_base) => {
@@ -376,6 +419,27 @@ pub fn evaluate_smb_control(
         }
         None => evaluate_random_with_factory(cfg, episodes, make_env),
     }
+}
+
+/// Evaluates SMB control either from a saved checkpoint or with a random baseline.
+///
+/// # Errors
+///
+/// Returns [`AiError`] if `profile_cfg` is not an SMB profile, the profile
+/// cannot be loaded, the checkpoint cannot be loaded, or evaluation artifacts
+/// cannot be emitted.
+pub fn evaluate_smb_control(
+    profile_cfg: &AiProfileConfig,
+    cfg: &TrainerConfig,
+    episodes: usize,
+    checkpoint_base: Option<&Path>,
+) -> Result<EvalSummary, AiError> {
+    if profile_cfg.game != GameProfileId::Smb {
+        return Err(AiError::Unsupported(
+            "evaluate_smb_control requires game = \"smb\"",
+        ));
+    }
+    evaluate_control_profile(profile_cfg, cfg, episodes, checkpoint_base)
 }
 
 /// Parses a CLI action label into the discrete control action space.

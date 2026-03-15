@@ -6,9 +6,18 @@ use crate::error::AiError;
 
 pub const MIN_OBSERVATION_DIM: usize = 20;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GameProfileId {
+    #[default]
+    Smb,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AiProfileConfig {
+    #[serde(default)]
+    pub game: GameProfileId,
     pub id: String,
     pub rom_path: PathBuf,
     pub snapshot_path: PathBuf,

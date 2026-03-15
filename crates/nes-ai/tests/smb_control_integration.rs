@@ -5,8 +5,8 @@ use tempfile::tempdir;
 use nes_ai::{
     actions::ControlAction,
     config::AiProfileConfig,
-    env::SmbControlEnv,
-    trainer::{TrainerConfig, train_smb_control},
+    env::AnyControlEnv,
+    trainer::{TrainerConfig, train_control_profile},
 };
 
 #[test]
@@ -17,8 +17,8 @@ fn smb_control_profile_can_reset_and_gain_forward_reward() {
     )
     .unwrap();
 
-    let mut env = SmbControlEnv::from_config(cfg).unwrap();
-    let _ = env.reset().unwrap();
+    let mut env = AnyControlEnv::from_config(cfg).unwrap();
+    env.reset().unwrap();
     let observation = env.observation().unwrap();
     let step = env.step(ControlAction::Right).unwrap();
 
@@ -49,7 +49,7 @@ fn smb_control_training_stack_can_emit_checkpoint_and_eval_artifacts() {
         ..TrainerConfig::smoke()
     };
 
-    let trained = train_smb_control(&cfg, &trainer_cfg, 1).unwrap();
+    let trained = train_control_profile(&cfg, &trainer_cfg, 1).unwrap();
     let mut checkpoint_file = trained.checkpoint_paths[0].clone();
     checkpoint_file.set_extension("mpk");
 
