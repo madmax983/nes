@@ -1,0 +1,19 @@
+game = "smb"
+id = "smb-control"
+rom_path = "./roms/Super Mario Bros.nes"
+snapshot_path = "./artifacts/ai/snapshots/smb-1-1-control.state.json"
+bootstrap_tas_path = "./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json"
+frame_stack = 4
+frame_skip = 4
+max_episode_frames = 900
+
+[observation]
+width = 84
+height = 84
+
+[reward]
+forward_progress = 1.0
+alive_bonus = 0.01
+stall_penalty = -0.02
+death_penalty = -1.0
+stall_frames = 120

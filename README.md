@@ -13,6 +13,7 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 - `crates/nes-test-harness`: replay + ROM gate tests.
 - `crates/nes-netplay`: rollback netcode engine + relay protocol types.
 - `crates/nes-relay`: room relay server for internet netplay sessions.
+- `crates/nes-ai`: Burn-based training/eval stack for snapshot-start control tasks with TAS replay artifacts.
 
 ## v0 Quality Gates
 
@@ -139,7 +140,35 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_play_demo.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_hybrid_autoplay.ps1
 ```
 
-For in-process automation, `nes_core::tas` is now the stable foundation when `nes-core` is built with `--features tas`: it records run-length encoded per-frame controller movies, replays them deterministically against `NesCore`, and can export the legacy macro script format for existing MCP tooling. That gives future search/planning work, including a possible `nes-ai` crate, a structured input tape instead of a stringly experiment.
+For in-process automation, `nes_core::tas` is now the stable foundation when `nes-core` is built with `--features tas`: it records run-length encoded per-frame controller movies, replays them deterministically against `NesCore`, and can export the legacy macro script format for existing MCP tooling. That gives search/planning work, including `nes-ai`, a structured input tape instead of a stringly experiment.
+
+## AI Control Training
+
+`nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
+
+```powershell
+# 1. Prepare the fixed SMB 1-1 control snapshot
+cargo run -p nes-ai --bin prepare_smb_control -- `
+  ./roms/Super Mario Bros.nes `
+  ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
+  ./artifacts/ai/snapshots/smb-1-1-control.state.json
+
+# 2. Train from the local profile
+cargo run -p nes-ai --bin train_smb_control -- `
+  ./config/ai/profiles/smb-control.toml `
+  4 `
+  ./artifacts/ai/checkpoints `
+  ./artifacts/ai/eval
+
+# 3. Evaluate a saved checkpoint base path (the recorder appends .mpk)
+cargo run -p nes-ai --bin eval_smb_control -- `
+  ./config/ai/profiles/smb-control.toml `
+  ./artifacts/ai/checkpoints/policy-update-0002 `
+  2 `
+  ./artifacts/ai/eval
+```
+
+Evaluation writes `*.tas.json`, `*.run.json`, and when possible `*.macro.txt` so runs can be replayed either through `nes_core::tas` or the legacy macro tooling.
 
 ROM harness tests read from:
 - `roms.smb`
