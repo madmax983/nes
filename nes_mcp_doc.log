@@ -1,0 +1,32 @@
+   Compiling libc v0.2.182
+    Checking smallvec v1.15.1
+   Compiling rustix v0.38.44
+   Compiling serde_json v1.0.149
+    Checking nes-core v0.1.0 (/app/crates/nes-core)
+    Checking errno v0.3.14
+    Checking parking_lot_core v0.9.12
+    Checking mio v1.1.1
+    Checking signal-hook-registry v1.4.8
+    Checking parking_lot v0.12.5
+    Checking signal-hook v0.3.18
+    Checking crossterm v0.29.0
+    Checking signal-hook-mio v0.2.5
+    Checking crossterm v0.28.1
+    Checking comfy-table v7.2.2
+    Checking nes-mcp v0.1.0 (/app/crates/nes-mcp)
+ Documenting nes-mcp v0.1.0 (/app/crates/nes-mcp)
+warning: missing documentation for the crate
+   --> crates/nes-mcp/src/bin/run_macro.rs:1:1
+    |
+  1 | / use std::env;
+  2 | | use std::fs;
+  3 | | use std::path::Path;
+...   |
+119 | | }
+    | |_^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: `nes-mcp` (bin "run_macro" doc) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.04s
+   Generated /app/target/doc/nes_mcp/index.html and 1 other file

@@ -1,3 +1,9 @@
+//! Standalone macro runner binary.
+//!
+//! Provides a command-line interface to execute `.macro.txt` scripts directly
+//! against a ROM using the `nes_mcp` macro engine. Useful for debugging
+//! automated tool interactions outside of an active MCP session.
+
 use std::env;
 use std::fs;
 use std::path::Path;
