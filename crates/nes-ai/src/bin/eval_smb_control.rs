@@ -7,13 +7,20 @@ use nes_ai::{
     trainer::{TrainerConfig, evaluate_smb_control},
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    if let Err(err) = run() {
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
     if args.len() < 3 || args.len() > 5 {
-        eprintln!(
+        return Err(
             "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
+                .to_owned(),
         );
-        std::process::exit(2);
     }
 
     let profile_path = PathBuf::from(&args[1]);
@@ -21,10 +28,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let episodes = args
         .get(3)
         .map(|value| value.parse::<usize>())
-        .transpose()?
+        .transpose()
+        .map_err(|e| format!("Failed to parse episodes: {e}"))?
         .unwrap_or(2);
     let artifact_dir = args.get(4).map(PathBuf::from);
-    let profile_cfg: AiProfileConfig = toml::from_str(&fs::read_to_string(&profile_path)?)?;
+
+    let profile_str = fs::read_to_string(&profile_path)
+        .map_err(|e| format!("Failed to read profile config: {e}"))?;
+    let profile_cfg: AiProfileConfig = toml::from_str(&profile_str)
+        .map_err(|e| format!("Failed to parse profile config: {e}"))?;
+
     let trainer_cfg = TrainerConfig {
         artifact_dir: artifact_dir.clone(),
         ..TrainerConfig::smoke()
@@ -33,8 +46,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", "Evaluating AI Profile...".with(Color::Cyan).bold());
 
     let summary =
-        evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))?;
+        evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
+            .map_err(|e| format!("Evaluation failed: {e}"))?;
 
+    println!("\n{}", build_summary_table(summary.average_return, summary.artifact_paths.len()));
+
+    Ok(())
+}
+
+fn build_summary_table(average_return: f32, artifact_paths_len: usize) -> Table {
     let mut table = Table::new();
     table.set_header(vec![
         Cell::new("Metric").fg(TableColor::Cyan),
@@ -43,14 +63,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     table.add_row(vec![
         Cell::new("Average Return"),
-        Cell::new(format!("{:.2}", summary.average_return)).fg(TableColor::Yellow),
+        Cell::new(format!("{average_return:.2}")).fg(TableColor::Yellow),
     ]);
     table.add_row(vec![
         Cell::new("Artifacts Written"),
-        Cell::new(summary.artifact_paths.len().to_string()).fg(TableColor::Green),
+        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Green),
     ]);
 
-    println!("\n{table}");
+    table
+}
 
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::build_summary_table;
+
+    #[test]
+    fn build_summary_table_formats_average_return_and_artifacts() {
+        let table = build_summary_table(2.5, 3);
+        let output = table.to_string();
+
+        assert!(output.contains("Average Return"));
+        assert!(output.contains("2.50"));
+        assert!(output.contains("Artifacts Written"));
+        assert!(output.contains('3'));
+    }
 }
