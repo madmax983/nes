@@ -11,6 +11,25 @@ pub struct KeyframePolicy {
 }
 
 impl KeyframePolicy {
+    /// Creates a new `KeyframePolicy` with the given parameters.
+    ///
+    /// ## Arguments
+    ///
+    /// * `base_interval` - The guaranteed number of frames between keyframes,
+    ///   assuming no delta spikes trigger an early keyframe.
+    /// * `spike_threshold` - The heuristic threshold where a large frame delta
+    ///   is considered complex enough to warrant a fresh keyframe immediately,
+    ///   preventing expensive delta-chains.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_rewind::policy::KeyframePolicy;
+    ///
+    /// let mut policy = KeyframePolicy::new(60, 4000);
+    /// assert_eq!(policy.should_promote(100), false); // Still under interval
+    /// assert_eq!(policy.should_promote(5000), true); // Triggered by spike
+    /// ```
     pub fn new(base_interval: u64, spike_threshold: u32) -> Self {
         Self {
             base_interval,

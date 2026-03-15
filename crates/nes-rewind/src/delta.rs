@@ -2,7 +2,7 @@
 //!
 //! Three layers of delta:
 //! - [`ArrayDelta`]: byte-level runs of changes in raw arrays (RAM, CHR, etc.).
-//! - [`FieldDelta`]: scalar register/timing changes between [`CoreSnapshot`]s.
+//! - [`FieldDelta`]: scalar register/timing changes between `CoreSnapshot`s.
 //! - [`FrameDelta`]: full per-frame delta combining array and field deltas.
 
 use nes_core::cpu::CpuSnapshot;
@@ -106,7 +106,7 @@ pub struct PpuScrollDelta {
     pub render_ctrl: u8,
 }
 
-/// Scalar-field delta between two [`CoreSnapshot`]s.
+/// Scalar-field delta between two `CoreSnapshot`s.
 ///
 /// Each `Option` field is `None` when unchanged, `Some(new_value)` when changed.
 #[derive(Debug, Clone)]

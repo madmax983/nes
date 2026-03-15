@@ -92,33 +92,59 @@ pub struct AssembledProgram {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DslError {
     /// Source parse failure at a specific line.
-    Parse { line: usize, message: String },
+    Parse {
+        /// Line number of the error.
+        line: usize,
+        /// Detail message describing the parsing issue.
+        message: String,
+    },
     /// Duplicate label declaration.
     DuplicateLabel(String),
     /// Duplicate constant declaration.
     DuplicateConst(String),
     /// Address was written multiple times with incompatible bytes.
     DuplicateAddress {
+        /// Target CPU address.
         addr: u16,
+        /// Previously assembled byte value at this address.
         existing: u8,
+        /// Incoming byte value trying to overwrite it.
         incoming: u8,
     },
     /// Symbol was referenced but never defined.
     UnknownSymbol(String),
     /// Value does not fit target width.
     ValueOutOfRange {
+        /// Line number where the value definition failed.
         line: usize,
+        /// Provided numeric value.
         value: i64,
+        /// Bit-width constraint that was violated.
         width_bits: u8,
     },
     /// Relative branch cannot reach target.
-    BranchOutOfRange { line: usize, from: u16, to: u16 },
+    BranchOutOfRange {
+        /// Line number containing the branch instruction.
+        line: usize,
+        /// Program counter executing the branch.
+        from: u16,
+        /// Target address.
+        to: u16,
+    },
     /// Instruction mnemonic not recognized.
-    UnknownMnemonic { line: usize, mnemonic: String },
+    UnknownMnemonic {
+        /// Line number with the unknown mnemonic.
+        line: usize,
+        /// The unrecognized mnemonic string.
+        mnemonic: String,
+    },
     /// Mnemonic exists but addressing mode is unsupported.
     UnsupportedAddressing {
+        /// Line number with the unsupported syntax.
         line: usize,
+        /// The mnemonic.
         mnemonic: String,
+        /// The addressing mode.
         mode: String,
     },
     /// ROM layout cannot represent assembled bytes.
