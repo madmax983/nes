@@ -237,13 +237,18 @@ pub struct ProfileSelection {
     pub source: ProfileSelectionSource,
 }
 
+/// ⚡ Bolt Optimization:
+/// Eliminates 32 intermediate `String` heap allocations per ROM hash computation
+/// by using `std::fmt::Write` to format directly into the pre-allocated string buffer,
+/// rather than creating a temporary formatted `String` for each byte and pushing it.
 pub fn compute_rom_hash(rom_bytes: &[u8]) -> String {
+    use std::fmt::Write;
     let mut hasher = Sha256::new();
     hasher.update(rom_bytes);
     let digest = hasher.finalize();
     let mut out = String::with_capacity(digest.len() * 2);
     for byte in digest {
-        out.push_str(&format!("{byte:02x}"));
+        let _ = write!(out, "{byte:02x}");
     }
     out
 }
