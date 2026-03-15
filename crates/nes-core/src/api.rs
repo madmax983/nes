@@ -1756,4 +1756,89 @@ mod tests {
         let mapper = LoadedMapper::Cnrom(cnrom);
         assert!(mapper.chr_writable());
     }
+
+    #[test]
+    fn should_return_chr_writable_for_gxrom() {
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Gxrom(gxrom);
+        assert!(mapper.chr_writable());
+    }
+
+    #[test]
+    fn should_return_chr_writable_for_mmc3() {
+        let mmc3 = Mmc3::from_prg_chr(vec![0; 32 * 1024], vec![], NametableMirroring::Vertical);
+        let mapper = LoadedMapper::Mmc3(mmc3);
+        assert!(mapper.chr_writable());
+    }
+
+    #[test]
+    fn should_return_false_for_chr_writable_unsupported_mappers() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(!mapper.chr_writable());
+    }
+
+    #[test]
+    fn should_sync_chr_ram_from_ppu_window_for_mmc3() {
+        let mmc3 = Mmc3::from_prg_chr(vec![0; 32 * 1024], vec![], NametableMirroring::Vertical);
+        let mut mapper = LoadedMapper::Mmc3(mmc3);
+        let window = [3; 8192];
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        let (chr_window, writable) = mapper.chr_window().unwrap();
+        assert!(writable);
+        assert_eq!(chr_window[0], 3);
+    }
+
+    #[test]
+    fn should_ignore_sync_chr_ram_for_unsupported_mappers() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mut mapper = LoadedMapper::Nrom(nrom);
+        let window = [4; 8192];
+        // This should not panic or change anything
+        mapper.sync_chr_ram_from_ppu_window(&window);
+    }
+
+    #[test]
+    fn should_ignore_on_ppu_dot_for_unsupported_mappers() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mut mapper = LoadedMapper::Nrom(nrom);
+        // This should not panic
+        mapper.on_ppu_dot(0, 0, true);
+    }
+
+    #[test]
+    fn should_return_false_for_irq_pending_unsupported_mappers() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(!mapper.irq_pending());
+    }
+
+    #[test]
+    fn should_return_none_for_mirroring_override_unsupported_mappers() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert_eq!(mapper.mirroring_override(), None);
+    }
+
+    #[test]
+    fn should_return_none_for_chr_window_unsupported_mappers() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert_eq!(mapper.chr_window(), None);
+    }
+
+    #[test]
+    fn should_return_chr_window_for_gxrom() {
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Gxrom(gxrom);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_cnrom() {
+        let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Cnrom(cnrom);
+        assert!(mapper.chr_window().is_some());
+    }
 }
