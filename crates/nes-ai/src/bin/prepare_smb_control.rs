@@ -26,7 +26,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     write_snapshot_bundle(&out_path, &rom_hash, "smb-control-v1", &core.save_state())?;
 
-    println!("{}", "Prepared SMB Control Snapshot".with(Color::Cyan).bold());
+    println!(
+        "{}",
+        "Prepared SMB Control Snapshot".with(Color::Cyan).bold()
+    );
 
     let mut table = Table::new();
     table.set_header(vec![
