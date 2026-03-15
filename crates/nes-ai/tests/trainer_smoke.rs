@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{Mutex, OnceLock},
+};
 
 use burn_core::{
     module::Module,
@@ -24,6 +28,7 @@ use nes_ai::{
 
 #[test]
 fn ppo_smoke_produces_positive_finite_return() {
+    let _lock = trainer_lock().lock().unwrap();
     let cfg = TrainerConfig::smoke();
     let trained = run_mock_ppo_smoke(&cfg, 4).unwrap();
 
@@ -33,6 +38,7 @@ fn ppo_smoke_produces_positive_finite_return() {
 
 #[test]
 fn ppo_smoke_return_changes_with_training_budget() {
+    let _lock = trainer_lock().lock().unwrap();
     let cfg = TrainerConfig::smoke();
     let stronger = TrainerConfig {
         training_updates: cfg.training_updates + 1,
@@ -48,6 +54,7 @@ fn ppo_smoke_return_changes_with_training_budget() {
 
 #[test]
 fn ppo_smoke_writes_checkpoints_and_eval_artifacts() {
+    let _lock = trainer_lock().lock().unwrap();
     let dir = tempdir().unwrap();
     let cfg = TrainerConfig {
         training_updates: 1,
@@ -70,6 +77,7 @@ fn ppo_smoke_writes_checkpoints_and_eval_artifacts() {
 
 #[test]
 fn ppo_smoke_returns_checkpoint_base_paths() {
+    let _lock = trainer_lock().lock().unwrap();
     let dir = tempdir().unwrap();
     let cfg = TrainerConfig {
         training_updates: 1,
@@ -92,6 +100,7 @@ fn ppo_smoke_returns_checkpoint_base_paths() {
 
 #[test]
 fn ppo_smoke_returned_checkpoint_base_round_trips_through_burn_load_file() {
+    let _lock = trainer_lock().lock().unwrap();
     let dir = tempdir().unwrap();
     let cfg = TrainerConfig {
         training_updates: 1,
@@ -201,4 +210,11 @@ fn action_parser_rejects_unknown_labels() {
     let err = action_from_arg("left").unwrap_err();
 
     assert!(matches!(err, AiError::Unsupported("unknown action")));
+}
+
+fn trainer_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    // Burn's NdArray backend uses process-global seeding, so parallel smoke
+    // training tests can perturb each other's initialization and flake.
+    LOCK.get_or_init(|| Mutex::new(()))
 }
