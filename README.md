@@ -149,7 +149,7 @@ For in-process automation, `nes_core::tas` is now the stable foundation when `ne
 ```powershell
 # 1. Prepare the fixed SMB 1-1 control snapshot
 cargo run -p nes-ai --bin prepare_smb_control -- `
-  ./roms/Super Mario Bros.nes `
+  "./roms/Super Mario Bros.nes" `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
 
