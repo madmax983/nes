@@ -1978,8 +1978,15 @@ fn run() -> Result<(), String> {
             }
 
             if let Some(audio_output) = audio_output.as_ref() {
-                let queued = audio_output.queue_samples(core.audio_chunk_i16());
-                metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
+                if audio_output.queue_len() >= MAX_AUDIO_QUEUE_CHUNKS {
+                    // Fast path: drain samples into a stack array without heap allocation
+                    let mut dummy = [0_i16; nes_core::AUDIO_CHUNK_SAMPLES];
+                    core.fill_audio_chunk_i16(&mut dummy);
+                    metrics.on_audio_queue(audio_output.queue_len(), true);
+                } else {
+                    let queued = audio_output.queue_samples(core.audio_chunk_i16());
+                    metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
+                }
             }
 
             window.request_redraw();
