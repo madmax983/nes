@@ -1679,6 +1679,13 @@ mod tests {
     }
 
     #[test]
+    fn should_not_return_none_mirroring_override_for_axrom() {
+        let axrom = Axrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Axrom(axrom);
+        assert!(mapper.mirroring_override().is_some());
+    }
+
+    #[test]
     fn should_return_mirroring_override_for_mmc3() {
         let mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
@@ -1690,6 +1697,17 @@ mod tests {
             mapper.mirroring_override(),
             Some(NametableMirroring::Vertical)
         );
+    }
+
+    #[test]
+    fn should_not_return_none_mirroring_override_for_mmc3() {
+        let mmc3 = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![0; 8 * 1024],
+            NametableMirroring::Vertical,
+        );
+        let mapper = LoadedMapper::Mmc3(mmc3);
+        assert!(mapper.mirroring_override().is_some());
     }
 
     #[test]
@@ -1712,16 +1730,38 @@ mod tests {
     }
 
     #[test]
-    fn should_call_on_ppu_dot_for_mmc3() {
+    fn should_return_false_irq_pending_for_mmc3_initially() {
         let mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
             vec![0; 8 * 1024],
             NametableMirroring::Vertical,
         );
+        let mapper = LoadedMapper::Mmc3(mmc3);
+        assert!(!mapper.irq_pending());
+    }
+
+    #[test]
+    fn should_call_on_ppu_dot_for_mmc3() {
+        let mut mmc3 = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![0; 8 * 1024],
+            NametableMirroring::Vertical,
+        );
+
+        // Force an IRQ
+        mmc3.write_prg(0xC000, 1); // IRQ reload value
+        mmc3.write_prg(0xC001, 0); // IRQ reload clear
+        mmc3.write_prg(0xE001, 0); // IRQ enable
+
         let mut mapper = LoadedMapper::Mmc3(mmc3);
 
-        // This should not panic
-        mapper.on_ppu_dot(0, 0, true);
+        assert!(!mapper.irq_pending());
+
+        // Trigger A12 edges to decrement counter and trigger IRQ (visible scanline < 240)
+        mapper.on_ppu_dot(0, 260, true);
+        mapper.on_ppu_dot(0, 260, true);
+
+        assert!(mapper.irq_pending());
     }
 
     #[test]
@@ -1755,5 +1795,75 @@ mod tests {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Cnrom(cnrom);
         assert!(mapper.chr_writable());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_gxrom() {
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Gxrom(gxrom);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_sync_chr_ram_for_mmc3() {
+        let mmc3 = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![], // CHR RAM
+            NametableMirroring::Vertical,
+        );
+        let mut mapper = LoadedMapper::Mmc3(mmc3);
+        let mut window = [0; 8192];
+        window[0] = 42;
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        let (chr_window, writable) = mapper.chr_window().unwrap();
+        assert!(writable);
+        assert_eq!(chr_window[0], 42);
+    }
+
+    #[test]
+    fn should_return_chr_writable_for_gxrom() {
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Gxrom(gxrom);
+        assert!(mapper.chr_writable());
+    }
+
+    #[test]
+    fn should_return_chr_writable_for_mmc3() {
+        let mmc3 = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![], // CHR RAM
+            NametableMirroring::Vertical,
+        );
+        let mapper = LoadedMapper::Mmc3(mmc3);
+        assert!(mapper.chr_writable());
+    }
+
+    #[test]
+    fn should_return_none_chr_window_for_nrom() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(mapper.chr_window().is_none());
+    }
+
+    #[test]
+    fn should_return_none_mirroring_override_for_nrom() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(mapper.mirroring_override().is_none());
+    }
+
+    #[test]
+    fn should_return_false_irq_pending_for_nrom() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(!mapper.irq_pending());
+    }
+
+    #[test]
+    fn should_return_false_chr_writable_for_nrom() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(!mapper.chr_writable());
     }
 }
