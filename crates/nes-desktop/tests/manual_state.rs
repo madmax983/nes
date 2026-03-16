@@ -2,7 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use nes_core::{Command, NesCore};
 use nes_desktop::manual_state::{load_state_file, quicksave_path_for_rom, save_state_file};
-use nes_desktop::rta::compute_rom_hash;
+use nes_rta::compute_rom_hash;
 
 fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
     let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];

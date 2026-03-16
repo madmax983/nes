@@ -33,7 +33,7 @@ use nes_desktop::menu::{
 use nes_desktop::overlay::{
     OverlayCheatSummary, OverlayCommand, OverlayModel, OverlaySlotSummary, draw_overlay,
 };
-use nes_desktop::rta::{
+use nes_rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
     ProfileStatus, RtaEvent, RtaManager, RtaProfile, compute_rom_hash, load_profiles,
     select_profile,

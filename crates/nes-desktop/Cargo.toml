@@ -19,6 +19,7 @@ crossterm = "0.28"
 nes-netplay = { path = "../nes-netplay" }
 nes-rewind = { path = "../nes-rewind" }
 nes-mcp = { path = "../nes-mcp", optional = true }
+nes-rta = { path = "../nes-rta" }
 pixels = "0.13"
 rodio = "0.17"
 serde = { version = "1", features = ["derive"] }

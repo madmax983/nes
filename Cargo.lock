@@ -3173,6 +3173,7 @@ dependencies = [
  "nes-mcp",
  "nes-netplay",
  "nes-rewind",
+ "nes-rta",
  "pixels",
  "rand 0.8.5",
  "rfd",
@@ -3238,6 +3239,17 @@ dependencies = [
  "nes-core",
  "proptest",
  "smallvec",
+]
+
+[[package]]
+name = "nes-rta"
+version = "0.1.0"
+dependencies = [
+ "nes-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "toml",
 ]
 
 [[package]]
