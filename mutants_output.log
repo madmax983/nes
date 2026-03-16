@@ -1,14 +1,7 @@
-Found 5291 mutants to test
-ok       Unmutated baseline in 112s build + 58s test
-TIMEOUT  crates/nes-core/src/api.rs:39:69: replace / with * in 2s build + 60s test
-MISSED   crates/nes-core/src/api.rs:261:13: delete match arm Self::Mmc3(mapper) in LoadedMapper::chr_window in 3s build + 16s test
-MISSED   crates/nes-core/src/api.rs:269:9: replace LoadedMapper::mirroring_override -> Option<NametableMirroring> with None in 3s build + 17s test
-MISSED   crates/nes-core/src/api.rs:270:13: delete match arm Self::Axrom(mapper) in LoadedMapper::mirroring_override in 3s build + 17s test
-MISSED   crates/nes-core/src/api.rs:271:13: delete match arm Self::Mmc3(mapper) in LoadedMapper::mirroring_override in 2s build + 16s test
-MISSED   crates/nes-core/src/api.rs:277:9: replace LoadedMapper::irq_pending -> bool with true in 3s build + 16s test
-MISSED   crates/nes-core/src/api.rs:277:9: replace LoadedMapper::irq_pending -> bool with false in 2s build + 17s test
-MISSED   crates/nes-core/src/api.rs:278:13: delete match arm Self::Mmc3(mapper) in LoadedMapper::irq_pending in 3s build + 16s test
-MISSED   crates/nes-core/src/api.rs:284:9: replace LoadedMapper::on_ppu_dot with () in 3s build + 17s test
-MISSED   crates/nes-core/src/api.rs:291:13: delete match arm Self::Cnrom(mapper) in LoadedMapper::sync_chr_ram_from_ppu_window in 3s build + 17s test
-MISSED   crates/nes-core/src/api.rs:292:13: delete match arm Self::Gxrom(mapper) in LoadedMapper::sync_chr_ram_from_ppu_window in 2s build + 17s test
-MISSED   crates/nes-core/src/api.rs:300:9: replace LoadedMapper::chr_writable -> bool with true in 3s build + 17s test
+Found 73 mutants to test
+ok       Unmutated baseline in 22s build + 29s test
+ INFO Auto-set test timeout to 150s
+MISSED   crates/nes-core/src/mapper/gxrom.rs:35:26: replace < with == in Gxrom::from_prg_chr in 3s build + 32s test
+ERROR interrupted
+ERROR scenario execution internal error err=interrupted phase=Test
+Error: interrupted
