@@ -1,13 +1,19 @@
 use proptest::prelude::*;
 use nes_core::NesCore;
+use nes_mcp::macro_engine::execute_macro_script;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(50000))]
     #[test]
     fn does_not_crash(s in "[a-zA-Z0-9_ \\n\\r\\t#$:,\"\\.=-]*") {
-        // Just checking string processing locally or via another method,
-        // avoiding macro_engine to dodge API breaking changes upstream.
-        let mut _core = NesCore::new();
-        let _ = s.split_whitespace().collect::<Vec<_>>();
+        let mut core = NesCore::new();
+        // Fallback to testing parsing to avoid signature changes.
+        let _ = execute_macro_script(&mut core, &s);
+    }
+
+    #[test]
+    fn test_arbitrary_strings(s in ".*") {
+        let mut core = NesCore::new();
+        let _ = execute_macro_script(&mut core, &s);
     }
 }
