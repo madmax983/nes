@@ -11,6 +11,7 @@ pub struct AutoPlayer {
 
 #[cfg(feature = "nova")]
 impl AutoPlayer {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             frame_counter: 0,

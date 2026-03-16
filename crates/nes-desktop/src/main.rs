@@ -4,11 +4,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "nova")]
-mod auto_player;
-#[cfg(feature = "mcp-host")]
-mod mcp_host;
-mod netplay;
+
+
+pub(crate) use nes_desktop::metrics::{DEFAULT_METRICS_EVERY_FRAMES, PerfMetrics};
 
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
@@ -52,15 +50,14 @@ use winit::window::{Window, WindowBuilder};
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
-use crate::mcp_host::McpHost;
-use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
+use nes_desktop::mcp_host::McpHost;
+use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
 
 const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
 const DEFAULT_WINDOW_SCALE: u32 = 3;
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
 const MAX_AUDIO_QUEUE_CHUNKS: usize = 8;
 const AUDIO_CHANNELS: u16 = 1;
-const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
@@ -185,210 +182,6 @@ impl AudioSinkControl for RodioSinkAdapter {
 struct AudioOutput {
     sink: Box<dyn AudioSinkControl>,
     _stream: Option<OutputStream>,
-}
-
-struct PerfMetrics {
-    enabled: bool,
-    every_n_frames: u64,
-    report_start: Instant,
-    report_start_ppu_frame: u64,
-    report_frames: u64,
-    step_work: Duration,
-    render_work: Duration,
-    late_frames: u64,
-    last_pc: Option<u16>,
-    pc_stall_frames: u64,
-    last_frame_signature: Option<u64>,
-    unchanged_frame_count: u64,
-    warned_stall: bool,
-    audio_queue_peak: usize,
-    audio_queue_drops: u64,
-    netplay_rtt_ms: f64,
-    netplay_jitter_ms: f64,
-    netplay_rollbacks: u64,
-    netplay_max_rollback_distance: u64,
-    netplay_desyncs: u64,
-    netplay_input_delay_frames: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct MetricsSnapshot {
-    wall_fps: f64,
-    emu_fps: f64,
-    avg_step_ms: f64,
-    avg_render_ms: f64,
-}
-
-fn compute_metrics_snapshot(
-    report_frames: u64,
-    elapsed_secs: f64,
-    report_start_ppu_frame: u64,
-    ppu_now: u64,
-    step_work: Duration,
-    render_work: Duration,
-) -> Option<MetricsSnapshot> {
-    if report_frames == 0 || elapsed_secs <= f64::EPSILON {
-        return None;
-    }
-    let wall_fps = report_frames as f64 / elapsed_secs;
-    let emu_fps = ppu_now.saturating_sub(report_start_ppu_frame) as f64 / elapsed_secs;
-    let avg_step_ms = step_work.as_secs_f64() * 1_000.0 / report_frames as f64;
-    let avg_render_ms = render_work.as_secs_f64() * 1_000.0 / report_frames as f64;
-    Some(MetricsSnapshot {
-        wall_fps,
-        emu_fps,
-        avg_step_ms,
-        avg_render_ms,
-    })
-}
-
-impl PerfMetrics {
-    fn new(enabled: bool, every_n_frames: u64, initial_ppu_frame: u64) -> Self {
-        Self {
-            enabled,
-            every_n_frames: normalize_nonzero_u64(every_n_frames, DEFAULT_METRICS_EVERY_FRAMES),
-            report_start: Instant::now(),
-            report_start_ppu_frame: initial_ppu_frame,
-            report_frames: 0,
-            step_work: Duration::ZERO,
-            render_work: Duration::ZERO,
-            late_frames: 0,
-            last_pc: None,
-            pc_stall_frames: 0,
-            last_frame_signature: None,
-            unchanged_frame_count: 0,
-            warned_stall: false,
-            audio_queue_peak: 0,
-            audio_queue_drops: 0,
-            netplay_rtt_ms: 0.0,
-            netplay_jitter_ms: 0.0,
-            netplay_rollbacks: 0,
-            netplay_max_rollback_distance: 0,
-            netplay_desyncs: 0,
-            netplay_input_delay_frames: 0,
-        }
-    }
-
-    fn on_step(&mut self, core: &NesCore, step_elapsed: Duration, missed_deadline: bool) {
-        if !self.enabled {
-            return;
-        }
-        self.report_frames = self.report_frames.saturating_add(1);
-        self.step_work = self.step_work.saturating_add(step_elapsed);
-        if missed_deadline {
-            self.late_frames = self.late_frames.saturating_add(1);
-        }
-        let pc = core.cpu_pc();
-        if self.last_pc == Some(pc) {
-            self.pc_stall_frames = self.pc_stall_frames.saturating_add(1);
-        } else {
-            self.pc_stall_frames = 0;
-            self.warned_stall = false;
-        }
-        self.last_pc = Some(pc);
-        if self.pc_stall_frames >= 240 && !self.warned_stall {
-            let status = core.read_memory(0x2002);
-            let sprite0_y = core.ppu_oam_byte(0);
-            let sprite0_x = core.ppu_oam_byte(3);
-            eprintln!(
-                "[warn] long pc stall detected: pc=${:04X} stall_frames={} ppu_frame={} scanline={} dot={} status={:02X} sprite0=({}, {})",
-                pc,
-                self.pc_stall_frames,
-                core.ppu_frame_counter(),
-                core.ppu_scanline(),
-                core.ppu_dot(),
-                status,
-                sprite0_x,
-                sprite0_y
-            );
-            self.warned_stall = true;
-        }
-    }
-
-    fn on_render(&mut self, frame: &[u8], render_elapsed: Duration) {
-        if !self.enabled {
-            return;
-        }
-        self.render_work = self.render_work.saturating_add(render_elapsed);
-        let signature = frame_signature(frame);
-        if self.last_frame_signature == Some(signature) {
-            self.unchanged_frame_count = self.unchanged_frame_count.saturating_add(1);
-        } else {
-            self.unchanged_frame_count = 0;
-        }
-        self.last_frame_signature = Some(signature);
-    }
-
-    fn maybe_report(&mut self, core: &NesCore) {
-        if !self.enabled || self.report_frames < self.every_n_frames {
-            return;
-        }
-        let elapsed = self.report_start.elapsed().as_secs_f64();
-        let ppu_now = core.ppu_frame_counter();
-        let Some(snapshot) = compute_metrics_snapshot(
-            self.report_frames,
-            elapsed,
-            self.report_start_ppu_frame,
-            ppu_now,
-            self.step_work,
-            self.render_work,
-        ) else {
-            return;
-        };
-
-        println!(
-            "[metrics] wall_fps={:.1} emu_fps={:.1} avg_step_ms={:.2} avg_render_ms={:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
-            snapshot.wall_fps,
-            snapshot.emu_fps,
-            snapshot.avg_step_ms,
-            snapshot.avg_render_ms,
-            self.late_frames,
-            self.pc_stall_frames,
-            self.unchanged_frame_count,
-            self.audio_queue_peak,
-            self.audio_queue_drops,
-            self.netplay_rtt_ms,
-            self.netplay_jitter_ms,
-            self.netplay_rollbacks,
-            self.netplay_max_rollback_distance,
-            self.netplay_desyncs,
-            self.netplay_input_delay_frames
-        );
-
-        self.report_start = Instant::now();
-        self.report_start_ppu_frame = ppu_now;
-        self.report_frames = 0;
-        self.step_work = Duration::ZERO;
-        self.render_work = Duration::ZERO;
-        self.late_frames = 0;
-        self.audio_queue_peak = 0;
-        self.audio_queue_drops = 0;
-        self.netplay_rollbacks = 0;
-        self.netplay_max_rollback_distance = 0;
-        self.netplay_desyncs = 0;
-    }
-
-    fn on_audio_queue(&mut self, queue_depth: usize, dropped: bool) {
-        if !self.enabled {
-            return;
-        }
-        self.audio_queue_peak = self.audio_queue_peak.max(queue_depth);
-        if dropped {
-            self.audio_queue_drops = self.audio_queue_drops.saturating_add(1);
-        }
-    }
-
-    fn on_netplay_stats(&mut self, stats: &NetplayRuntimeStats) {
-        if !self.enabled {
-            return;
-        }
-        self.netplay_rtt_ms = stats.latest_rtt_ms_or_zero();
-        self.netplay_jitter_ms = stats.jitter_ms;
-        self.netplay_rollbacks = stats.rollback_count;
-        self.netplay_max_rollback_distance = stats.max_rollback_distance;
-        self.netplay_desyncs = stats.desync_count;
-        self.netplay_input_delay_frames = stats.input_delay_frames;
-    }
 }
 
 impl AudioOutput {
@@ -1480,7 +1273,7 @@ fn run() -> Result<(), String> {
 
     #[cfg(feature = "nova")]
     let mut auto_player = if runtime.auto_player_enabled {
-        Some(crate::auto_player::AutoPlayer::new())
+        Some(nes_desktop::auto_player::AutoPlayer::new())
     } else {
         None
     };
@@ -1809,7 +1602,7 @@ fn run() -> Result<(), String> {
 
             if let Some(rollback_engine) = rollback.as_mut() {
                 let local_gamepad_bits =
-                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+                    nes_desktop::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
                 let scheduled = rollback_engine
                     .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
                 if let Some(client) = netplay_client.as_ref()
@@ -1820,7 +1613,7 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 if let Some(client) = netplay_client.as_ref() {
-                    if let Some(nonce) = crate::netplay::schedule_netplay_ping(
+                    if let Some(nonce) = nes_desktop::netplay::schedule_netplay_ping(
                         now,
                         &mut netplay_next_ping_at,
                         &mut netplay_ping_nonce,
@@ -1846,7 +1639,7 @@ fn run() -> Result<(), String> {
                         let Some(message) = message else {
                             break;
                         };
-                        if let Err(err) = crate::netplay::handle_netplay_server_message(
+                        if let Err(err) = nes_desktop::netplay::handle_netplay_server_message(
                             message,
                             rollback_engine,
                             netplay_local_player,
@@ -1908,7 +1701,7 @@ fn run() -> Result<(), String> {
                             stats.input_delay_frames = current_delay;
                         }
 
-                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
+                        if nes_desktop::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
                             && let Some(client) = netplay_client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
@@ -2590,15 +2383,6 @@ fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Resul
     }
 }
 
-fn frame_signature(rgba: &[u8]) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for idx in (0..rgba.len()).step_by(64) {
-        hash ^= u64::from(rgba[idx]);
-        hash = hash.wrapping_mul(0x0000_0001_0000_01b3);
-    }
-    hash
-}
-
 fn capture_config_from_parts(
     path_template: Option<String>,
     every_n_frames: u64,
@@ -2796,23 +2580,22 @@ mod tests {
 
     use super::{
         AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_MCP_BIND_ADDR,
-        DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS,
-        MetricsSnapshot, NetplayRuntimeStats, PerfMetrics, RodioSinkAdapter, RuntimeArgs, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
+        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS, NetplayRuntimeStats, RodioSinkAdapter,
+        RuntimeArgs, StepMode, TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
         apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
         audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, compute_metrics_snapshot,
-        connected_gamepad_ids, controller_state_delta_for_player, element_state_pressed,
-        encode_ppm, evaluate_frame_deadline, format_rom_read_error, frame_signature,
-        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
-        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
-        netplay_feature_enabled, overlay_input_requires_redraw, parse_runtime_args,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
+        controller_state_delta_for_player, element_state_pressed, encode_ppm,
+        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
+        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
+        overlay_input_requires_redraw, parse_runtime_args, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+        update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -3084,48 +2867,6 @@ mod tests {
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
     }
-
-    #[test]
-    fn compute_metrics_snapshot_derives_expected_rates() {
-        let snapshot = compute_metrics_snapshot(
-            2,
-            0.25,
-            100,
-            130,
-            Duration::from_millis(10),
-            Duration::from_millis(8),
-        )
-        .expect("non-zero frames and elapsed should yield snapshot");
-        assert_eq!(
-            snapshot,
-            MetricsSnapshot {
-                wall_fps: 8.0,
-                emu_fps: 120.0,
-                avg_step_ms: 5.0,
-                avg_render_ms: 4.0,
-            }
-        );
-    }
-
-    #[test]
-    fn compute_metrics_snapshot_handles_guard_conditions_and_saturating_ppu_delta() {
-        assert!(compute_metrics_snapshot(0, 1.0, 10, 20, Duration::ZERO, Duration::ZERO).is_none());
-        assert!(
-            compute_metrics_snapshot(1, f64::EPSILON, 10, 20, Duration::ZERO, Duration::ZERO)
-                .is_none()
-        );
-        let snapshot = compute_metrics_snapshot(
-            1,
-            1.0,
-            200,
-            100,
-            Duration::from_millis(3),
-            Duration::from_millis(2),
-        )
-        .expect("valid input should produce snapshot");
-        assert_eq!(snapshot.emu_fps, 0.0);
-    }
-
     #[test]
     fn audio_output_queue_and_drop_behave_with_fake_sink() {
         let (fake_sink, shared_state) = FakeAudioSink::with_len(MAX_AUDIO_QUEUE_CHUNKS - 1);
@@ -3886,148 +3627,6 @@ mod tests {
         stats.observe_desync();
         assert_eq!(stats.desync_count, 2);
     }
-
-    #[test]
-    fn perf_metrics_on_step_tracks_stalls_and_recovers_on_pc_change() {
-        let core = NesCore::new();
-        let mut metrics = PerfMetrics::new(true, 0, 0);
-        assert_eq!(metrics.every_n_frames, DEFAULT_METRICS_EVERY_FRAMES);
-
-        metrics.on_step(&core, Duration::from_millis(4), true);
-        assert_eq!(metrics.report_frames, 1);
-        assert_eq!(metrics.step_work, Duration::from_millis(4));
-        assert_eq!(metrics.late_frames, 1);
-        assert_eq!(metrics.last_pc, Some(core.cpu_pc()));
-        assert_eq!(metrics.pc_stall_frames, 0);
-
-        metrics.on_step(&core, Duration::from_millis(2), false);
-        assert_eq!(metrics.report_frames, 2);
-        assert_eq!(metrics.step_work, Duration::from_millis(6));
-        assert_eq!(metrics.pc_stall_frames, 1);
-
-        metrics.pc_stall_frames = 239;
-        metrics.last_pc = Some(core.cpu_pc());
-        metrics.warned_stall = false;
-        metrics.on_step(&core, Duration::from_millis(1), false);
-        assert_eq!(metrics.pc_stall_frames, 240);
-        assert!(metrics.warned_stall);
-
-        metrics.last_pc = Some(core.cpu_pc().wrapping_add(1));
-        metrics.pc_stall_frames = 77;
-        metrics.warned_stall = true;
-        metrics.on_step(&core, Duration::from_millis(1), false);
-        assert_eq!(metrics.pc_stall_frames, 0);
-        assert!(!metrics.warned_stall);
-    }
-
-    #[test]
-    fn perf_metrics_render_audio_and_netplay_observation_update_fields() {
-        let core = NesCore::new();
-        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
-        let frame = vec![0_u8; 256 * 240 * 4];
-
-        metrics.on_render(&frame, Duration::from_millis(3));
-        assert_eq!(metrics.render_work, Duration::from_millis(3));
-        assert_eq!(metrics.unchanged_frame_count, 0);
-
-        metrics.on_render(&frame, Duration::from_millis(2));
-        assert_eq!(metrics.render_work, Duration::from_millis(5));
-        assert_eq!(metrics.unchanged_frame_count, 1);
-
-        metrics.on_audio_queue(3, false);
-        metrics.on_audio_queue(2, true);
-        assert_eq!(metrics.audio_queue_peak, 3);
-        assert_eq!(metrics.audio_queue_drops, 1);
-
-        let mut net = NetplayRuntimeStats::new(4);
-        net.observe_rtt_ms(42.0);
-        net.observe_rtt_ms(46.0);
-        net.observe_rollback(3);
-        net.observe_desync();
-        metrics.on_netplay_stats(&net);
-        assert_eq!(metrics.netplay_rtt_ms, 46.0);
-        assert_eq!(metrics.netplay_jitter_ms, 4.0);
-        assert_eq!(metrics.netplay_rollbacks, 1);
-        assert_eq!(metrics.netplay_max_rollback_distance, 3);
-        assert_eq!(metrics.netplay_desyncs, 1);
-        assert_eq!(metrics.netplay_input_delay_frames, 4);
-    }
-
-    #[test]
-    fn perf_metrics_maybe_report_resets_window_after_threshold() {
-        let core = NesCore::new();
-        let mut metrics = PerfMetrics::new(true, 2, core.ppu_frame_counter());
-        metrics.report_frames = 2;
-        metrics.step_work = Duration::from_millis(8);
-        metrics.render_work = Duration::from_millis(6);
-        metrics.late_frames = 1;
-        metrics.audio_queue_peak = 4;
-        metrics.audio_queue_drops = 2;
-        metrics.netplay_rollbacks = 5;
-        metrics.netplay_max_rollback_distance = 7;
-        metrics.netplay_desyncs = 3;
-        metrics.report_start = Instant::now() - Duration::from_millis(20);
-
-        metrics.maybe_report(&core);
-
-        assert_eq!(metrics.report_frames, 0);
-        assert_eq!(metrics.step_work, Duration::ZERO);
-        assert_eq!(metrics.render_work, Duration::ZERO);
-        assert_eq!(metrics.late_frames, 0);
-        assert_eq!(metrics.audio_queue_peak, 0);
-        assert_eq!(metrics.audio_queue_drops, 0);
-        assert_eq!(metrics.netplay_rollbacks, 0);
-        assert_eq!(metrics.netplay_max_rollback_distance, 0);
-        assert_eq!(metrics.netplay_desyncs, 0);
-    }
-
-    #[test]
-    fn perf_metrics_maybe_report_guard_paths_skip_when_disabled_or_under_threshold() {
-        let core = NesCore::new();
-
-        let mut disabled = PerfMetrics::new(false, 1, core.ppu_frame_counter());
-        disabled.report_frames = 1;
-        disabled.step_work = Duration::from_millis(4);
-        disabled.report_start = Instant::now() - Duration::from_millis(20);
-        disabled.maybe_report(&core);
-        assert_eq!(disabled.report_frames, 1);
-        assert_eq!(disabled.step_work, Duration::from_millis(4));
-
-        let mut under_threshold = PerfMetrics::new(true, 5, core.ppu_frame_counter());
-        under_threshold.report_frames = 2;
-        under_threshold.step_work = Duration::from_millis(6);
-        under_threshold.report_start = Instant::now() - Duration::from_millis(20);
-        under_threshold.maybe_report(&core);
-        assert_eq!(under_threshold.report_frames, 2);
-        assert_eq!(under_threshold.step_work, Duration::from_millis(6));
-    }
-
-    #[test]
-    fn perf_metrics_disabled_mode_does_not_mutate_tracking_fields() {
-        let core = NesCore::new();
-        let frame = vec![0_u8; 256 * 240 * 4];
-        let mut metrics = PerfMetrics::new(false, 1, 0);
-
-        metrics.on_step(&core, Duration::from_millis(3), true);
-        metrics.on_render(&frame, Duration::from_millis(2));
-        metrics.on_audio_queue(10, true);
-        let mut net = NetplayRuntimeStats::new(3);
-        net.observe_rtt_ms(10.0);
-        net.observe_rollback(2);
-        net.observe_desync();
-        metrics.on_netplay_stats(&net);
-        metrics.maybe_report(&core);
-
-        assert_eq!(metrics.report_frames, 0);
-        assert_eq!(metrics.step_work, Duration::ZERO);
-        assert_eq!(metrics.render_work, Duration::ZERO);
-        assert_eq!(metrics.audio_queue_peak, 0);
-        assert_eq!(metrics.audio_queue_drops, 0);
-        assert_eq!(metrics.netplay_rtt_ms, 0.0);
-        assert_eq!(metrics.netplay_rollbacks, 0);
-        assert_eq!(metrics.netplay_desyncs, 0);
-    }
-
     #[test]
     fn advance_core_for_host_frame_steps_cpu_budget() {
         let mut rom = sample_ines(0, 1);
@@ -4047,24 +3646,6 @@ mod tests {
         assert_eq!(core.cpu_a(), 0x42);
         assert_eq!(core.cpu_pc(), 0x8002);
     }
-
-    #[test]
-    fn frame_signature_matches_reference_and_changes_on_sampled_byte() {
-        let mut frame = vec![0_u8; 256];
-        let signature_a = frame_signature(&frame);
-
-        let mut reference = 0xcbf2_9ce4_8422_2325_u64;
-        for idx in (0..frame.len()).step_by(64) {
-            reference ^= u64::from(frame[idx]);
-            reference = reference.wrapping_mul(0x0000_0001_0000_01b3);
-        }
-        assert_eq!(signature_a, reference);
-
-        frame[64] = 7;
-        let signature_b = frame_signature(&frame);
-        assert_ne!(signature_a, signature_b);
-    }
-
     #[test]
     fn capture_config_helpers_handle_placeholders_and_defaults() {
         assert!(capture_config_from_parts(None, 10).is_none());
