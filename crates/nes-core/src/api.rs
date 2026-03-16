@@ -1713,15 +1713,22 @@ mod tests {
 
     #[test]
     fn should_call_on_ppu_dot_for_mmc3() {
-        let mmc3 = Mmc3::from_prg_chr(
+        let mut mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
             vec![0; 8 * 1024],
             NametableMirroring::Vertical,
         );
+
+        mmc3.write_prg(0xC000, 1);
+        mmc3.write_prg(0xC001, 0);
+        mmc3.write_prg(0xE001, 0);
+
         let mut mapper = LoadedMapper::Mmc3(mmc3);
 
-        // This should not panic
-        mapper.on_ppu_dot(0, 0, true);
+        mapper.on_ppu_dot(0, 260, true);
+        mapper.on_ppu_dot(0, 260, true);
+
+        assert!(mapper.irq_pending());
     }
 
     #[test]
@@ -1815,6 +1822,19 @@ mod tests {
     }
 
     #[test]
+    fn should_return_true_for_irq_pending_when_mmc3_has_irq() {
+        let mut mmc3 = Mmc3::from_prg_chr(vec![0; 32 * 1024], vec![], NametableMirroring::Vertical);
+        // Force an IRQ
+        mmc3.write_prg(0xC000, 1);
+        mmc3.write_prg(0xC001, 0);
+        mmc3.write_prg(0xE001, 0);
+        mmc3.on_ppu_dot(0, 260, true);
+        mmc3.on_ppu_dot(0, 260, true);
+        let mapper = LoadedMapper::Mmc3(mmc3);
+        assert!(mapper.irq_pending());
+    }
+
+    #[test]
     fn should_return_none_for_mirroring_override_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
@@ -1840,5 +1860,12 @@ mod tests {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Cnrom(cnrom);
         assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_none_mirroring_override_for_nrom() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert_eq!(mapper.mirroring_override(), None);
     }
 }
