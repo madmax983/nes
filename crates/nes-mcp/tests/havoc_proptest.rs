@@ -1,6 +1,6 @@
-use proptest::prelude::*;
 use nes_core::NesCore;
 use nes_mcp::macro_engine::execute_macro_script;
+use proptest::prelude::*;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(50000))]
