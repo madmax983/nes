@@ -735,7 +735,7 @@ impl Apu {
             hp440_prev_out_q16: 0,
             hp440_prev_in_q16: 0,
             lp14k_prev_out_q16: 0,
-            samples: VecDeque::new(),
+            samples: VecDeque::with_capacity(MAX_QUEUED_SAMPLES),
         }
     }
 
@@ -766,7 +766,7 @@ impl Apu {
             hp440_prev_out_q16: self.hp440_prev_out_q16,
             hp440_prev_in_q16: self.hp440_prev_in_q16,
             lp14k_prev_out_q16: self.lp14k_prev_out_q16,
-            samples: self.samples.iter().copied().collect(),
+            samples: Vec::from(self.samples.clone()),
         }
     }
 
@@ -790,7 +790,7 @@ impl Apu {
         self.hp440_prev_out_q16 = snapshot.hp440_prev_out_q16;
         self.hp440_prev_in_q16 = snapshot.hp440_prev_in_q16;
         self.lp14k_prev_out_q16 = snapshot.lp14k_prev_out_q16;
-        self.samples = snapshot.samples.into_iter().collect();
+        self.samples = snapshot.samples.into();
     }
 
     /// Writes an APU/MMIO register (`$4000-$4017`).
