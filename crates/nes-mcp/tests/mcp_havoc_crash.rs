@@ -53,3 +53,29 @@ fn havoc_dos_macro_wait_hang() {
     rx.recv_timeout(Duration::from_millis(500))
         .expect("timeout");
 }
+
+#[test]
+fn havoc_fuzz_base64_decode_panic() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_nes-mcp"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn nes-mcp daemon");
+
+    let payload_body = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"export_6502_dsl_rom_base64","arguments":{"source": ".bank 1\nRESET:\n  LDA #$22\n  JMP RESET\n.reset RESET\n"}}}"#;
+    let payload = format!("Content-Length: {}\r\n\r\n{}", payload_body.len(), payload_body);
+    {
+        let stdin = child.stdin.as_mut().expect("child stdin");
+        stdin
+            .write_all(payload.as_bytes())
+            .expect("write bad payload");
+        stdin.flush().expect("flush stdin");
+    }
+    drop(child.stdin.take());
+
+    let status = child.wait().expect("wait on daemon");
+    assert!(
+        status.success(),
+        "Daemon crashed"
+    );
+}
