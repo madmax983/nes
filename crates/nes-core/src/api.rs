@@ -1868,5 +1868,4 @@ mod tests {
         let mapper = LoadedMapper::Nrom(nrom);
         assert_eq!(mapper.mirroring_override(), None);
     }
-
 }
