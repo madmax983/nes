@@ -35,8 +35,8 @@ use nes_desktop::overlay::{
 };
 use nes_desktop::rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
-    ProfileStatus, RtaEvent, RtaManager, RtaProfile, compute_rom_hash, load_profiles,
-    select_profile,
+    ProfileStatus, RtaEvent, RtaManager, RtaProfile, RtaRuntimeConfig, compute_rom_hash,
+    load_profiles, select_profile,
 };
 use nes_desktop::session_cheats::SessionCheats;
 use nes_netplay::{RollbackConfig, RollbackEngine};
@@ -120,14 +120,6 @@ struct RuntimeArgs {
     rta_calibrate: bool,
     #[cfg(feature = "nova")]
     auto_player_enabled: bool,
-}
-
-#[derive(Debug, Clone)]
-struct RtaRuntimeConfig {
-    profile_id_override: Option<String>,
-    profiles_dir: PathBuf,
-    runs_dir: PathBuf,
-    calibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
