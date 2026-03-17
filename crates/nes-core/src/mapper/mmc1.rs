@@ -441,4 +441,52 @@ mod tests {
         assert_eq!(m.read_prg(0x8000), 0x11);
         assert_eq!(m.read_prg(0xC000), 0xEE);
     }
+
+    #[test]
+    fn state_and_restore_state_round_trip() {
+        let mut m = Mmc1::new(16, 8);
+        m.write_prg(0x8000, 0x01);
+        let s = m.state();
+        assert_eq!(s.shift_count, 1);
+        assert!(!m.shift_is_reset());
+
+        m.write_prg(0x8000, 0x01);
+        m.write_prg(0x8000, 0x01);
+        assert_eq!(m.shift_count, 3);
+
+        m.restore_state(s);
+        assert_eq!(m.shift_count, 1);
+        assert!(!m.shift_is_reset());
+    }
+
+    #[test]
+    fn mmc1_shift_is_reset_handles_partial_reset() {
+        let mut m = Mmc1::new(16, 8);
+        // Both conditions met
+        assert!(m.shift_is_reset());
+
+        // One condition met
+        m.shift_count = 1;
+        assert!(!m.shift_is_reset());
+
+        // Other condition met
+        m.shift_count = 0;
+        m.shift_register = 0x00;
+        assert!(!m.shift_is_reset());
+
+        // Neither condition met
+        m.shift_count = 1;
+        m.shift_register = 0x00;
+        assert!(!m.shift_is_reset());
+    }
+
+    #[test]
+    fn mmc1_write_prg_with_bit7_set_preserves_other_control_bits() {
+        let mut m = Mmc1::new(16, 8);
+        m.control = 0x03; // set lower bits
+        m.write_prg(0x8000, 0x80); // bit 7 set -> resets shift and sets bit 2,3
+
+        // Before ORing: 0x03. OR with 0x0C (CONTROL_RESET). Expected: 0x0F
+        assert_eq!(m.control, 0x0F);
+    }
 }

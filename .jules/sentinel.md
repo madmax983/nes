@@ -33,3 +33,8 @@
 **Mutant:** `replace RollbackEngine::clear_from with ()` in `crates/nes-netplay/src/rollback.rs`
 **Diagnosis:** `EQUIVALENT_MUTANT` / `SUSPECTED_BUG`. The `clear_from` method uses `BTreeMap::split_off` to remove all state mappings for frames `>= start_frame`. However, immediately after `clear_from` is called in `sync_frame`, the logic iterates exactly from `start_frame..self.next_frame`, calling `simulate_frame` which re-inserts and perfectly overwrites all of these "cleared" future values. Therefore, replacing `clear_from` with `()` does not change any observable state, leaving the mutant alive. The operation is mathematically functionally redundant and adds unnecessary `BTreeMap` node deallocation/reallocation overhead compared to simply overwriting the values.
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT` / `SUSPECTED_BUG`. No test can assert the absence of `clear_from` because the state is fully overwritten in standard execution.
+
+**mmc1_equivalent_shift_push_bit**
+**Mutant:** `crates/nes-core/src/mapper/mmc1.rs:137:58: replace | with ^ in Mmc1::push_shift_bit`
+**Diagnosis:** EQUIVALENT_MUTANT. The operation `(shift_register >> 1) | (incoming << 4)` is mutated to use `^`. Because `shift_register` is restricted to 5 active bits (max value `0x1F`), shifting right leaves bit 4 empty. Combining an empty bit 4 with `incoming << 4` yields mathematically identical results whether `|` or `^` is used.
+**Kill Shot:** None. This mutant is mathematically equivalent and cannot be killed.
