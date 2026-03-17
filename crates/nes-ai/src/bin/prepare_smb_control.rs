@@ -25,7 +25,16 @@ fn run() -> Result<(), String> {
     let movie_path = PathBuf::from(&args[2]);
     let out_path = PathBuf::from(&args[3]);
 
-    let rom = fs::read(&rom_path).map_err(|e| format!("Failed to read ROM: {e}"))?;
+    let rom = fs::read(&rom_path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            format!(
+                "Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+                rom_path.display()
+            )
+        } else {
+            format!("Failed to read ROM at '{}': {}", rom_path.display(), err)
+        }
+    })?;
     let rom_hash = sha256_hex(&rom);
 
     let movie_json = fs::read(&movie_path).map_err(|e| format!("Failed to read TAS json: {e}"))?;

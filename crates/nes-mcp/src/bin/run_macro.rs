@@ -30,8 +30,16 @@ fn main() {
 }
 
 fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
-    let rom_bytes = fs::read(rom_path)
-        .map_err(|err| format!("Failed to read ROM file '{}': {}", rom_path, err))?;
+    let rom_bytes = fs::read(rom_path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            format!(
+                "Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+                rom_path
+            )
+        } else {
+            format!("Failed to read ROM file '{}': {}", rom_path, err)
+        }
+    })?;
     let script_content = fs::read_to_string(script_path)
         .map_err(|err| format!("Failed to read script file '{}': {}", script_path, err))?;
 
@@ -120,6 +128,7 @@ mod tests {
     fn run_reports_missing_rom_file_errors() {
         let err = run("__missing_rom__.nes", "__missing_script__.txt")
             .expect_err("missing files should fail");
-        assert!(err.contains("Failed to read ROM file"));
+        assert!(err.contains("Could not find the ROM file at '__missing_rom__.nes'"));
+        assert!(err.contains("homebrew.nes"));
     }
 }
