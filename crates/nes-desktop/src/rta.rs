@@ -408,21 +408,11 @@ pub fn select_profile(
         ));
     }
 
-    let second_match = match_iter.next();
-
-    if second_match.is_some() {
-        let conflict = profiles
-            .iter()
-            .filter(|profile| {
-                profile
-                    .profile
-                    .rom_hashes
-                    .iter()
-                    .any(|value| compare_rom_hashes(value, rom_hash))
-            })
-            .map(|profile| profile.profile.id.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+    if let Some(second_match) = match_iter.next() {
+        let first = first_match.expect("first_match must be Some");
+        let mut conflict_names = vec![first.profile.id.as_str(), second_match.profile.id.as_str()];
+        conflict_names.extend(match_iter.map(|profile| profile.profile.id.as_str()));
+        let conflict = conflict_names.join(", ");
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
