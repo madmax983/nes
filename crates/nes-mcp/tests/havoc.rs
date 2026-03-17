@@ -1,5 +1,5 @@
 use nes_core::NesCore;
-use nes_mcp::{dispatch_tool, ToolParams};
+use nes_mcp::{ToolParams, dispatch_tool};
 use proptest::prelude::*;
 use std::fs;
 use std::path::Path;
