@@ -277,8 +277,8 @@ mod tests {
     /// This avoids flaky hardcoded sleep delays in tests.
     fn wait_for_sync(tm: &mut TimeMachine) -> bool {
         let start = std::time::Instant::now();
-        // Give it up to 250ms to process the queue.
-        while start.elapsed() < Duration::from_millis(250) {
+        // Give it up to 2000ms to process the queue in slow CI environments.
+        while start.elapsed() < Duration::from_millis(2000) {
             // To check if the worker has caught up, we can ask for a reconstruct
             // of the last recorded frame. If it succeeds, the worker has processed it.
             if tm.last_recorded_frame == 0 {
