@@ -9,6 +9,14 @@ use sha2::{Digest, Sha256};
 pub const DEFAULT_RTA_PROFILES_DIR: &str = "config/rta/profiles";
 pub const DEFAULT_RTA_RUNS_DIR: &str = "runs/rta";
 
+#[derive(Debug, Clone)]
+pub struct RtaRuntimeConfig {
+    pub profile_id_override: Option<String>,
+    pub profiles_dir: PathBuf,
+    pub runs_dir: PathBuf,
+    pub calibrate: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileStatus {
