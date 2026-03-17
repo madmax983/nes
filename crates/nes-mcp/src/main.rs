@@ -101,6 +101,10 @@ fn run() -> Result<(), McpError> {
         Cell::new("Tools Loaded"),
         Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
     ]);
+    table.add_row(vec![
+        Cell::new("Status"),
+        Cell::new("Listening on stdio").fg(TableColor::Green),
+    ]);
 
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
