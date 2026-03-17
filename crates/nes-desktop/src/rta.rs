@@ -158,10 +158,27 @@ impl Default for TriggerRule {
     }
 }
 
+/// An individual rule that defines when a "split" should occur in a speedrun.
+///
+/// A split typically represents the completion of a level or segment. When the conditions
+/// defined in the underlying `TriggerRule` are met, the RTA engine logs the elapsed time.
+///
+/// # Examples
+///
+/// ```toml
+/// [[splits]]
+/// name = "World 1-1"
+/// [splits.trigger]
+/// address = "0x071A" # Current Screen
+/// old_value = 0
+/// new_value = 1
+/// ```
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SplitRule {
+    /// The human-readable name of the split (e.g., `"World 1-1"`).
     pub name: String,
+    /// The conditions required to trigger the split.
     pub trigger: TriggerRule,
 }
 
@@ -174,23 +191,59 @@ impl Default for SplitRule {
     }
 }
 
+/// Defines the rules, metadata, and triggers for an RTA speedrun.
+///
+/// Profiles are typically loaded from TOML files (e.g., `smb-any.toml`) within the
+/// `config/rta/profiles` directory. They declare what actions are forbidden, how the timer
+/// operates, and the memory state transitions required to automatically split a run.
+///
+/// # Examples
+///
+/// An example of an `RtaProfile` loaded from TOML:
+///
+/// ```toml
+/// id = "smb-any"
+/// game = "Super Mario Bros"
+/// category = "Any%"
+/// rom_hashes = ["ea343f4e44562066f8114f6e80b2d35c43d3120e71ce001b33edccfa98319df6"]
+///
+/// [start]
+/// address = "0x071A" # Current Screen
+/// old_value = 0
+/// new_value = 1
+/// ```
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RtaProfile {
+    /// A unique identifier for the profile (e.g., `"smb-any"`).
     pub id: String,
+    /// The name of the game (e.g., `"Super Mario Bros"`).
     pub game: Option<String>,
+    /// The speedrunning category (e.g., `"Any%"`).
     pub category: Option<String>,
+    /// The version of the profile logic.
     pub version: Option<String>,
+    /// Whether this is a Draft (under calibration) or a Published run.
     pub status: ProfileStatus,
+    /// Authorized SHA-256 ROM hashes that may execute this run.
     pub rom_hashes: Vec<String>,
+    /// Rules for when to pause or continue the timer.
     pub timer: TimerPolicy,
+    /// Rules that determine what actions invalidate the run.
     pub invalidation: InvalidationPolicy,
+    /// Splitting rules.
     pub split_policy: SplitPolicy,
+    /// Configuration for artifacts generated post-run.
     pub logging: LoggingPolicy,
+    /// The memory trigger that officially starts the timer.
     pub start: TriggerRule,
+    /// Optional memory trigger that pauses the timer.
     pub pause: Option<TriggerRule>,
+    /// Optional memory trigger that resumes a paused timer.
     pub resume: Option<TriggerRule>,
+    /// The memory trigger that marks the end of the run.
     pub end: TriggerRule,
+    /// An ordered list of memory triggers that automatically log a split time.
     pub splits: Vec<SplitRule>,
 }
 
