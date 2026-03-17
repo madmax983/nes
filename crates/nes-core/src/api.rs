@@ -85,9 +85,12 @@ impl Button {
     }
 }
 
+/// Represents the controller port for a player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Player {
+pub enum Player {
+    /// Controller port 1.
     One,
+    /// Controller port 2.
     Two,
 }
 
