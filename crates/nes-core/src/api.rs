@@ -85,6 +85,12 @@ impl Button {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Player {
+    One,
+    Two,
+}
+
 /// Commands that can be executed by the [`NesCore`] to change its state
 /// or advance the emulation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -358,52 +364,46 @@ impl LoadedMapper {
     fn apply_delta(&mut self, delta: &MapperDelta, chr_window: &[u8; CHR_8K_BYTES]) {
         match &delta.kind {
             MapperDeltaKind::Uxrom(state) => {
-                if let Self::Uxrom(mapper) = self {
-                    mapper.restore_state(*state);
-                } else {
+                let Self::Uxrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
-                }
+                };
+                mapper.restore_state(*state);
             }
             MapperDeltaKind::Mmc1(state) => {
-                if let Self::Mmc1(mapper) = self {
-                    mapper.restore_state(*state);
-                } else {
+                let Self::Mmc1(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
-                }
+                };
+                mapper.restore_state(*state);
             }
             MapperDeltaKind::Cnrom(state) => {
-                if let Self::Cnrom(mapper) = self {
-                    mapper.restore_state(*state);
-                } else {
+                let Self::Cnrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
-                }
+                };
+                mapper.restore_state(*state);
             }
             MapperDeltaKind::Axrom(state) => {
-                if let Self::Axrom(mapper) = self {
-                    mapper.restore_state(*state);
-                } else {
+                let Self::Axrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
-                }
+                };
+                mapper.restore_state(*state);
             }
             MapperDeltaKind::Gxrom(state) => {
-                if let Self::Gxrom(mapper) = self {
-                    mapper.restore_state(*state);
-                } else {
+                let Self::Gxrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
-                }
+                };
+                mapper.restore_state(*state);
             }
             MapperDeltaKind::Mmc3(state) => {
-                if let Self::Mmc3(mapper) = self {
-                    mapper.restore_state(*state);
-                } else {
+                let Self::Mmc3(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
-                }
+                };
+                mapper.restore_state(*state);
             }
             MapperDeltaKind::Replace(_) => {
                 debug_assert!(
@@ -683,8 +683,8 @@ impl NesCore {
             0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
             0x2007 => self.ppu.peek_data_for_cpu_read(),
             0x4015 => self.apu.peek_status(),
-            0x4016 => self.controller_port_sample(false),
-            0x4017 => self.controller_port_sample(true),
+            0x4016 => self.controller_port_sample(Player::One),
+            0x4017 => self.controller_port_sample(Player::Two),
             _ => self.cpu.read_byte(addr),
         }
     }
@@ -1058,73 +1058,50 @@ impl NesCore {
     /// ```
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
         match command {
-            Command::Pause => {
-                self.paused = true;
-                Ok(())
-            }
-            Command::Resume => {
-                self.paused = false;
-                Ok(())
-            }
-            Command::Reset => {
-                self.reset_runtime();
-                Ok(())
-            }
+            Command::Pause => self.paused = true,
+            Command::Resume => self.paused = false,
+            Command::Reset => self.reset_runtime(),
             Command::PowerCycle => {
                 self.reset_runtime();
                 self.speed_permille = DEFAULT_SPEED_PERMILLE;
-                Ok(())
             }
             Command::StepCpu => {
                 self.step_single_instruction()?;
-                Ok(())
             }
-            Command::StepScanline => {
-                self.step_until_next_scanline()?;
-                Ok(())
-            }
-            Command::StepFrame => {
-                self.step_until_next_frame()?;
-                Ok(())
-            }
+            Command::StepScanline => self.step_until_next_scanline()?,
+            Command::StepFrame => self.step_until_next_frame()?,
             Command::SetControllerState(bits) => {
-                self.set_controller_bits(bits, false);
+                self.set_controller_bits(bits, Player::One);
                 self.sync_ppu_register_image();
-                Ok(())
             }
             Command::SetController2State(bits) => {
-                self.set_controller_bits(bits, true);
+                self.set_controller_bits(bits, Player::Two);
                 self.sync_ppu_register_image();
-                Ok(())
             }
             Command::PressButton(button) => {
-                self.set_controller_bits(self.controller_bits | button.bit_mask(), false);
+                self.set_controller_bits(self.controller_bits | button.bit_mask(), Player::One);
                 self.sync_ppu_register_image();
-                Ok(())
             }
             Command::PressButton2(button) => {
-                self.set_controller_bits(self.controller2_bits | button.bit_mask(), true);
+                self.set_controller_bits(self.controller2_bits | button.bit_mask(), Player::Two);
                 self.sync_ppu_register_image();
-                Ok(())
             }
             Command::ReleaseButton(button) => {
-                self.set_controller_bits(self.controller_bits & !button.bit_mask(), false);
+                self.set_controller_bits(self.controller_bits & !button.bit_mask(), Player::One);
                 self.sync_ppu_register_image();
-                Ok(())
             }
             Command::ReleaseButton2(button) => {
-                self.set_controller_bits(self.controller2_bits & !button.bit_mask(), true);
+                self.set_controller_bits(self.controller2_bits & !button.bit_mask(), Player::Two);
                 self.sync_ppu_register_image();
-                Ok(())
             }
             Command::SetSpeed(speed) => {
                 if speed == 0 {
                     return Err(CoreError::InvalidSpeed(speed));
                 }
                 self.speed_permille = speed;
-                Ok(())
             }
         }
+        Ok(())
     }
 
     /// Executes a readonly query against current state.
@@ -1466,9 +1443,9 @@ impl NesCore {
             .write_byte(0x2007, self.ppu.peek_data_for_cpu_read());
         self.cpu.write_byte(0x4015, self.apu.peek_status());
         self.cpu
-            .write_byte(0x4016, self.controller_port_sample(false));
+            .write_byte(0x4016, self.controller_port_sample(Player::One));
         self.cpu
-            .write_byte(0x4017, self.controller_port_sample(true));
+            .write_byte(0x4017, self.controller_port_sample(Player::Two));
     }
 
     fn apply_cpu_reads(&mut self) {
@@ -1502,10 +1479,10 @@ impl NesCore {
             let _ = self.apu.read_status();
         }
         for _ in 0..controller1_reads {
-            self.consume_controller_read(false);
+            self.consume_controller_read(Player::One);
         }
         for _ in 0..controller2_reads {
-            self.consume_controller_read(true);
+            self.consume_controller_read(Player::Two);
         }
     }
 
@@ -1519,14 +1496,14 @@ impl NesCore {
         patched
     }
 
-    fn set_controller_bits(&mut self, bits: u8, player2: bool) {
-        if player2 {
+    fn set_controller_bits(&mut self, bits: u8, player: Player) {
+        if player == Player::Two {
             self.controller2_bits = bits;
         } else {
             self.controller_bits = bits;
         }
         if self.controller_strobe {
-            if player2 {
+            if player == Player::Two {
                 self.controller2_shift = bits;
             } else {
                 self.controller_shift = bits;
@@ -1550,8 +1527,8 @@ impl NesCore {
         self.controller_strobe = false;
     }
 
-    fn controller_port_sample(&self, player2: bool) -> u8 {
-        let (bits, shift) = if player2 {
+    fn controller_port_sample(&self, player: Player) -> u8 {
+        let (bits, shift) = if player == Player::Two {
             (self.controller2_bits, self.controller2_shift)
         } else {
             (self.controller_bits, self.controller_shift)
@@ -1564,9 +1541,9 @@ impl NesCore {
         bit | CONTROLLER_OPEN_BUS_MASK
     }
 
-    fn consume_controller_read(&mut self, player2: bool) {
+    fn consume_controller_read(&mut self, player: Player) {
         if !self.controller_strobe {
-            if player2 {
+            if player == Player::Two {
                 self.controller2_shift = (self.controller2_shift >> 1) | 0x80;
             } else {
                 self.controller_shift = (self.controller_shift >> 1) | 0x80;
