@@ -130,5 +130,11 @@ mod tests {
             .expect_err("missing files should fail");
         assert!(err.contains("Could not find the ROM file at '__missing_rom__.nes'"));
         assert!(err.contains("homebrew.nes"));
+
+        let _ = std::fs::write("__dummy__.nes", []);
+        let err = run("__dummy__.nes", "__missing_script__.txt")
+            .expect_err("missing files should fail");
+        assert!(err.contains("Failed to read script file"));
+        let _ = std::fs::remove_file("__dummy__.nes");
     }
 }
