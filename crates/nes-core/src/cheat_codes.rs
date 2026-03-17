@@ -122,6 +122,33 @@ impl FromStr for CheatCode {
 }
 
 /// Errors returned when parsing a cheat code string.
+///
+/// This error type is returned by [`CheatCode::from_str`] when a provided
+/// cheat code string is malformed. It provides specific information about
+/// whether the length was incorrect or if invalid characters were used,
+/// which is useful for displaying helpful feedback to the user.
+///
+/// # Examples
+///
+/// ```
+/// use std::str::FromStr;
+/// use nes_core::{CheatCode, CheatCodeError};
+///
+/// // Attempt to parse a code with invalid characters
+/// let err = CheatCode::from_str("123456").unwrap_err();
+///
+/// match err {
+///     CheatCodeError::InvalidCharacter { ch, index } => {
+///         assert_eq!(ch, '1');
+///         assert_eq!(index, 0);
+///     }
+///     _ => panic!("Expected InvalidCharacter"),
+/// }
+///
+/// // Attempt to parse a code with invalid length
+/// let err = CheatCode::from_str("SXTPO").unwrap_err();
+/// assert_eq!(err, CheatCodeError::InvalidLength(5));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatCodeError {
     /// Normalized code length was not 6 or 8 characters.
