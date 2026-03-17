@@ -1210,7 +1210,7 @@ fn resync_restored_inputs(
 ) -> Result<(), String> {
     release_all_buttons(core);
     *gamepad_bits = [0; 2];
-    apply_gamepad_delta_commands(core, 0, keyboard_bits, false)
+    apply_gamepad_delta_commands(core, 0, keyboard_bits, nes_core::Player::One)
 }
 
 fn is_player_two_slot(player_index: usize) -> bool {
@@ -1257,9 +1257,9 @@ fn apply_gamepad_delta_commands(
     core: &mut NesCore,
     previous_bits: u8,
     next_bits: u8,
-    player2: bool,
+    player: nes_core::Player,
 ) -> Result<(), String> {
-    for command in controller_state_delta_for_player(previous_bits, next_bits, player2) {
+    for command in controller_state_delta_for_player(previous_bits, next_bits, player) {
         core.execute(command)
             .map_err(|err| format!("Gamepad command failed: {err}"))?;
     }
@@ -1770,7 +1770,11 @@ fn run() -> Result<(), String> {
                             &mut core,
                             gamepad_bits[player],
                             next_gamepad_bits,
-                            is_player_two_slot(player),
+                            if is_player_two_slot(player) {
+                                nes_core::Player::Two
+                            } else {
+                                nes_core::Player::One
+                            },
                         )
                     {
                         eprintln!("{err}");
@@ -2557,23 +2561,25 @@ fn gamepad_snapshot_to_bits(snapshot: GamepadSnapshot) -> u8 {
     bits
 }
 
-fn controller_state_delta_for_player(previous: u8, current: u8, player2: bool) -> Vec<Command> {
+fn controller_state_delta_for_player(
+    previous: u8,
+    current: u8,
+    player: nes_core::Player,
+) -> Vec<Command> {
     let mut commands = Vec::with_capacity(CONTROLLER_BUTTONS.len());
     for button in CONTROLLER_BUTTONS {
         let mask = button.bit_mask();
         match (previous & mask != 0, current & mask != 0) {
             (false, true) => {
-                commands.push(if player2 {
-                    Command::PressButton2(button)
-                } else {
-                    Command::PressButton(button)
+                commands.push(match player {
+                    nes_core::Player::One => Command::PressButton(button),
+                    nes_core::Player::Two => Command::PressButton2(button),
                 });
             }
             (true, false) => {
-                commands.push(if player2 {
-                    Command::ReleaseButton2(button)
-                } else {
-                    Command::ReleaseButton(button)
+                commands.push(match player {
+                    nes_core::Player::One => Command::ReleaseButton(button),
+                    nes_core::Player::Two => Command::ReleaseButton2(button),
                 });
             }
             _ => {}
@@ -3678,7 +3684,7 @@ mod tests {
             &mut core,
             0,
             Button::A.bit_mask() | Button::Right.bit_mask(),
-            false,
+            nes_core::Player::One,
         )
         .expect("applying player-1 gamepad delta should succeed");
         assert_eq!(
@@ -3690,13 +3696,18 @@ mod tests {
             &mut core,
             Button::A.bit_mask() | Button::Right.bit_mask(),
             Button::Right.bit_mask(),
-            false,
+            nes_core::Player::One,
         )
         .expect("releasing one player-1 button should succeed");
         assert_eq!(core.controller_bits(), Button::Right.bit_mask());
 
-        apply_gamepad_delta_commands(&mut core, 0, Button::Start.bit_mask(), true)
-            .expect("applying player-2 gamepad delta should succeed");
+        apply_gamepad_delta_commands(
+            &mut core,
+            0,
+            Button::Start.bit_mask(),
+            nes_core::Player::Two,
+        )
+        .expect("applying player-2 gamepad delta should succeed");
         assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
     }
 
@@ -3705,7 +3716,7 @@ mod tests {
         let press = controller_state_delta_for_player(
             0,
             Button::A.bit_mask() | Button::Right.bit_mask(),
-            false,
+            nes_core::Player::One,
         );
         assert_eq!(
             press,
@@ -3718,17 +3729,19 @@ mod tests {
         let release = controller_state_delta_for_player(
             Button::A.bit_mask() | Button::B.bit_mask(),
             Button::B.bit_mask(),
-            false,
+            nes_core::Player::One,
         );
         assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
     }
 
     #[test]
     fn controller_state_delta_for_player2_uses_player2_commands() {
-        let press = controller_state_delta_for_player(0, Button::A.bit_mask(), true);
+        let press =
+            controller_state_delta_for_player(0, Button::A.bit_mask(), nes_core::Player::Two);
         assert_eq!(press, vec![Command::PressButton2(Button::A)]);
 
-        let release = controller_state_delta_for_player(Button::Start.bit_mask(), 0, true);
+        let release =
+            controller_state_delta_for_player(Button::Start.bit_mask(), 0, nes_core::Player::Two);
         assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
     }
 
