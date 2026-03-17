@@ -486,9 +486,9 @@ impl Assembler {
             }
             ".byte" => {
                 for arg in split_csv(args)? {
-                    if is_quoted_string(&arg) {
+                    if is_quoted_string(arg) {
                         let bytes =
-                            decode_string_literal(&arg).map_err(|message| DslError::Parse {
+                            decode_string_literal(arg).map_err(|message| DslError::Parse {
                                 line: line_no,
                                 message,
                             })?;
@@ -496,14 +496,14 @@ impl Assembler {
                             self.emit_u8(byte)?;
                         }
                     } else {
-                        self.emit_expr_byte(parse_expr(&arg, line_no)?, line_no, FixupKind::Byte)?;
+                        self.emit_expr_byte(parse_expr(arg, line_no)?, line_no, FixupKind::Byte)?;
                     }
                 }
                 Ok(())
             }
             ".word" => {
                 for arg in split_csv(args)? {
-                    self.emit_expr_word(parse_expr(&arg, line_no)?, line_no)?;
+                    self.emit_expr_word(parse_expr(arg, line_no)?, line_no)?;
                 }
                 Ok(())
             }
@@ -516,13 +516,13 @@ impl Assembler {
                     });
                 }
                 for lit in literals {
-                    if !is_quoted_string(&lit) {
+                    if !is_quoted_string(lit) {
                         return Err(DslError::Parse {
                             line: line_no,
                             message: ".text accepts only quoted string literals".to_owned(),
                         });
                     }
-                    let bytes = decode_string_literal(&lit).map_err(|message| DslError::Parse {
+                    let bytes = decode_string_literal(lit).map_err(|message| DslError::Parse {
                         line: line_no,
                         message,
                     })?;
@@ -1221,15 +1221,14 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
     Ok(Expr::Symbol(symbol))
 }
 
-fn split_csv(input: &str) -> Result<Vec<String>, DslError> {
+fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
     let mut out = Vec::new();
-    let mut current = String::new();
     let mut in_string = false;
     let mut escaped = false;
+    let mut start_idx = 0;
 
-    for ch in input.chars() {
+    for (idx, ch) in input.char_indices() {
         if in_string {
-            current.push(ch);
             if escaped {
                 escaped = false;
             } else if ch == '\\' {
@@ -1242,16 +1241,15 @@ fn split_csv(input: &str) -> Result<Vec<String>, DslError> {
         match ch {
             '"' => {
                 in_string = true;
-                current.push(ch);
             }
             ',' => {
-                let item = current.trim();
+                let item = input[start_idx..idx].trim();
                 if !item.is_empty() {
-                    out.push(item.to_owned());
+                    out.push(item);
                 }
-                current.clear();
+                start_idx = idx + ch.len_utf8();
             }
-            _ => current.push(ch),
+            _ => {}
         }
     }
 
@@ -1262,9 +1260,9 @@ fn split_csv(input: &str) -> Result<Vec<String>, DslError> {
         });
     }
 
-    let tail = current.trim();
+    let tail = input[start_idx..].trim();
     if !tail.is_empty() {
-        out.push(tail.to_owned());
+        out.push(tail);
     }
     Ok(out)
 }
