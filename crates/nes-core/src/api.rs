@@ -1348,19 +1348,18 @@ impl NesCore {
 
     fn apply_cpu_writes(&mut self, writes: &[CpuWrite]) {
         let remap_needed = if let Some(mapper) = self.mapper.as_mut() {
-            if writes.iter().any(|write| write.addr >= 0x8000) {
+            let mut prg_writes = writes.iter().filter(|w| w.addr >= 0x8000).peekable();
+            if prg_writes.peek().is_some() {
                 // Persist CHR-RAM writes made through PPUDATA before bank remapping.
                 let chr_window = self.ppu.chr_window_snapshot();
                 mapper.sync_chr_ram_from_ppu_window(&chr_window);
-            }
-            let mut wrote_prg = false;
-            for write in writes {
-                if write.addr >= 0x8000 {
+                for write in prg_writes {
                     mapper.write_prg(write.addr, write.value);
-                    wrote_prg = true;
                 }
+                true
+            } else {
+                false
             }
-            wrote_prg
         } else {
             false
         };
