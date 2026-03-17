@@ -81,12 +81,12 @@ impl FromStr for CheatCode {
             return Err(CheatCodeError::InvalidLength(normalized.len()));
         }
 
-        let mut digits = Vec::with_capacity(normalized.len());
+        let mut digits = [0u8; 8];
         for (index, ch) in normalized.chars().enumerate() {
             let Some(value) = alphabet_digit(ch) else {
                 return Err(CheatCodeError::InvalidCharacter { ch, index });
             };
-            digits.push(value);
+            digits[index] = value;
         }
 
         let address = 0x8000
@@ -101,7 +101,7 @@ impl FromStr for CheatCode {
             | ((digits[0] & 0x8) << 4)
             | (digits[0] & 0x7)
             | (digits[5] & 0x8);
-        let compare = if digits.len() == 8 {
+        let compare = if normalized.len() == 8 {
             Some(
                 ((digits[7] & 0x7) << 4)
                     | ((digits[6] & 0x8) << 4)
