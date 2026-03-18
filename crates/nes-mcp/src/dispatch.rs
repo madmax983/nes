@@ -686,7 +686,7 @@ fn sync_frame_output(core: &NesCore) {
 }
 
 fn sync_audio_output(core: &mut NesCore) {
-    publish_audio_with(nes_core::api::AUDIO_CHUNK_SAMPLES, |samples| {
+    publish_audio_with(nes_core::AUDIO_CHUNK_SAMPLES, |samples| {
         core.fill_audio_chunk_i16(samples)
     });
 }
