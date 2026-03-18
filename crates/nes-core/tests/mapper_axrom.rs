@@ -55,3 +55,32 @@ fn axrom_read_prg_masks_address_into_32k_window() {
     assert_eq!(mapper.read_prg(0x9234), 0x5A);
     assert_eq!(mapper.read_prg(0x1234), 0x5A);
 }
+
+#[test]
+fn axrom_state_can_be_saved_and_restored() {
+    let mut mapper = nes_core::mapper::Axrom::from_prg_rom(vec![0; 4 * 32 * 1024]);
+    mapper.write_prg(0x8000, 0x12); // PRG bank 2, NT bank 1
+
+    let state = mapper.state();
+    assert_eq!(mapper.selected_bank(), 2);
+    assert_eq!(mapper.selected_nametable_bank(), 1);
+
+    mapper.write_prg(0x8000, 0x03); // PRG bank 3, NT bank 0
+    assert_eq!(mapper.selected_bank(), 3);
+    assert_eq!(mapper.selected_nametable_bank(), 0);
+
+    mapper.restore_state(state);
+    assert_eq!(mapper.selected_bank(), 2);
+    assert_eq!(mapper.selected_nametable_bank(), 1);
+}
+
+#[test]
+fn axrom_read_prg_through_trait() {
+    use nes_core::mapper::Mapper;
+    let mut prg = vec![0_u8; 32 * 1024];
+    prg[0x0000] = 0xAA;
+    let mapper = nes_core::mapper::Axrom::from_prg_rom(prg);
+
+    // Explicitly test <Self as Mapper>::read_prg
+    assert_eq!(<nes_core::mapper::Axrom as Mapper>::read_prg(&mapper, 0x8000), mapper.read_prg(0x8000));
+}

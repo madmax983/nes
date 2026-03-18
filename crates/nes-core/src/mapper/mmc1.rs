@@ -17,7 +17,7 @@ pub struct Mmc1 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Mmc1State {
+pub struct Mmc1State {
     pub control: u8,
     pub shift_register: u8,
     pub shift_count: u8,
@@ -74,7 +74,7 @@ impl Mmc1 {
     }
 
     #[must_use]
-    pub(crate) fn state(&self) -> Mmc1State {
+    pub fn state(&self) -> Mmc1State {
         Mmc1State {
             control: self.control,
             shift_register: self.shift_register,
@@ -83,7 +83,7 @@ impl Mmc1 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Mmc1State) {
+    pub fn restore_state(&mut self, state: Mmc1State) {
         self.control = state.control;
         self.shift_register = state.shift_register;
         self.shift_count = state.shift_count;

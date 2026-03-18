@@ -15,7 +15,7 @@ pub struct Axrom {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct AxromState {
+pub struct AxromState {
     pub selected_bank: u8,
     pub selected_nametable_bank: u8,
 }
@@ -54,14 +54,14 @@ impl Axrom {
     }
 
     #[must_use]
-    pub(crate) fn state(&self) -> AxromState {
+    pub fn state(&self) -> AxromState {
         AxromState {
             selected_bank: self.selected_bank,
             selected_nametable_bank: self.selected_nametable_bank,
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: AxromState) {
+    pub fn restore_state(&mut self, state: AxromState) {
         self.selected_bank = state.selected_bank % self.bank_count;
         self.selected_nametable_bank = state.selected_nametable_bank & 0x01;
     }
