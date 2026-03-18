@@ -1,0 +1,17 @@
+<<<<<<< SEARCH
+    // In actual use, read_client_message parses it indefinitely leading to loop locks
+    thread_handle.join().unwrap();
+}
+=======
+    // Wait for the client to queue up a significant payload
+    thread::sleep(std::time::Duration::from_millis(50));
+
+    // In actual use, read_client_message parses it indefinitely leading to loop locks
+    // This will block and OOM eventually, but we assert it panics or fails to read cleanly
+    let mut reader = std::io::BufReader::new(_server);
+    let mut line = String::new();
+    let _ = std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
+
+    thread_handle.join().unwrap();
+}
+>>>>>>> REPLACE
