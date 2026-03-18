@@ -1147,22 +1147,16 @@ impl NesCore {
         self.apply_cpu_reads();
 
         let cpu_cycles = u64::from(cpu_cycles);
-        for _ in 0..cpu_cycles {
-            self.step_hardware_cycle();
-        }
+        self.advance_hardware_cycles(cpu_cycles);
 
         if let Some(page) = self.pending_oam_dma_page.take() {
             self.run_oam_dma(page);
         }
         if self.ppu.take_nmi_pending() {
             self.cpu.service_nmi();
-            for _ in 0..7 {
-                self.step_hardware_cycle();
-            }
+            self.advance_hardware_cycles(7);
         } else if (self.apu.irq_pending() || self.mapper_irq_pending()) && self.cpu.service_irq() {
-            for _ in 0..7 {
-                self.step_hardware_cycle();
-            }
+            self.advance_hardware_cycles(7);
         }
         self.sync_ppu_register_image();
         Ok(cpu_cycles)
@@ -1577,6 +1571,12 @@ impl NesCore {
         }
     }
 
+    fn advance_hardware_cycles(&mut self, cycles: u64) {
+        for _ in 0..cycles {
+            self.step_hardware_cycle();
+        }
+    }
+
     fn apply_dmc_dma_request(&mut self, request: DmcDmaRequest) {
         let sample = self.cpu.read_byte(request.addr);
         self.apu.load_dmc_sample(sample);
@@ -1615,9 +1615,7 @@ impl NesCore {
         } else {
             513
         };
-        for _ in 0..stall_cycles {
-            self.step_hardware_cycle();
-        }
+        self.advance_hardware_cycles(stall_cycles);
     }
 }
 
