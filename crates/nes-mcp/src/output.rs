@@ -192,6 +192,29 @@ pub fn publish_frame(width: u32, height: u32, rgba: Vec<u8>) {
     state.frame_rgba = Arc::new(rgba);
 }
 
+/// Updates the globally shared output state with a new video frame by modifying the existing allocation.
+pub fn publish_frame_with<F>(width: u32, height: u32, f: F)
+where
+    F: FnOnce(&mut [u8]),
+{
+    let Some(expected_len) = expected_frame_len(width, height) else {
+        return;
+    };
+
+    let mut state = output_state().lock().expect("output state lock");
+    let buffer = Arc::make_mut(&mut state.frame_rgba);
+
+    if buffer.len() != expected_len {
+        buffer.resize(expected_len, 0);
+    }
+
+    f(buffer);
+
+    state.frame_seq = state.frame_seq.saturating_add(1);
+    state.width = width;
+    state.height = height;
+}
+
 /// Updates the globally shared output state with a new audio chunk.
 ///
 /// This increments the internal `audio_seq` counter and wraps the samples
@@ -211,6 +234,23 @@ pub fn publish_audio(samples: Vec<i16>) {
     let mut state = output_state().lock().expect("output state lock");
     state.audio_seq = state.audio_seq.saturating_add(1);
     state.audio_samples = Arc::new(samples);
+}
+
+/// Updates the globally shared output state with a new audio chunk by modifying the existing allocation.
+pub fn publish_audio_with<F>(len: usize, f: F)
+where
+    F: FnOnce(&mut [i16]),
+{
+    let mut state = output_state().lock().expect("output state lock");
+    let buffer = Arc::make_mut(&mut state.audio_samples);
+
+    if buffer.len() != len {
+        buffer.resize(len, 0);
+    }
+
+    f(buffer);
+
+    state.audio_seq = state.audio_seq.saturating_add(1);
 }
 
 /// Retrieves a reference-counted view of the requested frame sequence.
@@ -343,6 +383,32 @@ mod tests {
             final_meta.audio_seq, future_seq,
             "Global metadata audio sequence should be fast-forwarded"
         );
+    }
+
+    #[test]
+    fn should_reuse_memory_when_publishing_frame_with_closure() {
+        let initial_meta = latest_output_metadata();
+        publish_frame_with(256, 240, |buf| {
+            assert_eq!(buf.len(), 245_760);
+            buf[0] = 99;
+        });
+        let meta = latest_output_metadata();
+        assert_eq!(meta.frame_seq, initial_meta.frame_seq + 1);
+        let chunk = frame_chunk(meta.frame_seq).unwrap();
+        assert_eq!(chunk.rgba[0], 99);
+    }
+
+    #[test]
+    fn should_reuse_memory_when_publishing_audio_with_closure() {
+        let initial_meta = latest_output_metadata();
+        publish_audio_with(735, |buf| {
+            assert_eq!(buf.len(), 735);
+            buf[0] = 42;
+        });
+        let meta = latest_output_metadata();
+        assert_eq!(meta.audio_seq, initial_meta.audio_seq + 1);
+        let chunk = audio_chunk(meta.audio_seq).unwrap();
+        assert_eq!(chunk.samples[0], 42);
     }
 
     #[test]
