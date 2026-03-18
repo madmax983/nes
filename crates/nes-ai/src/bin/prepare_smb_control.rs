@@ -14,6 +14,12 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
+
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        std::process::exit(0);
+    }
+
     if args.len() != 4 {
         return Err(
             "Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>"

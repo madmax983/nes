@@ -16,6 +16,12 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
+
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Usage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]");
+        std::process::exit(0);
+    }
+
     if args.len() < 2 || args.len() > 5 {
         return Err(
             "Usage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]"

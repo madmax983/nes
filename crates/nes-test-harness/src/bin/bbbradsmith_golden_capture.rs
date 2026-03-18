@@ -92,6 +92,13 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
     let force = pass_through.iter().any(|arg| arg == "--force");
     for arg in &pass_through {
+        if arg == "--help" || arg == "-h" {
+            let _ = writeln!(
+                stdout,
+                "Usage: bbbradsmith_golden_capture [--config <path>] [--force]"
+            );
+            return Ok(());
+        }
         if arg != "--force" {
             return Err(format!(
                 "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
