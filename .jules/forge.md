@@ -5,3 +5,6 @@
 **Refactoring boolean conversions and nested iterators in nes-core**
 **Learning:** Found several boolean blindness issues using `if condition { 1 } else { 0 }` instead of idiomatic `From` trait implementations. Also found a case of intermediate Vec allocation during iterator filtering in `apply_cpu_writes` that could be optimized out using `filter`.
 **Action:** Replaced boolean conversions with `u64::from` and `i32::from`. Simplified `apply_cpu_writes` by chaining `iter().filter()` to eliminate unneeded variable mutation and nesting.
+**Refactoring hardware cycle loops in nes-core API**
+**Learning:** Found scattered and repeated logic manually running `self.step_hardware_cycle()` inside `for _ in 0..cycles` loops in `api.rs`, hiding the fact that chained DMC requests handled within `step_hardware_cycle` implicitly recurse back to `apply_dmc_dma_request`.
+**Action:** Extracted `advance_hardware_cycles` helper function and replaced manual loops in `step_single_instruction` and `run_oam_dma`. Deliberately avoided refactoring `apply_dmc_dma_request` because its inline loop explicitly handles chained requests without triggering recursive stalls, which is required for accurate hardware timing.
