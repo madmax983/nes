@@ -737,7 +737,11 @@ fn set_pixel(frame: &mut [u8], frame_width: usize, x: usize, y: usize, color: [u
 /// ⚡ Bolt Optimization:
 /// Eliminates intermediate `String` heap allocations per frame while the overlay is open
 /// by writing directly to a reusable `String` buffer via `std::fmt::Write`.
-fn main_entry_label(entry: MainMenuSelection, slot_summaries: &[OverlaySlotSummary], out: &mut String) {
+fn main_entry_label(
+    entry: MainMenuSelection,
+    slot_summaries: &[OverlaySlotSummary],
+    out: &mut String,
+) {
     use std::fmt::Write;
     match entry {
         MainMenuSelection::Resume => out.push_str("Resume"),
