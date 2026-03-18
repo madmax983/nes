@@ -41,5 +41,8 @@ fn mmc1_read_prg_through_trait() {
     let mapper = nes_core::mapper::Mmc1::from_prg_rom(prg, 1);
 
     // Explicitly test <Self as Mapper>::read_prg
-    assert_eq!(<nes_core::mapper::Mmc1 as Mapper>::read_prg(&mapper, 0x8000), mapper.read_prg(0x8000));
+    assert_eq!(
+        <nes_core::mapper::Mmc1 as Mapper>::read_prg(&mapper, 0x8000),
+        mapper.read_prg(0x8000)
+    );
 }
