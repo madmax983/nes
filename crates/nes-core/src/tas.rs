@@ -240,3 +240,59 @@ fn append_wait(script: &mut String, frames: u32) {
     script.push_str(buf.format(frames));
     script.push('\n');
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tas_movie_push_run_coalescing() {
+        let mut movie = TasMovie::default();
+
+        // Zero frames run should be ignored
+        movie.push_run(TasFrameRun::new(0, 0, 0));
+        assert!(movie.runs().is_empty());
+
+        // Initial run
+        movie.push_run(TasFrameRun::new(0, 0, 10));
+        assert_eq!(movie.runs(), &[TasFrameRun::new(0, 0, 10)]);
+
+        // Coalescing same inputs
+        movie.push_run(TasFrameRun::new(0, 0, 5));
+        assert_eq!(movie.runs(), &[TasFrameRun::new(0, 0, 15)]);
+
+        // Different controller 1 input
+        movie.push_run(TasFrameRun::new(1, 0, 10));
+        assert_eq!(
+            movie.runs(),
+            &[TasFrameRun::new(0, 0, 15), TasFrameRun::new(1, 0, 10)]
+        );
+
+        // Different controller 2 input
+        movie.push_run(TasFrameRun::new(1, 1, 10));
+        assert_eq!(
+            movie.runs(),
+            &[
+                TasFrameRun::new(0, 0, 15),
+                TasFrameRun::new(1, 0, 10),
+                TasFrameRun::new(1, 1, 10)
+            ]
+        );
+
+        // Frame limit overflow prevents coalescing
+        let mut runs = movie.runs().to_vec();
+        runs.last_mut().unwrap().frames = u32::MAX;
+        let mut max_movie = TasMovie::from_runs(runs);
+
+        max_movie.push_run(TasFrameRun::new(1, 1, 1));
+        assert_eq!(
+            max_movie.runs(),
+            &[
+                TasFrameRun::new(0, 0, 15),
+                TasFrameRun::new(1, 0, 10),
+                TasFrameRun::new(1, 1, u32::MAX),
+                TasFrameRun::new(1, 1, 1)
+            ]
+        );
+    }
+}
