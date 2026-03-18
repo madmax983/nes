@@ -30,7 +30,15 @@ fn havoc_test_read_client_message_dos() {
         let _ = client.write_all(b"0}\n");
     });
 
-    // In actual use, read_client_message parses it indefinitely leading to loop locks
+    // Wait for the client to queue up a significant payload
+    thread::sleep(std::time::Duration::from_millis(50));
+
+    // In actual use, read_client_message parses it indefinitely leading to loop locks.
+    // This will block and allocate memory indefinitely since there is no limit and no newline.
+    let mut reader = std::io::BufReader::new(_server);
+    let mut line = String::new();
+    let _ = std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
+
     thread_handle.join().unwrap();
 }
 

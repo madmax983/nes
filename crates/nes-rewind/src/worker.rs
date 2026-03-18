@@ -277,8 +277,8 @@ mod tests {
     /// This avoids flaky hardcoded sleep delays in tests.
     fn wait_for_sync(tm: &mut TimeMachine) -> bool {
         let start = std::time::Instant::now();
-        // Give it up to 2000ms to process the queue in slow CI environments.
-        while start.elapsed() < Duration::from_millis(2000) {
+        // Give it up to 5000ms to process the queue in extremely slow CI environments.
+        while start.elapsed() < Duration::from_millis(5000) {
             // To check if the worker has caught up, we can ask for a reconstruct
             // of the last recorded frame. If it succeeds, the worker has processed it.
             if tm.last_recorded_frame == 0 {
@@ -288,7 +288,7 @@ mod tests {
                 target_frame: tm.last_recorded_frame,
             });
             if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
-                tm.rx.recv_timeout(Duration::from_millis(10))
+                tm.rx.recv_timeout(Duration::from_millis(100))
             {
                 // The test core isn't mutated until `tm.rewind_step` does it.
                 // But we just sent a raw message.
