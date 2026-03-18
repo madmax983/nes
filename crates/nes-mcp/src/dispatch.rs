@@ -16,7 +16,7 @@ use nes_core::{
 use nes_dsl::{Mirroring, RomBuildOptions};
 
 use crate::output::{
-    audio_chunk, frame_chunk, latest_output_metadata, publish_audio, publish_frame,
+    audio_chunk, frame_chunk, latest_output_metadata, publish_audio_with, publish_frame_with,
 };
 
 /// Type alias for key-value pair strings passed as arguments to an MCP tool.
@@ -680,15 +680,15 @@ fn execute_command(core: &mut NesCore, command: Command) -> Result<(), DispatchE
 }
 
 fn sync_frame_output(core: &NesCore) {
-    publish_frame(
-        FRAME_WIDTH as u32,
-        FRAME_HEIGHT as u32,
-        core.framebuffer_rgba(),
-    );
+    publish_frame_with(FRAME_WIDTH as u32, FRAME_HEIGHT as u32, |frame| {
+        core.fill_framebuffer_rgba(frame)
+    });
 }
 
 fn sync_audio_output(core: &mut NesCore) {
-    publish_audio(core.audio_chunk_i16());
+    publish_audio_with(nes_core::AUDIO_CHUNK_SAMPLES, |samples| {
+        core.fill_audio_chunk_i16(samples)
+    });
 }
 
 fn write_frame_image(
