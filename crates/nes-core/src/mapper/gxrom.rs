@@ -148,3 +148,65 @@ impl Mapper for Gxrom {
         self.selected_chr_bank = (chr_select % self.chr_bank_count) as u8;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_sync_chr_ram_when_writable() {
+        // Create a GxROM mapper with empty CHR ROM, making it writable (CHR-RAM)
+        let mut mapper = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        assert!(mapper.chr_writable());
+
+        // Update the CHR window
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        window[0] = 42;
+        window[CHR_WINDOW_BYTES - 1] = 84;
+
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        // Verify the mapper's internal CHR RAM was updated
+        let updated_window = mapper.chr_window();
+        assert_eq!(updated_window[0], 42);
+        assert_eq!(updated_window[CHR_WINDOW_BYTES - 1], 84);
+    }
+
+    #[test]
+    fn should_not_sync_chr_ram_when_not_writable() {
+        // Create a GxROM mapper with non-empty CHR ROM, making it read-only
+        let original_chr = vec![0; CHR_WINDOW_BYTES];
+        let mut mapper = Gxrom::from_prg_chr(vec![0; 32 * 1024], original_chr);
+        assert!(!mapper.chr_writable());
+
+        // Attempt to update the CHR window
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        window[0] = 42;
+
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        // Verify the mapper's internal CHR ROM was NOT updated
+        let unchanged_window = mapper.chr_window();
+        assert_eq!(unchanged_window[0], 0);
+    }
+
+    #[test]
+    fn should_restore_state() {
+        let mut mapper = Gxrom::from_prg_chr(vec![0; 64 * 1024], vec![0; 16 * 1024]);
+
+        // Change banks
+        mapper.write_prg(0x8000, 0x11); // PRG bank 1, CHR bank 1
+
+        let state = mapper.state();
+        assert_eq!(state.selected_prg_bank, 1);
+        assert_eq!(state.selected_chr_bank, 1);
+
+        // Reset banks
+        mapper.write_prg(0x8000, 0x00);
+
+        // Restore
+        mapper.restore_state(state);
+        assert_eq!(mapper.selected_prg_bank(), 1);
+        assert_eq!(mapper.selected_chr_bank(), 1);
+    }
+}
