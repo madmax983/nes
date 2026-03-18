@@ -72,11 +72,13 @@ pub struct OverlaySlotSummary {
 
 impl OverlaySlotSummary {
     /// Returns a human-readable suffix for rendering beside slot actions.
-    #[must_use]
-    pub fn render_suffix(&self) -> String {
+    pub fn render_suffix(&self, out: &mut String) {
+        use std::fmt::Write;
         match self.detail.as_deref() {
-            Some(detail) if !detail.is_empty() => format!("{} ({detail})", self.status_label),
-            _ => self.status_label.clone(),
+            Some(detail) if !detail.is_empty() => {
+                let _ = write!(out, "{} ({detail})", self.status_label);
+            }
+            _ => out.push_str(&self.status_label),
         }
     }
 }
@@ -502,6 +504,8 @@ pub fn draw_overlay(
     let text_x = panel_x.saturating_add(PANEL_PADDING);
     let mut text_y = panel_y.saturating_add(PANEL_PADDING);
 
+    let mut text_buffer = String::with_capacity(64);
+
     match model.panel() {
         OverlayPanel::MainMenu => {
             draw_text(frame, frame_width, text_x, text_y, "PAUSED", COLOR_TEXT);
@@ -533,13 +537,14 @@ pub fn draw_overlay(
                     );
                 }
 
-                let label = main_entry_label(*entry, slot_summaries);
+                text_buffer.clear();
+                main_entry_label(*entry, slot_summaries, &mut text_buffer);
                 draw_text(
                     frame,
                     frame_width,
                     text_x,
                     text_y,
-                    &label,
+                    &text_buffer,
                     if is_selected {
                         COLOR_TEXT
                     } else {
@@ -579,17 +584,18 @@ pub fn draw_overlay(
                     );
                 }
 
-                let label = if index == 0 {
-                    "Add Code".to_owned()
+                text_buffer.clear();
+                if index == 0 {
+                    text_buffer.push_str("Add Code");
                 } else {
-                    cheat_label(&cheat_summaries[index - 1])
-                };
+                    cheat_label(&cheat_summaries[index - 1], &mut text_buffer);
+                }
                 draw_text(
                     frame,
                     frame_width,
                     text_x,
                     text_y,
-                    &label,
+                    &text_buffer,
                     if is_selected {
                         COLOR_TEXT
                     } else {
@@ -728,36 +734,48 @@ fn set_pixel(frame: &mut [u8], frame_width: usize, x: usize, y: usize, color: [u
     }
 }
 
-fn main_entry_label(entry: MainMenuSelection, slot_summaries: &[OverlaySlotSummary]) -> String {
+/// ⚡ Bolt Optimization:
+/// Eliminates intermediate `String` heap allocations per frame while the overlay is open
+/// by writing directly to a reusable `String` buffer via `std::fmt::Write`.
+fn main_entry_label(
+    entry: MainMenuSelection,
+    slot_summaries: &[OverlaySlotSummary],
+    out: &mut String,
+) {
+    use std::fmt::Write;
     match entry {
-        MainMenuSelection::Resume => "Resume".to_owned(),
-        MainMenuSelection::OpenRom => "Open ROM...".to_owned(),
-        MainMenuSelection::OpenCheats => "Cheats...".to_owned(),
+        MainMenuSelection::Resume => out.push_str("Resume"),
+        MainMenuSelection::OpenRom => out.push_str("Open ROM..."),
+        MainMenuSelection::OpenCheats => out.push_str("Cheats..."),
         MainMenuSelection::SaveSlot(slot) => {
-            format!("Save Slot {slot}: {}", slot_suffix(slot, slot_summaries))
+            let _ = write!(out, "Save Slot {slot}: ");
+            slot_suffix(slot, slot_summaries, out);
         }
         MainMenuSelection::LoadSlot(slot) => {
-            format!("Load Slot {slot}: {}", slot_suffix(slot, slot_summaries))
+            let _ = write!(out, "Load Slot {slot}: ");
+            slot_suffix(slot, slot_summaries, out);
         }
-        MainMenuSelection::Reset => "Reset".to_owned(),
-        MainMenuSelection::Quit => "Quit".to_owned(),
+        MainMenuSelection::Reset => out.push_str("Reset"),
+        MainMenuSelection::Quit => out.push_str("Quit"),
     }
 }
 
-fn cheat_label(summary: &OverlayCheatSummary) -> String {
-    format!(
+fn cheat_label(summary: &OverlayCheatSummary, out: &mut String) {
+    use std::fmt::Write;
+    let _ = write!(
+        out,
         "{} {}",
         if summary.enabled { "ON " } else { "OFF" },
         summary.raw_code
-    )
+    );
 }
 
-fn slot_suffix(slot: u8, slot_summaries: &[OverlaySlotSummary]) -> String {
-    slot_summaries
-        .iter()
-        .find(|summary| summary.slot == slot)
-        .map(OverlaySlotSummary::render_suffix)
-        .unwrap_or_else(|| "Unknown".to_owned())
+fn slot_suffix(slot: u8, slot_summaries: &[OverlaySlotSummary], out: &mut String) {
+    if let Some(summary) = slot_summaries.iter().find(|summary| summary.slot == slot) {
+        summary.render_suffix(out);
+    } else {
+        out.push_str("Unknown");
+    }
 }
 
 fn key_to_cheat_char(key: VirtualKeyCode) -> Option<char> {
