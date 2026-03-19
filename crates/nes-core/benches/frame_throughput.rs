@@ -29,6 +29,12 @@ fn make_nop_core() -> NesCore {
     core
 }
 
+fn make_nop_core_no_trace() -> NesCore {
+    let mut core = make_nop_core();
+    core.set_trace_enabled(false);
+    core
+}
+
 /// Single-frame throughput — how fast can we emulate one PPU frame?
 ///
 /// Cold: fresh NesCore each sample (first-frame cost).
@@ -86,4 +92,36 @@ fn sixty_frames_burst(bencher: divan::Bencher) {
             core.execute(Command::StepFrame).unwrap();
         }
     });
+}
+
+/// Same benchmarks with `trace_enabled = false` — eliminates bus-trace RefCell
+/// borrow overhead and format_trace String allocations from the hot path.
+mod no_trace {
+    use super::*;
+
+    #[divan::bench]
+    fn step_frame_warm(bencher: divan::Bencher) {
+        let mut core = make_nop_core_no_trace();
+        bencher.bench_local(|| {
+            core.execute(Command::StepFrame).unwrap();
+        });
+    }
+
+    #[divan::bench]
+    fn step_cpu_nop(bencher: divan::Bencher) {
+        let mut core = make_nop_core_no_trace();
+        bencher.bench_local(|| {
+            core.execute(Command::StepCpu).unwrap();
+        });
+    }
+
+    #[divan::bench]
+    fn sixty_frames_burst(bencher: divan::Bencher) {
+        let mut core = make_nop_core_no_trace();
+        bencher.bench_local(|| {
+            for _ in 0..60 {
+                core.execute(Command::StepFrame).unwrap();
+            }
+        });
+    }
 }

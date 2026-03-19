@@ -660,6 +660,16 @@ impl NesCore {
         self.cpu.x()
     }
 
+    /// Enables or disables CPU trace generation.
+    ///
+    /// When disabled, bus-trace recording and trace-string formatting are skipped,
+    /// eliminating `RefCell` borrow overhead and heap allocations per instruction.
+    /// Call `set_trace_enabled(false)` for throughput-critical modes (AI training,
+    /// rewind, netplay rollback); call `set_trace_enabled(true)` for debugging.
+    pub fn set_trace_enabled(&mut self, enabled: bool) {
+        self.cpu.set_trace_enabled(enabled);
+    }
+
     /// Returns last executed instruction trace string, if any.
     #[must_use]
     pub fn last_cpu_trace(&self) -> Option<&str> {
@@ -1137,9 +1147,15 @@ impl NesCore {
             .cpu
             .step_with_trace_and_cycles()
             .map_err(CoreError::CpuStepFailed)?;
-        self.last_cpu_trace = Some(trace);
-        self.last_cpu_bus_trace.clear();
-        self.cpu.swap_bus_trace(&mut self.last_cpu_bus_trace);
+        // When trace is disabled, `trace` is an empty String (no heap alloc) and
+        // the bus_trace Vec is empty — skip the Option wrap and swap entirely.
+        if trace.is_empty() {
+            self.last_cpu_trace = None;
+        } else {
+            self.last_cpu_trace = Some(trace);
+            self.last_cpu_bus_trace.clear();
+            self.cpu.swap_bus_trace(&mut self.last_cpu_bus_trace);
+        }
 
         let mut writes = core::mem::take(&mut self.scratch_writes);
         writes.clear();

@@ -125,11 +125,64 @@ All 103 unit tests + 27 doc tests pass.
 
 ---
 
-## Next Candidates (not yet measured)
+---
+
+## Optimization 3: Disable CPU Trace (2026-03-19)
+
+**Hypothesis:** Skipping `format_trace` String allocations and bus-trace `RefCell::borrow_mut()` per `read()` call in throughput modes would save 5–15%.
+
+**Actual result:** **4.0x speedup** — trace was consuming ~75% of per-instruction time.
+
+### What the trace does per instruction
+
+```
+bus_trace.borrow_mut().clear()           ← RefCell borrow
+read(pc) → record_bus_access()           ← RefCell borrow + Vec::push per read
+... (2-6 reads/writes per instruction)
+format_trace(snapshot, bytes, mnemonic)  ← format!() String allocation (~75 chars)
+pad_microphase_to_cycle_count()          ← extra RefCell borrows + pushes
+swap_bus_trace()                         ← Vec pointer swap
+```
+
+For a NOP (2 cycles): 2 `RefCell::borrow_mut()` + 2 `Vec::push(CpuBusAccess{4 bytes})` + 1 `format!()` heap alloc.
+
+At ~35,736 instructions per frame that's ~35K String allocations + ~71K RefCell borrows per frame. String allocations were the dominant cost — each one allocates, writes ~75 chars, then is immediately replaced (triggering a free) on the next instruction.
+
+### Change
+
+Added `trace_enabled: bool` to `Cpu` (default `true`). When `false`:
+- `record_bus_access()` is a no-op (guards in `read()`, `push()`, `write_and_track()`)
+- `bus_trace.borrow_mut().clear()` skipped at start of step
+- `pad_microphase_to_cycle_count()` skipped at end of step
+- `maybe_trace()` returns `String::new()` (zero allocation) instead of formatting
+
+`NesCore::set_trace_enabled(bool)` propagates to the CPU.
+
+### Results
+
+| Benchmark | Traced | No-trace | Speedup |
+|-----------|--------|----------|---------|
+| `step_frame_warm` (median) | 2.683ms | 671µs | **4.0x** |
+| `step_cpu_nop` (median) | 229.5ns | 58.3ns | **3.9x** |
+| `sixty_frames_burst` (median) | 164.4ms | 41.44ms | **3.97x** |
+
+**No-trace real-time:** 671µs/frame → **24.8x real-time** (budget: 16.67ms).
+**Cumulative from original baseline (4.682ms):** **6.98x total speedup**.
+
+### Lessons
+
+5. **Tracing overhead dominated emulation work.** In the traced path, ~75% of per-instruction time was String allocation and RefCell borrow overhead — not actual CPU/PPU/APU logic. The emulator was more of a trace-formatter than an emulator.
+
+6. **Runtime toggle is better than compile-time flag.** Frontends can switch modes: trace=true for debugging/disassembly views, trace=false for AI training/rewind/netplay. No rebuild required.
+
+7. **`String::new()` is zero-allocation.** The `maybe_trace()` helper returns `String::new()` in the disabled path — this is a stack-only empty vector (no heap alloc). The `is_empty()` check in `api.rs` distinguishes "disabled" from "traced" without a separate bool.
+
+---
+
+## Next Candidates
 
 | Hypothesis | Estimate | Risk |
 |------------|----------|------|
-| Lazy sync: only call when CPU is about to read MMIO | 10–30% gain | Medium — requires MMIO read prediction |
-| Disable CPU trace generation in release builds | 5–15% gain | Low — feature flag |
+| Lazy sync: only call when CPU is about to read MMIO | 5–15% gain | Medium — requires MMIO read prediction |
 | PPU scanline-level rendering (batch 256 pixels) | 10–25% gain | High — large refactor |
 | APU timer batching (skip timer decrements between events) | 3–8% gain | Medium — frame sequencer coupling |
