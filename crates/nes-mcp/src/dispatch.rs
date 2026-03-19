@@ -731,8 +731,9 @@ fn write_frame_image(
 }
 
 fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
+    use std::io::Write;
     let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    ppm.extend_from_slice(format!("P6\n{width} {height}\n255\n").as_bytes());
+    write!(&mut ppm, "P6\n{width} {height}\n255\n").unwrap();
     for px in rgba.chunks_exact(4) {
         ppm.extend_from_slice(&px[..3]);
     }
