@@ -1129,6 +1129,9 @@ impl NesCore {
     }
 
     fn step_single_instruction(&mut self) -> Result<u64, CoreError> {
+        // Sync before the CPU step so reads during execution see current PPU/APU state.
+        // No post-step sync is needed: the next call's pre-step sync will refresh the
+        // image before the CPU runs again, and nothing reads the image between iterations.
         self.sync_ppu_register_image();
         let (trace, cpu_cycles) = self
             .cpu
@@ -1158,7 +1161,6 @@ impl NesCore {
         } else if (self.apu.irq_pending() || self.mapper_irq_pending()) && self.cpu.service_irq() {
             self.advance_hardware_cycles(7);
         }
-        self.sync_ppu_register_image();
         Ok(cpu_cycles)
     }
 
@@ -1551,29 +1553,28 @@ impl NesCore {
         self.mapper.as_ref().is_some_and(LoadedMapper::irq_pending)
     }
 
-    fn step_hardware_cycle(&mut self) {
-        self.scheduler.step_cpu_cycle();
-        self.scheduler.step_apu_cycle();
-        let dmc_request = self.apu.step_cpu_cycle(self.paused);
-        for _ in 0..3 {
-            self.scheduler.step_ppu_cycle();
-            self.ppu.step_dot();
-            if let Some(mapper) = self.mapper.as_mut() {
-                mapper.on_ppu_dot(
-                    self.ppu.scanline(),
-                    self.ppu.dot(),
-                    self.ppu.rendering_enabled_for_mapper_irq(),
-                );
-            }
-        }
-        if let Some(request) = dmc_request {
-            self.apply_dmc_dma_request(request);
-        }
-    }
-
     fn advance_hardware_cycles(&mut self, cycles: u64) {
+        // Batch-advance scheduler accounting counters once for the whole burst.
+        // The counters are not observed mid-loop, so this is equivalent to N
+        // per-cycle calls but avoids 5 wrapping_add operations per CPU cycle.
+        // One CPU cycle = 1 APU cycle = 3 PPU cycles.
+        self.scheduler.advance_by(cycles);
+
         for _ in 0..cycles {
-            self.step_hardware_cycle();
+            let dmc_request = self.apu.step_cpu_cycle(self.paused);
+            for _ in 0..3 {
+                self.ppu.step_dot();
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.on_ppu_dot(
+                        self.ppu.scanline(),
+                        self.ppu.dot(),
+                        self.ppu.rendering_enabled_for_mapper_irq(),
+                    );
+                }
+            }
+            if let Some(request) = dmc_request {
+                self.apply_dmc_dma_request(request);
+            }
         }
     }
 
