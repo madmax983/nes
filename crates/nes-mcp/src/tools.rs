@@ -29,7 +29,11 @@ pub struct ToolDefinition {
     pub description: &'static str,
 }
 
-const TOOL_CATALOG: [ToolDefinition; 30] = [
+const TOOL_CATALOG: [ToolDefinition; 31] = [
+    ToolDefinition {
+        name: "get_ppu_oam",
+        description: "Get the current PPU OAM (Object Attribute Memory) data representing 64 sprites",
+    },
     ToolDefinition {
         name: "load_rom",
         description: "Load an iNES ROM into the emulator core",

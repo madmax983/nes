@@ -416,6 +416,12 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "prg_rom_bytes": prg_rom_bytes,
             })
         }
+        DispatchOutput::PpuOam { oam_bytes } => {
+            json!({
+                "kind": "ppu_oam",
+                "oam_bytes": oam_bytes,
+            })
+        }
     }
 }
 

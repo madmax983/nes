@@ -117,6 +117,11 @@ pub enum DispatchOutput {
         /// The total number of rendered frames.
         frame_counter: u64,
     },
+    /// Result returning PPU OAM (Object Attribute Memory) data.
+    PpuOam {
+        /// The 256 bytes of OAM memory.
+        oam_bytes: Vec<u8>,
+    },
     /// Result referencing a published video frame.
     Frame {
         /// The sequence identifier for the frame payload.
@@ -303,6 +308,7 @@ pub fn dispatch_tool(
         "set_speed" => handle_set_speed(core, params),
         "get_fps" => handle_get_fps(core),
         "get_ppu_frame_counter" => handle_get_ppu_frame_counter(core),
+        "get_ppu_oam" => handle_get_ppu_oam(core),
         "get_emulator_state" => handle_get_emulator_state(core),
         "read_registers" => handle_read_registers(core),
         "read_memory" => handle_read_memory(core, params),
@@ -366,6 +372,14 @@ fn handle_get_fps(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
             "unexpected core query result for get_fps".to_owned(),
         )),
     }
+}
+
+fn handle_get_ppu_oam(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    let mut oam_bytes = Vec::with_capacity(256);
+    for i in 0..=255 {
+        oam_bytes.push(core.ppu_oam_byte(i));
+    }
+    Ok(DispatchOutput::PpuOam { oam_bytes })
 }
 
 fn handle_get_ppu_frame_counter(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
@@ -1143,6 +1157,18 @@ mod tests {
         sync_audio_output(&mut core);
         let after_audio = latest_output_metadata();
         assert!(after_audio.audio_seq > before.audio_seq);
+    }
+
+    #[test]
+    fn handle_get_ppu_oam_returns_256_bytes() {
+        let core = NesCore::new();
+        let result = super::handle_get_ppu_oam(&core).expect("Should successfully retrieve OAM");
+        match result {
+            super::DispatchOutput::PpuOam { oam_bytes } => {
+                assert_eq!(oam_bytes.len(), 256);
+            }
+            _ => panic!("Expected DispatchOutput::PpuOam"),
+        }
     }
 }
 #[cfg(test)]
