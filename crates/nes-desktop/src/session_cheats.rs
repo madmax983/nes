@@ -1,17 +1,38 @@
+//! The player's runtime toolbox for bending the rules of the NES universe.
+//!
+//! This module maintains a local inventory of active and inactive Game Genie
+//! codes during a single play session. Instead of forcing users to delete codes
+//! they temporarily want to bypass, this manager tracks a discrete `enabled` flag
+//! for each entry. When codes are sent to the core emulator, only the activated
+//! subset is applied.
+//!
+//! Because `SessionCheats` validates raw code strings through the core `CheatCode`
+//! parser immediately upon addition, it guarantees that its inventory never holds
+//! syntactically malformed Game Genie commands.
+
 use nes_core::{CheatCode, CheatCodeError};
 
 /// One session-local cheat entry managed by the desktop frontend.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionCheat {
+    /// The normalized Game Genie string (e.g., "GOSSIP").
     pub raw_code: String,
+    /// Whether this cheat is currently active in the core.
     pub enabled: bool,
 }
 
 /// Errors raised while mutating the session cheat list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionCheatError {
+    /// The cheat code string was not a valid Game Genie sequence.
     InvalidCode(CheatCodeError),
-    MissingIndex { index: usize, len: usize },
+    /// An operation was attempted on an index that does not exist in the session list.
+    MissingIndex {
+        /// The requested index.
+        index: usize,
+        /// The total number of entries.
+        len: usize,
+    },
 }
 
 impl std::fmt::Display for SessionCheatError {
@@ -43,6 +64,15 @@ pub struct SessionCheats {
 }
 
 impl SessionCheats {
+    /// Creates an empty session cheat list.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let cheats = SessionCheats::new();
+    /// assert!(cheats.is_empty());
+    /// ```
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -50,6 +80,16 @@ impl SessionCheats {
         }
     }
 
+    /// Parses and initializes a session cheat list from multiple raw Game Genie strings.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let codes = vec!["GOSSIP".to_owned()];
+    /// let cheats = SessionCheats::from_raw_codes(&codes).unwrap();
+    /// assert_eq!(cheats.len(), 1);
+    /// ```
     pub fn from_raw_codes(raw_codes: &[String]) -> Result<Self, SessionCheatError> {
         let mut cheats = Self::new();
         for raw_code in raw_codes {
@@ -58,6 +98,16 @@ impl SessionCheats {
         Ok(cheats)
     }
 
+    /// Validates, normalizes, and adds a new cheat code to the session, enabling it by default.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// assert_eq!(cheats.entries()[0].raw_code, "GOSSIP");
+    /// ```
     pub fn add(&mut self, raw_code: &str) -> Result<(), SessionCheatError> {
         let normalized = normalize_cheat_code(raw_code)?;
         self.entries.push(SessionCheat {
@@ -67,6 +117,17 @@ impl SessionCheats {
         Ok(())
     }
 
+    /// Toggles the enabled state of the cheat code at the specified index.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// cheats.toggle(0).unwrap();
+    /// assert_eq!(cheats.entries()[0].enabled, false);
+    /// ```
     pub fn toggle(&mut self, index: usize) -> Result<(), SessionCheatError> {
         let len = self.entries.len();
         let entry = self
@@ -77,6 +138,17 @@ impl SessionCheats {
         Ok(())
     }
 
+    /// Removes and returns the cheat code at the specified index.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// let removed = cheats.remove(0).unwrap();
+    /// assert_eq!(removed.raw_code, "GOSSIP");
+    /// ```
     pub fn remove(&mut self, index: usize) -> Result<SessionCheat, SessionCheatError> {
         if index >= self.entries.len() {
             return Err(SessionCheatError::MissingIndex {
@@ -87,15 +159,50 @@ impl SessionCheats {
         Ok(self.entries.remove(index))
     }
 
+    /// Evicts all stored codes, wiping the slate clean for the next playthrough.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// cheats.clear();
+    /// assert!(cheats.is_empty());
+    /// ```
     pub fn clear(&mut self) {
         self.entries.clear();
     }
 
+    /// Exposes the immutable ledger of every active and inactive code in the session.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// assert_eq!(cheats.entries()[0].raw_code, "GOSSIP");
+    /// ```
     #[must_use]
     pub fn entries(&self) -> &[SessionCheat] {
         &self.entries
     }
 
+    /// Extracts an array of just the raw Game Genie strings that are currently switched on.
+    ///
+    /// This output is ideal for directly feeding into the core emulator configuration.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// cheats.add("ZEXPYGLA").unwrap();
+    /// cheats.toggle(1).unwrap(); // disable the second code
+    /// assert_eq!(cheats.enabled_codes(), vec!["GOSSIP"]);
+    /// ```
     #[must_use]
     pub fn enabled_codes(&self) -> Vec<String> {
         self.entries
@@ -105,11 +212,30 @@ impl SessionCheats {
             .collect()
     }
 
+    /// Counts how many distinct cheat codes are being tracked, regardless of active status.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let mut cheats = SessionCheats::new();
+    /// cheats.add("GOSSIP").unwrap();
+    /// assert_eq!(cheats.len(), 1);
+    /// ```
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    /// Verifies if the inventory is entirely empty.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_desktop::session_cheats::SessionCheats;
+    /// let cheats = SessionCheats::new();
+    /// assert!(cheats.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
