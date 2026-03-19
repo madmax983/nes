@@ -2650,11 +2650,18 @@ fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "Error: Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
-            rom_path
+            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            "Error:".with(Color::Red).bold(),
+            rom_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
         )
     } else {
-        format!("Error: Failed to read ROM at '{}': {}", rom_path, err)
+        format!(
+            "{} Failed to read ROM at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            rom_path,
+            err
+        )
     }
 }
 
@@ -4105,12 +4112,14 @@ mod tests {
     fn format_rom_read_error_handles_not_found_and_other_errors() {
         let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
         let msg = format_rom_read_error("bad.nes", &not_found);
-        assert!(msg.contains("Could not find the ROM file at 'bad.nes'"));
+        assert!(msg.contains("Could not find the ROM file at"));
+        assert!(msg.contains("bad.nes"));
         assert!(msg.contains("homebrew.nes"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);
-        assert!(msg.contains("Failed to read ROM at 'bad.nes'"));
+        assert!(msg.contains("Failed to read ROM at"));
+        assert!(msg.contains("bad.nes"));
         assert!(msg.contains("permission denied"));
     }
 
