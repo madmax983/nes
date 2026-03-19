@@ -41,12 +41,10 @@ fn make_nop_core_no_trace() -> NesCore {
 /// Warm: same core accumulating frames (steady-state throughput).
 #[divan::bench]
 fn step_frame_cold(bencher: divan::Bencher) {
-    bencher
-        .with_inputs(make_nop_core)
-        .bench_values(|mut core| {
-            core.execute(Command::StepFrame).unwrap();
-            core
-        });
+    bencher.with_inputs(make_nop_core).bench_values(|mut core| {
+        core.execute(Command::StepFrame).unwrap();
+        core
+    });
 }
 
 #[divan::bench]
