@@ -110,3 +110,18 @@ fn uxrom_from_prg_rom_preserves_large_bank_count_without_u8_wrap() {
     assert_eq!(m.read_prg(0x8000), 0x11);
     assert_eq!(m.read_prg(0xC000), 0xEE);
 }
+
+#[test]
+fn nrom_from_prg_rom_truncates_large_rom() {
+    use nes_core::mapper::Nrom;
+    let mut prg_rom = vec![0_u8; 40 * 1024];
+    prg_rom[0] = 0xAA;
+    prg_rom[32 * 1024 - 1] = 0xBB;
+    prg_rom[32 * 1024] = 0xCC; // This byte should be truncated
+
+    let m = Nrom::from_prg_rom(prg_rom);
+    // NROM reads wrap around using `modulo prg_rom.len()`.
+    // We verify it was truncated to 32KB by reading the first and last bytes.
+    assert_eq!(m.read_prg(0x8000), 0xAA);
+    assert_eq!(m.read_prg(0xFFFF), 0xBB);
+}

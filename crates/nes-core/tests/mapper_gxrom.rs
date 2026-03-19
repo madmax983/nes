@@ -96,3 +96,23 @@ fn gxrom_bank_counts_do_not_wrap_at_256_banks() {
     assert_eq!(mapper.read_prg(0x8000), 0xB0);
     assert_eq!(mapper.chr_window()[0], 0xD0);
 }
+
+#[test]
+fn gxrom_from_prg_chr_pads_unaligned_prg_rom() {
+    use nes_core::mapper::Gxrom;
+    // PRG ROM length is 32k + 1 byte
+    let mut prg_rom = vec![0_u8; 32 * 1024 + 1];
+    prg_rom[0] = 0xAA;
+    prg_rom[32 * 1024] = 0xBB;
+
+    let chr_rom = vec![0_u8; 8 * 1024];
+
+    let mut m = Gxrom::from_prg_chr(prg_rom, chr_rom);
+
+    // Test that the PRG ROM was padded to 64k (2 banks of 32k)
+    m.write_prg(0x8000, 0x00); // Select PRG Bank 0
+    assert_eq!(m.read_prg(0x8000), 0xAA);
+
+    m.write_prg(0x8000, 0x10); // Select PRG Bank 1 (PRG bank is top 2 bits, bits 4-5)
+    assert_eq!(m.read_prg(0x8000), 0xBB);
+}

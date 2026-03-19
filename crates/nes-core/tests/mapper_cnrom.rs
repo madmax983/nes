@@ -66,3 +66,26 @@ fn cnrom_chr_bank_count_does_not_wrap_at_256_banks() {
     assert_eq!(mapper.selected_chr_bank(), 1);
     assert_eq!(mapper.chr_window()[0], 0xB0);
 }
+
+#[test]
+fn cnrom_from_prg_chr_pads_chr_rom() {
+    use nes_core::mapper::Cnrom;
+    // CHR ROM length is 8k + 1 byte
+    let mut chr_rom = vec![0_u8; 8 * 1024 + 1];
+    chr_rom[0] = 0xAA;
+    chr_rom[8 * 1024] = 0xBB;
+
+    // PRG is just 32k
+    let prg_rom = vec![0_u8; 32 * 1024];
+
+    let mut m = Cnrom::from_prg_chr(prg_rom, chr_rom);
+
+    // Test that the CHR ROM was padded to 16k (2 banks of 8k)
+    m.write_prg(0x8000, 0); // Select Bank 0
+    let window0 = m.chr_window();
+    assert_eq!(window0[0], 0xAA);
+
+    m.write_prg(0x8000, 1); // Select Bank 1
+    let window1 = m.chr_window();
+    assert_eq!(window1[0], 0xBB);
+}
