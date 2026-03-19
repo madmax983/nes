@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cheat_codes::{CheatCode, CheatCodeError};
-use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
+use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{
     Axrom, AxromState, Cnrom, CnromState, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State,
     Nrom, Uxrom, UxromState,
