@@ -1,17 +1,25 @@
-<<<<<<< SEARCH
-    // In actual use, read_client_message parses it indefinitely leading to loop locks
-    thread_handle.join().unwrap();
-}
-=======
-    // Wait for the client to queue up a significant payload
-    thread::sleep(std::time::Duration::from_millis(50));
+--- crates/nes-mcp/src/output.rs
++++ crates/nes-mcp/src/output.rs
+@@ -415,6 +415,22 @@
+         assert_eq!(Arc::as_ptr(&initial_meta.audio_samples), Arc::as_ptr(&final_meta.audio_samples));
+     }
 
-    // In actual use, read_client_message parses it indefinitely leading to loop locks
-    // This will block and OOM eventually, but we assert it panics or fails to read cleanly
-    let mut reader = std::io::BufReader::new(_server);
-    let mut line = String::new();
-    let _ = std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
-
-    thread_handle.join().unwrap();
-}
->>>>>>> REPLACE
++    #[test]
++    fn should_resize_memory_when_publishing_audio_with_closure_if_length_differs() {
++        publish_audio(vec![0; 100]);
++        publish_audio_with(200, |samples| {
++            assert_eq!(samples.len(), 200);
++        });
++    }
++
++    #[test]
++    fn should_resize_memory_when_publishing_frame_with_closure_if_length_differs() {
++        publish_frame(256, 240, vec![0; 256 * 240 * 4]);
++        publish_frame_with(128, 120, |rgba| {
++            assert_eq!(rgba.len(), 128 * 120 * 4);
++        });
++    }
++
+     #[test]
+     fn should_return_none_when_expected_frame_len_overflows() {
+         assert_eq!(
