@@ -516,6 +516,7 @@ pub struct NesCore {
     last_cpu_trace: Option<String>,
     last_cpu_bus_trace: Vec<CpuBusAccess>,
     scratch_writes: Vec<CpuWrite>,
+    scratch_mmio_reads: Vec<u16>,
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
@@ -575,6 +576,7 @@ impl NesCore {
             last_cpu_trace: None,
             last_cpu_bus_trace: Vec::new(),
             scratch_writes: Vec::new(),
+            scratch_mmio_reads: Vec::new(),
         }
     }
 
@@ -1162,7 +1164,11 @@ impl NesCore {
         self.apply_cpu_writes(&writes);
         self.scratch_writes = writes;
 
-        self.apply_cpu_reads();
+        let mut mmio_reads = core::mem::take(&mut self.scratch_mmio_reads);
+        mmio_reads.clear();
+        self.cpu.swap_mmio_reads(&mut mmio_reads);
+        self.apply_cpu_reads(&mmio_reads);
+        self.scratch_mmio_reads = mmio_reads;
 
         let cpu_cycles = u64::from(cpu_cycles);
         self.advance_hardware_cycles(cpu_cycles);
@@ -1461,18 +1467,15 @@ impl NesCore {
             .write_byte(0x4017, self.controller_port_sample(Player::Two));
     }
 
-    fn apply_cpu_reads(&mut self) {
+    fn apply_cpu_reads(&mut self, mmio_reads: &[u16]) {
         let mut saw_ppu_status_read = false;
         let mut ppu_data_reads = 0_u8;
         let mut apu_status_reads = 0_u8;
         let mut controller1_reads = 0_u8;
         let mut controller2_reads = 0_u8;
 
-        for access in &self.last_cpu_bus_trace {
-            if access.kind != CpuBusAccessKind::Read {
-                continue;
-            }
-            match access.addr {
+        for &addr in mmio_reads {
+            match addr {
                 0x2002 => saw_ppu_status_read = true,
                 0x2007 => ppu_data_reads = ppu_data_reads.saturating_add(1),
                 0x4015 => apu_status_reads = apu_status_reads.saturating_add(1),
