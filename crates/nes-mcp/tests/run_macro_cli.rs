@@ -28,6 +28,36 @@ fn run_macro_bin() -> std::path::PathBuf {
 }
 
 #[test]
+fn run_macro_with_missing_rom_prints_styled_error() {
+    let output = Command::new(run_macro_bin())
+        .arg("__does_not_exist__.nes")
+        .arg("dummy.txt")
+        .output()
+        .expect("run nes-mcp-run-macro");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("Could not find the ROM file at"));
+    assert!(stderr.contains("__does_not_exist__.nes"));
+    assert!(stderr.contains("Hint:"));
+    assert!(stderr.contains("Check the path or try the bundled homebrew ROM"));
+}
+
+#[test]
+fn run_macro_with_invalid_rom_permissions_prints_styled_error() {
+    let output = Command::new(run_macro_bin())
+        .arg(".")
+        .arg("dummy.txt")
+        .output()
+        .expect("run nes-mcp-run-macro");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("Failed to read ROM at"));
+    assert!(stderr.contains("'.'"));
+}
+
+#[test]
 fn run_macro_without_required_arguments_prints_usage_and_fails() {
     let output = Command::new(run_macro_bin())
         .output()

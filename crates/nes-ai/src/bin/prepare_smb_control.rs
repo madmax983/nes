@@ -7,8 +7,26 @@ use nes_core::{NesCore, tas::TasMovie};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
+        eprintln!("\n{err}");
         std::process::exit(1);
+    }
+}
+
+fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            "Error:".with(Color::Red).bold(),
+            rom_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read ROM at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            rom_path,
+            err
+        )
     }
 }
 
@@ -25,7 +43,8 @@ fn run() -> Result<(), String> {
     let movie_path = PathBuf::from(&args[2]);
     let out_path = PathBuf::from(&args[3]);
 
-    let rom = fs::read(&rom_path).map_err(|e| format!("Failed to read ROM: {e}"))?;
+    let rom =
+        fs::read(&rom_path).map_err(|e| format_rom_read_error(&rom_path.to_string_lossy(), &e))?;
     let rom_hash = sha256_hex(&rom);
 
     let movie_json = fs::read(&movie_path).map_err(|e| format!("Failed to read TAS json: {e}"))?;
