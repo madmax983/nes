@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cheat_codes::{CheatCode, CheatCodeError};
-use crate::cpu::{Cpu, CpuBusAccess, CpuBusAccessKind, CpuError, CpuSnapshot, CpuWrite};
+use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuSnapshot, CpuWrite};
 use crate::mapper::{
     Axrom, AxromState, Cnrom, CnromState, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State,
     Nrom, Uxrom, UxromState,
@@ -516,6 +516,7 @@ pub struct NesCore {
     last_cpu_trace: Option<String>,
     last_cpu_bus_trace: Vec<CpuBusAccess>,
     scratch_writes: Vec<CpuWrite>,
+    scratch_mmio_reads: Vec<u16>,
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
@@ -575,6 +576,7 @@ impl NesCore {
             last_cpu_trace: None,
             last_cpu_bus_trace: Vec::new(),
             scratch_writes: Vec::new(),
+            scratch_mmio_reads: Vec::new(),
         }
     }
 
@@ -658,6 +660,15 @@ impl NesCore {
     #[must_use]
     pub fn cpu_x(&self) -> u8 {
         self.cpu.x()
+    }
+
+    /// Enables or disables CPU trace generation.
+    ///
+    /// Defaults to `true` in debug builds and `false` in release builds.
+    /// Override to `true` in release if you need the disassembly view (debugger,
+    /// step-cpu UI), or to `false` in debug for throughput profiling.
+    pub fn set_trace_enabled(&mut self, enabled: bool) {
+        self.cpu.set_trace_enabled(enabled);
     }
 
     /// Returns last executed instruction trace string, if any.
@@ -1129,14 +1140,23 @@ impl NesCore {
     }
 
     fn step_single_instruction(&mut self) -> Result<u64, CoreError> {
+        // Sync before the CPU step so reads during execution see current PPU/APU state.
+        // No post-step sync is needed: the next call's pre-step sync will refresh the
+        // image before the CPU runs again, and nothing reads the image between iterations.
         self.sync_ppu_register_image();
         let (trace, cpu_cycles) = self
             .cpu
             .step_with_trace_and_cycles()
             .map_err(CoreError::CpuStepFailed)?;
-        self.last_cpu_trace = Some(trace);
-        self.last_cpu_bus_trace.clear();
-        self.cpu.swap_bus_trace(&mut self.last_cpu_bus_trace);
+        // When trace is disabled, `trace` is an empty String (no heap alloc) and
+        // the bus_trace Vec is empty — skip the Option wrap and swap entirely.
+        if trace.is_empty() {
+            self.last_cpu_trace = None;
+        } else {
+            self.last_cpu_trace = Some(trace);
+            self.last_cpu_bus_trace.clear();
+            self.cpu.swap_bus_trace(&mut self.last_cpu_bus_trace);
+        }
 
         let mut writes = core::mem::take(&mut self.scratch_writes);
         writes.clear();
@@ -1144,7 +1164,11 @@ impl NesCore {
         self.apply_cpu_writes(&writes);
         self.scratch_writes = writes;
 
-        self.apply_cpu_reads();
+        let mut mmio_reads = core::mem::take(&mut self.scratch_mmio_reads);
+        mmio_reads.clear();
+        self.cpu.swap_mmio_reads(&mut mmio_reads);
+        self.apply_cpu_reads(&mmio_reads);
+        self.scratch_mmio_reads = mmio_reads;
 
         let cpu_cycles = u64::from(cpu_cycles);
         self.advance_hardware_cycles(cpu_cycles);
@@ -1158,7 +1182,6 @@ impl NesCore {
         } else if (self.apu.irq_pending() || self.mapper_irq_pending()) && self.cpu.service_irq() {
             self.advance_hardware_cycles(7);
         }
-        self.sync_ppu_register_image();
         Ok(cpu_cycles)
     }
 
@@ -1444,18 +1467,15 @@ impl NesCore {
             .write_byte(0x4017, self.controller_port_sample(Player::Two));
     }
 
-    fn apply_cpu_reads(&mut self) {
+    fn apply_cpu_reads(&mut self, mmio_reads: &[u16]) {
         let mut saw_ppu_status_read = false;
         let mut ppu_data_reads = 0_u8;
         let mut apu_status_reads = 0_u8;
         let mut controller1_reads = 0_u8;
         let mut controller2_reads = 0_u8;
 
-        for access in &self.last_cpu_bus_trace {
-            if access.kind != CpuBusAccessKind::Read {
-                continue;
-            }
-            match access.addr {
+        for &addr in mmio_reads {
+            match addr {
                 0x2002 => saw_ppu_status_read = true,
                 0x2007 => ppu_data_reads = ppu_data_reads.saturating_add(1),
                 0x4015 => apu_status_reads = apu_status_reads.saturating_add(1),
@@ -1551,29 +1571,28 @@ impl NesCore {
         self.mapper.as_ref().is_some_and(LoadedMapper::irq_pending)
     }
 
-    fn step_hardware_cycle(&mut self) {
-        self.scheduler.step_cpu_cycle();
-        self.scheduler.step_apu_cycle();
-        let dmc_request = self.apu.step_cpu_cycle(self.paused);
-        for _ in 0..3 {
-            self.scheduler.step_ppu_cycle();
-            self.ppu.step_dot();
-            if let Some(mapper) = self.mapper.as_mut() {
-                mapper.on_ppu_dot(
-                    self.ppu.scanline(),
-                    self.ppu.dot(),
-                    self.ppu.rendering_enabled_for_mapper_irq(),
-                );
-            }
-        }
-        if let Some(request) = dmc_request {
-            self.apply_dmc_dma_request(request);
-        }
-    }
-
     fn advance_hardware_cycles(&mut self, cycles: u64) {
+        // Batch-advance scheduler accounting counters once for the whole burst.
+        // The counters are not observed mid-loop, so this is equivalent to N
+        // per-cycle calls but avoids 5 wrapping_add operations per CPU cycle.
+        // One CPU cycle = 1 APU cycle = 3 PPU cycles.
+        self.scheduler.advance_by(cycles);
+
         for _ in 0..cycles {
-            self.step_hardware_cycle();
+            let dmc_request = self.apu.step_cpu_cycle(self.paused);
+            for _ in 0..3 {
+                self.ppu.step_dot();
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.on_ppu_dot(
+                        self.ppu.scanline(),
+                        self.ppu.dot(),
+                        self.ppu.rendering_enabled_for_mapper_irq(),
+                    );
+                }
+            }
+            if let Some(request) = dmc_request {
+                self.apply_dmc_dma_request(request);
+            }
         }
     }
 

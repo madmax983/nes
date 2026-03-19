@@ -51,6 +51,18 @@ impl Scheduler {
         self.apu_cycles = self.apu_cycles.wrapping_add(1);
     }
 
+    /// Batch-advances all counters by `cpu_cycles` CPU ticks.
+    ///
+    /// One CPU cycle = one APU cycle = three PPU cycles. Using this instead of
+    /// N calls to `step_cpu_cycle` + `step_apu_cycle` + 3N calls to
+    /// `step_ppu_cycle` reduces the per-cycle accounting overhead in hot loops.
+    #[inline(always)]
+    pub fn advance_by(&mut self, cpu_cycles: u64) {
+        self.cpu_cycles = self.cpu_cycles.wrapping_add(cpu_cycles);
+        self.ppu_cycles = self.ppu_cycles.wrapping_add(cpu_cycles * 3);
+        self.apu_cycles = self.apu_cycles.wrapping_add(cpu_cycles);
+    }
+
     /// Returns a copyable snapshot of all counters.
     #[must_use]
     pub fn snapshot(&self) -> SchedulerSnapshot {
