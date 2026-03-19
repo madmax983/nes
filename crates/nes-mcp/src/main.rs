@@ -382,6 +382,12 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "final_controller_bits": final_controller_bits,
             })
         }
+        DispatchOutput::PpuOam { oam_bytes } => {
+            json!({
+                "kind": "ppu_oam",
+                "oam_bytes": oam_bytes,
+            })
+        }
         DispatchOutput::DslAssembled {
             bytes_written,
             label_count,
