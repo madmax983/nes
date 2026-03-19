@@ -94,8 +94,10 @@ fn sixty_frames_burst(bencher: divan::Bencher) {
     });
 }
 
-/// Same benchmarks with `trace_enabled = false` — eliminates bus-trace RefCell
-/// borrow overhead and format_trace String allocations from the hot path.
+/// Same benchmarks with trace explicitly forced off.
+///
+/// In release builds this matches the default (trace is off by default via
+/// `cfg!(debug_assertions)`). Kept as an explicit ceiling measurement.
 mod no_trace {
     use super::*;
 

@@ -662,10 +662,9 @@ impl NesCore {
 
     /// Enables or disables CPU trace generation.
     ///
-    /// When disabled, bus-trace recording and trace-string formatting are skipped,
-    /// eliminating `RefCell` borrow overhead and heap allocations per instruction.
-    /// Call `set_trace_enabled(false)` for throughput-critical modes (AI training,
-    /// rewind, netplay rollback); call `set_trace_enabled(true)` for debugging.
+    /// Defaults to `true` in debug builds and `false` in release builds.
+    /// Override to `true` in release if you need the disassembly view (debugger,
+    /// step-cpu UI), or to `false` in debug for throughput profiling.
     pub fn set_trace_enabled(&mut self, enabled: bool) {
         self.cpu.set_trace_enabled(enabled);
     }

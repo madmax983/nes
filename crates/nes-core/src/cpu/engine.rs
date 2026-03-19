@@ -166,15 +166,15 @@ impl Cpu {
             writes: Vec::new(),
             prg_writes: Vec::new(),
             bus_trace: RefCell::new(Vec::new()),
-            trace_enabled: true,
+            trace_enabled: cfg!(debug_assertions),
         }
     }
 
     /// Enables or disables CPU trace generation.
     ///
+    /// Defaults to `true` in debug builds and `false` in release builds.
     /// When disabled, bus-trace recording and trace-string formatting are skipped,
     /// eliminating `RefCell` borrow overhead and heap allocations in the hot path.
-    /// Disable for throughput-critical modes (AI training, rewind, netplay rollback).
     pub fn set_trace_enabled(&mut self, enabled: bool) {
         self.trace_enabled = enabled;
     }
