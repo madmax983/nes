@@ -947,27 +947,22 @@ fn encode_base64(bytes: &[u8]) -> String {
 }
 
 fn parse_hex_bytes(raw: &str) -> Result<Vec<u8>, DispatchError> {
-    let mut cleaned = String::with_capacity(raw.len());
-    for ch in raw.chars() {
-        if !ch.is_ascii_whitespace() && ch != '_' {
-            cleaned.push(ch);
-        }
-    }
+    let mut bytes = Vec::with_capacity(raw.len() / 2);
+    let mut valid_bytes = raw
+        .bytes()
+        .enumerate()
+        .filter(|&(_, b)| !b.is_ascii_whitespace() && b != b'_');
 
-    if !cleaned.len().is_multiple_of(2) {
-        return Err(DispatchError::InvalidParams(
-            "rom_hex must have an even number of hex digits".to_owned(),
-        ));
-    }
+    while let Some((i1, b1)) = valid_bytes.next() {
+        let Some((i2, b2)) = valid_bytes.next() else {
+            return Err(DispatchError::InvalidParams(
+                "rom_hex must have an even number of hex digits".to_owned(),
+            ));
+        };
 
-    let mut bytes = Vec::with_capacity(cleaned.len() / 2);
-    let as_bytes = cleaned.as_bytes();
-    let mut index = 0;
-    while index < as_bytes.len() {
-        let hi = decode_hex_nibble(as_bytes[index], index)?;
-        let lo = decode_hex_nibble(as_bytes[index + 1], index + 1)?;
+        let hi = decode_hex_nibble(b1, i1)?;
+        let lo = decode_hex_nibble(b2, i2)?;
         bytes.push((hi << 4) + lo);
-        index += 2;
     }
     Ok(bytes)
 }
