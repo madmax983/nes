@@ -16,6 +16,7 @@ impl SpriteExtractor {
         let height = 256; // 32 tiles down
 
         let mut rgba = vec![0u8; width * height * 4];
+        let palette = [0, 85, 170, 255];
 
         for tile_y in 0..32 {
             for tile_x in 0..16 {
@@ -37,13 +38,7 @@ impl SpriteExtractor {
                         let pixel_idx = (base_y * width + base_x) * 4;
 
                         // Simple grayscale palette mapping for raw CHR
-                        let color_val = match color_idx {
-                            0 => 0,
-                            1 => 85,
-                            2 => 170,
-                            3 => 255,
-                            _ => unreachable!(),
-                        };
+                        let color_val = palette[color_idx as usize];
 
                         rgba[pixel_idx] = color_val;
                         rgba[pixel_idx + 1] = color_val;
