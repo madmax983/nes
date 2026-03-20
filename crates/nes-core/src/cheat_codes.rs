@@ -184,3 +184,23 @@ fn alphabet_digit(ch: char) -> Option<u8> {
         .position(|candidate| candidate == ch)
         .and_then(|index| u8::try_from(index).ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cheat_code_accessors_return_correct_values() {
+        let code = CheatCode::from_str("SXTPOU").unwrap();
+        assert_eq!(code.raw(), "SXTPOU");
+        assert_eq!(code.address(), 0x9BE1);
+        assert_eq!(code.value(), 0xAD);
+        assert_eq!(code.compare(), None);
+
+        let code_8 = CheatCode::from_str("ZEXPYGLA").unwrap();
+        assert_eq!(code_8.raw(), "ZEXPYGLA");
+        assert_eq!(code_8.address(), 0x94A7);
+        assert_eq!(code_8.value(), 0x02);
+        assert_eq!(code_8.compare(), Some(0x03));
+    }
+}
