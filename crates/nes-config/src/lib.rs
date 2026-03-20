@@ -1,8 +1,13 @@
+//! Configuration loading and deserialization for the NES emulator workspace.
+//!
+//! This crate parses `nes.toml` files and CLI overrides into a strongly-typed [`NesConfig`] struct.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+/// Default path to the configuration file.
 pub const DEFAULT_CONFIG_PATH: &str = "nes.toml";
 
 const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
@@ -20,26 +25,40 @@ const DEFAULT_NETPLAY_INPUT_DELAY_FRAMES: u32 = 2;
 const DEFAULT_NETPLAY_MAX_ROLLBACK_FRAMES: u32 = 240;
 const DEFAULT_NETPLAY_HASH_CHECK_EVERY_FRAMES: u64 = 120;
 
+/// Execution granularity for the emulator loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum StepModeConfig {
+    /// Step the emulator one CPU instruction at a time.
     Cpu,
+    /// Step the emulator one full PPU frame at a time.
     #[default]
     Frame,
 }
 
+/// Runtime configuration for desktop and windowing features.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DesktopConfig {
+    /// Path to the ROM file to load on startup.
     pub rom_path: Option<String>,
+    /// Multiplier for the native NES resolution.
     pub window_scale: u32,
+    /// Emulator step granularity.
     pub step_mode: StepModeConfig,
+    /// Fixed number of CPU steps to execute per frame when not syncing to PPU.
     pub cpu_steps_per_frame: u32,
+    /// Toggles audio synthesis and playback.
     pub audio_enabled: bool,
+    /// Interval (in frames) to emit CPU execution traces.
     pub trace_every_frames: u64,
+    /// Toggles performance metrics collection.
     pub metrics_enabled: bool,
+    /// Interval (in frames) to log metrics.
     pub metrics_every_frames: u64,
+    /// Path template for saving audio captures.
     pub capture_path_template: Option<String>,
+    /// Interval (in frames) for audio captures.
     pub capture_every_frames: u64,
 }
 
@@ -60,25 +79,39 @@ impl Default for DesktopConfig {
     }
 }
 
+/// File paths to ROM files used for testing and validation.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RomPathsConfig {
+    /// Path to Super Mario Bros ROM.
     pub smb: Option<String>,
+    /// Path to nestest ROM.
     pub nestest: Option<String>,
+    /// Path to blargg CPU test ROM.
     pub blargg_cpu: Option<String>,
+    /// Directory containing bbbradsmith audio suite ROMs.
     pub bbbradsmith_audio_suite_dir: Option<String>,
+    /// Directory containing bbbradsmith audio suite golden references.
     pub bbbradsmith_audio_golden_dir: Option<String>,
 }
 
+/// Settings for rollback netcode and online multiplayer.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct NetplayConfig {
+    /// Toggles netplay rollback engine.
     pub enabled: bool,
+    /// Address of the netplay relay server.
     pub relay_addr: String,
+    /// Netplay room name.
     pub room: String,
+    /// Player index (1 or 2).
     pub player: u8,
+    /// Fixed input delay added before executing local inputs.
     pub input_delay_frames: u32,
+    /// Maximum allowed rollback window size.
     pub max_rollback_frames: u32,
+    /// Interval (in frames) to perform state hash checks.
     pub hash_check_every_frames: u64,
 }
 
@@ -96,12 +129,17 @@ impl Default for NetplayConfig {
     }
 }
 
+/// Settings for the rewind and state history engine.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TimeMachineConfig {
+    /// Toggles time machine functionality.
     pub enabled: bool,
+    /// Maximum history size in seconds.
     pub max_history_seconds: u32,
+    /// Frames between full state keyframes.
     pub keyframe_base_interval: u64,
+    /// Size threshold in bytes to force a keyframe instead of a delta.
     pub delta_spike_threshold: u32,
 }
 
@@ -116,23 +154,42 @@ impl Default for TimeMachineConfig {
     }
 }
 
+/// The root configuration object combining all sub-sections.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct NesConfig {
+    /// Desktop configuration.
     pub desktop: DesktopConfig,
+    /// ROM paths configuration.
     pub roms: RomPathsConfig,
+    /// Netplay configuration.
     pub netplay: NetplayConfig,
+    /// Time machine configuration.
     pub time_machine: TimeMachineConfig,
 }
 
 impl NesConfig {
+    /// Loads and parses a TOML configuration from the specified file path.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use nes_config::NesConfig;
+    /// use std::path::Path;
+    /// let config = NesConfig::load(Path::new("my_nes.toml")).unwrap();
+    /// ```
     pub fn load(path: &Path) -> Result<Self, String> {
         let bytes = fs::read_to_string(path)
             .map_err(|err| format!("failed to read config '{}': {err}", path.display()))?;
         toml::from_str::<Self>(&bytes)
             .map_err(|err| format!("failed to parse config '{}': {err}", path.display()))
     }
-
+    /// Loads a configuration from the given path if present, otherwise attempts to load from the default path or returns a default configuration.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use nes_config::NesConfig;
+    /// let config = NesConfig::load_or_default(None).unwrap();
+    /// ```
     pub fn load_or_default(path: Option<&Path>) -> Result<Self, String> {
         match path {
             Some(config_path) => Self::load(config_path),
@@ -148,14 +205,17 @@ impl NesConfig {
     }
 }
 
+/// Returns the value if it is non-zero, otherwise returns the fallback.
 pub fn normalize_nonzero_u32(value: u32, fallback: u32) -> u32 {
     if value == 0 { fallback } else { value }
 }
 
+/// Returns the value if it is non-zero, otherwise returns the fallback.
 pub fn normalize_nonzero_u64(value: u64, fallback: u64) -> u64 {
     if value == 0 { fallback } else { value }
 }
 
+/// Extracts the `--config` argument from a list of command-line arguments, returning the parsed path and the remaining arguments.
 pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<String>), String> {
     let mut config_path = None::<PathBuf>;
     let mut pass_through = Vec::new();
