@@ -8,6 +8,7 @@ nova = []
 tas = []
 
 [dependencies]
+arbitrary = { version = "1.4.2", features = ["derive"] }
 itoa = "1.0.17"
 serde = { version = "1", features = ["derive"] }
 
