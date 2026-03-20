@@ -297,7 +297,10 @@ mod tests {
                 }
 
                 // If we got a reply but it wasn't the target frame, drain any remaining backlog immediately.
-                while let Ok(WorkerReply::Reconstructed { frame_id: next_id, .. }) = tm.rx.try_recv() {
+                while let Ok(WorkerReply::Reconstructed {
+                    frame_id: next_id, ..
+                }) = tm.rx.try_recv()
+                {
                     if next_id == tm.last_recorded_frame {
                         return true;
                     }
