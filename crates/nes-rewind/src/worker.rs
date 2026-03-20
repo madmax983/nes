@@ -287,14 +287,20 @@ mod tests {
             let _ = tm.tx.send(WorkerMsg::Reconstruct {
                 target_frame: tm.last_recorded_frame,
             });
+
+            // First wait for up to 100ms for a reply.
             if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
                 tm.rx.recv_timeout(Duration::from_millis(100))
             {
-                // The test core isn't mutated until `tm.rewind_step` does it.
-                // But we just sent a raw message.
-                // Since we received the reply, the worker is caught up.
                 if frame_id == tm.last_recorded_frame {
                     return true;
+                }
+
+                // If we got a reply but it wasn't the target frame, drain any remaining backlog immediately.
+                while let Ok(WorkerReply::Reconstructed { frame_id: next_id, .. }) = tm.rx.try_recv() {
+                    if next_id == tm.last_recorded_frame {
+                        return true;
+                    }
                 }
             }
         }
