@@ -458,4 +458,29 @@ mod tests {
         assert_eq!(result, None);
         assert_eq!(tm.state(), TimeMachineState::Exhausted);
     }
+
+    #[test]
+    fn wait_for_sync_drains_backlog() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+
+        // Push a bunch of frames to create some work
+        for _ in 0..5 {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(&core);
+        }
+
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+
+        // The worker is caught up now.
+        // We will forcefully insert some stale `Reconstructed` messages,
+        // followed by the one it actually expects.
+        // We do this by sending older target_frame requests to the worker.
+        let _ = tm.tx.send(WorkerMsg::Reconstruct { target_frame: 1 });
+        let _ = tm.tx.send(WorkerMsg::Reconstruct { target_frame: 2 });
+        let _ = tm.tx.send(WorkerMsg::Reconstruct { target_frame: 3 });
+
+        // Now wait_for_sync will ask for frame 5, which will queue up behind 1, 2, 3.
+        assert!(wait_for_sync(&mut tm));
+    }
 }
