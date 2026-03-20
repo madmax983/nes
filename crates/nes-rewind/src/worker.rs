@@ -284,9 +284,13 @@ mod tests {
             if tm.last_recorded_frame == 0 {
                 return true;
             }
+            // Drain the queue to prevent reading a stale `Reconstruct` response
+            while tm.rx.try_recv().is_ok() {}
+
             let _ = tm.tx.send(WorkerMsg::Reconstruct {
                 target_frame: tm.last_recorded_frame,
             });
+
             if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
                 tm.rx.recv_timeout(Duration::from_millis(500))
             {
@@ -297,8 +301,6 @@ mod tests {
                     return true;
                 }
             }
-            // Drain the queue to prevent filling it with stale `Reconstruct` requests
-            while tm.rx.try_recv().is_ok() {}
         }
         false
     }
