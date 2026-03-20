@@ -26,3 +26,6 @@ pub use api::{
     QueryResult, RomLoadInfo,
 };
 pub use cheat_codes::{CheatCode, CheatCodeError};
+
+#[cfg(feature = "nova")]
+pub mod experimental;

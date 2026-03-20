@@ -1,0 +1,73 @@
+#[cfg(feature = "nova")]
+use crate::NesCore;
+#[cfg(feature = "nova")]
+use crate::bmp::encode_bmp;
+
+#[cfg(feature = "nova")]
+pub struct SpriteExtractor;
+
+#[cfg(feature = "nova")]
+impl SpriteExtractor {
+    pub fn extract_chr_ram_bmp(core: &NesCore) -> Result<Vec<u8>, String> {
+        let snapshot = core.save_state();
+        let chr = snapshot.ppu.chr;
+
+        let width = 128; // 16 tiles across
+        let height = 256; // 32 tiles down
+
+        let mut rgba = vec![0u8; width * height * 4];
+
+        for tile_y in 0..32 {
+            for tile_x in 0..16 {
+                let tile_idx = tile_y * 16 + tile_x;
+                let tile_addr = tile_idx * 16;
+
+                for row in 0..8 {
+                    let plane0 = chr[tile_addr + row];
+                    let plane1 = chr[tile_addr + row + 8];
+
+                    for col in 0..8 {
+                        let bit0 = (plane0 >> (7 - col)) & 1;
+                        let bit1 = (plane1 >> (7 - col)) & 1;
+                        let color_idx = (bit1 << 1) | bit0;
+
+                        let base_x = tile_x * 8 + col;
+                        let base_y = tile_y * 8 + row;
+
+                        let pixel_idx = (base_y * width + base_x) * 4;
+
+                        // Simple grayscale palette mapping for raw CHR
+                        let color_val = match color_idx {
+                            0 => 0,
+                            1 => 85,
+                            2 => 170,
+                            3 => 255,
+                            _ => unreachable!(),
+                        };
+
+                        rgba[pixel_idx] = color_val;
+                        rgba[pixel_idx + 1] = color_val;
+                        rgba[pixel_idx + 2] = color_val;
+                        rgba[pixel_idx + 3] = 255;
+                    }
+                }
+            }
+        }
+
+        encode_bmp(width, height, &rgba)
+    }
+}
+
+#[cfg(all(test, feature = "nova"))]
+mod tests {
+    use super::*;
+    use crate::NesCore;
+
+    #[test]
+    fn can_extract_sprite_sheet() {
+        let core = NesCore::new();
+        let bmp_data = SpriteExtractor::extract_chr_ram_bmp(&core).unwrap();
+        // Check BMP header magic
+        assert_eq!(&bmp_data[0..2], b"BM");
+    }
+}
