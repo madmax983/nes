@@ -288,7 +288,7 @@ mod tests {
                 target_frame: tm.last_recorded_frame,
             });
             if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
-                tm.rx.recv_timeout(Duration::from_millis(100))
+                tm.rx.recv_timeout(Duration::from_millis(500))
             {
                 // The test core isn't mutated until `tm.rewind_step` does it.
                 // But we just sent a raw message.
@@ -297,6 +297,8 @@ mod tests {
                     return true;
                 }
             }
+            // Drain the queue to prevent filling it with stale `Reconstruct` requests
+            while tm.rx.try_recv().is_ok() {}
         }
         false
     }

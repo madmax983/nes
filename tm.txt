@@ -1,0 +1,201 @@
+115:impl TimeMachine {
+116-    /// Construct a new `TimeMachine` and spawn its background worker thread.
+117-    pub fn new(config: TimeMachineConfig) -> Self {
+118-        let max_frames = u64::from(config.max_history_seconds) * 60;
+119-        let policy =
+120-            KeyframePolicy::new(config.keyframe_base_interval, config.delta_spike_threshold);
+121-
+122-        // Channel capacities:
+123-        //   work_tx capacity 4  — small; emulation thread drops rather than blocks.
+124-        //   reply_tx capacity 64 — large enough for lookahead pre-fetch bursts.
+125-        let (work_tx, work_rx) = mpsc::sync_channel::<WorkerMsg>(4);
+126-        let (reply_tx, reply_rx) = mpsc::sync_channel::<WorkerReply>(64);
+127-
+128-        thread::spawn(move || {
+129-            let mut timeline = CompressedTimeline::new(max_frames, policy);
+130-            loop {
+131-                match work_rx.recv() {
+132-                    Ok(WorkerMsg::Record { frame_id, snapshot }) => {
+133-                        timeline.push(frame_id, *snapshot);
+134-                    }
+135-                    Ok(WorkerMsg::Reconstruct { target_frame }) => {
+136-                        if let Some(snapshot) = timeline.reconstruct(target_frame) {
+137-                            let _ = reply_tx.send(WorkerReply::Reconstructed {
+138-                                frame_id: target_frame,
+139-                                snapshot,
+140-                            });
+141-                        }
+142-                    }
+143-                    Ok(WorkerMsg::Shutdown) | Err(_) => break,
+144-                }
+145-            }
+146-        });
+147-
+148-        Self {
+149-            config,
+150-            state: TimeMachineState::Recording,
+151-            cursor: None,
+152-            tx: work_tx,
+153-            rx: reply_rx,
+154-            last_recorded_frame: 0,
+155-        }
+156-    }
+157-
+158-    /// Record the current emulator state. Non-blocking — drops if worker is busy.
+159-    ///
+160-    /// Call once per frame after advancing the core, only while [`TimeMachineState::Recording`].
+161-    pub fn record_frame(&mut self, core: &NesCore) {
+162-        if !matches!(self.state, TimeMachineState::Recording) {
+163-            return;
+164-        }
+165-        let frame_id = core.ppu_frame_counter();
+166-        let snapshot = core.save_state();
+167-        self.last_recorded_frame = frame_id;
+168-        // `try_send` — never block the emulation thread.
+169-        let _ = self.tx.try_send(WorkerMsg::Record {
+170-            frame_id,
+171-            snapshot: Box::new(snapshot),
+172-        });
+173-    }
+174-
+175-    /// Step backward one frame. Returns `Some(frame_id)` on success, `None` when history is exhausted.
+176-    ///
+177-    /// Blocks up to 16 ms waiting for the worker to reconstruct the target frame.
+178-    pub fn rewind_step(&mut self, core: &mut NesCore) -> Option<u64> {
+179-        // Initialise the cursor on first rewind call.
+180-        if self.cursor.is_none() {
+181-            self.state = TimeMachineState::Rewinding {
+182-                seconds_remaining: 0.0,
+183-            };
+184-            self.cursor = Some(RewindCursor::new(
+185-                self.last_recorded_frame,
+186-                RewindSpeed::Normal,
+187-            ));
+188-        }
+189-
+190-        let cursor = self.cursor.as_mut().unwrap();
+191-        let target = cursor.current_frame.checked_sub(1)?;
+192-
+193-        // Request the previous frame from the worker.
+194-        // Use blocking send here — during rewind the emulation loop is paused so
+195-        // it is acceptable to wait briefly for a slot (worker drains quickly).
+196-        let _ = self.tx.send(WorkerMsg::Reconstruct {
+197-            target_frame: target,
+198-        });
+199-
+200-        // Wait up to one frame-budget (16 ms) for the reply.
+201-        match self.rx.recv_timeout(Duration::from_millis(16)) {
+202-            Ok(WorkerReply::Reconstructed { frame_id, snapshot }) => {
+203-                cursor.current_frame = frame_id;
+204-                core.load_state(&snapshot);
+205-                self.state = TimeMachineState::Rewinding {
+206-                    seconds_remaining: frame_id as f32 / 60.0,
+207-                };
+208-                Some(frame_id)
+209-            }
+210-            _ => {
+211-                self.state = TimeMachineState::Exhausted;
+212-                None
+213-            }
+214-        }
+215-    }
+216-
+217-    /// Accelerate rewind (tap → Normal → Fast → Faster).
+218-    pub fn rewind_faster(&mut self) {
+219-        if let Some(cursor) = &mut self.cursor {
+220-            cursor.speed = match cursor.speed {
+221-                RewindSpeed::Single | RewindSpeed::Normal => RewindSpeed::Fast,
+222-                RewindSpeed::Fast => RewindSpeed::Faster,
+223-                RewindSpeed::Faster => RewindSpeed::Faster,
+224-            };
+225-        }
+226-    }
+227-
+228-    /// Resume recording from the current rewind position.
+229-    pub fn resume(&mut self) {
+230-        self.cursor = None;
+231-        self.state = TimeMachineState::Recording;
+232-    }
+233-
+234-    /// Current observable state.
+235-    pub fn state(&self) -> TimeMachineState {
+236-        self.state.clone()
+237-    }
+238-
+239-    /// Approximate seconds of history recorded so far.
+240-    pub fn history_seconds(&self) -> f32 {
+241-        self.last_recorded_frame as f32 / 60.0
+242-    }
+243-}
+244-
+245-impl Drop for TimeMachine {
+246-    fn drop(&mut self) {
+247-        // Best-effort graceful shutdown of the worker thread.
+248-        let _ = self.tx.send(WorkerMsg::Shutdown);
+249-    }
+250-}
+251-
+252-// ---------------------------------------------------------------------------
+253-// Tests
+254-// ---------------------------------------------------------------------------
+255-
+256-#[cfg(test)]
+257-mod tests {
+258-    use super::*;
+259-    use nes_core::{Command, NesCore};
+260-
+261-    fn make_core() -> NesCore {
+262-        let mut core = NesCore::new();
+263-        core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
+264-        core
+265-    }
+266-
+267-    fn config() -> TimeMachineConfig {
+268-        TimeMachineConfig {
+269-            max_history_seconds: 10,
+270-            keyframe_base_interval: 30,
+271-            delta_spike_threshold: 2048,
+272-        }
+273-    }
+274-
+275-    /// A helper function to poll the TimeMachine until it processes all queued
+276-    /// frames. Returns `true` if it synced successfully, or `false` if it timed out.
+277-    /// This avoids flaky hardcoded sleep delays in tests.
+278-    fn wait_for_sync(tm: &mut TimeMachine) -> bool {
+279-        let start = std::time::Instant::now();
+280-        // Give it up to 5000ms to process the queue in extremely slow CI environments.
+281-        while start.elapsed() < Duration::from_millis(5000) {
+282-            // To check if the worker has caught up, we can ask for a reconstruct
+283-            // of the last recorded frame. If it succeeds, the worker has processed it.
+284-            if tm.last_recorded_frame == 0 {
+285-                return true;
+286-            }
+287-            let _ = tm.tx.send(WorkerMsg::Reconstruct {
+288-                target_frame: tm.last_recorded_frame,
+289-            });
+290-            if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
+291-                tm.rx.recv_timeout(Duration::from_millis(100))
+292-            {
+293-                // The test core isn't mutated until `tm.rewind_step` does it.
+294-                // But we just sent a raw message.
+295-                // Since we received the reply, the worker is caught up.
+296-                if frame_id == tm.last_recorded_frame {
+297-                    return true;
+298-                }
+299-            }
+300-        }
+301-        false
+302-    }
+303-
+304-    #[test]
+305-    fn record_and_rewind_restores_earlier_frame() {
+306-        let mut core = make_core();
+307-        let mut tm = TimeMachine::new(config());
+308-
+309-        // Record 60 frames.
+310-        for _ in 0..60 {
+311-            core.execute(Command::StepFrame).unwrap();
+312-            tm.record_frame(&core);
+313-        }
+314-        let frame_before_rewind = core.ppu_frame_counter();
+315-
