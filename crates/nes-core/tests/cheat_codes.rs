@@ -100,3 +100,12 @@ fn compare_guarded_cheat_codes_track_uxrom_bank_switches() {
     core.write_cpu_bus(0x8000, 0x00);
     assert_eq!(core.read_memory(cpu_addr), 0x02);
 }
+
+#[test]
+fn cheat_code_raw_returns_normalized_string() {
+    let code: CheatCode = " Sxt-po U ".parse().expect("valid six-letter code");
+    assert_eq!(code.raw(), "SXTPOU");
+
+    let code2: CheatCode = "zeXp-yGLa".parse().expect("valid eight-letter code");
+    assert_eq!(code2.raw(), "ZEXPYGLA");
+}
