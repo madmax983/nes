@@ -44,6 +44,29 @@ fn run_macro_with_missing_rom_prints_styled_error() {
 }
 
 #[test]
+fn run_macro_with_missing_script_prints_styled_error() {
+    let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_missing_script_cli_test");
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    let rom_path = create_dummy_rom_file(&temp_dir);
+
+    let output = Command::new(run_macro_bin())
+        .arg(&rom_path)
+        .arg("__does_not_exist__.txt")
+        .output()
+        .expect("run nes-mcp-run-macro");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("Could not find the macro script at"));
+    assert!(stderr.contains("__does_not_exist__.txt"));
+    assert!(stderr.contains("Hint:"));
+    assert!(stderr.contains("Check the path or create a new .txt file"));
+}
+
+#[test]
 fn run_macro_with_invalid_rom_permissions_prints_styled_error() {
     let output = Command::new(run_macro_bin())
         .arg(".")
