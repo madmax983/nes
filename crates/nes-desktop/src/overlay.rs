@@ -651,14 +651,14 @@ fn draw_add_cheat_modal(frame: &mut [u8], frame_width: usize, frame_height: usiz
         "Enter cheat code:",
         COLOR_TEXT,
     );
-    draw_text(
-        frame,
-        frame_width,
-        text_x,
-        text_y.saturating_add(LINE_HEIGHT + 4),
-        &format!("{}_", buffer),
-        COLOR_STATUS,
-    );
+
+    // ⚡ Bolt Optimization:
+    // Eliminates a per-frame `String` heap allocation (from `format!("{}_", buffer)`)
+    // by drawing the input text and the cursor separately.
+    let input_y = text_y.saturating_add(LINE_HEIGHT + 4);
+    draw_text(frame, frame_width, text_x, input_y, buffer, COLOR_STATUS);
+    let cursor_x = text_x.saturating_add(buffer.chars().count() * (GLYPH_SIZE + GLYPH_SPACING));
+    draw_text(frame, frame_width, cursor_x, input_y, "_", COLOR_STATUS);
 }
 
 fn draw_frame_border(
