@@ -517,6 +517,23 @@ mod tests {
     }
 
     #[test]
+    fn new_initializes_banks_and_fills_memory() {
+        let mapper = Mmc3::new(8, 8);
+        assert_eq!(mapper.prg_bank_count_8k, 8);
+        assert_eq!(mapper.chr_bank_count_1k, 8);
+        assert_eq!(mapper.prg_rom[0], 0);
+        assert_eq!(mapper.chr_data[0], 0);
+    }
+
+    #[test]
+    fn mmc3_write_e001_enables_irq() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xE001, 1);
+        let state = m.state();
+        assert!(state.irq_enabled);
+    }
+
+    #[test]
     fn state_and_restore_state_round_trip() {
         let mut original = Mmc3::new(8, 8);
         original.bank_select = 0x55;

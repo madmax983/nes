@@ -106,3 +106,24 @@ impl Mapper for Uxrom {
         self.selected_bank = usize::from(value) % self.bank_count;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uxrom_state_can_be_restored() {
+        let mut mapper = Uxrom::new(2);
+        mapper.write_prg(0x8000, 1);
+        let state = mapper.state();
+        let mut restored = Uxrom::new(2);
+        restored.restore_state(state);
+        assert_eq!(mapper.selected_bank(), restored.selected_bank());
+    }
+
+    #[test]
+    fn uxrom_read_prg_resolves_via_mapper_trait() {
+        let mapper = Uxrom::new(2);
+        assert_eq!(mapper.read_prg(0x8000), 0);
+    }
+}
