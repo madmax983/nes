@@ -1348,28 +1348,33 @@ impl NesCore {
     }
 
     fn sync_mapper_prg_window(&mut self) {
-        if let Some(mapper) = self.mapper.as_ref() {
-            for addr in 0x8000..=0xFFFF {
-                let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
-                self.cpu.write_byte(addr, value);
-            }
+        let Some(mapper) = self.mapper.as_ref() else {
+            return;
+        };
+        for addr in 0x8000..=0xFFFF {
+            let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
+            self.cpu.write_byte(addr, value);
         }
     }
 
     fn sync_mapper_chr_window(&mut self) {
-        if let Some(mapper) = self.mapper.as_ref()
-            && let Some((chr_window, writable)) = mapper.chr_window()
-        {
-            self.ppu.set_chr_window(&chr_window, writable);
-        }
+        let Some(mapper) = self.mapper.as_ref() else {
+            return;
+        };
+        let Some((chr_window, writable)) = mapper.chr_window() else {
+            return;
+        };
+        self.ppu.set_chr_window(&chr_window, writable);
     }
 
     fn sync_mapper_mirroring(&mut self) {
-        if let Some(mapper) = self.mapper.as_ref()
-            && let Some(mirroring) = mapper.mirroring_override()
-        {
-            self.ppu.set_mirroring(mirroring);
-        }
+        let Some(mapper) = self.mapper.as_ref() else {
+            return;
+        };
+        let Some(mirroring) = mapper.mirroring_override() else {
+            return;
+        };
+        self.ppu.set_mirroring(mirroring);
     }
 
     fn apply_cpu_writes(&mut self, writes: &[CpuWrite]) {
