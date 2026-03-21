@@ -113,4 +113,32 @@ mod tests {
         // $0010 was 5, now 4, so it decreased.
         assert!(results.contains(&(0x0010, 0x04)));
     }
+
+    #[test]
+    fn memory_search_can_find_unchanged_and_reset() {
+        let mut core = NesCore::new();
+        // Load a program that changes $0010 but not $0011
+        core.load_cpu_bytes(
+            0xC000,
+            &[0xA9, 0x05, 0x85, 0x10, 0x85, 0x11, 0xA9, 0x06, 0x85, 0x10],
+        );
+
+        core.execute(Command::StepCpu).unwrap(); // LDA #$05
+        core.execute(Command::StepCpu).unwrap(); // STA $10
+        core.execute(Command::StepCpu).unwrap(); // STA $11
+
+        let mut searcher = MemorySearcher::new(&core);
+
+        core.execute(Command::StepCpu).unwrap(); // LDA #$06
+        core.execute(Command::StepCpu).unwrap(); // STA $10
+
+        searcher.filter_unchanged(&core);
+        let results = searcher.results(&core);
+
+        assert!(results.contains(&(0x0011, 0x05)));
+        assert!(!results.contains(&(0x0010, 0x06)));
+
+        searcher.reset(&core);
+        assert_eq!(searcher.results(&core).len(), 2048);
+    }
 }
