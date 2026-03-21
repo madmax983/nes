@@ -8,3 +8,7 @@
 **Refactoring hardware cycle loops in nes-core API**
 **Learning:** Found scattered and repeated logic manually running `self.step_hardware_cycle()` inside `for _ in 0..cycles` loops in `api.rs`, hiding the fact that chained DMC requests handled within `step_hardware_cycle` implicitly recurse back to `apply_dmc_dma_request`.
 **Action:** Extracted `advance_hardware_cycles` helper function and replaced manual loops in `step_single_instruction` and `run_oam_dma`. Deliberately avoided refactoring `apply_dmc_dma_request` because its inline loop explicitly handles chained requests without triggering recursive stalls, which is required for accurate hardware timing.
+
+**Refactoring guard clauses in nes-core mapper synchronization**
+**Learning:** Found deeply nested `if let` blocks inside mapper synchronization functions (`sync_mapper_prg_window`, `sync_mapper_chr_window`, and `sync_mapper_mirroring`), creating unnecessary indentation and violating early return principles.
+**Action:** Replaced nested `if let` and `&& let` bindings with flat `let Some(...) = ... else { return; }` guard clauses to reduce nesting depth and improve readability.
