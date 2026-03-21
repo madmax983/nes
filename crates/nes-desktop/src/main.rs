@@ -2518,11 +2518,10 @@ mod tests {
     }
 
     use super::{
-        AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES,
-        DEFAULT_METRICS_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH,
-        FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision,
-        MAX_AUDIO_QUEUE_CHUNKS, MetricsSnapshot, NetplayRuntimeStats, PerfMetrics,
-        RodioSinkAdapter, StepMode, TARGET_FRAME_TIME, WindowEventDecision,
+        AudioOutput, AudioSinkControl, DEFAULT_CAPTURE_EVERY_FRAMES, DEFAULT_METRICS_EVERY_FRAMES,
+        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        KeyboardDecision, MAX_AUDIO_QUEUE_CHUNKS, MetricsSnapshot, NetplayRuntimeStats,
+        PerfMetrics, RodioSinkAdapter, StepMode, TARGET_FRAME_TIME, WindowEventDecision,
         advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
         apply_runtime_cheat_codes, audio_queue_dropped, capture_config_from_parts,
         capture_path_for_frame, classify_keyboard_input, classify_window_event,
@@ -2543,7 +2542,7 @@ mod tests {
     use nes_desktop::overlay::OverlayModel;
     use rodio::Sink;
     use std::fs;
-        use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
     use winit::dpi::PhysicalSize;
     use winit::event::{

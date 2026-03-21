@@ -252,11 +252,7 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             return Err(format!("unknown flag: {arg}"));
         }
         if let Some(path) = &parsed.rom_path {
-            return Err(format!(
-                "multiple ROM paths provided: {} and {}",
-                path,
-                arg
-            ));
+            return Err(format!("multiple ROM paths provided: {} and {}", path, arg));
         }
         parsed.rom_path = Some(arg.clone());
         idx += 1;
