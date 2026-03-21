@@ -47,10 +47,28 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     }
 }
 
+fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the macro script at '{}'.\n{} Check the path or create a new .txt file.",
+            "Error:".with(Color::Red).bold(),
+            script_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read script at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            script_path,
+            err
+        )
+    }
+}
+
 fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
     let rom_bytes = fs::read(rom_path).map_err(|err| format_rom_read_error(rom_path, &err))?;
     let script_content = fs::read_to_string(script_path)
-        .map_err(|err| format!("Failed to read script file '{}': {}", script_path, err))?;
+        .map_err(|err| format_script_read_error(script_path, &err))?;
 
     let mut core = NesCore::new();
     let rom_info = core
@@ -139,5 +157,22 @@ mod tests {
             .expect_err("missing files should fail");
         assert!(err.contains("Could not find the ROM file at"));
         assert!(err.contains("__missing_rom__.nes"));
+    }
+
+    #[test]
+    fn run_reports_missing_script_file_errors() {
+        // We need a dummy ROM file to pass the first check
+        let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_missing_script_test");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let rom_path = temp_dir.join("dummy.nes");
+        std::fs::write(&rom_path, vec![0; 16 + 16384]).unwrap();
+
+        let err = run(rom_path.to_str().unwrap(), "__missing_script__.txt")
+            .expect_err("missing script should fail");
+        assert!(err.contains("Could not find the macro script at"));
+        assert!(err.contains("__missing_script__.txt"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
