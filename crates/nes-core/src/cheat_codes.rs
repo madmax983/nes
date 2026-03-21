@@ -190,6 +190,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cheat_code_parser_ignores_whitespace_and_hyphens() {
+        let code1 = CheatCode::from_str("S X T P O U").unwrap();
+        assert_eq!(code1.raw(), "SXTPOU");
+        assert_eq!(code1.address(), 0x9BE1);
+
+        let code2 = CheatCode::from_str("S-X-T-P-O-U").unwrap();
+        assert_eq!(code2.raw(), "SXTPOU");
+        assert_eq!(code2.address(), 0x9BE1);
+
+        let code3 = CheatCode::from_str("S X-T P-O U").unwrap();
+        assert_eq!(code3.raw(), "SXTPOU");
+        assert_eq!(code3.address(), 0x9BE1);
+    }
+
+    #[test]
     fn cheat_code_accessors_return_correct_values() {
         let code = CheatCode::from_str("SXTPOU").unwrap();
         assert_eq!(code.raw(), "SXTPOU");
