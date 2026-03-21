@@ -16,6 +16,26 @@ const JSONRPC_VERSION: &str = "2.0";
 const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// A background server that bridges the emulator core to the Model Context Protocol (MCP).
+///
+/// `McpHost` listens on a local TCP socket for incoming JSON-RPC connections from
+/// an MCP client. It delegates commands like reading memory or injecting inputs
+/// to the actual emulator running on the main thread.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_desktop::mcp_host::McpHost;
+/// use nes_core::NesCore;
+///
+/// // Start the server on an ephemeral port
+/// let host = McpHost::start("127.0.0.1:0").unwrap();
+/// println!("Listening on {}", host.bind_addr());
+///
+/// // The emulator core must regularly drain requests
+/// let mut core = NesCore::new();
+/// host.drain(&mut core);
+/// ```
 pub struct McpHost {
     requests: Receiver<ToolRequest>,
     _thread: thread::JoinHandle<()>,
