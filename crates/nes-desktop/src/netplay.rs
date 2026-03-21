@@ -6,6 +6,25 @@ use std::time::Duration;
 
 use nes_netplay::{ClientMessage, ServerMessage};
 
+/// Configuration settings to launch a netplay session.
+///
+/// This tells the `NetplayClient` which relay server to connect to,
+/// the room ID, the local player index, and how to handle rollback mechanics.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_desktop::netplay::NetplayRuntimeConfig;
+///
+/// let config = NetplayRuntimeConfig {
+///     relay_addr: "127.0.0.1:3555".to_string(),
+///     room: "room_123".to_string(),
+///     player: 1,
+///     input_delay_frames: 2,
+///     max_rollback_frames: 60,
+///     hash_check_every_frames: 60,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct NetplayRuntimeConfig {
     pub relay_addr: String,
@@ -16,6 +35,27 @@ pub struct NetplayRuntimeConfig {
     pub hash_check_every_frames: u64,
 }
 
+/// The TCP client responsible for communicating with the netplay relay server.
+///
+/// `NetplayClient` maintains an active connection to the relay server, sending
+/// local inputs and receiving remote inputs from the other player.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig};
+///
+/// let config = NetplayRuntimeConfig {
+///     relay_addr: "127.0.0.1:3555".to_string(),
+///     room: "match_xyz".to_string(),
+///     player: 1,
+///     input_delay_frames: 2,
+///     max_rollback_frames: 60,
+///     hash_check_every_frames: 60,
+/// };
+/// let client = NetplayClient::connect(&config).unwrap();
+/// client.send_ping(1234).unwrap();
+/// ```
 pub struct NetplayClient {
     tx: Sender<ClientMessage>,
     rx: Receiver<ServerMessage>,
