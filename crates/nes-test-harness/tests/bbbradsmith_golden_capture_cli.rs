@@ -27,7 +27,7 @@ fn golden_capture_with_help_flag_prints_usage_and_succeeds() {
             .output()
             .expect("run bbbradsmith_golden_capture");
 
-        assert!(output.status.success(), "failed on flag {}", flag);
+        assert!(output.status.success(), "failed on flag {flag}");
         let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
         assert!(stdout.contains("Usage: bbbradsmith_golden_capture [--config <path>] [--force]"));
     }
