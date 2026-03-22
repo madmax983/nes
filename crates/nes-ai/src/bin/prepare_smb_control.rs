@@ -32,6 +32,12 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
 
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
+
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        return Ok(());
+    }
+
     if args.len() != 4 {
         return Err(
             "Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>"

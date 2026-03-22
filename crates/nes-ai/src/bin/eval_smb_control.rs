@@ -16,6 +16,14 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
+
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!(
+            "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
+        );
+        return Ok(());
+    }
+
     if args.len() < 3 || args.len() > 5 {
         return Err(
             "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
