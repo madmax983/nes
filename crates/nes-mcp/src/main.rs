@@ -613,8 +613,7 @@ fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpE
 fn write_stdio_message(writer: &mut impl Write, value: &Value) -> Result<(), McpError> {
     let payload = serde_json::to_vec(value)
         .map_err(|err| McpError::Protocol(format!("failed serializing JSON response: {err}")))?;
-    writer
-        .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
+    write!(writer, "Content-Length: {}\r\n\r\n", payload.len())
         .and_then(|_| writer.write_all(&payload))
         .and_then(|_| writer.flush())
         .map_err(|err| McpError::Protocol(format!("failed writing stdio response: {err}")))
