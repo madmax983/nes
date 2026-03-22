@@ -89,6 +89,11 @@ fn main() {
 
 fn run(stdout: &mut impl Write) -> Result<(), String> {
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
+    if raw_args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Usage: bbbradsmith_golden_capture [--config <path>] [--force]");
+        std::process::exit(0);
+    }
+
     let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
     let force = pass_through.iter().any(|arg| arg == "--force");
     for arg in &pass_through {
