@@ -209,4 +209,37 @@ mod tests {
         assert_eq!(mapper.selected_prg_bank(), 1);
         assert_eq!(mapper.selected_chr_bank(), 1);
     }
+
+    #[test]
+    fn gxrom_from_prg_chr_pads_short_prg() {
+        // Test `if prg_rom.len() < PRG_BANK_32K` branch
+        let prg_rom = vec![0; PRG_BANK_32K - 1];
+        let mapper = Gxrom::from_prg_chr(prg_rom, vec![]);
+
+        // Should pad to 1 bank
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), PRG_BANK_32K);
+    }
+
+    #[test]
+    fn gxrom_from_prg_chr_pads_chr() {
+        // Test CHR padding logic: `chr_data.resize(chr_data.len() + (CHR_WINDOW_BYTES - chr_remainder), 0);`
+        let chr_rom = vec![0; CHR_WINDOW_BYTES + 1];
+        let mapper = Gxrom::from_prg_chr(vec![], chr_rom);
+
+        // Should pad CHR to 2 banks
+        assert_eq!(mapper.chr_bank_count, 2);
+    }
+
+    #[test]
+    fn gxrom_from_prg_chr_pads_partial_bank() {
+        // Test `prg_rom.resize(prg_rom.len() + (PRG_BANK_32K - prg_remainder), 0);` and `%`
+        // 32KB + 1 byte remainder -> should pad to 64KB
+        let prg_rom = vec![0; PRG_BANK_32K + 1];
+        let mapper = Gxrom::from_prg_chr(prg_rom, vec![]);
+
+        // Should pad to 2 banks
+        assert_eq!(mapper.prg_bank_count, 2);
+        assert_eq!(mapper.prg_rom.len(), 2 * PRG_BANK_32K);
+    }
 }
