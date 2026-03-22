@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 #[cfg(feature = "nova")]
-use crate::{NesCore, CoreQuery, QueryResult};
+use crate::{CoreQuery, NesCore, QueryResult};
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
