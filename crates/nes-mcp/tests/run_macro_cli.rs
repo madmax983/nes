@@ -155,3 +155,15 @@ fn run_macro_with_empty_script_prints_zero_progress() {
     assert!(stdout.contains("Executing Macro Script..."));
     assert!(stdout.contains("Execution Complete"));
 }
+
+#[test]
+fn run_macro_with_help_flag_prints_usage_and_exits_success() {
+    let output = Command::new(run_macro_bin())
+        .arg("--help")
+        .output()
+        .expect("run nes-mcp-run-macro");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    assert!(stdout.contains("Usage: nes-mcp-run-macro <rom_path> <script_path>"));
+}

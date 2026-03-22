@@ -46,3 +46,15 @@ fn prepare_smb_control_invalid_rom_permissions_prints_styled_error() {
     assert!(stderr.contains("Failed to read ROM at"));
     assert!(stderr.contains("'.'"));
 }
+
+#[test]
+fn prepare_smb_control_with_help_flag_prints_usage_and_exits_success() {
+    let output = Command::new(prepare_smb_control_bin())
+        .arg("--help")
+        .output()
+        .expect("run prepare_smb_control");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    assert!(stdout.contains("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>"));
+}
