@@ -6,3 +6,7 @@
 **Extract RtaRuntimeConfig**
 **Tangle:** The `RtaRuntimeConfig` struct was defined inside `nes-desktop/src/main.rs`, but conceptually it belongs with the `rta` module alongside other RTA-related structs.
 **Blueprint:** Moved `RtaRuntimeConfig` to `nes-desktop/src/rta.rs` and marked its fields `pub`, then imported it into `main.rs`.
+
+**Extract PerfMetrics from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` was bloated and contained highly cohesive logic for metrics tracking (`PerfMetrics`, `MetricsSnapshot`) mixed with core desktop/windowing logic.
+**Blueprint:** Extracted the metrics tracking structures and functions into `crates/nes-desktop/src/metrics.rs` and exposed them via `pub(crate)` boundaries.
