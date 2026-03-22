@@ -26,7 +26,9 @@ fn eval_smb_control_with_help_flag_prints_usage_and_exits_success() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
-    assert!(stdout.contains("Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"));
+    assert!(stdout.contains(
+        "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
+    ));
 }
 
 #[test]
@@ -37,5 +39,7 @@ fn eval_smb_control_without_required_arguments_prints_usage_and_fails() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
-    assert!(stderr.contains("Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"));
+    assert!(stderr.contains(
+        "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
+    ));
 }

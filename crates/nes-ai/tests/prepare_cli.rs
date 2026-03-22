@@ -56,5 +56,9 @@ fn prepare_smb_control_with_help_flag_prints_usage_and_exits_success() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
-    assert!(stdout.contains("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>"));
+    assert!(
+        stdout.contains(
+            "Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>"
+        )
+    );
 }
