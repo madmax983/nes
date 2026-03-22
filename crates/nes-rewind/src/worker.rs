@@ -276,21 +276,20 @@ mod tests {
     /// frames. Returns `true` if it synced successfully, or `false` if it timed out.
     /// This avoids flaky hardcoded sleep delays in tests.
     fn wait_for_sync(tm: &mut TimeMachine) -> bool {
+        if tm.last_recorded_frame == 0 {
+            return true;
+        }
+
+        // Drain the queue to prevent reading a stale `Reconstruct` response
+        while tm.rx.try_recv().is_ok() {}
+
+        let _ = tm.tx.send(WorkerMsg::Reconstruct {
+            target_frame: tm.last_recorded_frame,
+        });
+
         let start = std::time::Instant::now();
         // Give it up to 5000ms to process the queue in extremely slow CI environments.
         while start.elapsed() < Duration::from_millis(5000) {
-            // To check if the worker has caught up, we can ask for a reconstruct
-            // of the last recorded frame. If it succeeds, the worker has processed it.
-            if tm.last_recorded_frame == 0 {
-                return true;
-            }
-            // Drain the queue to prevent reading a stale `Reconstruct` response
-            while tm.rx.try_recv().is_ok() {}
-
-            let _ = tm.tx.send(WorkerMsg::Reconstruct {
-                target_frame: tm.last_recorded_frame,
-            });
-
             if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
                 tm.rx.recv_timeout(Duration::from_millis(500))
             {
