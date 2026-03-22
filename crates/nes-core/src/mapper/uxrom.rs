@@ -126,4 +126,16 @@ mod tests {
         let mapper = Uxrom::new(2);
         assert_eq!(mapper.read_prg(0x8000), 0);
     }
+
+    #[test]
+    fn uxrom_from_prg_rom_pads_partial_bank() {
+        // Test padding logic: `prg_rom.resize(prg_rom.len() + (PRG_BANK_BYTES - remainder), 0);`
+        // 16KB + 1 byte remainder -> should pad to 32KB
+        let prg_rom = vec![0; PRG_BANK_BYTES + 1];
+        let mapper = Uxrom::from_prg_rom(prg_rom);
+
+        // bank_count should be (16385 / 16384).max(1) which is 1 normally, but with padding it's 32768 / 16384 = 2.
+        assert_eq!(mapper.bank_count, 2);
+        assert_eq!(mapper.prg_rom.len(), 2 * PRG_BANK_BYTES);
+    }
 }
