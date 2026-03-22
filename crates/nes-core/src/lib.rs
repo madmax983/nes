@@ -15,7 +15,7 @@ pub mod mapper;
 mod ppu;
 mod rom;
 mod scheduler;
-mod serde_array;
+pub mod serde_array;
 /// Stable TAS movie/recorder primitives built on top of the deterministic core.
 #[cfg(feature = "tas")]
 pub mod tas;

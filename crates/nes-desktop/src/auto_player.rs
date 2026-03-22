@@ -3,6 +3,23 @@ use nes_core::{Button, Command, NesCore};
 #[cfg(feature = "nova")]
 use rand::Rng;
 
+/// A simplistic, automated player that periodically injects random inputs into the emulator.
+///
+/// This is used primarily in experimental/nova builds to generate chaos or background activity
+/// without requiring human interaction.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::NesCore;
+/// use nes_desktop::auto_player::AutoPlayer;
+///
+/// let mut core = NesCore::new();
+/// let mut auto_player = AutoPlayer::new();
+///
+/// // Step the emulator and allow the auto player to generate inputs
+/// auto_player.step(&mut core);
+/// ```
 #[cfg(feature = "nova")]
 pub struct AutoPlayer {
     frame_counter: u64,
@@ -11,6 +28,7 @@ pub struct AutoPlayer {
 
 #[cfg(feature = "nova")]
 impl AutoPlayer {
+    /// Creates a new `AutoPlayer` with internal frame counters reset.
     pub fn new() -> Self {
         Self {
             frame_counter: 0,
@@ -18,6 +36,8 @@ impl AutoPlayer {
         }
     }
 
+    /// Updates the auto player's internal state and injects input commands into the `NesCore`
+    /// if an input interval has elapsed.
     pub fn step(&mut self, core: &mut NesCore) {
         self.frame_counter = self.frame_counter.wrapping_add(1);
 
