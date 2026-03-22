@@ -11,6 +11,20 @@ pub fn default_homebrew_rom_path() -> PathBuf {
         .join("homebrew.nes")
 }
 
+/// Compiles the minimal test ROM ("homebrew.nes") using the `nes_dsl` assembler.
+///
+/// This ROM is used across the codebase for integration testing and serves as a reliable,
+/// deterministic target that doesn't require downloading copyrighted material.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::build_homebrew_rom;
+///
+/// let rom_bytes = build_homebrew_rom().unwrap();
+/// assert!(rom_bytes.len() > 16);
+/// assert_eq!(&rom_bytes[0..4], b"NES\x1A");
+/// ```
 pub fn build_homebrew_rom() -> Result<Vec<u8>, String> {
     let source = assemble_homebrew_program();
 
@@ -30,6 +44,20 @@ pub fn build_homebrew_rom() -> Result<Vec<u8>, String> {
     nes_dsl::build_ines_nrom_rom(&source, &options).map_err(|e| e.to_string())
 }
 
+/// Compiles and writes the minimal test ROM to the specified path on disk.
+///
+/// This function also creates any missing parent directories required by the target path.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use std::path::Path;
+/// use nes_test_harness::write_homebrew_rom;
+///
+/// let path = Path::new("./roms/homebrew/homebrew.nes");
+/// write_homebrew_rom(path).unwrap();
+/// assert!(path.exists());
+/// ```
 pub fn write_homebrew_rom(path: &Path) -> Result<(), String> {
     let rom = build_homebrew_rom()?;
     if let Some(parent) = path.parent() {

@@ -25,6 +25,24 @@ pub struct RuntimeArgs {
     pub auto_player_enabled: bool,
 }
 
+/// Parses command-line arguments into the typed `RuntimeArgs` configuration.
+///
+/// This handles routing for CLI flags that dictate whether the emulator should launch
+/// with MCP, Netplay, or RTA modes enabled.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_desktop::args::parse_runtime_args;
+///
+/// let args = vec![
+///     "--mcp-host".to_string(),
+///     "./game.nes".to_string()
+/// ];
+/// let parsed = parse_runtime_args(&args).unwrap();
+/// assert!(parsed.mcp_enabled);
+/// assert_eq!(parsed.rom_path.as_deref(), Some("./game.nes"));
+/// ```
 pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     let mut parsed = RuntimeArgs {
         rom_path: None,
