@@ -172,4 +172,21 @@ mod tests {
         let window = mapper.chr_window();
         assert_eq!(window[0], 0x00);
     }
+
+    #[test]
+    fn cnrom_prg_offset_for_empty_prg_rom_returns_zero() {
+        let mapper = Cnrom::from_prg_chr(vec![], vec![]);
+        assert_eq!(mapper.prg_offset_for(0x8000), 0);
+        assert_eq!(mapper.prg_offset_for(0xFFFF), 0);
+    }
+
+    #[test]
+    fn cnrom_from_prg_chr_pads_chr_rom_with_remainder() {
+        let prg = vec![0_u8; 32 * 1024];
+        let chr = vec![0_u8; 1024 * 8 + 1]; // 8K + 1 byte
+        let mapper = Cnrom::from_prg_chr(prg, chr);
+
+        assert_eq!(mapper.chr_bank_count, 2);
+        assert_eq!(mapper.chr_data.len(), 16 * 1024);
+    }
 }
