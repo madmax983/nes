@@ -572,4 +572,32 @@ mod tests {
         assert_eq!(original_state.bank_select, new_state.bank_select);
         assert_eq!(original_state.bank_registers, new_state.bank_registers);
     }
+
+    #[test]
+    fn mmc3_from_prg_chr_pads_unaligned_roms() {
+        let prg = vec![0_u8; 8192 * 4 + 1];
+        let chr = vec![0_u8; 1024 * 8 + 1];
+        let mmc3 = Mmc3::from_prg_chr(prg, chr, NametableMirroring::Horizontal);
+
+        assert_eq!(mmc3.prg_bank_count_8k, 5);
+        assert_eq!(mmc3.prg_rom.len(), 5 * 8192);
+
+        assert_eq!(mmc3.chr_bank_count_1k, 9);
+        assert_eq!(mmc3.chr_data.len(), 9 * 1024);
+    }
+
+    #[test]
+    fn mmc3_from_prg_chr_pads_short_roms_to_minimum() {
+        let prg = vec![0_u8; 8192]; // Only 1 bank
+        let chr = vec![0_u8; 1024]; // Only 1 bank
+        let mmc3 = Mmc3::from_prg_chr(prg, chr, NametableMirroring::Horizontal);
+
+        // Minimum PRG is 4 banks (32K)
+        assert_eq!(mmc3.prg_bank_count_8k, 4);
+        assert_eq!(mmc3.prg_rom.len(), 4 * 8192);
+
+        // Minimum CHR is 8 banks (8K)
+        assert_eq!(mmc3.chr_bank_count_1k, 8);
+        assert_eq!(mmc3.chr_data.len(), 8 * 1024);
+    }
 }
