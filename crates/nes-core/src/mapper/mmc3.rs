@@ -402,6 +402,7 @@ impl Mapper for Mmc3 {
                 self.irq_latch = value;
             }
             0xC001..=0xDFFF if addr & 1 == 1 => {
+                self.irq_counter = 0;
                 self.irq_reload = true;
             }
             0xE000..=0xFFFE if addr & 1 == 0 => {
@@ -599,5 +600,33 @@ mod tests {
         // Minimum CHR is 8 banks (8K)
         assert_eq!(mmc3.chr_bank_count_1k, 8);
         assert_eq!(mmc3.chr_data.len(), 8 * 1024);
+    }
+
+    #[test]
+    fn mmc3_c001_clears_counter_for_mmc3c_behavior() {
+        let mut m = Mmc3::new(8, 8);
+
+        // Set latch to 5 and start counting
+        m.write_prg(0xC000, 5); // latch = 5
+        m.write_prg(0xC001, 0); // reload + clear counter
+        m.write_prg(0xE001, 0); // enable IRQ
+
+        // First clock: counter reloads from latch (5)
+        m.on_ppu_dot(0, 260, true);
+        assert_eq!(m.state().irq_counter, 5);
+
+        // Decrement twice: counter = 3
+        m.on_ppu_dot(1, 260, true);
+        m.on_ppu_dot(2, 260, true);
+        assert_eq!(m.state().irq_counter, 3);
+
+        // Write $C001 mid-count: should clear counter to 0 and set reload
+        m.write_prg(0xC001, 0);
+        assert_eq!(m.state().irq_counter, 0);
+        assert!(m.state().irq_reload);
+
+        // Next clock: counter reloads from latch (5) again
+        m.on_ppu_dot(3, 260, true);
+        assert_eq!(m.state().irq_counter, 5);
     }
 }
