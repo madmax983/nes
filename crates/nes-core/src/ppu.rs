@@ -521,6 +521,19 @@ impl Ppu {
                 } else {
                     self.temp_addr = (self.temp_addr & 0x7F00) | u16::from(value);
                     self.vram_addr = self.temp_addr & PPU_ADDR_MASK;
+                    // During visible rendering, derive scroll from the new vram_addr
+                    // so mid-frame $2006 writes (e.g. MMC3 IRQ handler screen splits)
+                    // update the background scroll used by the renderer.
+                    if self.scanline < 240 {
+                        let coarse_x = (self.vram_addr & 0x001F) as u8;
+                        let coarse_y = ((self.vram_addr >> 5) & 0x001F) as u8;
+                        let fine_y = ((self.vram_addr >> 12) & 0x07) as u8;
+                        let nt = ((self.vram_addr >> 10) & 0x03) as u8;
+                        self.scroll_x = coarse_x.wrapping_mul(8).wrapping_add(self.fine_x);
+                        self.scroll_y = coarse_y.wrapping_mul(8).wrapping_add(fine_y);
+                        self.ctrl = (self.ctrl & !0x03) | nt;
+                        self.mark_render_state_dirty();
+                    }
                 }
                 self.write_toggle = !self.write_toggle;
             }
@@ -1533,6 +1546,49 @@ mod tests {
         ppu.dot = 2; // x = 1
         ppu.render_visible_dot();
         assert_eq!(pixel_rgb(&ppu, 1, 1), (0, 0, 0));
+    }
+
+    #[test]
+    fn ppuaddr_write_during_visible_scanline_updates_scroll() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x0A); // enable background rendering
+
+        // Set initial scroll via $2005
+        ppu.write_register(0x2005, 0); // scroll_x = 0
+        ppu.write_register(0x2005, 0); // scroll_y = 0
+
+        // Simulate mid-frame: place PPU on a visible scanline
+        ppu.scanline = 100;
+        ppu.dot = 10;
+
+        // Write $2006 twice to set vram_addr = 0x3545:
+        //   coarse_x=5, coarse_y=10, nametable=1, fine_y=3
+        ppu.write_register(0x2006, 0x35); // high byte
+        ppu.write_register(0x2006, 0x45); // low byte -> vram_addr = 0x3545
+
+        // Expected: scroll_x = 5*8 + fine_x(0) = 40, scroll_y = 10*8 + 3 = 83
+        assert_eq!(ppu.scroll_x, 40);
+        assert_eq!(ppu.scroll_y, 83);
+        assert_eq!(ppu.ctrl & 0x03, 1); // nametable bits updated
+    }
+
+    #[test]
+    fn ppuaddr_write_during_vblank_does_not_update_scroll() {
+        let mut ppu = Ppu::new();
+
+        ppu.write_register(0x2005, 10); // scroll_x = 10
+        ppu.write_register(0x2005, 20); // scroll_y = 20
+
+        // Simulate VBlank
+        ppu.scanline = 241;
+        ppu.dot = 10;
+
+        ppu.write_register(0x2006, 0x35);
+        ppu.write_register(0x2006, 0x45);
+
+        // Scroll should NOT change during VBlank
+        assert_eq!(ppu.scroll_x, 10);
+        assert_eq!(ppu.scroll_y, 20);
     }
 
     fn step_until(mut_ppu: &mut Ppu, done: impl Fn(&Ppu) -> bool) {

@@ -219,6 +219,11 @@ fn sprite_zero_hit_sets_ppustatus_bit() {
     write_ppu_bytes(&mut core, 0x0020, &[0xFF; 8]); // sprite tile #2 plane 0
     write_ppu_bytes(&mut core, 0x0028, &[0x00; 8]); // sprite tile #2 plane 1
 
+    // Reset scroll after $2006-based data setup so background tiles render
+    // at the expected positions (mirrors real-game VBlank scroll setup).
+    core.write_cpu_bus(0x2005, 0x00);
+    core.write_cpu_bus(0x2005, 0x00);
+
     set_oam_sprite(&mut core, 0, 0, 2, 0, 0);
     core.execute(Command::StepScanline).unwrap();
 

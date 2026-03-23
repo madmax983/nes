@@ -54,6 +54,11 @@ fn mid_frame_scroll_write_changes_later_scanline_pixels_only() {
     write_ppu_data(&mut core, 0x2000, &[0x01]);
     write_ppu_data(&mut core, 0x2020, &[0x02]);
 
+    // Reset scroll after $2006-based data setup (mirrors real-game VBlank behavior
+    // where games always set scroll via $2005 before rendering begins).
+    core.write_cpu_bus(0x2005, 0x00);
+    core.write_cpu_bus(0x2005, 0x00);
+
     core.execute(Command::StepScanline).unwrap(); // render y=0
     core.write_cpu_bus(0x2005, 0x00); // scroll X
     core.write_cpu_bus(0x2005, 0x08); // scroll Y
