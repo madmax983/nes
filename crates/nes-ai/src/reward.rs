@@ -1,5 +1,10 @@
 use crate::{config::RewardConfig, profiles::smb::SmbFeatures};
 
+/// Specifies common indicators required for computing scalar AI rewards.
+///
+/// AI models operate on "carrots" and "sticks." This trait extracts the metrics
+/// (like `level_progress`, player `lives`) we need to compute the scalar reward
+/// at the end of every step.
 pub trait RewardFeatures {
     fn level_progress(&self) -> f32;
     fn player_state(&self) -> u8;

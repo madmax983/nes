@@ -35,10 +35,12 @@ pub struct NetplayRuntimeConfig {
     pub hash_check_every_frames: u64,
 }
 
-/// The TCP client responsible for communicating with the netplay relay server.
+/// An asynchronous TCP client that bridges local emulation with the `nes-relay` server.
 ///
-/// `NetplayClient` maintains an active connection to the relay server, sending
-/// local inputs and receiving remote inputs from the other player.
+/// Emulation is a synchronous, cycle-accurate beast. Networks are asynchronous and
+/// chaotic. `NetplayClient` solves this by spinning up an I/O thread. It exposes
+/// simple, non-blocking MPSC channels so the main emulator loop can shove inputs
+/// into the ether and pull down remote inputs without ever dropping a frame.
 ///
 /// ## Examples
 ///
@@ -63,6 +65,29 @@ pub struct NetplayClient {
 }
 
 impl NetplayClient {
+    /// Attempts to establish a connection to the configured `nes-relay` server.
+    ///
+    /// Why do we spawn a background thread? Emulation loops are incredibly sensitive to
+    /// timing. If we blocked the main thread waiting for a TCP response, the emulator
+    /// would stutter and drop audio. By spinning up a background I/O thread, we can
+    /// shove inputs over the network asynchronously while keeping the 60 FPS dream alive.
+    ///
+    /// ## Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig};
+    ///
+    /// let config = NetplayRuntimeConfig {
+    ///     relay_addr: "127.0.0.1:4545".to_string(),
+    ///     room: "my_room".to_string(),
+    ///     player: 1,
+    ///     input_delay_frames: 2,
+    ///     max_rollback_frames: 30,
+    ///     hash_check_every_frames: 60,
+    /// };
+    ///
+    /// let client = NetplayClient::connect(&config).expect("Relay is down!");
+    /// ```
     pub fn connect(config: &NetplayRuntimeConfig) -> Result<Self, String> {
         if !matches!(config.player, 1 | 2) {
             return Err(format!(
@@ -106,24 +131,98 @@ impl NetplayClient {
         Ok(Self { tx, rx, err_rx })
     }
 
+    /// Queues an input event to be sent to the remote peer via the relay.
+    ///
+    /// This is the lifeblood of netplay. We send our local `frame` and controller `bits`
+    /// to the server, which then forwards them to Player 2. If we don't send this,
+    /// Player 2's emulator will eventually guess wrong and trigger a massive rollback.
+    ///
+    /// ## Examples
+    ///
+    /// ```no_run
+    /// # use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig};
+    /// # let config = NetplayRuntimeConfig {
+    /// #     relay_addr: "127.0.0.1:4545".to_string(), room: "room".to_string(), player: 1,
+    /// #     input_delay_frames: 2, max_rollback_frames: 30, hash_check_every_frames: 60,
+    /// # };
+    /// # let client = NetplayClient::connect(&config).unwrap();
+    /// // Frame 120, holding 'Right' (0x01)
+    /// client.send_input(120, 0x01).unwrap();
+    /// ```
     pub fn send_input(&self, frame: u64, bits: u8) -> Result<(), String> {
         self.tx
             .send(ClientMessage::Input { frame, bits })
             .map_err(|err| format!("failed to queue netplay input: {err}"))
     }
 
+    /// Sends a local emulator state hash to the remote peer to verify sync.
+    ///
+    /// Rollback netcode is an illusion of perfection. Occasionally, the emulators diverge
+    /// due to a bug or bad guess. By periodically sending a snapshot hash, we can
+    /// detect desyncs early before the players notice they are playing two entirely
+    /// different realities.
+    ///
+    /// ## Examples
+    ///
+    /// ```no_run
+    /// # use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig};
+    /// # let config = NetplayRuntimeConfig {
+    /// #     relay_addr: "127.0.0.1:4545".to_string(), room: "room".to_string(), player: 1,
+    /// #     input_delay_frames: 2, max_rollback_frames: 30, hash_check_every_frames: 60,
+    /// # };
+    /// # let client = NetplayClient::connect(&config).unwrap();
+    /// // Frame 60, computed state hash
+    /// client.send_hash(60, 0x1A2B3C4D).unwrap();
+    /// ```
     pub fn send_hash(&self, frame: u64, state_hash: u64) -> Result<(), String> {
         self.tx
             .send(ClientMessage::Hash { frame, state_hash })
             .map_err(|err| format!("failed to queue netplay hash: {err}"))
     }
 
+    /// Sends a ping to measure Round-Trip Time (RTT) to the relay.
+    ///
+    /// Why do we ping? Because the internet is a series of tubes, and sometimes those tubes
+    /// get clogged. Measuring RTT allows the emulator to dynamically adjust the
+    /// `input_delay_frames` to keep the gameplay smooth under high latency.
+    ///
+    /// ## Examples
+    ///
+    /// ```no_run
+    /// # use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig};
+    /// # let config = NetplayRuntimeConfig {
+    /// #     relay_addr: "127.0.0.1:4545".to_string(), room: "room".to_string(), player: 1,
+    /// #     input_delay_frames: 2, max_rollback_frames: 30, hash_check_every_frames: 60,
+    /// # };
+    /// # let client = NetplayClient::connect(&config).unwrap();
+    /// // Send ping #1
+    /// client.send_ping(1).unwrap();
+    /// ```
     pub fn send_ping(&self, nonce: u64) -> Result<(), String> {
         self.tx
             .send(ClientMessage::Ping { nonce })
             .map_err(|err| format!("failed to queue netplay ping: {err}"))
     }
 
+    /// Non-blockingly drains the next available message from the relay server.
+    ///
+    /// This is called exactly once per emulation frame. It grabs any queued inputs
+    /// from the background thread. If we used a blocking read here, the game would
+    /// literally stop and wait for the network.
+    ///
+    /// ## Examples
+    ///
+    /// ```no_run
+    /// # use nes_desktop::netplay::{NetplayClient, NetplayRuntimeConfig};
+    /// # let config = NetplayRuntimeConfig {
+    /// #     relay_addr: "127.0.0.1:4545".to_string(), room: "room".to_string(), player: 1,
+    /// #     input_delay_frames: 2, max_rollback_frames: 30, hash_check_every_frames: 60,
+    /// # };
+    /// # let client = NetplayClient::connect(&config).unwrap();
+    /// if let Ok(Some(msg)) = client.try_recv() {
+    ///     println!("Got message from relay!");
+    /// }
+    /// ```
     pub fn try_recv(&self) -> Result<Option<ServerMessage>, String> {
         if let Some(err) = self.take_error() {
             return Err(err);
@@ -185,6 +284,12 @@ fn write_message(stream: &mut TcpStream, message: &ClientMessage) -> Result<(), 
         .map_err(|err| format!("failed to write relay message: {err}"))
 }
 
+/// Tracks the health of a live rollback netplay session.
+///
+/// The goal of netplay is the illusion of local multiplayer. This struct acts as the
+/// pulse monitor, recording how often the illusion breaks (rollbacks), how far time
+/// had to rewind (`max_rollback_distance`), and how much the network is struggling (`rtt_ms`, `jitter_ms`).
+/// These metrics are vital for dynamically tuning `input_delay_frames` mid-game to hide latency.
 pub struct NetplayRuntimeStats {
     pub latest_rtt_ms: Option<f64>,
     pub jitter_ms: f64,
@@ -195,6 +300,7 @@ pub struct NetplayRuntimeStats {
 }
 
 impl NetplayRuntimeStats {
+    /// Initializes tracking metrics, seeding the initial `input_delay_frames`.
     pub fn new(input_delay_frames: u32) -> Self {
         Self {
             latest_rtt_ms: None,
@@ -206,6 +312,7 @@ impl NetplayRuntimeStats {
         }
     }
 
+    /// Records an observed Round-Trip Time sample to calculate average latency and jitter.
     pub fn observe_rtt_ms(&mut self, rtt_ms: f64) {
         if let Some(previous) = self.latest_rtt_ms {
             let delta = (rtt_ms - previous).abs();
@@ -219,6 +326,7 @@ impl NetplayRuntimeStats {
         self.latest_rtt_ms = Some(rtt_ms);
     }
 
+    /// Logs that a rollback occurred and updates the maximum rollback distance seen.
     pub fn observe_rollback(&mut self, distance: u64) {
         if distance == 0 {
             return;
@@ -227,15 +335,25 @@ impl NetplayRuntimeStats {
         self.max_rollback_distance = self.max_rollback_distance.max(distance);
     }
 
+    /// Tallies a catastrophic timeline divergence.
+    ///
+    /// Desyncs happen when Player 1 and Player 2 calculate different state hashes for the same frame.
+    /// It means the emulators have disagreed on reality. We track this to alert the players
+    /// that they are no longer playing the same game.
     pub fn observe_desync(&mut self) {
         self.desync_count = self.desync_count.saturating_add(1);
     }
 
+    /// Computes the last known round-trip time, defaulting to zero if unknown.
+    ///
+    /// We use this zero fallback to keep the dynamic delay logic mathematically
+    /// safe during the initial connection handshake before the first ping returns.
     pub fn latest_rtt_ms_or_zero(&self) -> f64 {
         self.latest_rtt_ms.unwrap_or(0.0)
     }
 }
 
+/// Identifies which player's gamepad state belongs to the local user.
 pub fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8 {
     let local_slot = usize::from(local_player.saturating_sub(1));
     gamepad_bits.get(local_slot).copied().unwrap_or_else(|| {
@@ -247,10 +365,12 @@ pub fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8
     })
 }
 
+/// Determines whether it is time to transmit a state hash based on the interval.
 pub fn should_send_netplay_hash(hash_check_every: u64, frame: u64) -> bool {
     hash_check_every != 0 && frame != 0 && frame.is_multiple_of(hash_check_every)
 }
 
+/// Evaluates if enough time has passed to send another network ping to the relay.
 pub fn schedule_netplay_ping(
     now: std::time::Instant,
     next_ping_at: &mut std::time::Instant,
@@ -275,6 +395,7 @@ pub fn schedule_netplay_ping(
     Some(nonce)
 }
 
+/// Processes an incoming message from the `nes-relay` server, updating rollback state and metrics.
 pub fn handle_netplay_server_message(
     message: ServerMessage,
     rollback_engine: &mut nes_netplay::RollbackEngine,
