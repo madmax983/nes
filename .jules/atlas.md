@@ -10,3 +10,7 @@
 **Extract PerfMetrics from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` was bloated and contained highly cohesive logic for metrics tracking (`PerfMetrics`, `MetricsSnapshot`) mixed with core desktop/windowing logic.
 **Blueprint:** Extracted the metrics tracking structures and functions into `crates/nes-desktop/src/metrics.rs` and exposed them via `pub(crate)` boundaries.
+
+**Refactoring NesCore Controller State**
+**Tangle:** The `NesCore` struct and `api.rs` implementation block had become bloated with low-level controller port state (`controllers: [ControllerState; 2]`, `controller_strobe: bool`) and its associated manipulation methods mixed alongside high-level system components. This reduced cohesion within `NesCore` and violated encapsulation.
+**Blueprint:** Extracted the controller state into a dedicated `ControllerPorts` internal struct. Relocated `set_controller_bits`, `write_controller_strobe`, `controller_port_sample`, and `consume_controller_read` methods to `impl ControllerPorts`, simplifying the `NesCore` implementation block and consolidating input logic.
