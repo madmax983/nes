@@ -1419,6 +1419,7 @@ unexpected = "boom"
     #[test]
     fn calibration_outputs_draft_profile_and_report() {
         let mut recorder = CalibrationRecorder::new("calibration-smb".to_owned());
+        recorder.max_frames = 4; // Explicitly set a low limit to trigger ring buffer eviction logic for code coverage
         let mut memory = [0_u8; 0x800];
         for frame in 0_u64..8 {
             if frame == 3 {
