@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -1002,7 +1002,7 @@ struct CalibrationSplitMark {
 #[derive(Debug, Clone)]
 pub struct CalibrationRecorder {
     profile_id: String,
-    frames: Vec<CalibrationFrame>,
+    frames: VecDeque<CalibrationFrame>,
     splits: Vec<CalibrationSplitMark>,
     max_frames: usize,
 }
@@ -1011,12 +1011,14 @@ impl CalibrationRecorder {
     pub fn new(profile_id: String) -> Self {
         Self {
             profile_id,
-            frames: Vec::new(),
+            frames: VecDeque::new(),
             splits: Vec::new(),
             max_frames: 30_000,
         }
     }
 
+    /// **Performance optimization:** Uses `VecDeque::pop_front` instead of `Vec::remove(0)`
+    /// to avoid an O(N) memory shift of up to 30,000 frames on every single frame execution.
     pub fn record_frame<F>(&mut self, frame: u64, mut read_u8: F)
     where
         F: FnMut(u16) -> u8,
@@ -1025,9 +1027,9 @@ impl CalibrationRecorder {
         for (offset, byte) in work_ram.iter_mut().enumerate() {
             *byte = read_u8(offset as u16);
         }
-        self.frames.push(CalibrationFrame { frame, work_ram });
+        self.frames.push_back(CalibrationFrame { frame, work_ram });
         if self.frames.len() > self.max_frames {
-            self.frames.remove(0);
+            self.frames.pop_front();
         }
     }
 
