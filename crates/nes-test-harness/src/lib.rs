@@ -337,11 +337,46 @@ pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        apu_write_hash, audio_stats, collect_apu_register_writes, compare_waveforms,
-        detect_mapper_id, mapper_supported_by_core, pearson_correlation, read_pcm_i16le,
-        rms_envelope, waveform_hash, write_pcm_i16le,
+        apu_write_hash, audio_stats, collect_apu_register_writes, collect_audio_for_frames,
+        compare_waveforms, detect_mapper_id, mapper_supported_by_core, pearson_correlation,
+        read_pcm_i16le, rms_envelope, waveform_hash, write_pcm_i16le, ApuWriteEvent,
     };
     use nes_core::NesCore;
+
+    #[test]
+    fn apu_write_hash_is_sensitive_to_event_fields() {
+        let base = ApuWriteEvent {
+            cpu_cycle: 100,
+            addr: 0x4000,
+            value: 0xAA,
+        };
+        let mut different_cycle = base;
+        different_cycle.cpu_cycle = 101;
+        let mut different_addr = base;
+        different_addr.addr = 0x4001;
+        let mut different_value = base;
+        different_value.value = 0xAB;
+
+        let hash_base = apu_write_hash(&[base]);
+        let hash_cycle = apu_write_hash(&[different_cycle]);
+        let hash_addr = apu_write_hash(&[different_addr]);
+        let hash_value = apu_write_hash(&[different_value]);
+
+        assert_ne!(hash_base, hash_cycle, "cycle difference should change hash");
+        assert_ne!(hash_base, hash_addr, "addr difference should change hash");
+        assert_ne!(hash_base, hash_value, "value difference should change hash");
+        assert_ne!(hash_cycle, hash_addr);
+        assert_ne!(hash_cycle, hash_value);
+        assert_ne!(hash_addr, hash_value);
+    }
+
+    #[test]
+    fn collect_audio_for_frames_returns_samples() {
+        let mut core = NesCore::new();
+        let samples = collect_audio_for_frames(&mut core, 1).expect("step frame should succeed");
+        assert!(!samples.is_empty(), "expected audio samples to be collected for a frame");
+        assert!(samples.len() > 100, "expected a reasonable number of samples per frame");
+    }
 
     #[test]
     fn waveform_hash_is_stable_for_known_input() {
@@ -372,6 +407,23 @@ mod tests {
         let envelope = rms_envelope(&samples, 2);
         assert_eq!(envelope.len(), 2);
         assert!(envelope[0] > envelope[1]);
+    }
+
+    #[test]
+    fn collect_apu_register_writes_ignores_reads_and_non_apu_writes() {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(
+            0xC000,
+            &[
+                0xAD, 0x15, 0x40, // LDA $4015
+                0x8D, 0x00, 0x20, // STA $2000
+                0x4C, 0x00, 0xC0, // JMP $C000
+            ],
+        );
+
+        let writes =
+            collect_apu_register_writes(&mut core, 8).expect("step cpu should not fail in loop");
+        assert!(writes.is_empty(), "expected reads and non-apu writes to be ignored");
     }
 
     #[test]
