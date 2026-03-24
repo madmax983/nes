@@ -8,6 +8,7 @@ use nes_ai::{
 };
 use nes_core::NesCore;
 
+#[doc(hidden)]
 pub fn make_mock_env() -> ProfileEnv<SmbProfile> {
     let mut core = NesCore::new();
     core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
