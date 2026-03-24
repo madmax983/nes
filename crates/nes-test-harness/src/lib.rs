@@ -337,9 +337,9 @@ pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        apu_write_hash, audio_stats, collect_apu_register_writes, collect_audio_for_frames,
-        compare_waveforms, detect_mapper_id, mapper_supported_by_core, pearson_correlation,
-        read_pcm_i16le, rms_envelope, waveform_hash, write_pcm_i16le, ApuWriteEvent,
+        ApuWriteEvent, apu_write_hash, audio_stats, collect_apu_register_writes,
+        collect_audio_for_frames, compare_waveforms, detect_mapper_id, mapper_supported_by_core,
+        pearson_correlation, read_pcm_i16le, rms_envelope, waveform_hash, write_pcm_i16le,
     };
     use nes_core::NesCore;
 
@@ -373,9 +373,17 @@ mod tests {
     #[test]
     fn collect_audio_for_frames_returns_samples() {
         let mut core = NesCore::new();
+        let rom_bytes = crate::build_homebrew_rom().expect("failed to build homebrew rom");
+        core.load_ines_rom(&rom_bytes).expect("failed to load rom");
         let samples = collect_audio_for_frames(&mut core, 1).expect("step frame should succeed");
-        assert!(!samples.is_empty(), "expected audio samples to be collected for a frame");
-        assert!(samples.len() > 100, "expected a reasonable number of samples per frame");
+        assert!(
+            !samples.is_empty(),
+            "expected audio samples to be collected for a frame"
+        );
+        assert!(
+            samples.len() > 100,
+            "expected a reasonable number of samples per frame"
+        );
     }
 
     #[test]
@@ -423,7 +431,10 @@ mod tests {
 
         let writes =
             collect_apu_register_writes(&mut core, 8).expect("step cpu should not fail in loop");
-        assert!(writes.is_empty(), "expected reads and non-apu writes to be ignored");
+        assert!(
+            writes.is_empty(),
+            "expected reads and non-apu writes to be ignored"
+        );
     }
 
     #[test]
