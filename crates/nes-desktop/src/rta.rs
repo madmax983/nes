@@ -1027,10 +1027,10 @@ impl CalibrationRecorder {
         for (offset, byte) in work_ram.iter_mut().enumerate() {
             *byte = read_u8(offset as u16);
         }
-        self.frames.push_back(CalibrationFrame { frame, work_ram });
-        if self.frames.len() > self.max_frames {
+        if self.frames.len() >= self.max_frames {
             self.frames.pop_front();
         }
+        self.frames.push_back(CalibrationFrame { frame, work_ram });
     }
 
     pub fn mark_split(&mut self, name: String, frame: u64) {
