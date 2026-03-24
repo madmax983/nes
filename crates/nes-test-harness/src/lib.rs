@@ -35,6 +35,33 @@ pub struct WaveformComparison {
 const INES_HEADER_LEN: usize = 16;
 const INES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
+/// Collects all CPU writes to APU registers ($4000-$4017) over a given number of CPU steps.
+///
+/// This function is useful for verifying audio driver state machines or tracking how a game
+/// configures the audio channels over time. It traces the CPU bus access and filters for
+/// `CpuBusAccessKind::Write` events hitting the APU memory mapped I/O range.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, Command};
+/// use nes_test_harness::{build_homebrew_rom, collect_apu_register_writes};
+///
+/// let mut core = NesCore::new();
+/// let rom = build_homebrew_rom().unwrap();
+/// core.load_ines_rom(&rom).unwrap();
+///
+/// // Since we default to 0xC000, we'll manually load some bytes to test
+/// core.load_cpu_bytes(0xC000, &[
+///     0xA9, 0x01, // LDA #$01
+///     0x8D, 0x15, 0x40, // STA $4015 (Enable Square 1)
+/// ]);
+///
+/// // Step enough cycles to execute LDA and STA (2 + 4 cycles roughly, let's step 10)
+/// let writes = collect_apu_register_writes(&mut core, 10).unwrap();
+///
+/// assert!(writes.iter().any(|w| w.addr == 0x4015 && w.value == 0x01));
+/// ```
 pub fn collect_apu_register_writes(
     core: &mut NesCore,
     cpu_steps: u32,
@@ -70,6 +97,31 @@ pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     hash
 }
 
+/// Steps the emulator forward by a given number of frames and collects all audio samples produced.
+///
+/// Under the hood, this loops `Command::StepFrame` and drains the core's audio chunk buffer
+/// (`audio_chunk_i16`) into a single flattened vector.
+///
+/// **Important:** To ensure the core actually produces audio samples, a valid ROM must first
+/// be loaded (e.g., using `build_homebrew_rom`). Stepping an empty emulator will produce no
+/// audio.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::NesCore;
+/// use nes_test_harness::{build_homebrew_rom, collect_audio_for_frames};
+///
+/// let mut core = NesCore::new();
+/// let rom = build_homebrew_rom().unwrap();
+/// core.load_ines_rom(&rom).unwrap();
+///
+/// // Capture exactly 2 frames of audio output
+/// let samples = collect_audio_for_frames(&mut core, 2).unwrap();
+///
+/// // 2 frames at ~60Hz on a 44100Hz audio buffer should be around ~1470 samples
+/// assert!(samples.len() > 1400);
+/// ```
 pub fn collect_audio_for_frames(core: &mut NesCore, frames: u32) -> Result<Vec<i16>, CoreError> {
     let mut samples = Vec::new();
     for _ in 0..frames {
@@ -79,6 +131,27 @@ pub fn collect_audio_for_frames(core: &mut NesCore, frames: u32) -> Result<Vec<i
     Ok(samples)
 }
 
+/// End-to-end wrapper for gathering an audio snapshot after a given startup period.
+///
+/// This spins up a fresh [`NesCore`] instance, loads the provided ROM, steps it silently
+/// for `warmup_frames` (ignoring audio output), and then returns the audio produced
+/// over the subsequent `capture_frames`.
+///
+/// This is heavily used by the `rom_bbbradsmith_audio` and golden PCM generators to quickly
+/// grab steady-state tones without saving enormous amounts of intermediate buffers.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::{build_homebrew_rom, capture_audio_window};
+///
+/// let rom = build_homebrew_rom().unwrap();
+///
+/// // Ignore the first 5 frames of silence, capture the next 2 frames
+/// let samples = capture_audio_window(&rom, 5, 2).unwrap();
+///
+/// assert!(!samples.is_empty());
+/// ```
 pub fn capture_audio_window(
     rom_bytes: &[u8],
     warmup_frames: u32,
@@ -200,6 +273,22 @@ pub fn pearson_correlation(lhs: &[i16], rhs: &[i16]) -> f64 {
     (numerator / denom).clamp(-1.0, 1.0)
 }
 
+/// Writes a slice of 16-bit signed audio samples to disk in little-endian PCM format.
+///
+/// This is heavily used to generate "golden" reference files for audio output tests.
+///
+/// ## Examples
+///
+/// ```
+/// use std::path::PathBuf;
+/// use nes_test_harness::write_pcm_i16le;
+///
+/// let path = std::env::temp_dir().join("test_write.pcm");
+/// let samples = vec![0, 100, -100, 32767, -32768];
+///
+/// write_pcm_i16le(&path, &samples).unwrap();
+/// # std::fs::remove_file(path).unwrap();
+/// ```
 pub fn write_pcm_i16le(path: &Path, samples: &[i16]) -> Result<(), String> {
     let mut bytes = Vec::with_capacity(samples.len() * 2);
     for sample in samples {
@@ -208,6 +297,31 @@ pub fn write_pcm_i16le(path: &Path, samples: &[i16]) -> Result<(), String> {
     fs::write(path, bytes).map_err(|err| format!("failed to write '{}': {err}", path.display()))
 }
 
+/// Reads a little-endian PCM file from disk into a vector of 16-bit signed audio samples.
+///
+/// This is used to load "golden" reference files to compare against live emulator output
+/// in test suites like `rom_bbbradsmith_audio`.
+///
+/// ## Errors
+///
+/// Returns an error if the file cannot be read, or if the file length is not an even number
+/// of bytes (since each `i16` requires exactly 2 bytes).
+///
+/// ## Examples
+///
+/// ```
+/// use std::path::PathBuf;
+/// use nes_test_harness::{write_pcm_i16le, read_pcm_i16le};
+///
+/// let path = std::env::temp_dir().join("test_read.pcm");
+/// let original = vec![0, 1234, -1234];
+///
+/// write_pcm_i16le(&path, &original).unwrap();
+///
+/// let loaded = read_pcm_i16le(&path).unwrap();
+/// assert_eq!(loaded, original);
+/// # std::fs::remove_file(path).unwrap();
+/// ```
 pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     let bytes =
         fs::read(path).map_err(|err| format!("failed to read '{}': {err}", path.display()))?;
