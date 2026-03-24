@@ -10,10 +10,14 @@ Missing out on gameplay due to distractions or managing other windows is a prima
 - Zero unwanted gameplay progression when the emulator window is alt-tabbed or clicked away from.
 - Feature does not introduce input lag or stutter during normal play.
 
+## 🕵️ Gap Analysis
+- Market View: Most modern emulators and games pause automatically when minimized or when another application is focused to prevent unintended gameplay progression.
+- Our Gap: Our emulator currently continues running in the background, which can cause the player to die or miss important events if they switch windows.
+
 ## ✅ Acceptance Criteria
-- The emulator must automatically enter a Paused state immediately upon receiving a `winit` window focus loss event.
-- The emulator must automatically resume immediately upon regaining window focus.
-- The feature must be configurable and toggleable via `nes.toml` under `[desktop]` as `auto_pause = true` (defaulting to true).
+- The emulator must automatically enter a Paused state immediately upon the application window losing focus.
+- The emulator must automatically resume immediately upon the application window regaining focus.
+- The feature must be configurable and toggleable by the user (defaulting to true).
 - A visual indication (e.g., a "PAUSED" overlay) must be shown when auto-paused.
 - **Critical Caveat:** Auto-pause **must be forcibly disabled** during active Netplay sessions to prevent intentional or unintentional network desyncs and rollbacks.
 - **Critical Caveat:** Auto-pause **must be forcibly disabled** during active strict RTA (Speedrun) mode to preserve the integrity of the run timing.
