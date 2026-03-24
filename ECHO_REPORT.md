@@ -2,8 +2,8 @@
 
 **Description:**
 
-* 🤦 **The Confusion:** Tried to run the desktop and netplay examples directly from the README block. The system immediately errored out with `Failed to read ROM at 'C:\Users\markm\roms\Super Mario Bros. (World).nes': No such file or directory (os error 2)`.
+* 🤦 **The Confusion:** Tried to run the desktop and tui examples directly from the README block. The system immediately errored out with `failed to read config './nes.toml': No such file or directory (os error 2)`.
 
-* 🕵️ **The Reality:** Turns out the `README.md` examples use hardcoded local Windows paths pointing to a specific user's `markm` directory. As a new user, I don't have this directory, nor do I have these specific ROMs named exactly this way. The example just fails.
+* 🕵️ **The Reality:** Turns out the `README.md` examples tell you to run `cargo run -p nes-desktop --release -- --config ./nes.toml`. But there is no `nes.toml` file in the repository! There is only a `nes.example.toml`. As a new user, I didn't know I had to copy the example file first because the README never mentions it! The example just fails.
 
-* 💡 **The Fix:** Change the quickstart commands in the README to point to the locally bundled homebrew ROM (`.\roms\homebrew\homebrew.nes`) or clearly indicate `<path-to-your-rom>.nes`. If I can't copy-paste and run it, I'm out!
+* 💡 **The Fix:** Add a step to the README to copy `nes.example.toml` to `nes.toml` before running the command, or change the quickstart commands to use `./nes.example.toml`. If I can't copy-paste and run it, I'm out!

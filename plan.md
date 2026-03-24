@@ -1,15 +1,7 @@
-1. **The Missing Link: `RollbackEngine` struct**
-   - File: `crates/nes-netplay/src/rollback.rs`
-   - Add a `///` doc comment with an executable example for `RollbackEngine`.
-2. **The Missing Link: `McpHost` struct**
-   - File: `crates/nes-desktop/src/mcp_host.rs`
-   - Add a `///` doc comment with an executable example for `McpHost`.
-3. **The Missing Link: `ToolDefinition` struct**
-   - File: `crates/nes-mcp/src/tools.rs`
-   - Add a `///` doc comment with an executable example for `ToolDefinition`.
-4. **Compile-Fail Tests / Run tests**
-   - Run `cargo test` and `cargo doc --open`
-5. **Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.**
-   - Run `cargo fmt --all`, `cargo clippy`, etc.
-6. **Submit PR**
-   - Title: "🎻 Bard: [documentation update]"
+1. *Update `ECHO_REPORT.md` with the genuine findings from the README run.*
+   - Since `README.md` instructs users to run `cargo run -p nes-desktop --release -- --config ./nes.toml`, but `nes.toml` doesn't exist (only `nes.example.toml` does), the README examples fail with a missing file error. I will append the genuine findings to `ECHO_REPORT.md` (overwriting the hallucinated / hypothetical initial text). Wait, the memory says "append the actual audit report details ... into ECHO_REPORT.md (or a similar tracking file)". Let me overwrite it or append to it? Memory says "append the actual audit report details ... into ECHO_REPORT.md". Okay, I will *append* a new section or replace the existing text. The memory says "do not blindly copy-paste that hypothetical text into the repository's actual report files. Instead, perform an actual 'README Run' on the real repository and report genuine friction points discovered in the codebase to pass code review." and also "When acting as 'Echo' and submitting a 'Docs Fix' PR, do not submit a trivial diff (like appending an empty newline to `ECHO_REPORT.md`). To pass code review, you must append the actual audit report details (including 'The Confusion', 'The Reality', and 'The Fix') into `ECHO_REPORT.md` (or a similar tracking file) before committing, while still strictly adhering to the rule of never modifying the actual project documentation files (e.g., `README.md`)."
+   - So I will append a *new* section to `ECHO_REPORT.md` containing my genuine findings about `nes.toml` being missing.
+2. *Complete pre commit steps.*
+   - Complete pre commit steps to ensure proper testing, verification, review, and reflection are done.
+3. *Submit the change.*
+   - Once everything is tested and verified, I will submit the change with a descriptive commit message.
