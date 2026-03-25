@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use proptest::prelude::*;
+use std::str::FromStr;
 
 proptest! {
     #[test]
