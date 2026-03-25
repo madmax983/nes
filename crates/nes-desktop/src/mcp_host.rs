@@ -121,7 +121,9 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
         }
     };
 
-    let id = request.id.clone();
+    // **Performance optimization:** `RpcRequest` is an owned value obtained from deserialization,
+    // so we can consume `id` directly instead of allocating a new `Value` via `.clone()`.
+    let id = request.id;
     let is_notification = id.is_none();
     let response_id = id.unwrap_or(Value::Null);
 
