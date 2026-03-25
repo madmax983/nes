@@ -154,6 +154,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn gxrom_read_and_write_prg() {
+        let mut prg_rom = vec![0; 64 * 1024];
+        prg_rom[0x0000] = 0xAA; // Bank 0, offset 0
+        prg_rom[32 * 1024] = 0xBB; // Bank 1, offset 0
+
+        let mut chr_rom = vec![0; 16 * 1024];
+        chr_rom[0x0000] = 0xCC; // Bank 0, offset 0
+        chr_rom[8 * 1024] = 0xDD; // Bank 1, offset 0
+
+        let mut mapper = Gxrom::from_prg_chr(prg_rom, chr_rom);
+
+        // Initially Bank 0
+        assert_eq!(mapper.read_prg(0x8000), 0xAA);
+        assert_eq!(mapper.chr_window()[0], 0xCC);
+
+        // Write to switch to PRG Bank 1 and CHR Bank 1
+        // value format is prg_select << 4 | chr_select
+        mapper.write_prg(0x8000, 0x11);
+
+        assert_eq!(mapper.read_prg(0x8000), 0xBB);
+        assert_eq!(mapper.chr_window()[0], 0xDD);
+    }
+
+    #[test]
     fn should_sync_chr_ram_when_writable() {
         // Create a GxROM mapper with empty CHR ROM, making it writable (CHR-RAM)
         let mut mapper = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
@@ -211,6 +235,13 @@ mod tests {
     }
 
     #[test]
+    fn gxrom_from_prg_chr_pads_empty_prg() {
+        let mapper = Gxrom::from_prg_chr(vec![], vec![]);
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), PRG_BANK_32K);
+    }
+
+    #[test]
     fn gxrom_from_prg_chr_pads_short_prg() {
         // Test `if prg_rom.len() < PRG_BANK_32K` branch
         let prg_rom = vec![0; PRG_BANK_32K - 1];
@@ -229,6 +260,7 @@ mod tests {
 
         // Should pad CHR to 2 banks
         assert_eq!(mapper.chr_bank_count, 2);
+        assert_eq!(mapper.chr_data.len(), 2 * CHR_WINDOW_BYTES);
     }
 
     #[test]
