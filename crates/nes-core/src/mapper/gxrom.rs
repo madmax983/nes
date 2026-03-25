@@ -211,6 +211,13 @@ mod tests {
     }
 
     #[test]
+    fn gxrom_from_prg_chr_pads_empty_prg() {
+        let mapper = Gxrom::from_prg_chr(vec![], vec![]);
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), PRG_BANK_32K);
+    }
+
+    #[test]
     fn gxrom_from_prg_chr_pads_short_prg() {
         // Test `if prg_rom.len() < PRG_BANK_32K` branch
         let prg_rom = vec![0; PRG_BANK_32K - 1];
@@ -229,6 +236,7 @@ mod tests {
 
         // Should pad CHR to 2 banks
         assert_eq!(mapper.chr_bank_count, 2);
+        assert_eq!(mapper.chr_data.len(), 2 * CHR_WINDOW_BYTES);
     }
 
     #[test]
