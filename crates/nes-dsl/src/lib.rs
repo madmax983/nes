@@ -469,69 +469,10 @@ impl Assembler {
                 };
                 Ok(())
             }
-            ".const" => {
-                let (name, value_expr) = parse_const_assignment(args, line_no)?;
-                let normalized = normalize_symbol(name);
-                validate_symbol(&normalized).map_err(|message| DslError::Parse {
-                    line: line_no,
-                    message,
-                })?;
-                if self.labels.contains_key(&normalized) || self.constants.contains_key(&normalized)
-                {
-                    return Err(DslError::DuplicateConst(normalized));
-                }
-                let value = self.resolve_expr(&parse_expr(value_expr, line_no)?)?;
-                self.constants.insert(normalized, value);
-                Ok(())
-            }
-            ".byte" => {
-                for arg in split_csv(args)? {
-                    if is_quoted_string(arg) {
-                        let bytes =
-                            decode_string_literal(arg).map_err(|message| DslError::Parse {
-                                line: line_no,
-                                message,
-                            })?;
-                        for byte in bytes {
-                            self.emit_u8(byte)?;
-                        }
-                    } else {
-                        self.emit_expr_byte(parse_expr(arg, line_no)?, line_no, FixupKind::Byte)?;
-                    }
-                }
-                Ok(())
-            }
-            ".word" => {
-                for arg in split_csv(args)? {
-                    self.emit_expr_word(parse_expr(arg, line_no)?, line_no)?;
-                }
-                Ok(())
-            }
-            ".text" => {
-                let literals = split_csv(args)?;
-                if literals.is_empty() {
-                    return Err(DslError::Parse {
-                        line: line_no,
-                        message: ".text expects at least one quoted string".to_owned(),
-                    });
-                }
-                for lit in literals {
-                    if !is_quoted_string(lit) {
-                        return Err(DslError::Parse {
-                            line: line_no,
-                            message: ".text accepts only quoted string literals".to_owned(),
-                        });
-                    }
-                    let bytes = decode_string_literal(lit).map_err(|message| DslError::Parse {
-                        line: line_no,
-                        message,
-                    })?;
-                    for byte in bytes {
-                        self.emit_u8(byte)?;
-                    }
-                }
-                Ok(())
-            }
+            ".const" => self.handle_const_directive(args, line_no),
+            ".byte" => self.handle_byte_directive(args, line_no),
+            ".word" => self.handle_word_directive(args, line_no),
+            ".text" => self.handle_text_directive(args, line_no),
             ".reset" => {
                 self.vectors.reset = Some(parse_expr(args, line_no)?);
                 Ok(())
@@ -549,6 +490,71 @@ impl Assembler {
                 message: format!("unknown directive '{directive}'"),
             }),
         }
+    }
+
+    fn handle_const_directive(&mut self, args: &str, line_no: usize) -> Result<(), DslError> {
+        let (name, value_expr) = parse_const_assignment(args, line_no)?;
+        let normalized = normalize_symbol(name);
+        validate_symbol(&normalized).map_err(|message| DslError::Parse {
+            line: line_no,
+            message,
+        })?;
+        if self.labels.contains_key(&normalized) || self.constants.contains_key(&normalized) {
+            return Err(DslError::DuplicateConst(normalized));
+        }
+        let value = self.resolve_expr(&parse_expr(value_expr, line_no)?)?;
+        self.constants.insert(normalized, value);
+        Ok(())
+    }
+
+    fn handle_byte_directive(&mut self, args: &str, line_no: usize) -> Result<(), DslError> {
+        for arg in split_csv(args)? {
+            if is_quoted_string(arg) {
+                let bytes = decode_string_literal(arg).map_err(|message| DslError::Parse {
+                    line: line_no,
+                    message,
+                })?;
+                for byte in bytes {
+                    self.emit_u8(byte)?;
+                }
+            } else {
+                self.emit_expr_byte(parse_expr(arg, line_no)?, line_no, FixupKind::Byte)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_word_directive(&mut self, args: &str, line_no: usize) -> Result<(), DslError> {
+        for arg in split_csv(args)? {
+            self.emit_expr_word(parse_expr(arg, line_no)?, line_no)?;
+        }
+        Ok(())
+    }
+
+    fn handle_text_directive(&mut self, args: &str, line_no: usize) -> Result<(), DslError> {
+        let literals = split_csv(args)?;
+        if literals.is_empty() {
+            return Err(DslError::Parse {
+                line: line_no,
+                message: ".text expects at least one quoted string".to_owned(),
+            });
+        }
+        for lit in literals {
+            if !is_quoted_string(lit) {
+                return Err(DslError::Parse {
+                    line: line_no,
+                    message: ".text accepts only quoted string literals".to_owned(),
+                });
+            }
+            let bytes = decode_string_literal(lit).map_err(|message| DslError::Parse {
+                line: line_no,
+                message,
+            })?;
+            for byte in bytes {
+                self.emit_u8(byte)?;
+            }
+        }
+        Ok(())
     }
 
     fn handle_instruction(&mut self, line_no: usize, line: &str) -> Result<(), DslError> {
@@ -1722,137 +1728,139 @@ mod tests {
             IndirectY, Relative, ZeroPage, ZeroPageX, ZeroPageY,
         };
 
-        fn assert_supported_modes(mnemonic: &str, modes: &[AddressingMode]) {
-            for mode in modes {
+        let supported_modes: &[(&str, &[AddressingMode])] = &[
+            (
+                "ADC",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            (
+                "AND",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            (
+                "ASL",
+                &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+            ),
+            ("BCC", &[Relative]),
+            ("BCS", &[Relative]),
+            ("BEQ", &[Relative]),
+            ("BIT", &[ZeroPage, Absolute]),
+            ("BMI", &[Relative]),
+            ("BNE", &[Relative]),
+            ("BPL", &[Relative]),
+            ("BRK", &[Implied]),
+            ("BVC", &[Relative]),
+            ("BVS", &[Relative]),
+            ("CLC", &[Implied]),
+            ("CLD", &[Implied]),
+            ("CLI", &[Implied]),
+            ("CLV", &[Implied]),
+            (
+                "CMP",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            ("CPX", &[Immediate, ZeroPage, Absolute]),
+            ("CPY", &[Immediate, ZeroPage, Absolute]),
+            ("DEC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]),
+            ("DEX", &[Implied]),
+            ("DEY", &[Implied]),
+            (
+                "EOR",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            ("INC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]),
+            ("INX", &[Implied]),
+            ("INY", &[Implied]),
+            ("JMP", &[Absolute, Indirect]),
+            ("JSR", &[Absolute]),
+            (
+                "LDA",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            (
+                "LDX",
+                &[Immediate, ZeroPage, ZeroPageY, Absolute, AbsoluteY],
+            ),
+            (
+                "LDY",
+                &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+            ),
+            (
+                "LSR",
+                &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+            ),
+            ("NOP", &[Implied]),
+            (
+                "ORA",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            ("PHA", &[Implied]),
+            ("PHP", &[Implied]),
+            ("PLA", &[Implied]),
+            ("PLP", &[Implied]),
+            (
+                "ROL",
+                &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+            ),
+            (
+                "ROR",
+                &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
+            ),
+            ("RTI", &[Implied]),
+            ("RTS", &[Implied]),
+            (
+                "SBC",
+                &[
+                    Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
+                    IndirectY,
+                ],
+            ),
+            ("SEC", &[Implied]),
+            ("SED", &[Implied]),
+            ("SEI", &[Implied]),
+            (
+                "STA",
+                &[
+                    ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY,
+                ],
+            ),
+            ("STX", &[ZeroPage, ZeroPageY, Absolute]),
+            ("STY", &[ZeroPage, ZeroPageX, Absolute]),
+            ("TAX", &[Implied]),
+            ("TAY", &[Implied]),
+            ("TSX", &[Implied]),
+            ("TXA", &[Implied]),
+            ("TXS", &[Implied]),
+            ("TYA", &[Implied]),
+        ];
+
+        for &(mnemonic, modes) in supported_modes {
+            for &mode in modes {
                 assert!(
-                    opcode_for(mnemonic, *mode).is_some(),
+                    opcode_for(mnemonic, mode).is_some(),
                     "expected opcode for {mnemonic} in mode {}",
-                    mode_name(*mode)
+                    mode_name(mode)
                 );
             }
         }
-
-        assert_supported_modes(
-            "ADC",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes(
-            "AND",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes(
-            "ASL",
-            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
-        );
-        assert_supported_modes("BCC", &[Relative]);
-        assert_supported_modes("BCS", &[Relative]);
-        assert_supported_modes("BEQ", &[Relative]);
-        assert_supported_modes("BIT", &[ZeroPage, Absolute]);
-        assert_supported_modes("BMI", &[Relative]);
-        assert_supported_modes("BNE", &[Relative]);
-        assert_supported_modes("BPL", &[Relative]);
-        assert_supported_modes("BRK", &[Implied]);
-        assert_supported_modes("BVC", &[Relative]);
-        assert_supported_modes("BVS", &[Relative]);
-        assert_supported_modes("CLC", &[Implied]);
-        assert_supported_modes("CLD", &[Implied]);
-        assert_supported_modes("CLI", &[Implied]);
-        assert_supported_modes("CLV", &[Implied]);
-        assert_supported_modes(
-            "CMP",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes("CPX", &[Immediate, ZeroPage, Absolute]);
-        assert_supported_modes("CPY", &[Immediate, ZeroPage, Absolute]);
-        assert_supported_modes("DEC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
-        assert_supported_modes("DEX", &[Implied]);
-        assert_supported_modes("DEY", &[Implied]);
-        assert_supported_modes(
-            "EOR",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes("INC", &[ZeroPage, ZeroPageX, Absolute, AbsoluteX]);
-        assert_supported_modes("INX", &[Implied]);
-        assert_supported_modes("INY", &[Implied]);
-        assert_supported_modes("JMP", &[Absolute, Indirect]);
-        assert_supported_modes("JSR", &[Absolute]);
-        assert_supported_modes(
-            "LDA",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes(
-            "LDX",
-            &[Immediate, ZeroPage, ZeroPageY, Absolute, AbsoluteY],
-        );
-        assert_supported_modes(
-            "LDY",
-            &[Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
-        );
-        assert_supported_modes(
-            "LSR",
-            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
-        );
-        assert_supported_modes("NOP", &[Implied]);
-        assert_supported_modes(
-            "ORA",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes("PHA", &[Implied]);
-        assert_supported_modes("PHP", &[Implied]);
-        assert_supported_modes("PLA", &[Implied]);
-        assert_supported_modes("PLP", &[Implied]);
-        assert_supported_modes(
-            "ROL",
-            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
-        );
-        assert_supported_modes(
-            "ROR",
-            &[Accumulator, ZeroPage, ZeroPageX, Absolute, AbsoluteX],
-        );
-        assert_supported_modes("RTI", &[Implied]);
-        assert_supported_modes("RTS", &[Implied]);
-        assert_supported_modes(
-            "SBC",
-            &[
-                Immediate, ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX,
-                IndirectY,
-            ],
-        );
-        assert_supported_modes("SEC", &[Implied]);
-        assert_supported_modes("SED", &[Implied]);
-        assert_supported_modes("SEI", &[Implied]);
-        assert_supported_modes(
-            "STA",
-            &[
-                ZeroPage, ZeroPageX, Absolute, AbsoluteX, AbsoluteY, IndirectX, IndirectY,
-            ],
-        );
-        assert_supported_modes("STX", &[ZeroPage, ZeroPageY, Absolute]);
-        assert_supported_modes("STY", &[ZeroPage, ZeroPageX, Absolute]);
-        assert_supported_modes("TAX", &[Implied]);
-        assert_supported_modes("TAY", &[Implied]);
-        assert_supported_modes("TSX", &[Implied]);
-        assert_supported_modes("TXA", &[Implied]);
-        assert_supported_modes("TXS", &[Implied]);
-        assert_supported_modes("TYA", &[Implied]);
 
         assert!(opcode_for("LDA", AddressingMode::Implied).is_none());
         assert!(opcode_for("WUT", AddressingMode::Immediate).is_none());
