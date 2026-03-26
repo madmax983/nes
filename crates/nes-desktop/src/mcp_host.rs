@@ -49,6 +49,25 @@ struct ToolRequest {
 }
 
 impl McpHost {
+    /// Starts the MCP background server, listening for incoming JSON-RPC connections.
+    ///
+    /// This method binds a TCP listener to the specified address and spawns a background thread
+    /// to handle client requests. The server accepts commands like reading memory or controlling
+    /// the emulator state, which are sent back to the main thread via a channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `String` containing the error message if the server fails to bind to the specified address.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_desktop::mcp_host::McpHost;
+    ///
+    /// // Start the server on an ephemeral port
+    /// let host = McpHost::start("127.0.0.1:0").unwrap();
+    /// println!("Bound to {}", host.bind_addr());
+    /// ```
     pub fn start(bind_addr: &str) -> Result<Self, String> {
         let listener = TcpListener::bind(bind_addr)
             .map_err(|err| format!("Failed to bind MCP host at '{bind_addr}': {err}"))?;
@@ -69,10 +88,45 @@ impl McpHost {
         })
     }
 
+    /// Returns the local address that the MCP server is currently bound to.
+    ///
+    /// This is particularly useful when starting the server with port `0` (an ephemeral port),
+    /// as it allows the host to query the operating system for the actual port that was assigned.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_desktop::mcp_host::McpHost;
+    ///
+    /// let host = McpHost::start("127.0.0.1:0").unwrap();
+    /// let addr = host.bind_addr();
+    /// assert!(addr.starts_with("127.0.0.1:"));
+    /// ```
     pub fn bind_addr(&self) -> &str {
         &self.bind_addr
     }
 
+    /// Drains all pending MCP requests and executes them against the emulator core.
+    ///
+    /// The MCP server runs on a background thread and sends requests to the main thread via a channel.
+    /// The main thread (running the emulator) must call this method regularly (e.g., once per frame)
+    /// to process and reply to these requests.
+    ///
+    /// If an empty or uninitialized [`NesCore`] is provided, tools like reading memory or injecting
+    /// inputs may fail gracefully depending on their internal error handling.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_desktop::mcp_host::McpHost;
+    /// use nes_core::NesCore;
+    ///
+    /// let host = McpHost::start("127.0.0.1:0").unwrap();
+    /// let mut core = NesCore::new();
+    ///
+    /// // Typically called inside the main emulation loop
+    /// host.drain(&mut core);
+    /// ```
     pub fn drain(&self, core: &mut NesCore) {
         while let Ok(request) = self.requests.try_recv() {
             let result = dispatch_tool(core, &request.name, &request.params);
