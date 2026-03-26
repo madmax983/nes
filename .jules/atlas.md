@@ -14,3 +14,7 @@
 **Refactoring NesCore Controller State**
 **Tangle:** The `NesCore` struct and `api.rs` implementation block had become bloated with low-level controller port state (`controllers: [ControllerState; 2]`, `controller_strobe: bool`) and its associated manipulation methods mixed alongside high-level system components. This reduced cohesion within `NesCore` and violated encapsulation.
 **Blueprint:** Extracted the controller state into a dedicated `ControllerPorts` internal struct. Relocated `set_controller_bits`, `write_controller_strobe`, `controller_port_sample`, and `consume_controller_read` methods to `impl ControllerPorts`, simplifying the `NesCore` implementation block and consolidating input logic.
+
+**Refactor nes-test-harness test support code into library**
+**Tangle:** Shared ROM path helpers for integration tests were defined in `tests/support/mod.rs`, which violates best practices by duplicating code and relying on implicit modules in tests.
+**Blueprint:** Moved the `tests/support/mod.rs` file into the `nes-test-harness` library as `src/rom_paths.rs`, exposing it publicly. Updated all test files to import the functions directly from the `nes_test_harness` crate, improving encapsulation and reusability.

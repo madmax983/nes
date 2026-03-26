@@ -4,11 +4,10 @@ use std::path::Path;
 
 use nes_core::AUDIO_CHUNK_SAMPLES;
 use nes_test_harness::{
-    apu_write_hash, audio_stats, capture_audio_window, collect_apu_register_writes,
+    apu_write_hash, audio_stats, bbbradsmith_audio_golden_dir_path,
+    bbbradsmith_audio_suite_rom_paths, capture_audio_window, collect_apu_register_writes,
     compare_waveforms, detect_mapper_id, mapper_supported_by_core, read_pcm_i16le, waveform_hash,
 };
-
-mod support;
 
 const WRITE_TRACE_STEPS_PER_ROM: u32 = 750_000;
 const AUDIO_WARMUP_FRAMES: u32 = 60;
@@ -29,7 +28,7 @@ struct ApuWriteTraceSummary {
 #[test]
 #[ignore = "requires roms.bbbradsmith_audio_suite_dir in nes.toml"]
 fn bbbradsmith_audio_suite_write_trace_is_deterministic_per_rom() {
-    let rom_paths = support::bbbradsmith_audio_suite_rom_paths();
+    let rom_paths = bbbradsmith_audio_suite_rom_paths();
     let mut tested_roms = 0_usize;
     let mut skipped = Vec::new();
     for rom_path in rom_paths {
@@ -71,7 +70,7 @@ fn bbbradsmith_audio_suite_write_trace_is_deterministic_per_rom() {
 #[test]
 #[ignore = "requires roms.bbbradsmith_audio_suite_dir in nes.toml"]
 fn bbbradsmith_audio_suite_audio_windows_are_deterministic_and_well_formed() {
-    let rom_paths = support::bbbradsmith_audio_suite_rom_paths();
+    let rom_paths = bbbradsmith_audio_suite_rom_paths();
     let expected_samples = AUDIO_CAPTURE_FRAMES as usize * AUDIO_CHUNK_SAMPLES;
     let mut audible_roms = 0_usize;
     let mut tested_roms = 0_usize;
@@ -131,8 +130,8 @@ fn bbbradsmith_audio_suite_audio_windows_are_deterministic_and_well_formed() {
 #[test]
 #[ignore = "requires roms.bbbradsmith_audio_suite_dir and roms.bbbradsmith_audio_golden_dir in nes.toml"]
 fn bbbradsmith_audio_suite_matches_golden_pcm_tolerances() {
-    let rom_paths = support::bbbradsmith_audio_suite_rom_paths();
-    let golden_dir = support::bbbradsmith_audio_golden_dir_path();
+    let rom_paths = bbbradsmith_audio_suite_rom_paths();
+    let golden_dir = bbbradsmith_audio_golden_dir_path();
     let mut checked_roms = 0_usize;
     let mut skipped = Vec::new();
 
