@@ -18,6 +18,19 @@ fn eval_smb_control_bin() -> std::path::PathBuf {
 }
 
 #[test]
+fn eval_smb_control_with_no_args_prints_usage_and_fails() {
+    let output = Command::new(eval_smb_control_bin())
+        .output()
+        .expect("run eval_smb_control");
+
+    assert!(!output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout utf8");
+    assert!(stdout.contains(
+        "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
+    ));
+}
+
+#[test]
 fn eval_smb_control_with_help_flag_prints_usage_and_succeeds() {
     for flag in ["--help", "-h"] {
         let output = Command::new(eval_smb_control_bin())
