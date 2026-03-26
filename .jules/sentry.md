@@ -9,4 +9,6 @@
 **Action:** Wrote explicit unit tests instantiating mapper implementations directly (`Mmc3::from_prg_chr`, `Axrom::from_prg_rom`, etc.) and wrapping them in `LoadedMapper` variants to assert execution paths, reducing mutation survivability and ensuring correct integration behavior.
 ## 2026-03-12 - [GxROM Coverage Improvements]
 **Learning:** `sync_chr_ram_from_ppu_window` in `crates/nes-core/src/mapper/gxrom.rs` was missing unit tests covering whether the PPU window data was correctly synced to the CHR array when `chr_writable` is true or false.
-**Action:** Wrote explicit unit tests instantiating `Gxrom` with empty and non-empty `chr_rom` to cover the true and false branch of `chr_writable` and asserting the correct CHR syncing behavior.
+**Action:** Wrote explicit unit tests instantiating `Gxrom` with empty and non-empty `chr_rom` to cover the true and false branch of `chr_writable` and asserting the correct CHR syncing behavior.## 2026-03-26 - [RollbackEngine Clear History]
+**Learning:** `RollbackEngine::clear_from` in `crates/nes-netplay/src/rollback.rs` lacked specific test coverage, making mutations to its clearing logic (e.g. replacing it with `()`) survivable. This logic is crucial for ensuring that predicted future states are correctly purged upon a network desync and rollback.
+**Action:** Wrote an explicit unit test `rollback_engine_clears_from_frame_on_rollback` that manually constructs a rollback engine's internal buffers and directly asserts that `clear_from` drops future state arrays while preserving history before the target frame.

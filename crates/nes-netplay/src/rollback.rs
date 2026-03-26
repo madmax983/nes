@@ -1044,4 +1044,41 @@ mod tests {
         let missing_snapshot = RollbackError::MissingSnapshot(12).to_string();
         assert!(missing_snapshot.contains("frame 12"));
     }
+
+    #[test]
+    fn rollback_engine_clears_from_frame_on_rollback() {
+        let core = make_core_for_rollback();
+
+        let mut manual_engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+        manual_engine.snapshots.insert(1, core.save_state());
+        manual_engine.snapshots.insert(2, core.save_state());
+        manual_engine.snapshots.insert(3, core.save_state());
+        manual_engine.resolved_local.insert(1, 0);
+        manual_engine.resolved_local.insert(2, 0);
+        manual_engine.resolved_local.insert(3, 0);
+        manual_engine.resolved_remote.insert(1, 0);
+        manual_engine.resolved_remote.insert(2, 0);
+        manual_engine.resolved_remote.insert(3, 0);
+        manual_engine.frame_hashes.insert(1, 0);
+        manual_engine.frame_hashes.insert(2, 0);
+        manual_engine.frame_hashes.insert(3, 0);
+
+        manual_engine.clear_from(2);
+
+        assert!(manual_engine.snapshots.contains_key(&1));
+        assert!(!manual_engine.snapshots.contains_key(&2));
+        assert!(!manual_engine.snapshots.contains_key(&3));
+
+        assert!(manual_engine.resolved_local.contains_key(&1));
+        assert!(!manual_engine.resolved_local.contains_key(&2));
+        assert!(!manual_engine.resolved_local.contains_key(&3));
+
+        assert!(manual_engine.resolved_remote.contains_key(&1));
+        assert!(!manual_engine.resolved_remote.contains_key(&2));
+        assert!(!manual_engine.resolved_remote.contains_key(&3));
+
+        assert!(manual_engine.frame_hashes.contains_key(&1));
+        assert!(!manual_engine.frame_hashes.contains_key(&2));
+        assert!(!manual_engine.frame_hashes.contains_key(&3));
+    }
 }
