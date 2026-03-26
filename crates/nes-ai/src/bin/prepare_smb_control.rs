@@ -37,10 +37,8 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() != 4 {
-        return Err(
-            "Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>"
-                .to_owned(),
-        );
+        println!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        std::process::exit(1);
     }
 
     let rom_path = PathBuf::from(&args[1]);
