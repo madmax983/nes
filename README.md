@@ -43,6 +43,12 @@ cargo llvm-cov --workspace --all-features --all-targets --lcov --output-path lco
 Runtime and ROM paths are configured through `nes.toml` at the workspace root.
 Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
+Before running with a config, copy the example:
+
+```powershell
+cp nes.example.toml nes.toml
+```
+
 Desktop/TUI launch commands:
 
 ```powershell
