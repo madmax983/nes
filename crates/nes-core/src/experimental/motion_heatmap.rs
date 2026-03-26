@@ -74,7 +74,7 @@ mod tests {
     #[test]
     fn heatmap_highlights_motion() {
         let prev = vec![255, 255, 255, 255]; // White
-        let curr = vec![0, 0, 0, 255];       // Black (high motion)
+        let curr = vec![0, 0, 0, 255]; // Black (high motion)
 
         let bmp = MotionHeatmap::generate_heatmap(1, 1, &prev, &curr).unwrap();
         assert_eq!(&bmp[0..2], b"BM");
