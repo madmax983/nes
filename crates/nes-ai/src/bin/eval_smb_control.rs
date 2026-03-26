@@ -23,7 +23,9 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() < 3 || args.len() > 5 {
-        println!("Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]");
+        println!(
+            "Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]"
+        );
         std::process::exit(1);
     }
 
