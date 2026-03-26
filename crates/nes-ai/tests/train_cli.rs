@@ -31,6 +31,19 @@ fn train_smb_control_with_no_args_prints_usage_and_fails() {
 }
 
 #[test]
+fn train_smb_control_with_missing_profile_fails_and_prints_error() {
+    let output = Command::new(train_smb_control_bin())
+        .arg("__does_not_exist__.toml")
+        .output()
+        .expect("run train_smb_control");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("Failed to read profile config:"));
+    // The error string comes directly from OS `std::io::Error` and might not contain the file name explicitly
+}
+
+#[test]
 fn train_smb_control_with_help_flag_prints_usage_and_succeeds() {
     for flag in ["--help", "-h"] {
         let output = Command::new(train_smb_control_bin())

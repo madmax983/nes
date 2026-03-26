@@ -34,6 +34,18 @@ fn prepare_smb_control_missing_rom_prints_styled_error() {
 }
 
 #[test]
+fn prepare_smb_control_missing_movie_json_prints_error() {
+    let output = Command::new(prepare_smb_control_bin())
+        .arg("roms/homebrew/homebrew.nes")
+        .arg("__does_not_exist__.json")
+        .arg("out.bin")
+        .output()
+        .expect("run prepare_smb_control");
+
+    assert!(!output.status.success());
+}
+
+#[test]
 fn prepare_smb_control_invalid_rom_permissions_prints_styled_error() {
     let output = Command::new(prepare_smb_control_bin())
         .arg(".")
