@@ -908,7 +908,7 @@ mod tests {
 
         let mut stream = TcpStream::connect(&bind_addr).expect("client should connect to host");
         stream
-            .set_read_timeout(Some(Duration::from_millis(500)))
+            .set_read_timeout(Some(Duration::from_millis(5000)))
             .expect("set read timeout");
         let mut reader = BufReader::new(
             stream

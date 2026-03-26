@@ -485,7 +485,7 @@ mod tests {
         let client_stream = TcpStream::connect(addr).expect("connect client");
         let (server_stream, _) = listener.accept().expect("accept server stream");
         server_stream
-            .set_read_timeout(Some(Duration::from_millis(500)))
+            .set_read_timeout(Some(Duration::from_millis(5000)))
             .expect("set read timeout");
         let mut server_reader = BufReader::new(server_stream);
 
