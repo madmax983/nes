@@ -3,8 +3,10 @@ use std::fs;
 use std::path::Path;
 
 mod homebrew;
+pub mod rom_paths;
 
 pub use homebrew::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
+pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 

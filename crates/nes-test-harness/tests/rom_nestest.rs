@@ -1,13 +1,12 @@
 use std::fs;
 
 use nes_core::{Command, NesCore};
-
-mod support;
+use nes_test_harness::nestest_rom_path;
 
 #[test]
 #[ignore = "requires roms.nestest in nes.toml"]
 fn nestest_boot_sequence_matches_expected_prefix() {
-    let rom_path = support::nestest_rom_path();
+    let rom_path = nestest_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read nestest ROM");
     let mut core = NesCore::new();
@@ -52,7 +51,7 @@ fn nestest_boot_sequence_matches_expected_prefix() {
 #[test]
 #[ignore = "requires roms.nestest in nes.toml"]
 fn nestest_runs_instruction_window_without_unknown_opcode() {
-    let rom_path = support::nestest_rom_path();
+    let rom_path = nestest_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read nestest ROM");
     let mut core = NesCore::new();
