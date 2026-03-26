@@ -98,8 +98,22 @@ fn build_success_table(rom_hash: &str, out_path: &std::path::Path) -> Table {
 
 #[cfg(test)]
 mod tests {
-    use super::build_success_table;
+    use super::{build_success_table, format_rom_read_error};
     use std::path::PathBuf;
+
+    #[test]
+    fn test_format_rom_read_error() {
+        let not_found_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let msg = format_rom_read_error("fake.nes", &not_found_err);
+        assert!(msg.contains("Could not find the ROM file at"));
+        assert!(msg.contains("fake.nes"));
+
+        let other_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied");
+        let msg2 = format_rom_read_error("fake2.nes", &other_err);
+        assert!(msg2.contains("Failed to read ROM at"));
+        assert!(msg2.contains("fake2.nes"));
+        assert!(msg2.contains("access denied"));
+    }
 
     #[test]
     fn build_success_table_formats_hash_and_path() {
