@@ -1,3 +1,21 @@
+//! The Real-Time Attack (RTA) engine for speedrunning.
+//!
+//! This module provides a state machine and configuration system for automating
+//! speedrun timing, splitting, and rule enforcement. It relies on evaluating memory
+//! values against predefined conditions to track the progress of a run.
+//!
+//! # Architecture
+//!
+//! The RTA engine is built around three core concepts:
+//!
+//! * **Profiles ([`RtaProfile`]):** Static configurations loaded from TOML files that
+//!   define when a run starts, ends, pauses, and splits, as well as what actions
+//!   (like rewinding) invalidate the run.
+//! * **Triggers ([`TriggerRule`]):** Conditions evaluated against the emulator's memory
+//!   state (e.g., "Start the timer when memory address `0x071A` becomes `1`").
+//! * **The Manager ([`RtaManager`]):** The active state machine that ticks alongside the
+//!   emulator frame-by-frame, evaluating triggers and logging events.
+
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -320,6 +338,22 @@ pub fn compare_rom_hashes(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
+/// Loads all `.toml` RTA profiles from the specified directory.
+///
+/// If a profile file cannot be parsed or the directory does not exist,
+/// an error message is returned. The returned profiles are sorted
+/// alphabetically by their `id`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use nes_desktop::rta::load_profiles;
+/// use std::path::Path;
+///
+/// let profiles = load_profiles(Path::new("config/rta/profiles"))
+///     .expect("Failed to load profiles");
+/// println!("Loaded {} speedrun profiles", profiles.len());
+/// ```
 pub fn load_profiles(dir: &Path) -> Result<Vec<LoadedProfile>, String> {
     if !dir.exists() {
         return Err(format!(
@@ -359,6 +393,27 @@ pub fn load_profiles(dir: &Path) -> Result<Vec<LoadedProfile>, String> {
 }
 
 /// Selects an RTA profile given a ROM hash, or uses a manual override.
+///
+/// If a `manual_override` profile ID is provided, it takes precedence over
+/// auto-selection via ROM hash. If no override is provided, the engine looks
+/// for a profile whose authorized `rom_hashes` includes the provided hash.
+///
+/// If `allow_draft` is false, selecting a profile with a `ProfileStatus::Draft`
+/// status will result in an error.
+///
+/// # Examples
+///
+/// ```no_run
+/// use nes_desktop::rta::{load_profiles, select_profile, ProfileSelectionSource};
+/// use std::path::Path;
+///
+/// let profiles = load_profiles(Path::new("config/rta/profiles")).unwrap();
+/// let selection = select_profile(&profiles, "ea343f4e4...", None, false)
+///     .expect("Failed to auto-select profile");
+///
+/// assert_eq!(selection.source, ProfileSelectionSource::AutoByRomHash);
+/// println!("Selected profile: {}", selection.selected.profile.id);
+/// ```
 ///
 /// ⚡ Bolt Optimization:
 /// Instead of filtering the profile list and collecting matches into a `Vec`,
@@ -598,7 +653,40 @@ struct RunArtifact {
     splits: Vec<SplitEvent>,
 }
 
+/// The active state machine that tracks a speedrun session.
+///
+/// `RtaManager` evaluates memory triggers on every frame, manages the session state
+/// (Armed, Running, Finished), and enforces invalidation rules (e.g., forbidding rewinds).
+/// It logs splits and can optionally generate a JSON report and input log when a run finishes.
+///
+/// # Examples
+///
+/// ```no_run
+/// use nes_desktop::rta::{RtaManager, RtaProfile, RtaSessionState};
+/// use std::path::PathBuf;
+/// use std::time::Instant;
+///
+/// // Create a basic profile programmatically (usually loaded from TOML).
+/// let profile = RtaProfile::default();
+///
+/// // Initialize the manager with the profile and output directory.
+/// let runs_dir = PathBuf::from("runs/rta");
+/// let mut manager = RtaManager::new(profile, "rom_hash".to_owned(), runs_dir, None);
+///
+/// // The manager starts in the `Armed` state.
+/// assert_eq!(manager.state(), RtaSessionState::Armed);
+///
+/// // On every frame, provide the current frame number, the current time,
+/// // and a closure that can read memory values for trigger evaluation.
+/// let mut memory = [0u8; 0xFFFF];
+/// let t0 = Instant::now();
+/// let events = manager.tick(1, t0, |addr| memory[usize::from(addr)]);
+///
+/// // If triggers fire, the manager will return events like `RtaEvent::Started`
+/// // and update its internal state accordingly.
+/// ```
 #[derive(Debug)]
+#[doc(alias = "speedrun")]
 pub struct RtaManager {
     profile: RtaProfile,
     rom_hash: String,
