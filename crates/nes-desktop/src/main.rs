@@ -337,17 +337,38 @@ fn load_rom_session(
     rom_path: &Path,
     cheats: &SessionCheats,
 ) -> Result<LoadedRomSession, String> {
-    let rom_bytes = fs::read(rom_path)
-        .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
+    let mut actual_rom_path = rom_path.to_path_buf();
+    let rom_bytes = match fs::read(rom_path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            let fallback_path = Path::new("./roms/homebrew/homebrew.nes");
+            match fs::read(fallback_path) {
+                Ok(bytes) => {
+                    eprintln!(
+                        "{} Could not find the ROM file at '{}'.\n{} Falling back to bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+                        "Warning:".with(Color::Yellow).bold(),
+                        rom_path.display().to_string().with(Color::Yellow),
+                        "Hint:".with(Color::Cyan).bold()
+                    );
+                    actual_rom_path = fallback_path.to_path_buf();
+                    bytes
+                }
+                Err(_) => {
+                    return Err(format_rom_read_error(&rom_path.display().to_string(), &err));
+                }
+            }
+        }
+        Err(err) => return Err(format_rom_read_error(&rom_path.display().to_string(), &err)),
+    };
     core.clear_cheat_codes();
     let info = core
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
     apply_session_cheats(core, cheats)?;
     let rom_hash = compute_rom_hash(&rom_bytes);
-    let slot_metadata = load_slot_metadata_for_rom(rom_path, &rom_hash)?;
+    let slot_metadata = load_slot_metadata_for_rom(&actual_rom_path, &rom_hash)?;
     Ok(LoadedRomSession {
-        rom_path: rom_path.to_path_buf(),
+        rom_path: actual_rom_path,
         rom_hash,
         info,
         slot_metadata,
@@ -2126,10 +2147,9 @@ fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            "{} Could not find the ROM file at '{}'.",
             "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            rom_path.with(Color::Yellow)
         )
     } else {
         format!(
@@ -3132,7 +3152,6 @@ mod tests {
         let msg = format_rom_read_error("bad.nes", &not_found);
         assert!(msg.contains("Could not find the ROM file at"));
         assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("homebrew.nes"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);

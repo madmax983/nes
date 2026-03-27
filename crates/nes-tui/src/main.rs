@@ -1,6 +1,6 @@
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
@@ -232,17 +232,40 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let (rom_path, loaded_config_path, cli_options) = resolve_rom_path()?;
-    let rom_bytes = fs::read(&rom_path).map_err(|err| format_rom_read_error(&rom_path, &err))?;
+
+    let mut actual_rom_path = std::path::PathBuf::from(&rom_path);
+    let rom_bytes = match fs::read(&rom_path) {
+        Ok(bytes) => bytes,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            let fallback_path = std::path::Path::new("./roms/homebrew/homebrew.nes");
+            match fs::read(fallback_path) {
+                Ok(bytes) => {
+                    eprintln!(
+                        "{} Could not find the ROM file at '{}'.\n{} Falling back to bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+                        "Warning:".with(crossterm::style::Color::Yellow).bold(),
+                        rom_path.with(crossterm::style::Color::Yellow),
+                        "Hint:".with(crossterm::style::Color::Cyan).bold()
+                    );
+                    actual_rom_path = fallback_path.to_path_buf();
+                    bytes
+                }
+                Err(_) => {
+                    return Err(format_rom_read_error(&rom_path, &err));
+                }
+            }
+        }
+        Err(err) => return Err(format_rom_read_error(&rom_path, &err)),
+    };
 
     let mut core = NesCore::new();
     let info = core
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
-    let rom_name = Path::new(&rom_path)
+    let rom_name = actual_rom_path
         .file_name()
         .and_then(|name| name.to_str())
         .map(std::borrow::ToOwned::to_owned)
-        .unwrap_or(rom_path.clone());
+        .unwrap_or_else(|| actual_rom_path.display().to_string());
     let mut runtime = TuiRuntime {
         core,
         rom_name,
@@ -878,10 +901,9 @@ fn key_is_pressed(kind: KeyEventKind) -> bool {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            "{} Could not find the ROM file at '{}'.",
             "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            "Hint:".with(crossterm::style::Color::Cyan).bold()
+            rom_path.with(crossterm::style::Color::Yellow)
         )
     } else {
         format!(
@@ -1111,7 +1133,6 @@ mod tests {
         let msg = format_rom_read_error("bad.nes", &not_found);
         assert!(msg.contains("Could not find the ROM file at"));
         assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("homebrew.nes"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);
