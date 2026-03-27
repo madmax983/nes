@@ -71,11 +71,17 @@ impl FromStr for CheatCode {
     type Err = CheatCodeError;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        let normalized: String = raw
-            .chars()
-            .filter(|ch| !ch.is_ascii_whitespace() && *ch != '-')
-            .map(|ch| ch.to_ascii_uppercase())
-            .collect();
+        // **Performance optimization:** Instead of using `.filter(...).map(...).collect::<String>()`
+        // which cannot predict the final length and may re-allocate the heap buffer multiple times,
+        // we pre-allocate exactly 8 bytes (the maximum valid length of a NES cheat code)
+        // and push characters manually. This guarantees a single, zero-overhead allocation.
+        let mut normalized = String::with_capacity(8);
+        for ch in raw.chars() {
+            if ch.is_ascii_whitespace() || ch == '-' {
+                continue;
+            }
+            normalized.push(ch.to_ascii_uppercase());
+        }
 
         if normalized.len() != 6 && normalized.len() != 8 {
             return Err(CheatCodeError::InvalidLength(normalized.len()));
