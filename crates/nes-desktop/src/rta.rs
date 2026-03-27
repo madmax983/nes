@@ -402,9 +402,7 @@ pub fn select_profile(
             .any(|value| compare_rom_hashes(value, rom_hash))
     });
 
-    let first_match = match_iter.next();
-
-    if first_match.is_none() {
+    let Some(first_match) = match_iter.next() else {
         let known = profiles
             .iter()
             .map(|profile| profile.profile.id.as_str())
@@ -414,11 +412,13 @@ pub fn select_profile(
             "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
             known
         ));
-    }
+    };
 
     if let Some(second_match) = match_iter.next() {
-        let first = first_match.expect("first_match must be Some");
-        let mut conflict_names = vec![first.profile.id.as_str(), second_match.profile.id.as_str()];
+        let mut conflict_names = vec![
+            first_match.profile.id.as_str(),
+            second_match.profile.id.as_str(),
+        ];
         conflict_names.extend(match_iter.map(|profile| profile.profile.id.as_str()));
         let conflict = conflict_names.join(", ");
         return Err(format!(
@@ -426,7 +426,7 @@ pub fn select_profile(
         ));
     }
 
-    let selected = first_match.expect("first_match must be Some").clone();
+    let selected = first_match.clone();
     if !allow_draft && selected.profile.status == ProfileStatus::Draft {
         return Err(format!(
             "RTA profile '{}' is draft and cannot be used in strict mode",
@@ -722,6 +722,28 @@ impl RtaManager {
         }
 
         let mut events = Vec::<RtaEvent>::new();
+
+        self.tick_start(now, &mut read_u8, &mut events);
+
+        if !self.is_active() {
+            return events;
+        }
+
+        let is_paused = self.tick_pause_resume(now, &mut read_u8, &mut events);
+
+        if !is_paused {
+            self.tick_splits(frame, now, &mut read_u8, &mut events);
+        }
+
+        self.tick_end(frame, now, &mut read_u8, &mut events);
+
+        events
+    }
+
+    fn tick_start<F>(&mut self, now: Instant, mut read_u8: F, events: &mut Vec<RtaEvent>)
+    where
+        F: FnMut(u16) -> u8,
+    {
         if self.state == RtaSessionState::Armed
             && self.trigger_fired(TriggerSlot::Start, &mut read_u8)
         {
@@ -731,11 +753,17 @@ impl RtaManager {
             self.paused_accumulated = Duration::ZERO;
             events.push(RtaEvent::Started);
         }
+    }
 
-        if !self.is_active() {
-            return events;
-        }
-
+    fn tick_pause_resume<F>(
+        &mut self,
+        now: Instant,
+        mut read_u8: F,
+        events: &mut Vec<RtaEvent>,
+    ) -> bool
+    where
+        F: FnMut(u16) -> u8,
+    {
         let is_paused = self.pause_started_at.is_some();
         if is_paused {
             if self.trigger_fired(TriggerSlot::Resume, &mut read_u8)
@@ -750,17 +778,31 @@ impl RtaManager {
             self.pause_started_at = Some(now);
             events.push(RtaEvent::Paused);
         }
+        is_paused
+    }
 
-        if !is_paused {
-            for idx in 0..self.profile.splits.len() {
-                if self.trigger_fired(TriggerSlot::Split(idx), &mut read_u8) {
-                    let split_name = self.profile.splits[idx].name.clone();
-                    let event = self.push_split(split_name, SplitSource::Automatic, frame, now);
-                    events.push(RtaEvent::Split(event));
-                }
+    fn tick_splits<F>(
+        &mut self,
+        frame: u64,
+        now: Instant,
+        mut read_u8: F,
+        events: &mut Vec<RtaEvent>,
+    ) where
+        F: FnMut(u16) -> u8,
+    {
+        for idx in 0..self.profile.splits.len() {
+            if self.trigger_fired(TriggerSlot::Split(idx), &mut read_u8) {
+                let split_name = self.profile.splits[idx].name.clone();
+                let event = self.push_split(split_name, SplitSource::Automatic, frame, now);
+                events.push(RtaEvent::Split(event));
             }
         }
+    }
 
+    fn tick_end<F>(&mut self, frame: u64, now: Instant, mut read_u8: F, events: &mut Vec<RtaEvent>)
+    where
+        F: FnMut(u16) -> u8,
+    {
         if self.trigger_fired(TriggerSlot::End, &mut read_u8) {
             self.state = RtaSessionState::Finished;
             self.finish_frame = Some(frame);
@@ -769,8 +811,6 @@ impl RtaManager {
                 self.elapsed_at_finish.unwrap_or_default(),
             ));
         }
-
-        events
     }
 
     fn trigger_fired<F>(&mut self, slot: TriggerSlot, mut read_u8: F) -> bool
@@ -885,8 +925,20 @@ impl RtaManager {
 
         let stamp = unix_epoch_millis();
         let base_name = format!("{}-{stamp}", sanitize_id_for_filename(&self.profile.id));
-        let run_json_path = self.runs_dir.join(format!("{base_name}.run.json"));
 
+        let run_json_path = self.write_run_artifact(&base_name)?;
+        let input_log_path = self.write_input_log(&base_name)?;
+
+        let paths = RunArtifactPaths {
+            run_json_path,
+            input_log_path,
+        };
+        self.artifacts_written = Some(paths.clone());
+        Ok(Some(paths))
+    }
+
+    fn write_run_artifact(&self, base_name: &str) -> Result<PathBuf, String> {
+        let run_json_path = self.runs_dir.join(format!("{base_name}.run.json"));
         let artifact = RunArtifact {
             profile_id: self.profile.id.clone(),
             rom_hash: self.rom_hash.clone(),
@@ -909,25 +961,19 @@ impl RtaManager {
                 run_json_path.display()
             )
         })?;
+        Ok(run_json_path)
+    }
 
-        let input_log_path = if self.profile.logging.save_input_log {
-            let path = self.runs_dir.join(format!("{base_name}.input.json"));
-            let json = serde_json::to_string_pretty(&self.input_log)
-                .map_err(|err| format!("failed to serialize RTA input log: {err}"))?;
-            fs::write(&path, json).map_err(|err| {
-                format!("failed to write RTA input log '{}': {err}", path.display())
-            })?;
-            Some(path)
-        } else {
-            None
-        };
-
-        let paths = RunArtifactPaths {
-            run_json_path,
-            input_log_path,
-        };
-        self.artifacts_written = Some(paths.clone());
-        Ok(Some(paths))
+    fn write_input_log(&self, base_name: &str) -> Result<Option<PathBuf>, String> {
+        if !self.profile.logging.save_input_log {
+            return Ok(None);
+        }
+        let path = self.runs_dir.join(format!("{base_name}.input.json"));
+        let json = serde_json::to_string_pretty(&self.input_log)
+            .map_err(|err| format!("failed to serialize RTA input log: {err}"))?;
+        fs::write(&path, json)
+            .map_err(|err| format!("failed to write RTA input log '{}': {err}", path.display()))?;
+        Ok(Some(path))
     }
 
     pub fn write_calibration_draft(
