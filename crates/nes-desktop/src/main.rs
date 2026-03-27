@@ -1233,6 +1233,7 @@ fn run() -> Result<(), String> {
     };
 
     event_loop.run(move |event, _, control_flow| {
+        // coverage:ignore-start
         macro_rules! build_ctx {
             () => {
                 AppContext {
@@ -1254,26 +1255,27 @@ fn run() -> Result<(), String> {
                 }
             };
         }
+        // coverage:ignore-end
 
         match event {
-        Event::WindowEvent { event, .. } => match classify_window_event(&event) {
-            WindowEventDecision::CloseRequested => {
-                if let Some(rta) = rta_manager.as_mut() {
-                    if rta.is_calibrating() && rta.is_active() {
-                        let _ = rta.force_finish(frame_index, Instant::now());
+            Event::WindowEvent { event, .. } => match classify_window_event(&event) {
+                WindowEventDecision::CloseRequested => {
+                    if let Some(rta) = rta_manager.as_mut() {
+                        if rta.is_calibrating() && rta.is_active() {
+                            let _ = rta.force_finish(frame_index, Instant::now());
                     }
                     let _ = rta.write_artifacts_if_finished();
-                    if let Some(rta_config) = runtime.rta.as_ref() {
-                        let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                        if let Some(rta_config) = runtime.rta.as_ref() {
+                            let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                        }
                     }
+                    *control_flow = ControlFlow::Exit;
                 }
-                *control_flow = ControlFlow::Exit;
-            }
-            WindowEventDecision::KeyboardInput { key, pressed } => {
-                let Some(key) = key else {
-                    return;
-                };
-                if overlay.is_open() {
+                WindowEventDecision::KeyboardInput { key, pressed } => {
+                    let Some(key) = key else {
+                        return;
+                    };
+                    if overlay.is_open() {
                     let action = apply_overlay_keyboard_input(
                         &mut overlay,
                         key,
