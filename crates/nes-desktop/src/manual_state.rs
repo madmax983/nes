@@ -48,21 +48,31 @@ fn portable_stem_for_rom_path(rom_path: &Path) -> String {
         .to_owned()
 }
 
+/// **Performance optimization:** Avoids `.collect::<String>()` by pre-allocating
+/// `String::with_capacity` and pushing characters in a loop, guaranteeing exactly
+/// one heap allocation instead of reallocating dynamically.
 fn sanitized_stem_for_rom_path(rom_path: &Path) -> String {
-    portable_stem_for_rom_path(rom_path)
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    let stem = portable_stem_for_rom_path(rom_path);
+    let mut sanitized = String::with_capacity(stem.len());
+    for ch in stem.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+            sanitized.push(ch);
+        } else {
+            sanitized.push('_');
+        }
+    }
+    sanitized
 }
 
+/// **Performance optimization:** Avoids `.collect::<String>()` by pre-allocating
+/// `String::with_capacity` and pushing characters in a loop, guaranteeing exactly
+/// one heap allocation instead of reallocating dynamically.
 fn hash_prefix(rom_hash: &str) -> String {
-    rom_hash.chars().take(HASH_PREFIX_LEN).collect()
+    let mut prefix = String::with_capacity(HASH_PREFIX_LEN);
+    for ch in rom_hash.chars().take(HASH_PREFIX_LEN) {
+        prefix.push(ch);
+    }
+    prefix
 }
 
 fn read_save_state_file(path: &Path) -> Result<SaveStateFile, String> {

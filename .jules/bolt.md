@@ -28,3 +28,6 @@
 **[VecDeque for FIFO Collections]**
 **Learning:** When using a `Vec` as a FIFO queue (e.g., removing the oldest element with `.remove(0)` on every frame), it triggers an O(n) memory shift of all subsequent elements. This scales poorly for large capacities like 30,000 frames.
 **Action:** Use `VecDeque` with `push_back` and `pop_front` instead of `Vec` for fixed-capacity circular buffers to reduce O(n) shifts to O(1) operations.
+**Removing String allocation when string parsing and mapping**
+**Learning:** Chaining `.collect::<String>()` on an iterator with operations like `.chars().map(...).collect::<String>()` allocates memory but cannot guarantee a single allocation if the final length isn't perfectly predictable to the allocator, resulting in potential re-allocations on the hot path.
+**Action:** Use `String::with_capacity()` to pre-allocate the exact known maximum size, and a `for` loop with `.push()` to append characters manually. This guarantees exactly one heap allocation.
