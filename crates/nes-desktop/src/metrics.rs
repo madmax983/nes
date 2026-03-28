@@ -174,49 +174,64 @@ impl PerfMetrics {
         let mut table = Table::new();
         table.set_header(vec!["Metric", "Value"]);
         table.add_row(vec![
-            "wall_fps",
-            &format!("{:.1}", snapshot.wall_fps),
+            "wall_fps".to_string(),
+            format!("{:.1}", snapshot.wall_fps),
         ]);
         table.add_row(vec![
-            "emu_fps",
-            &format!("{:.1}", snapshot.emu_fps),
+            "emu_fps".to_string(),
+            format!("{:.1}", snapshot.emu_fps),
         ]);
         table.add_row(vec![
-            "avg_step_ms",
-            &format!("{:.2}", snapshot.avg_step_ms),
+            "avg_step_ms".to_string(),
+            format!("{:.2}", snapshot.avg_step_ms),
         ]);
         table.add_row(vec![
-            "avg_render_ms",
-            &format!("{:.2}", snapshot.avg_render_ms),
-        ]);
-        table.add_row(vec!["late_frames", &self.late_frames.to_string()]);
-        table.add_row(vec!["pc_stall_frames", &self.pc_stall_frames.to_string()]);
-        table.add_row(vec![
-            "unchanged_frames",
-            &self.unchanged_frame_count.to_string(),
-        ]);
-        table.add_row(vec!["audio_peak_q", &self.audio_queue_peak.to_string()]);
-        table.add_row(vec![
-            "audio_drop_chunks",
-            &self.audio_queue_drops.to_string(),
+            "avg_render_ms".to_string(),
+            format!("{:.2}", snapshot.avg_render_ms),
         ]);
         table.add_row(vec![
-            "net_rtt_ms",
-            &format!("{:.1}", self.netplay_rtt_ms),
+            "late_frames".to_string(),
+            self.late_frames.to_string(),
         ]);
         table.add_row(vec![
-            "net_jitter_ms",
-            &format!("{:.1}", self.netplay_jitter_ms),
+            "pc_stall_frames".to_string(),
+            self.pc_stall_frames.to_string(),
         ]);
-        table.add_row(vec!["net_rollbacks", &self.netplay_rollbacks.to_string()]);
         table.add_row(vec![
-            "net_max_rb",
-            &self.netplay_max_rollback_distance.to_string(),
+            "unchanged_frames".to_string(),
+            self.unchanged_frame_count.to_string(),
         ]);
-        table.add_row(vec!["net_desyncs", &self.netplay_desyncs.to_string()]);
         table.add_row(vec![
-            "net_delay_frames",
-            &self.netplay_input_delay_frames.to_string(),
+            "audio_peak_q".to_string(),
+            self.audio_queue_peak.to_string(),
+        ]);
+        table.add_row(vec![
+            "audio_drop_chunks".to_string(),
+            self.audio_queue_drops.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_rtt_ms".to_string(),
+            format!("{:.1}", self.netplay_rtt_ms),
+        ]);
+        table.add_row(vec![
+            "net_jitter_ms".to_string(),
+            format!("{:.1}", self.netplay_jitter_ms),
+        ]);
+        table.add_row(vec![
+            "net_rollbacks".to_string(),
+            self.netplay_rollbacks.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_max_rb".to_string(),
+            self.netplay_max_rollback_distance.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_desyncs".to_string(),
+            self.netplay_desyncs.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_delay_frames".to_string(),
+            self.netplay_input_delay_frames.to_string(),
         ]);
 
         println!("{table}");
