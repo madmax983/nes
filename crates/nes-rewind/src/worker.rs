@@ -277,6 +277,13 @@ mod tests {
     /// This avoids flaky hardcoded sleep delays in tests.
     fn wait_for_sync(tm: &mut TimeMachine) -> bool {
         let start = std::time::Instant::now();
+
+        // Drain the queue to prevent reading a stale `Reconstruct` response
+        // from a previous test or iteration. This MUST happen outside the poll
+        // loop so we don't accidentally discard the response we are waiting for
+        // if it arrives quickly while we loop.
+        while tm.rx.try_recv().is_ok() {}
+
         // Give it up to 5000ms to process the queue in extremely slow CI environments.
         while start.elapsed() < Duration::from_millis(5000) {
             // To check if the worker has caught up, we can ask for a reconstruct
@@ -284,8 +291,6 @@ mod tests {
             if tm.last_recorded_frame == 0 {
                 return true;
             }
-            // Drain the queue to prevent reading a stale `Reconstruct` response
-            while tm.rx.try_recv().is_ok() {}
 
             let _ = tm.tx.send(WorkerMsg::Reconstruct {
                 target_frame: tm.last_recorded_frame,
