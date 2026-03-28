@@ -351,6 +351,20 @@ mod tests {
     }
 
     #[test]
+    fn sanitized_stem_for_rom_path_preserves_hyphens_and_underscores() {
+        // This ensures the condition `ch == '-' || ch == '_'` is fully exercised.
+        let path = slot_path_for_rom(
+            Path::new(r"C:\roms\Super-Mario_Bros.nes"),
+            "abcdef0123456789",
+            1,
+        );
+        assert_eq!(
+            path,
+            PathBuf::from("savestates").join("Super-Mario_Bros-abcdef01.slot1.state.json")
+        );
+    }
+
+    #[test]
     fn slot_path_for_rom_includes_slot_number_and_hash_prefix() {
         let path = slot_path_for_rom(
             Path::new(r"C:\roms\Kirby's Adventure.nes"),
@@ -429,6 +443,25 @@ mod tests {
         assert_eq!(metadata.slot, 3);
         assert!(matches!(metadata.status, SaveSlotStatus::Corrupt));
         assert!(metadata.modified_unix_secs.is_some());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn read_slot_metadata_returns_error_on_invalid_path() {
+        let root = unique_test_dir("invalid_path");
+        fs::create_dir_all(&root).expect("temp root should be created");
+        let dummy_file = root.join("dummy.txt");
+        fs::write(&dummy_file, b"").expect("dummy file should write");
+
+        // Attempting to read metadata of a path inside a file will result in ENOTDIR (NotADirectory)
+        // rather than NotFound, which should bubble up as an Err from read_slot_metadata.
+        let invalid_slot_path = dummy_file.join("Kirby-abcdef01.slot4.state.json");
+        let result = read_slot_metadata(&invalid_slot_path, "rom-hash");
+
+        assert!(result.is_err(), "Expected an error when fs::metadata fails with something other than NotFound");
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("failed to read save-slot metadata for"));
 
         let _ = fs::remove_dir_all(&root);
     }
