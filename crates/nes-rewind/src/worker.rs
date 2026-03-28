@@ -447,8 +447,8 @@ mod tests {
         // Let's actually give the worker a moment to process the queue
         // to avoid race conditions.
         // Artificially replace the receiver with a black hole to force a timeout
-        let (dummy_reply_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
-        let (dummy_work_tx, dummy_work_rx) = std::sync::mpsc::sync_channel(1);
+        let (_dummy_reply_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
+        let (dummy_work_tx, _dummy_work_rx) = std::sync::mpsc::sync_channel(1);
 
         // Replace BOTH rx and tx to avoid panicking the worker thread when the dummy sender goes out of scope or the actual channel closes.
         tm.rx = dummy_rx;
