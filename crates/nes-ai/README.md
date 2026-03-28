@@ -8,7 +8,7 @@ Generate the fixed control snapshot locally from the bootstrap TAS:
 
 ```powershell
 cargo run -p nes-ai --bin prepare_smb_control -- `
-  "./roms/Super Mario Bros.nes" `
+  "./roms/homebrew/homebrew.nes" `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
 ```
