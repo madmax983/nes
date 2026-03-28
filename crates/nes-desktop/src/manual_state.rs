@@ -459,7 +459,10 @@ mod tests {
         let invalid_slot_path = dummy_file.join("Kirby-abcdef01.slot4.state.json");
         let result = read_slot_metadata(&invalid_slot_path, "rom-hash");
 
-        assert!(result.is_err(), "Expected an error when fs::metadata fails with something other than NotFound");
+        assert!(
+            result.is_err(),
+            "Expected an error when fs::metadata fails with something other than NotFound"
+        );
         let err_msg = result.unwrap_err();
         assert!(err_msg.contains("failed to read save-slot metadata for"));
 
