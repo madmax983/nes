@@ -521,4 +521,137 @@ mod tests {
         let load_dsl = tool_input_schema("load_6502_dsl");
         assert!(load_dsl["properties"]["mirroring"]["enum"].is_array());
     }
+
+    #[test]
+    fn dispatch_output_value_serializes_variants_correctly() {
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::Ack),
+            json!({ "kind": "ack" })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::CpuStep {
+                trace: Some("LDA #$00".to_owned()),
+                cpu_cycles: 1234,
+            }),
+            json!({ "kind": "cpu_step", "trace": "LDA #$00", "cpu_cycles": 1234 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::CycleCount { cpu_cycles: 5678 }),
+            json!({ "kind": "cycle_count", "cpu_cycles": 5678 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::ControllerState { controller_bits: 0xFF }),
+            json!({ "kind": "controller_state", "controller_bits": 255 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::EmulatorState {
+                paused: true,
+                speed_permille: 1500,
+                controller_bits: 0x01,
+            }),
+            json!({
+                "kind": "emulator_state",
+                "paused": true,
+                "speed_permille": 1500,
+                "controller_bits": 1
+            })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::Registers {
+                pc: 0xC000,
+                a: 0x42,
+                x: 0x01,
+                y: 0x02,
+                sp: 0xFD,
+                status: 0x24,
+            }),
+            json!({
+                "kind": "registers",
+                "pc": 49152,
+                "a": 66,
+                "x": 1,
+                "y": 2,
+                "sp": 253,
+                "status": 36
+            })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::Memory {
+                address: 0x2002,
+                value: 0x80,
+            }),
+            json!({ "kind": "memory", "address": 8194, "value": 128 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::Fps { fps_milli: 60000 }),
+            json!({ "kind": "fps", "fps_milli": 60000 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::PpuFrameCounter { frame_counter: 999 }),
+            json!({ "kind": "ppu_frame_counter", "frame_counter": 999 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::Frame { seq: 42, bytes: 245760 }),
+            json!({ "kind": "frame", "seq": 42, "bytes": 245760 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::FrameCaptured { path: "test.ppm".to_owned(), bytes: 245760 }),
+            json!({ "kind": "frame_captured", "path": "test.ppm", "bytes": 245760 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::Audio { seq: 15, samples: 735 }),
+            json!({ "kind": "audio", "seq": 15, "samples": 735 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::StateSlot { slot: "quicksave".to_owned() }),
+            json!({ "kind": "state_slot", "slot": "quicksave" })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::RomLoaded { mapper_id: 4, prg_rom_bytes: 524288, reset_pc: 0x8000 }),
+            json!({ "kind": "rom_loaded", "mapper_id": 4, "prg_rom_bytes": 524288, "reset_pc": 32768 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::MacroExecuted { frames_elapsed: 60, final_controller_bits: 0 }),
+            json!({ "kind": "macro_executed", "frames_elapsed": 60, "final_controller_bits": 0 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::PpuOam { oam_bytes: vec![0; 256] }),
+            json!({ "kind": "ppu_oam", "oam_bytes": vec![0; 256] })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::DslAssembled { bytes_written: 10, label_count: 2, nmi_vector: 0, reset_vector: 0, irq_vector: 0 }),
+            json!({ "kind": "dsl_assembled", "bytes_written": 10, "label_count": 2, "nmi_vector": 0, "reset_vector": 0, "irq_vector": 0 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::DslRomLoaded { mapper_id: 0, prg_rom_bytes: 16384, reset_pc: 0x8000, rom_bytes: 16396 }),
+            json!({ "kind": "dsl_rom_loaded", "mapper_id": 0, "prg_rom_bytes": 16384, "reset_pc": 32768, "rom_bytes": 16396 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::DslRomExported { path: "out.nes".to_owned(), bytes: 16400, mapper_id: 0, prg_rom_bytes: 16384 }),
+            json!({ "kind": "dsl_rom_exported", "path": "out.nes", "bytes": 16400, "mapper_id": 0, "prg_rom_bytes": 16384 })
+        );
+
+        assert_eq!(
+            dispatch_output_value(DispatchOutput::DslRomExportedBase64 { rom_base64: "NEQ=".to_owned(), bytes: 16400, mapper_id: 0, prg_rom_bytes: 16384 }),
+            json!({ "kind": "dsl_rom_exported_base64", "rom_base64": "NEQ=", "bytes": 16400, "mapper_id": 0, "prg_rom_bytes": 16384 })
+        );
+    }
 }
