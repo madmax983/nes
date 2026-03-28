@@ -1080,14 +1080,15 @@ fn fit_u16(value: i64, line: usize) -> Result<u16, DslError> {
     })
 }
 
+/// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by using an iterator,
+/// eliminating an O(N) heap allocation per line of DSL code parsed.
 fn strip_comments(line: &str) -> String {
     let mut in_string = false;
     let mut escaped = false;
     let mut out = String::with_capacity(line.len());
-    let chars: Vec<char> = line.chars().collect();
-    let mut idx = 0usize;
-    while idx < chars.len() {
-        let ch = chars[idx];
+    let mut chars = line.chars().peekable();
+
+    while let Some(ch) = chars.next() {
         if in_string {
             out.push(ch);
             if escaped {
@@ -1097,23 +1098,20 @@ fn strip_comments(line: &str) -> String {
             } else if ch == '"' {
                 in_string = false;
             }
-            idx += 1;
             continue;
         }
         if ch == '"' {
             in_string = true;
             out.push(ch);
-            idx += 1;
             continue;
         }
         if ch == ';' {
             break;
         }
-        if ch == '/' && idx + 1 < chars.len() && chars[idx + 1] == '/' {
+        if ch == '/' && chars.peek() == Some(&'/') {
             break;
         }
         out.push(ch);
-        idx += 1;
     }
     out
 }
