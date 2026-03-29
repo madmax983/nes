@@ -31,3 +31,7 @@
 **Removing String allocation when string parsing and mapping**
 **Learning:** Chaining `.collect::<String>()` on an iterator with operations like `.chars().map(...).collect::<String>()` allocates memory but cannot guarantee a single allocation if the final length isn't perfectly predictable to the allocator, resulting in potential re-allocations on the hot path.
 **Action:** Use `String::with_capacity()` to pre-allocate the exact known maximum size, and a `for` loop with `.push()` to append characters manually. This guarantees exactly one heap allocation.
+
+## 2025-06-19 - Replace O(N) allocation in DSL parser with peekable iterator
+**Learning:** Found an unnecessary intermediate heap allocation `let chars: Vec<char> = line.chars().collect();` in `nes-dsl/src/lib.rs` while doing string look-ahead for comment stripping.
+**Action:** Replaced the collected vector with `let mut chars = line.chars().peekable();`. A peekable iterator allows the look-ahead behavior needed (`chars.peek() == Some(&'/')`) without needing to load the entire line into memory.
