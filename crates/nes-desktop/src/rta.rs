@@ -1,20 +1,31 @@
-//! The Real-Time Attack (RTA) engine for speedrunning.
+//! The impartial referee for competitive NES speedrunning (Real-Time Attack).
 //!
-//! This module provides a state machine and configuration system for automating
-//! speedrun timing, splitting, and rule enforcement. It relies on evaluating memory
-//! values against predefined conditions to track the progress of a run.
+//! Speedrunners demand absolute precision and zero-trust verification. This module transforms
+//! a simple emulator into a tournament-grade competitive platform by automating the entire
+//! speedrun lifecycle. It acts as the "Black Box" flight recorder: it knows exactly when
+//! a run starts, it splits with frame-perfect accuracy based on memory inspection, and it
+//! violently invalidates the attempt if the player commits a cardinal sin (like rewinding).
+//!
+//! # The Lore
+//!
+//! When a user selects a game, the system loads an [`RtaProfile`]. This profile is a contract
+//! that dictates exactly which memory addresses define the start, end, and intermediate
+//! milestones (splits) of a run.
+//!
+//! The beating heart of this system is the [`RtaManager`], which must be `.tick()`'d every
+//! single frame. It constantly interrogates the emulator's memory to see if any of the profile's
+//! [`TriggerRule`] conditions have been met. When the dust settles, the manager spits out
+//! a cryptographically sound `.run.json` artifact containing the split times, the runner's
+//! controller inputs, and a verdict on the run's legitimacy.
 //!
 //! # Architecture
 //!
-//! The RTA engine is built around three core concepts:
+//! The RTA engine is built upon these pillars:
 //!
-//! * **Profiles ([`RtaProfile`]):** Static configurations loaded from TOML files that
-//!   define when a run starts, ends, pauses, and splits, as well as what actions
-//!   (like rewinding) invalidate the run.
-//! * **Triggers ([`TriggerRule`]):** Conditions evaluated against the emulator's memory
-//!   state (e.g., "Start the timer when memory address `0x071A` becomes `1`").
-//! * **The Manager ([`RtaManager`]):** The active state machine that ticks alongside the
-//!   emulator frame-by-frame, evaluating triggers and logging events.
+//! * **Profiles ([`RtaProfile`]):** The immutable laws of the run, loaded from TOML files.
+//! * **Triggers ([`TriggerRule`]):** The exact memory mutations (e.g., "Address `0x071A` becomes `1`") that cause the stopwatch to react.
+//! * **The Manager ([`RtaManager`]):** The active state machine that relentlessly enforces the profile rules frame-by-frame.
+//! * **Calibration ([`CalibrationRecorder`]):** The automated drafting tool that hallucinates new profiles by statistically analyzing a user's manual splits.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
@@ -707,6 +718,27 @@ pub struct RtaManager {
 }
 
 impl RtaManager {
+    /// Forges a new session manager that serves as the impartial referee for a speedrun attempt.
+    ///
+    /// The manager evaluates the provided [`RtaProfile`] against the live emulation state
+    /// to determine when to automatically start the timer, mark splits, or invalidate the run entirely.
+    /// It requires the ROM hash upfront to cryptographically bind the resulting run artifact
+    /// to a specific game version, preventing spoofing.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let profile = RtaProfile::default();
+    /// let mut manager = RtaManager::new(
+    ///     profile,
+    ///     "ea343f4e44562066f8114f6e80b2d35c43d3120e71ce001b33edccfa98319df6".to_owned(),
+    ///     PathBuf::from("runs/rta"),
+    ///     None, // No active calibration drafting
+    /// );
+    /// ```
     pub fn new(
         profile: RtaProfile,
         rom_hash: String,
@@ -752,18 +784,82 @@ impl RtaManager {
         }
     }
 
+    /// Inspects the current lifecycle phase of the speedrun to coordinate UI updates.
+    ///
+    /// Knowing the state is critical for UI components that must hide the timer when `Idle`,
+    /// pulse when `Armed`, or turn red when the run enters `InvalidPractice`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaSessionState, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// assert_eq!(manager.state(), RtaSessionState::Armed);
+    /// ```
     pub fn state(&self) -> RtaSessionState {
         self.state
     }
 
+    /// Reveals the unique string ID of the active [`RtaProfile`].
+    ///
+    /// UI overlays rely on this identifier to fetch and display the correct splits layout
+    /// for the currently loaded game.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let mut profile = RtaProfile::default();
+    /// profile.id = "smb-any".to_owned();
+    /// let manager = RtaManager::new(profile, "hash".to_owned(), PathBuf::from("out"), None);
+    /// assert_eq!(manager.profile_id(), "smb-any");
+    /// ```
     pub fn profile_id(&self) -> &str {
         &self.profile.id
     }
 
+    /// Determines if the engine is operating in 'Discovery Mode'.
+    ///
+    /// When `true`, the manager is secretly recording every memory mutation frame-by-frame.
+    /// This is an incredibly memory-intensive operation, so clients use this flag to alert
+    /// the user that performance degradation is expected during drafting.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile, CalibrationRecorder};
+    /// use std::path::PathBuf;
+    ///
+    /// let manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), Some(CalibrationRecorder::new("test".to_owned())));
+    /// if manager.is_calibrating() {
+    ///     println!("Warning: Draft mode active, expect frame drops.");
+    /// }
+    /// ```
     pub fn is_calibrating(&self) -> bool {
         self.calibration.is_some()
     }
 
+    /// Queries whether the timer is currently ticking down on a live attempt.
+    ///
+    /// An active run prevents the user from accidentally swapping profiles or resetting the
+    /// emulator without explicit confirmation. Note that a run remains active even if
+    /// the runner commits a foul (like loading a save state) and enters `InvalidPractice`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// if manager.is_active() {
+    ///     // Block the "Load ROM" menu item
+    /// }
+    /// ```
     pub fn is_active(&self) -> bool {
         matches!(
             self.state,
@@ -771,14 +867,62 @@ impl RtaManager {
         )
     }
 
+    /// Checks if the session is still in the safe setup phase where rules can be modified.
+    ///
+    /// A speedrunner often needs to switch categories (e.g., from Any% to 100%) before
+    /// starting. This returns `false` the moment they trigger the start condition, locking
+    /// the profile in place to prevent mid-run tampering.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// assert!(manager.can_manual_override_profile());
+    /// ```
     pub fn can_manual_override_profile(&self) -> bool {
         matches!(self.state, RtaSessionState::Idle | RtaSessionState::Armed)
     }
 
+    /// Assesses the competitive integrity of the current run.
+    ///
+    /// Returns `true` if the speedrunner has completely respected the profile's rules.
+    /// If they triggered any [`ForbiddenAction`] (like rewinding), the run is instantly
+    /// marked invalid and ineligible for leaderboard submission.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile, ForbiddenAction};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// manager.mark_forbidden_action(ForbiddenAction::Rewind, 0, Instant::now());
+    /// assert!(!manager.is_valid_run());
+    /// ```
     pub fn is_valid_run(&self) -> bool {
         self.invalidation_reasons.is_empty()
     }
 
+    /// Computes the exact duration the runner has been playing, excluding paused segments.
+    ///
+    /// By dynamically subtracting accumulated pause time, this method provides a highly
+    /// accurate Real Time Attack measurement that resiliently survives host OS sleep cycles.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// let time_spent = manager.elapsed(Instant::now());
+    /// println!("Run time: {:?}", time_spent);
+    /// ```
     pub fn elapsed(&self, now: Instant) -> Duration {
         if let Some(frozen) = self.elapsed_at_finish {
             return frozen;
@@ -793,14 +937,71 @@ impl RtaManager {
         gross.saturating_sub(self.paused_accumulated)
     }
 
+    /// Extracts the immutable chronological history of all segments completed so far.
+    ///
+    /// This slice is essential for rendering the classic speedrun layout on the screen,
+    /// allowing the UI to compare current split times against historical personal bests.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// for split in manager.split_events() {
+    ///     println!("Split: {} at {}ms", split.name, split.elapsed_ms);
+    /// }
+    /// ```
     pub fn split_events(&self) -> &[SplitEvent] {
         &self.split_events
     }
 
+    /// Exposes the specific fouls committed by the runner that destroyed the run's validity.
+    ///
+    /// This is included directly in the final `.run.json` artifact so verifiers can instantly
+    /// see why an automated run was rejected (e.g., `["save_load"]`).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile, ForbiddenAction};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// manager.mark_forbidden_action(ForbiddenAction::FrameStep, 0, Instant::now());
+    /// assert_eq!(manager.invalidation_reasons(), vec!["frame_step".to_owned()]);
+    /// ```
     pub fn invalidation_reasons(&self) -> Vec<String> {
         self.invalidation_reasons.iter().cloned().collect()
     }
 
+    /// The beating heart of the RTA Engine. Evaluates all active memory triggers for the current frame.
+    ///
+    /// By abstracting memory access behind the `read_u8` closure, the engine seamlessly integrates
+    /// with any emulator core. It meticulously checks if the current memory state fulfills the
+    /// conditions required to start, stop, pause, or split the run, returning any resulting
+    /// [`RtaEvent`]s to alert the UI layer.
+    ///
+    /// # Panics
+    ///
+    /// Does not explicitly panic, but the provided `read_u8` closure must handle out-of-bounds
+    /// addresses gracefully if requested by a poorly formed `TriggerRule`.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// let mut dummy_ram = vec![0_u8; 0x800];
+    ///
+    /// // Tick exactly once per frame update
+    /// let events = manager.tick(1, Instant::now(), |addr| dummy_ram[(addr as usize) % 0x800]);
+    /// ```
     pub fn tick<F>(&mut self, frame: u64, now: Instant, mut read_u8: F) -> Vec<RtaEvent>
     where
         F: FnMut(u16) -> u8,
@@ -911,6 +1112,25 @@ impl RtaManager {
         runtime.evaluate(&mut read_u8)
     }
 
+    /// Acts as the strict referee, penalizing actions that compromise the run's legitimacy.
+    ///
+    /// Emulator frontends must call this immediately whenever a user triggers a tool-assisted
+    /// feature. If the profile's [`InvalidationPolicy`] forbids the action, the session is
+    /// permanently branded as `InvalidPractice`, though the timer continues ticking for practice purposes.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile, ForbiddenAction, RtaEvent};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// // User just hit the rewind key!
+    /// if let Some(RtaEvent::Invalidated(reason)) = manager.mark_forbidden_action(ForbiddenAction::Rewind, 0, Instant::now()) {
+    ///     println!("Run ruined by: {}", reason);
+    /// }
+    /// ```
     pub fn mark_forbidden_action(
         &mut self,
         action: ForbiddenAction,
@@ -954,6 +1174,23 @@ impl RtaManager {
         event
     }
 
+    /// Forcefully logs a segment completion, bypassing all automated memory conditions.
+    ///
+    /// This is the ultimate escape hatch for runners when a game glitches or an automated trigger fails.
+    /// It is also heavily utilized during drafting to train the [`CalibrationRecorder`] on exactly *when*
+    /// significant events occur.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// // User pressed the "Split" hotkey!
+    /// manager.manual_split(100, Instant::now());
+    /// ```
     pub fn manual_split(&mut self, frame: u64, now: Instant) -> Option<RtaEvent> {
         if !self.is_active() {
             return None;
@@ -966,6 +1203,22 @@ impl RtaManager {
         Some(RtaEvent::Split(event))
     }
 
+    /// Slams the brakes on the speedrun, freezing the timer permanently.
+    ///
+    /// Necessary for rage-quits or when a runner wants to manually terminate the session
+    /// before the official memory trigger has fired. The run artifact is still generated.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// // User pressed the "Stop Timer" hotkey
+    /// manager.force_finish(200, Instant::now());
+    /// ```
     pub fn force_finish(&mut self, frame: u64, now: Instant) -> Option<RtaEvent> {
         if !self.is_active() {
             return None;
@@ -978,6 +1231,23 @@ impl RtaManager {
         ))
     }
 
+    /// Silently archives the controller state for the current frame into the active input log.
+    ///
+    /// For verified leaderboard submissions, memory analysis isn't enough—judges need to see
+    /// the exact inputs that produced the run. This method builds a massive, timestamped
+    /// keystroke history that gets written out when the run concludes.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    /// use std::time::Instant;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// // Player holds A and Right (0x01 | 0x80 = 0x81)
+    /// manager.record_input_frame(1, 0x81, 0x00, Instant::now());
+    /// ```
     pub fn record_input_frame(
         &mut self,
         frame: u64,
@@ -996,6 +1266,24 @@ impl RtaManager {
         });
     }
 
+    /// Safely flushes all recorded session data to persistent storage if the run has concluded.
+    ///
+    /// The manager accumulates a large amount of state (splits, input logs, invalidation reasons).
+    /// This method ensures that hard-earned data is transformed into a standardized JSON artifact
+    /// that can be uploaded to leaderboards or shared with friends. It gracefully does nothing
+    /// if the run is still active.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile};
+    /// use std::path::PathBuf;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
+    /// if let Ok(Some(paths)) = manager.write_artifacts_if_finished() {
+    ///     println!("Run saved to: {:?}", paths.run_json_path);
+    /// }
+    /// ```
     pub fn write_artifacts_if_finished(&mut self) -> Result<Option<RunArtifactPaths>, String> {
         if self.state != RtaSessionState::Finished {
             return Ok(None);
@@ -1064,6 +1352,23 @@ impl RtaManager {
         Ok(Some(path))
     }
 
+    /// Commands the calibration engine to analyze its memory snapshots and hallucinate a new profile.
+    ///
+    /// When drafting a new speedrun category, finding the exact memory addresses that represent
+    /// level transitions is agonizing. This method delegates that tedious hunt to the machine,
+    /// spitting out a `.draft.toml` file filled with highly probable `TriggerRule`s based on
+    /// statistical analysis of the user's manual splits.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::{RtaManager, RtaProfile, CalibrationRecorder};
+    /// use std::path::PathBuf;
+    ///
+    /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), Some(CalibrationRecorder::new("test".to_owned())));
+    /// // ... after playing and splitting ...
+    /// manager.write_calibration_draft(&PathBuf::from("config/rta/profiles")).unwrap();
+    /// ```
     pub fn write_calibration_draft(
         &self,
         profiles_dir: &Path,
@@ -1142,6 +1447,19 @@ pub struct CalibrationRecorder {
 }
 
 impl CalibrationRecorder {
+    /// Initializes a massive circular buffer capable of storing up to 30,000 full memory snapshots.
+    ///
+    /// This acts as the "black box" flight recorder for the RTA drafting process, capturing
+    /// exactly what the NES memory looked like right before and right after a player pressed
+    /// the manual split key.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::CalibrationRecorder;
+    ///
+    /// let recorder = CalibrationRecorder::new("smb-any-draft".to_owned());
+    /// ```
     pub fn new(profile_id: String) -> Self {
         Self {
             profile_id,
@@ -1151,8 +1469,25 @@ impl CalibrationRecorder {
         }
     }
 
-    /// **Performance optimization:** Uses `VecDeque::pop_front` instead of `Vec::remove(0)`
+    /// Ingests the current 2KB work RAM state into the circular buffer.
+    ///
+    /// This method is aggressively called every single frame during a draft run. It forces
+    /// the oldest memory snapshot out of the buffer if the capacity is reached.
+    ///
+    /// **⚡ Bolt Optimization:** Uses `VecDeque::pop_front` instead of `Vec::remove(0)`
     /// to avoid an O(N) memory shift of up to 30,000 frames on every single frame execution.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::CalibrationRecorder;
+    ///
+    /// let mut recorder = CalibrationRecorder::new("test".to_owned());
+    /// let mut dummy_ram = vec![0_u8; 0x800];
+    ///
+    /// // Tick exactly once per frame update
+    /// recorder.record_frame(1, |addr| dummy_ram[(addr as usize) % 0x800]);
+    /// ```
     pub fn record_frame<F>(&mut self, frame: u64, mut read_u8: F)
     where
         F: FnMut(u16) -> u8,
@@ -1167,10 +1502,41 @@ impl CalibrationRecorder {
         self.frames.push_back(CalibrationFrame { frame, work_ram });
     }
 
+    /// Drops an anchor in the memory timeline denoting that a significant event occurred.
+    ///
+    /// When the user manually splits, we don't know *why* they split yet. We just record
+    /// the frame number. Later, the analysis phase will scrutinize the memory snapshots
+    /// preceding this anchor to discover the exact address that changed.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::CalibrationRecorder;
+    ///
+    /// let mut recorder = CalibrationRecorder::new("test".to_owned());
+    /// recorder.mark_split("Level 1 Complete".to_owned(), 12450);
+    /// ```
     pub fn mark_split(&mut self, name: String, frame: u64) {
         self.splits.push(CalibrationSplitMark { name, frame });
     }
 
+    /// Scours the recorded memory timeline to automatically deduce the rules of a speedrun.
+    ///
+    /// It hunts for memory bytes that mutated exactly around the time of a [`CalibrationRecorder::mark_split`]
+    /// anchor and remained perfectly stable for several frames afterward. It compiles these
+    /// discoveries into a `.draft.toml` file, complete with confidence scores.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_desktop::rta::CalibrationRecorder;
+    /// use std::path::PathBuf;
+    ///
+    /// let recorder = CalibrationRecorder::new("test".to_owned());
+    /// // ... after recording frames and splits ...
+    /// let output = recorder.write_draft_profile(&PathBuf::from("out_dir"), "hash").unwrap();
+    /// println!("Draft generated at: {:?}", output.profile_path);
+    /// ```
     pub fn write_draft_profile(
         &self,
         profiles_dir: &Path,
