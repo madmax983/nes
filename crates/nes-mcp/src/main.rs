@@ -490,6 +490,22 @@ fn tool_input_schema(tool_name: &str) -> Value {
             "required": ["address"],
             "additionalProperties": false
         }),
+        #[cfg(feature = "nova")]
+        "cheat_finder_reset" | "cheat_finder_results" => json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+        #[cfg(feature = "nova")]
+        "cheat_finder_filter" => json!({
+            "type": "object",
+            "properties": {
+                "condition": { "type": "string", "enum": ["eq", "neq", "changed", "unchanged"] },
+                "value": { "type": "integer", "minimum": 0, "maximum": 255 }
+            },
+            "required": ["condition"],
+            "additionalProperties": false
+        }),
         "get_frame" | "get_audio_chunk" => json!({
             "type": "object",
             "properties": {
@@ -844,6 +860,20 @@ mod tests {
 
         let load_dsl = tool_input_schema("load_6502_dsl");
         assert!(load_dsl["properties"]["mirroring"]["enum"].is_array());
+    }
+
+    #[cfg(feature = "nova")]
+    #[test]
+    fn tool_input_schema_covers_cheat_finder_tools() {
+        let reset = tool_input_schema("cheat_finder_reset");
+        assert_eq!(reset["additionalProperties"], json!(false));
+
+        let filter = tool_input_schema("cheat_finder_filter");
+        assert_eq!(filter["required"], json!(["condition"]));
+        assert!(filter["properties"]["condition"]["enum"].is_array());
+
+        let results = tool_input_schema("cheat_finder_results");
+        assert_eq!(results["additionalProperties"], json!(false));
     }
 
     #[test]

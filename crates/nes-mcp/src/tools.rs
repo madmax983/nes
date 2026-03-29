@@ -156,6 +156,32 @@ const TOOL_CATALOG: [ToolDefinition; 31] = [
     },
 ];
 
+#[cfg(feature = "nova")]
+const NOVA_TOOL_CATALOG: [ToolDefinition; 34] = {
+    let mut expanded = [ToolDefinition {
+        name: "",
+        description: "",
+    }; 34];
+    let mut i = 0;
+    while i < TOOL_CATALOG.len() {
+        expanded[i] = TOOL_CATALOG[i];
+        i += 1;
+    }
+    expanded[31] = ToolDefinition {
+        name: "cheat_finder_reset",
+        description: "Reset the interactive RAM cheat search space",
+    };
+    expanded[32] = ToolDefinition {
+        name: "cheat_finder_filter",
+        description: "Filter RAM cheat candidates by a condition: 'eq', 'neq', 'changed', or 'unchanged'",
+    };
+    expanded[33] = ToolDefinition {
+        name: "cheat_finder_results",
+        description: "Get the current list of candidate addresses and their values for the cheat search",
+    };
+    expanded
+};
+
 /// Returns the static catalog of all registered MCP tools.
 ///
 /// The MCP daemon uses this list during the `tools/list` initialization phase to
@@ -174,5 +200,12 @@ const TOOL_CATALOG: [ToolDefinition; 31] = [
 /// ```
 #[must_use]
 pub fn tool_catalog() -> &'static [ToolDefinition] {
-    &TOOL_CATALOG
+    #[cfg(feature = "nova")]
+    {
+        &NOVA_TOOL_CATALOG
+    }
+    #[cfg(not(feature = "nova"))]
+    {
+        &TOOL_CATALOG
+    }
 }
