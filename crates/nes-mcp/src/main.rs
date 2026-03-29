@@ -331,7 +331,6 @@ fn write_stdio_message(writer: &mut impl Write, value: &Value) -> Result<(), Mcp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Map;
 
     fn request(method: &str, id: Value, params: Value) -> Value {
         json!({
@@ -483,64 +482,6 @@ mod tests {
             request("logging/setLevel", json!(13), json!({})),
         );
         assert_eq!(logging["result"], json!({}));
-    }
-
-    #[test]
-    fn map_tool_arguments_stringifies_supported_json_types() {
-        let mut arguments = Map::new();
-        arguments.insert("str".to_owned(), json!("value"));
-        arguments.insert("num".to_owned(), json!(123));
-        arguments.insert("bool".to_owned(), json!(true));
-        arguments.insert("null".to_owned(), Value::Null);
-        arguments.insert("object".to_owned(), json!({ "x": 1 }));
-
-        let mapped = map_tool_arguments(arguments);
-        assert_eq!(mapped.get("str"), Some(&"value".to_owned()));
-        assert_eq!(mapped.get("num"), Some(&"123".to_owned()));
-        assert_eq!(mapped.get("bool"), Some(&"true".to_owned()));
-        assert_eq!(mapped.get("null"), Some(&"null".to_owned()));
-        assert_eq!(mapped.get("object"), Some(&"{\"x\":1}".to_owned()));
-    }
-
-    #[test]
-    fn tool_input_schema_covers_controller_memory_and_dsl_groups() {
-        let controller = tool_input_schema("set_controller_state");
-        assert_eq!(controller["required"], json!(["bits"]));
-        assert!(controller["properties"]["player"].is_object());
-
-        let buttons = tool_input_schema("press_button");
-        assert_eq!(buttons["required"], json!(["button"]));
-        assert!(buttons["properties"]["button"]["enum"].is_array());
-
-        let speed = tool_input_schema("set_speed");
-        assert_eq!(speed["required"], json!(["multiplier"]));
-
-        let memory = tool_input_schema("read_memory");
-        assert_eq!(memory["required"], json!(["address"]));
-
-        let frame = tool_input_schema("get_frame");
-        assert!(frame["properties"]["seq"].is_object());
-
-        let capture = tool_input_schema("capture_frame");
-        assert_eq!(capture["required"], json!(["path"]));
-
-        let slots = tool_input_schema("save_state");
-        assert!(slots["properties"]["slot"].is_object());
-
-        let assemble = tool_input_schema("assemble_6502_dsl");
-        assert_eq!(assemble["required"], json!(["source"]));
-
-        let load_dsl = tool_input_schema("load_6502_dsl");
-        assert!(load_dsl["properties"]["mirroring"]["enum"].is_array());
-    }
-
-    #[test]
-    fn jsonrpc_error_wraps_error_payload() {
-        let response = jsonrpc_error(json!(99), RpcError::invalid_params("bad input"));
-        assert_eq!(response["jsonrpc"], json!("2.0"));
-        assert_eq!(response["id"], json!(99));
-        assert_eq!(response["error"]["code"], json!(-32602));
-        assert_eq!(response["error"]["message"], json!("bad input"));
     }
 
     #[test]

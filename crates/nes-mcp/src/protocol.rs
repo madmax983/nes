@@ -487,3 +487,107 @@ pub fn jsonrpc_error(id: Value, err: RpcError) -> Value {
         "error": err.to_json()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_tool_arguments_stringifies_supported_json_types() {
+        let mut arguments = Map::new();
+        arguments.insert("str".to_owned(), json!("value"));
+        arguments.insert("num".to_owned(), json!(123));
+        arguments.insert("bool".to_owned(), json!(true));
+        arguments.insert("null".to_owned(), Value::Null);
+        arguments.insert("object".to_owned(), json!({ "x": 1 }));
+
+        let mapped = map_tool_arguments(arguments);
+        assert_eq!(mapped.get("str"), Some(&"value".to_owned()));
+        assert_eq!(mapped.get("num"), Some(&"123".to_owned()));
+        assert_eq!(mapped.get("bool"), Some(&"true".to_owned()));
+        assert_eq!(mapped.get("null"), Some(&"null".to_owned()));
+        assert_eq!(mapped.get("object"), Some(&"{\"x\":1}".to_owned()));
+    }
+
+    #[test]
+    fn tool_input_schema_covers_controller_memory_and_dsl_groups() {
+        let controller = tool_input_schema("set_controller_state");
+        assert_eq!(controller["required"], json!(["bits"]));
+        assert!(controller["properties"]["player"].is_object());
+
+        let buttons = tool_input_schema("press_button");
+        assert_eq!(buttons["required"], json!(["button"]));
+        assert!(buttons["properties"]["button"]["enum"].is_array());
+
+        let speed = tool_input_schema("set_speed");
+        assert_eq!(speed["required"], json!(["multiplier"]));
+
+        let memory = tool_input_schema("read_memory");
+        assert_eq!(memory["required"], json!(["address"]));
+
+        let frame = tool_input_schema("get_frame");
+        assert!(frame["properties"]["seq"].is_object());
+
+        let capture = tool_input_schema("capture_frame");
+        assert_eq!(capture["required"], json!(["path"]));
+
+        let slots = tool_input_schema("save_state");
+        assert!(slots["properties"]["slot"].is_object());
+
+        let assemble = tool_input_schema("assemble_6502_dsl");
+        assert_eq!(assemble["required"], json!(["source"]));
+
+        let load_dsl = tool_input_schema("load_6502_dsl");
+        assert!(load_dsl["properties"]["mirroring"]["enum"].is_array());
+    }
+
+    #[test]
+    fn jsonrpc_error_wraps_error_payload() {
+        let response = jsonrpc_error(json!(99), RpcError::invalid_params("bad input"));
+        assert_eq!(response["jsonrpc"], json!("2.0"));
+        assert_eq!(response["id"], json!(99));
+        assert_eq!(response["error"]["code"], json!(-32602));
+        assert_eq!(response["error"]["message"], json!("bad input"));
+    }
+
+    #[test]
+    fn jsonrpc_helper_envelopes_include_version_ids_and_payloads() {
+        let result = jsonrpc_result(json!(7), json!({"ok": true}));
+        assert_eq!(result["jsonrpc"], JSONRPC_VERSION);
+        assert_eq!(result["id"], 7);
+        assert_eq!(result["result"]["ok"], true);
+
+        let error = jsonrpc_error(json!("abc"), RpcError::invalid_request("bad request"));
+        assert_eq!(error["jsonrpc"], JSONRPC_VERSION);
+        assert_eq!(error["id"], "abc");
+        assert_eq!(error["error"]["code"], -32600);
+        assert_eq!(error["error"]["message"], "bad request");
+    }
+
+    #[test]
+    fn rpc_error_constructors_use_jsonrpc_standard_codes() {
+        let parse = RpcError::parse_error("bad json");
+        assert_eq!(parse.code, -32700);
+        assert_eq!(parse.message, "bad json");
+
+        let invalid_request = RpcError::invalid_request("missing id");
+        assert_eq!(invalid_request.code, -32600);
+        assert_eq!(invalid_request.message, "missing id");
+
+        let method_not_found = RpcError::method_not_found("unknown method");
+        assert_eq!(method_not_found.code, -32601);
+        assert_eq!(method_not_found.message, "unknown method");
+
+        let invalid_params = RpcError::invalid_params("bad args");
+        assert_eq!(invalid_params.code, -32602);
+        assert_eq!(invalid_params.message, "bad args");
+
+        let internal = RpcError::internal_error("boom");
+        assert_eq!(internal.code, -32603);
+        assert_eq!(internal.message, "boom");
+
+        let json = internal.to_json();
+        assert_eq!(json["code"], -32603);
+        assert_eq!(json["message"], "boom");
+    }
+}

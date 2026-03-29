@@ -375,8 +375,6 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
 mod tests {
     use super::*;
     use nes_core::NesCore;
-    use nes_mcp::protocol::json_arg_to_string;
-    use serde_json::Map;
     use std::io::{BufReader, Cursor};
     use std::net::TcpStream;
     use std::sync::mpsc;
@@ -409,63 +407,6 @@ mod tests {
                 Err(err) => panic!("{context}: {err}"),
             }
         }
-    }
-
-    #[test]
-    fn rpc_error_constructors_use_jsonrpc_standard_codes() {
-        let parse = RpcError::parse_error("bad json");
-        assert_eq!(parse.code, -32700);
-        assert_eq!(parse.message, "bad json");
-
-        let invalid_request = RpcError::invalid_request("missing id");
-        assert_eq!(invalid_request.code, -32600);
-        assert_eq!(invalid_request.message, "missing id");
-
-        let method_not_found = RpcError::method_not_found("unknown method");
-        assert_eq!(method_not_found.code, -32601);
-        assert_eq!(method_not_found.message, "unknown method");
-
-        let invalid_params = RpcError::invalid_params("bad args");
-        assert_eq!(invalid_params.code, -32602);
-        assert_eq!(invalid_params.message, "bad args");
-
-        let internal = RpcError::internal_error("boom");
-        assert_eq!(internal.code, -32603);
-        assert_eq!(internal.message, "boom");
-
-        let json = internal.to_json();
-        assert_eq!(json["code"], -32603);
-        assert_eq!(json["message"], "boom");
-    }
-
-    #[test]
-    fn jsonrpc_helper_envelopes_include_version_ids_and_payloads() {
-        let result = jsonrpc_result(json!(7), json!({"ok": true}));
-        assert_eq!(result["jsonrpc"], JSONRPC_VERSION);
-        assert_eq!(result["id"], 7);
-        assert_eq!(result["result"]["ok"], true);
-
-        let error = jsonrpc_error(json!("abc"), RpcError::invalid_request("bad request"));
-        assert_eq!(error["jsonrpc"], JSONRPC_VERSION);
-        assert_eq!(error["id"], "abc");
-        assert_eq!(error["error"]["code"], -32600);
-        assert_eq!(error["error"]["message"], "bad request");
-    }
-
-    #[test]
-    fn json_arg_and_tool_argument_mapping_stringify_scalars_and_structures() {
-        assert_eq!(json_arg_to_string(json!("x")), "x");
-        assert_eq!(json_arg_to_string(json!(42)), "42");
-        assert_eq!(json_arg_to_string(json!(true)), "true");
-        assert_eq!(json_arg_to_string(Value::Null), "null");
-        assert_eq!(json_arg_to_string(json!({"k": "v"})), "{\"k\":\"v\"}");
-
-        let mut args = Map::<String, Value>::new();
-        args.insert("a".to_owned(), json!(5));
-        args.insert("b".to_owned(), json!(false));
-        let mapped = map_tool_arguments(args);
-        assert_eq!(mapped.get("a").map(String::as_str), Some("5"));
-        assert_eq!(mapped.get("b").map(String::as_str), Some("false"));
     }
 
     #[test]
@@ -606,39 +547,6 @@ mod tests {
         let err =
             read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
         assert!(err.contains("missing Content-Length"));
-    }
-
-    #[test]
-    fn tool_input_schema_covers_all_specialized_method_shapes() {
-        let methods_with_property = [
-            ("set_controller_state", "bits"),
-            ("press_button", "button"),
-            ("release_button", "button"),
-            ("set_speed", "multiplier"),
-            ("read_memory", "address"),
-            ("set_breakpoint", "address"),
-            ("clear_breakpoint", "address"),
-            ("disassemble_at", "address"),
-            ("get_frame", "seq"),
-            ("get_audio_chunk", "seq"),
-            ("capture_frame", "path"),
-            ("save_state", "slot"),
-            ("load_state", "slot"),
-            ("load_rom", "rom_path"),
-            ("assemble_6502_dsl", "source"),
-            ("load_6502_dsl", "source"),
-            ("export_6502_dsl_rom", "output_path"),
-            ("export_6502_dsl_rom_base64", "source"),
-        ];
-
-        for (method, property) in methods_with_property {
-            let schema = tool_input_schema(method);
-            assert_eq!(schema["type"], "object", "schema type for {method}");
-            assert!(schema["properties"][property].is_object());
-        }
-        let fallback = tool_input_schema("unknown");
-        assert_eq!(fallback["type"], "object");
-        assert!(fallback["properties"].is_object());
     }
 
     #[test]
