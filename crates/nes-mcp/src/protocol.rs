@@ -590,4 +590,200 @@ mod tests {
         assert_eq!(json["code"], -32603);
         assert_eq!(json["message"], "boom");
     }
+
+    #[test]
+    fn dispatch_output_value_maps_variants_to_json() {
+        let cases = vec![
+            (DispatchOutput::Ack, json!({ "kind": "ack" })),
+            (
+                DispatchOutput::CpuStep {
+                    trace: Some("ADC $00".to_owned()),
+                    cpu_cycles: 4,
+                },
+                json!({ "kind": "cpu_step", "trace": "ADC $00", "cpu_cycles": 4 }),
+            ),
+            (
+                DispatchOutput::CycleCount { cpu_cycles: 100 },
+                json!({ "kind": "cycle_count", "cpu_cycles": 100 }),
+            ),
+            (
+                DispatchOutput::ControllerState {
+                    controller_bits: 255,
+                },
+                json!({ "kind": "controller_state", "controller_bits": 255 }),
+            ),
+            (
+                DispatchOutput::EmulatorState {
+                    paused: true,
+                    speed_permille: 1000,
+                    controller_bits: 0,
+                },
+                json!({
+                    "kind": "emulator_state",
+                    "paused": true,
+                    "speed_permille": 1000,
+                    "controller_bits": 0
+                }),
+            ),
+            (
+                DispatchOutput::Registers {
+                    pc: 0x8000,
+                    a: 1,
+                    x: 2,
+                    y: 3,
+                    sp: 0xFF,
+                    status: 0x24,
+                },
+                json!({
+                    "kind": "registers",
+                    "pc": 0x8000,
+                    "a": 1,
+                    "x": 2,
+                    "y": 3,
+                    "sp": 0xFF,
+                    "status": 0x24
+                }),
+            ),
+            (
+                DispatchOutput::Memory {
+                    address: 0x2000,
+                    value: 0xAA,
+                },
+                json!({ "kind": "memory", "address": 0x2000, "value": 0xAA }),
+            ),
+            (
+                DispatchOutput::Fps { fps_milli: 60000 },
+                json!({ "kind": "fps", "fps_milli": 60000 }),
+            ),
+            (
+                DispatchOutput::PpuFrameCounter {
+                    frame_counter: 1234,
+                },
+                json!({ "kind": "ppu_frame_counter", "frame_counter": 1234 }),
+            ),
+            (
+                DispatchOutput::Frame {
+                    seq: 1,
+                    bytes: 8,
+                },
+                json!({ "kind": "frame", "seq": 1, "bytes": 8 }),
+            ),
+            (
+                DispatchOutput::FrameCaptured {
+                    path: "frame.png".to_owned(),
+                    bytes: 3,
+                },
+                json!({ "kind": "frame_captured", "path": "frame.png", "bytes": 3 }),
+            ),
+            (
+                DispatchOutput::Audio {
+                    seq: 5,
+                    samples: 2,
+                },
+                json!({ "kind": "audio", "seq": 5, "samples": 2 }),
+            ),
+            (
+                DispatchOutput::StateSlot {
+                    slot: "quicksave".to_owned(),
+                },
+                json!({ "kind": "state_slot", "slot": "quicksave" }),
+            ),
+            (
+                DispatchOutput::RomLoaded {
+                    mapper_id: 4,
+                    prg_rom_bytes: 262144,
+                    reset_pc: 0x8000,
+                },
+                json!({
+                    "kind": "rom_loaded",
+                    "mapper_id": 4,
+                    "prg_rom_bytes": 262144,
+                    "reset_pc": 0x8000
+                }),
+            ),
+            (
+                DispatchOutput::MacroExecuted {
+                    frames_elapsed: 10,
+                    final_controller_bits: 8,
+                },
+                json!({
+                    "kind": "macro_executed",
+                    "frames_elapsed": 10,
+                    "final_controller_bits": 8,
+                }),
+            ),
+            (
+                DispatchOutput::PpuOam {
+                    oam_bytes: vec![255, 128],
+                },
+                json!({ "kind": "ppu_oam", "oam_bytes": [255, 128] }),
+            ),
+            (
+                DispatchOutput::DslAssembled {
+                    bytes_written: 100,
+                    label_count: 5,
+                    nmi_vector: 0xFFFA,
+                    reset_vector: 0xFFFC,
+                    irq_vector: 0xFFFE,
+                },
+                json!({
+                    "kind": "dsl_assembled",
+                    "bytes_written": 100,
+                    "label_count": 5,
+                    "nmi_vector": 0xFFFA,
+                    "reset_vector": 0xFFFC,
+                    "irq_vector": 0xFFFE,
+                }),
+            ),
+            (
+                DispatchOutput::DslRomLoaded {
+                    mapper_id: 0,
+                    prg_rom_bytes: 16384,
+                    reset_pc: 0xC000,
+                    rom_bytes: 2,
+                },
+                json!({
+                    "kind": "dsl_rom_loaded",
+                    "mapper_id": 0,
+                    "prg_rom_bytes": 16384,
+                    "reset_pc": 0xC000,
+                    "rom_bytes": 2,
+                }),
+            ),
+            (
+                DispatchOutput::DslRomExported {
+                    path: "rom.nes".to_owned(),
+                    bytes: 3,
+                    mapper_id: 0,
+                    prg_rom_bytes: 32768,
+                },
+                json!({
+                    "kind": "dsl_rom_exported",
+                    "path": "rom.nes",
+                    "bytes": 3,
+                    "mapper_id": 0,
+                    "prg_rom_bytes": 32768,
+                }),
+            ),
+            (
+                DispatchOutput::DslRomExportedBase64 {
+                    rom_base64: "TkVT".to_owned(),
+                    bytes: 3,
+                    mapper_id: 0,
+                    prg_rom_bytes: 32768,
+                },
+                json!({
+                    "kind": "dsl_rom_exported_base64",
+                    "rom_base64": "TkVT",
+                    "bytes": 3,
+                    "mapper_id": 0,
+                    "prg_rom_bytes": 32768,
+                }),
+            ),
+        ];
+
+        for (output, expected) in cases {
+            assert_eq!(dispatch_output_value(output), expected);
+        }
+    }
 }
