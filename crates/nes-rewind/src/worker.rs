@@ -448,6 +448,8 @@ mod tests {
 
         // Let's actually give the worker a moment to process the queue
         // to avoid race conditions.
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+
         // Artificially replace the receiver with a black hole to force a timeout
         let (_dummy_reply_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
         let (dummy_work_tx, _dummy_work_rx) = std::sync::mpsc::sync_channel(1);
