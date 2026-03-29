@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::sync::{Mutex, OnceLock};
 
+#[cfg(feature = "nova")]
+use nes_core::experimental::cheat_finder::{CheatFinder, MemoryCandidate};
 use nes_core::{
     Button, Command, CoreQuery, CoreSnapshot, FRAME_HEIGHT, FRAME_WIDTH, NesCore, QueryResult,
 };
@@ -210,6 +212,14 @@ pub enum DispatchOutput {
         /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
+    /// Result returning candidate cheat addresses.
+    #[cfg(feature = "nova")]
+    CheatFinderCandidates {
+        /// Current search candidates length.
+        candidate_count: usize,
+        /// Top 10 candidate addresses and values.
+        top_candidates: Vec<MemoryCandidate>,
+    },
 }
 
 /// Errors raised when parsing or executing MCP tools.
@@ -323,6 +333,12 @@ pub fn dispatch_tool(
         "load_6502_dsl" => handle_load_6502_dsl(core, params),
         "export_6502_dsl_rom" => handle_export_6502_dsl_rom(params),
         "export_6502_dsl_rom_base64" => handle_export_6502_dsl_rom_base64(params),
+        #[cfg(feature = "nova")]
+        "cheat_finder_reset" => handle_cheat_finder_reset(core),
+        #[cfg(feature = "nova")]
+        "cheat_finder_filter" => handle_cheat_finder_filter(core, params),
+        #[cfg(feature = "nova")]
+        "cheat_finder_results" => handle_cheat_finder_results(),
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }
@@ -685,6 +701,76 @@ fn handle_load_rom(
         mapper_id: info.mapper_id,
         prg_rom_bytes: info.prg_rom_bytes,
         reset_pc: info.reset_pc,
+    })
+}
+
+#[cfg(feature = "nova")]
+static CHEAT_FINDER: OnceLock<Mutex<CheatFinder>> = OnceLock::new();
+
+#[cfg(feature = "nova")]
+fn get_cheat_finder() -> std::sync::MutexGuard<'static, CheatFinder> {
+    CHEAT_FINDER
+        .get_or_init(|| Mutex::new(CheatFinder::new()))
+        .lock()
+        .expect("cheat finder mutex poisoned")
+}
+
+#[cfg(feature = "nova")]
+fn handle_cheat_finder_reset(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    let mut finder = get_cheat_finder();
+    finder.reset_search(core);
+    let candidates = finder.candidates();
+    Ok(DispatchOutput::CheatFinderCandidates {
+        candidate_count: candidates.len(),
+        top_candidates: candidates.iter().take(10).cloned().collect(),
+    })
+}
+
+#[cfg(feature = "nova")]
+fn handle_cheat_finder_filter(
+    core: &NesCore,
+    params: &ToolParams,
+) -> Result<DispatchOutput, DispatchError> {
+    let condition = parse_required_string(params, "condition")?;
+    let mut finder = get_cheat_finder();
+
+    match condition.as_str() {
+        "eq" => {
+            let value = parse_u8(params, "value")?;
+            finder.filter_eq(core, value);
+        }
+        "neq" => {
+            let value = parse_u8(params, "value")?;
+            finder.filter_neq(core, value);
+        }
+        "changed" => {
+            finder.filter_changed(core);
+        }
+        "unchanged" => {
+            finder.filter_unchanged(core);
+        }
+        _ => {
+            return Err(DispatchError::InvalidParams(format!(
+                "unknown condition: {}",
+                condition
+            )));
+        }
+    }
+
+    let candidates = finder.candidates();
+    Ok(DispatchOutput::CheatFinderCandidates {
+        candidate_count: candidates.len(),
+        top_candidates: candidates.iter().take(10).cloned().collect(),
+    })
+}
+
+#[cfg(feature = "nova")]
+fn handle_cheat_finder_results() -> Result<DispatchOutput, DispatchError> {
+    let finder = get_cheat_finder();
+    let candidates = finder.candidates();
+    Ok(DispatchOutput::CheatFinderCandidates {
+        candidate_count: candidates.len(),
+        top_candidates: candidates.iter().take(10).cloned().collect(),
     })
 }
 

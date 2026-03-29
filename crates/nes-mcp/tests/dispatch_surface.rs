@@ -137,6 +137,8 @@ fn every_catalog_tool_has_dispatch_path() {
             "export_6502_dsl_rom_base64" => {
                 params(&[("source", ".bank 1\nRESET:\n  JMP RESET\n.reset RESET\n")])
             }
+            #[cfg(feature = "nova")]
+            "cheat_finder_filter" => params(&[("condition", "changed")]),
             _ => ToolParams::new(),
         };
 

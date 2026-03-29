@@ -498,6 +498,21 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "oam_bytes": oam_bytes,
             })
         }
+        #[cfg(feature = "nova")]
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count,
+            top_candidates,
+        } => {
+            let candidates_json: Vec<Value> = top_candidates
+                .into_iter()
+                .map(|c| json!({ "addr": c.addr, "value": c.last_value }))
+                .collect();
+            json!({
+                "kind": "cheat_finder_candidates",
+                "candidate_count": candidate_count,
+                "top_candidates": candidates_json,
+            })
+        }
     }
 }
 
