@@ -662,10 +662,7 @@ mod tests {
                 json!({ "kind": "ppu_frame_counter", "frame_counter": 1234 }),
             ),
             (
-                DispatchOutput::Frame {
-                    seq: 1,
-                    bytes: 8,
-                },
+                DispatchOutput::Frame { seq: 1, bytes: 8 },
                 json!({ "kind": "frame", "seq": 1, "bytes": 8 }),
             ),
             (
@@ -676,10 +673,7 @@ mod tests {
                 json!({ "kind": "frame_captured", "path": "frame.png", "bytes": 3 }),
             ),
             (
-                DispatchOutput::Audio {
-                    seq: 5,
-                    samples: 2,
-                },
+                DispatchOutput::Audio { seq: 5, samples: 2 },
                 json!({ "kind": "audio", "seq": 5, "samples": 2 }),
             ),
             (
