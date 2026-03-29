@@ -1,5 +1,5 @@
+use nes_dsl::{RomBuildOptions, assemble, build_ines_nrom_rom};
 use proptest::prelude::*;
-use nes_dsl::{assemble, build_ines_nrom_rom, RomBuildOptions};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(5000))]

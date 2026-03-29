@@ -1,6 +1,6 @@
-use proptest::prelude::*;
-use nes_desktop::session_cheats::SessionCheats;
 use nes_desktop::args::parse_runtime_args;
+use nes_desktop::session_cheats::SessionCheats;
+use proptest::prelude::*;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(5000))]

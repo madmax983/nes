@@ -1,7 +1,7 @@
-use proptest::prelude::*;
 use nes_core::NesCore;
-use nes_mcp::{dispatch_tool, ToolParams};
 use nes_mcp::macro_engine::execute_macro_script;
+use nes_mcp::{ToolParams, dispatch_tool};
+use proptest::prelude::*;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(5000))]
