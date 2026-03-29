@@ -35,3 +35,7 @@
 ## 2025-06-19 - Replace O(N) allocation in DSL parser with peekable iterator
 **Learning:** Found an unnecessary intermediate heap allocation `let chars: Vec<char> = line.chars().collect();` in `nes-dsl/src/lib.rs` while doing string look-ahead for comment stripping.
 **Action:** Replaced the collected vector with `let mut chars = line.chars().peekable();`. A peekable iterator allows the look-ahead behavior needed (`chars.peek() == Some(&'/')`) without needing to load the entire line into memory.
+
+## 2025-06-19 - Removed format! and Vec::new() on hot emulator path
+**Learning:** Returning `String` and `Vec<u8>` from inner parsing routines on the CPU emulation hot loop causes multiple allocations per executed opcode, degrading performance.
+**Action:** Replace `format!` and `vec![]` with `format_args!` and array slices (`&[u8]`). Pass `fmt::Arguments` to diagnostic functions that only evaluate and allocate them when tracing is explicitly enabled.
