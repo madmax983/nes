@@ -12,8 +12,8 @@ proptest! {
     ) {
         let mut deltas = Vec::new();
         // Construct some random deltas
-        let mut chunk_iter = deltas_bytes.chunks(5);
-        while let Some(chunk) = chunk_iter.next() {
+        let chunk_iter = deltas_bytes.chunks(5);
+        for chunk in chunk_iter {
             if chunk.len() == 5 {
                 let offset = u16::from_le_bytes([chunk[0], chunk[1]]);
                 let mut data = SmallVec::new();
