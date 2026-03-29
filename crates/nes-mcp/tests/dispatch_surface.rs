@@ -159,6 +159,103 @@ fn every_catalog_tool_has_dispatch_path() {
 }
 
 #[test]
+#[cfg(feature = "nova")]
+fn cheat_finder_tools_interact_with_core_memory() {
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0x0000, &[0x00, 0x05, 0x0A, 0x05]);
+
+    let reset_result =
+        dispatch_tool(&mut core, "cheat_finder_reset", &ToolParams::new()).expect("reset succeeds");
+    match reset_result {
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count, ..
+        } => {
+            assert_eq!(candidate_count, 2048);
+        }
+        _ => panic!("Expected CheatFinderCandidates"),
+    }
+
+    let mut eq_params = ToolParams::new();
+    eq_params.insert("condition".to_owned(), "eq".to_owned());
+    eq_params.insert("value".to_owned(), "5".to_owned());
+    let filter_result =
+        dispatch_tool(&mut core, "cheat_finder_filter", &eq_params).expect("filter succeeds");
+    match filter_result {
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count,
+            top_candidates,
+        } => {
+            assert_eq!(candidate_count, 2);
+            assert_eq!(top_candidates[0].addr, 0x0001);
+            assert_eq!(top_candidates[1].addr, 0x0003);
+        }
+        _ => panic!("Expected CheatFinderCandidates"),
+    }
+
+    let mut neq_params = ToolParams::new();
+    neq_params.insert("condition".to_owned(), "neq".to_owned());
+    neq_params.insert("value".to_owned(), "0".to_owned());
+    let _ = dispatch_tool(&mut core, "cheat_finder_reset", &ToolParams::new());
+    let filter_result2 =
+        dispatch_tool(&mut core, "cheat_finder_filter", &neq_params).expect("filter succeeds");
+    match filter_result2 {
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count, ..
+        } => {
+            assert_eq!(candidate_count, 3);
+        }
+        _ => panic!("Expected CheatFinderCandidates"),
+    }
+
+    core.load_cpu_bytes(0x0001, &[0x04]);
+    let mut changed_params = ToolParams::new();
+    changed_params.insert("condition".to_owned(), "changed".to_owned());
+    let filter_result3 =
+        dispatch_tool(&mut core, "cheat_finder_filter", &changed_params).expect("filter succeeds");
+    match filter_result3 {
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count,
+            top_candidates,
+        } => {
+            assert_eq!(candidate_count, 1);
+            assert_eq!(top_candidates[0].addr, 0x0001);
+        }
+        _ => panic!("Expected CheatFinderCandidates"),
+    }
+
+    let mut unchanged_params = ToolParams::new();
+    unchanged_params.insert("condition".to_owned(), "unchanged".to_owned());
+    let filter_result4 = dispatch_tool(&mut core, "cheat_finder_filter", &unchanged_params)
+        .expect("filter succeeds");
+    match filter_result4 {
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count,
+            top_candidates,
+        } => {
+            assert_eq!(candidate_count, 1);
+            assert_eq!(top_candidates[0].addr, 0x0001);
+        }
+        _ => panic!("Expected CheatFinderCandidates"),
+    }
+
+    let results_result = dispatch_tool(&mut core, "cheat_finder_results", &ToolParams::new())
+        .expect("results succeeds");
+    match results_result {
+        DispatchOutput::CheatFinderCandidates {
+            candidate_count, ..
+        } => {
+            assert_eq!(candidate_count, 1);
+        }
+        _ => panic!("Expected CheatFinderCandidates"),
+    }
+
+    let mut invalid_params = ToolParams::new();
+    invalid_params.insert("condition".to_owned(), "magic".to_owned());
+    let invalid_result = dispatch_tool(&mut core, "cheat_finder_filter", &invalid_params);
+    assert!(invalid_result.is_err());
+}
+
+#[test]
 fn press_and_release_button_tools_match_direct_commands() {
     let mut via_core = NesCore::new();
     via_core.execute(Command::PressButton(Button::A)).unwrap();
