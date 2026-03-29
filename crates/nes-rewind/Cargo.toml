@@ -9,3 +9,4 @@ smallvec = { version = "1.13", features = ["const_generics"] }
 
 [dev-dependencies]
 proptest = "1.0.0"
+smallvec = "1.13"
