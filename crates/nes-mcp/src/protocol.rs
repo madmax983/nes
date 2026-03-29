@@ -10,7 +10,12 @@
 //! data fields.
 
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
+
+use crate::{DispatchOutput, ToolParams};
+
+pub const JSONRPC_VERSION: &str = "2.0";
+pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 
 /// A JSON-RPC 2.0 request sent from the MCP client.
 ///
@@ -168,4 +173,317 @@ impl RpcError {
             data: None,
         }
     }
+}
+
+/// Maps raw JSON RPC arguments into a strongly typed `ToolParams` map.
+///
+/// **Performance optimization:** This function consumes an owned `Map<String, Value>`
+/// rather than taking a borrowed reference `&Map`. Because the MCP dispatch
+/// layer typically already has an owned arguments object, taking ownership here
+/// entirely eliminates the need to allocate and `.clone()` every string key
+/// and value when inserting them into the returned `ToolParams`.
+pub fn map_tool_arguments(arguments: Map<String, Value>) -> ToolParams {
+    let mut params = ToolParams::new();
+    for (key, value) in arguments {
+        params.insert(key, json_arg_to_string(value));
+    }
+    params
+}
+
+/// Converts a JSON `Value` into a `String` without extra allocations if possible.
+///
+/// **Performance optimization:** Taking an owned `Value` allows us to extract
+/// and return the inner `String` directly via pattern matching, avoiding
+/// a heap allocation compared to calling `.to_string()` or `.clone()` on a reference.
+pub fn json_arg_to_string(value: Value) -> String {
+    match value {
+        Value::String(v) => v,
+        _ => value.to_string(),
+    }
+}
+
+pub fn dispatch_output_value(output: DispatchOutput) -> Value {
+    match output {
+        DispatchOutput::Ack => json!({ "kind": "ack" }),
+        DispatchOutput::CpuStep { trace, cpu_cycles } => {
+            json!({ "kind": "cpu_step", "trace": trace, "cpu_cycles": cpu_cycles })
+        }
+        DispatchOutput::CycleCount { cpu_cycles } => {
+            json!({ "kind": "cycle_count", "cpu_cycles": cpu_cycles })
+        }
+        DispatchOutput::ControllerState { controller_bits } => {
+            json!({ "kind": "controller_state", "controller_bits": controller_bits })
+        }
+        DispatchOutput::EmulatorState {
+            paused,
+            speed_permille,
+            controller_bits,
+        } => {
+            json!({
+                "kind": "emulator_state",
+                "paused": paused,
+                "speed_permille": speed_permille,
+                "controller_bits": controller_bits
+            })
+        }
+        DispatchOutput::Registers {
+            pc,
+            a,
+            x,
+            y,
+            sp,
+            status,
+        } => {
+            json!({
+                "kind": "registers",
+                "pc": pc,
+                "a": a,
+                "x": x,
+                "y": y,
+                "sp": sp,
+                "status": status
+            })
+        }
+        DispatchOutput::Memory { address, value } => {
+            json!({ "kind": "memory", "address": address, "value": value })
+        }
+        DispatchOutput::Fps { fps_milli } => json!({ "kind": "fps", "fps_milli": fps_milli }),
+        DispatchOutput::PpuFrameCounter { frame_counter } => {
+            json!({ "kind": "ppu_frame_counter", "frame_counter": frame_counter })
+        }
+        DispatchOutput::Frame { seq, bytes } => {
+            json!({ "kind": "frame", "seq": seq, "bytes": bytes })
+        }
+        DispatchOutput::FrameCaptured { path, bytes } => {
+            json!({ "kind": "frame_captured", "path": path, "bytes": bytes })
+        }
+        DispatchOutput::Audio { seq, samples } => {
+            json!({ "kind": "audio", "seq": seq, "samples": samples })
+        }
+        DispatchOutput::StateSlot { slot } => {
+            json!({ "kind": "state_slot", "slot": slot })
+        }
+        DispatchOutput::RomLoaded {
+            mapper_id,
+            prg_rom_bytes,
+            reset_pc,
+        } => {
+            json!({
+                "kind": "rom_loaded",
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+                "reset_pc": reset_pc
+            })
+        }
+        DispatchOutput::MacroExecuted {
+            frames_elapsed,
+            final_controller_bits,
+        } => {
+            json!({
+                "kind": "macro_executed",
+                "frames_elapsed": frames_elapsed,
+                "final_controller_bits": final_controller_bits,
+            })
+        }
+        DispatchOutput::PpuOam { oam_bytes } => {
+            json!({
+                "kind": "ppu_oam",
+                "oam_bytes": oam_bytes,
+            })
+        }
+        DispatchOutput::DslAssembled {
+            bytes_written,
+            label_count,
+            nmi_vector,
+            reset_vector,
+            irq_vector,
+        } => {
+            json!({
+                "kind": "dsl_assembled",
+                "bytes_written": bytes_written,
+                "label_count": label_count,
+                "nmi_vector": nmi_vector,
+                "reset_vector": reset_vector,
+                "irq_vector": irq_vector,
+            })
+        }
+        DispatchOutput::DslRomLoaded {
+            mapper_id,
+            prg_rom_bytes,
+            reset_pc,
+            rom_bytes,
+        } => {
+            json!({
+                "kind": "dsl_rom_loaded",
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+                "reset_pc": reset_pc,
+                "rom_bytes": rom_bytes,
+            })
+        }
+        DispatchOutput::DslRomExported {
+            path,
+            bytes,
+            mapper_id,
+            prg_rom_bytes,
+        } => {
+            json!({
+                "kind": "dsl_rom_exported",
+                "path": path,
+                "bytes": bytes,
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+            })
+        }
+        DispatchOutput::DslRomExportedBase64 {
+            rom_base64,
+            bytes,
+            mapper_id,
+            prg_rom_bytes,
+        } => {
+            json!({
+                "kind": "dsl_rom_exported_base64",
+                "rom_base64": rom_base64,
+                "bytes": bytes,
+                "mapper_id": mapper_id,
+                "prg_rom_bytes": prg_rom_bytes,
+            })
+        }
+    }
+}
+
+pub fn tool_input_schema(tool_name: &str) -> Value {
+    match tool_name {
+        "set_controller_state" => json!({
+            "type": "object",
+            "properties": {
+                "bits": { "type": "integer", "minimum": 0, "maximum": 255 },
+                "player": { "type": "integer", "enum": [1, 2] }
+            },
+            "required": ["bits"],
+            "additionalProperties": false
+        }),
+        "press_button" | "release_button" => json!({
+            "type": "object",
+            "properties": {
+                "button": {
+                    "type": "string",
+                    "enum": ["A", "B", "Select", "Start", "Up", "Down", "Left", "Right"]
+                },
+                "player": { "type": "integer", "enum": [1, 2] }
+            },
+            "required": ["button"],
+            "additionalProperties": false
+        }),
+        "set_speed" => json!({
+            "type": "object",
+            "properties": {
+                "multiplier": { "type": "number", "exclusiveMinimum": 0.0 }
+            },
+            "required": ["multiplier"],
+            "additionalProperties": false
+        }),
+        "read_memory" | "set_breakpoint" | "clear_breakpoint" | "disassemble_at" => json!({
+            "type": "object",
+            "properties": {
+                "address": { "type": "integer", "minimum": 0, "maximum": 65535 }
+            },
+            "required": ["address"],
+            "additionalProperties": false
+        }),
+        "get_frame" | "get_audio_chunk" => json!({
+            "type": "object",
+            "properties": {
+                "seq": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+        }),
+        "capture_frame" => json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "minLength": 1 }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+        }),
+        "save_state" | "load_state" => json!({
+            "type": "object",
+            "properties": {
+                "slot": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+        }),
+        "load_rom" => json!({
+            "type": "object",
+            "properties": {
+                "rom_path": { "type": "string", "minLength": 1 },
+                "rom_hex": { "type": "string", "minLength": 2 }
+            },
+            "oneOf": [
+                { "required": ["rom_path"] },
+                { "required": ["rom_hex"] }
+            ],
+            "additionalProperties": false
+        }),
+        "assemble_6502_dsl" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 }
+            },
+            "required": ["source"],
+            "additionalProperties": false
+        }),
+        "load_6502_dsl" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "chr_hex": { "type": "string", "minLength": 2 }
+            },
+            "required": ["source"],
+            "additionalProperties": false
+        }),
+        "export_6502_dsl_rom" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "output_path": { "type": "string", "minLength": 1 },
+                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "chr_hex": { "type": "string", "minLength": 2 }
+            },
+            "required": ["source", "output_path"],
+            "additionalProperties": false
+        }),
+        "export_6502_dsl_rom_base64" => json!({
+            "type": "object",
+            "properties": {
+                "source": { "type": "string", "minLength": 1 },
+                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "chr_hex": { "type": "string", "minLength": 2 }
+            },
+            "required": ["source"],
+            "additionalProperties": false
+        }),
+        _ => json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }),
+    }
+}
+
+pub fn jsonrpc_result(id: Value, result: Value) -> Value {
+    json!({
+        "jsonrpc": JSONRPC_VERSION,
+        "id": id,
+        "result": result
+    })
+}
+
+pub fn jsonrpc_error(id: Value, err: RpcError) -> Value {
+    json!({
+        "jsonrpc": JSONRPC_VERSION,
+        "id": id,
+        "error": err.to_json()
+    })
 }
