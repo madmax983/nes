@@ -261,25 +261,20 @@ fn handle_tools_call(
     params: Option<Value>,
     request_tx: &Sender<ToolRequest>,
 ) -> Result<Option<Value>, RpcError> {
-    let mut params_obj = match params {
-        Some(Value::Object(map)) => map,
-        _ => {
-            return Err(RpcError::invalid_params(
-                "tools/call params must be an object",
-            ));
-        }
+    let Some(Value::Object(mut params_obj)) = params else {
+        return Err(RpcError::invalid_params(
+            "tools/call params must be an object",
+        ));
     };
-    let tool_name = match params_obj.remove("name") {
-        Some(Value::String(name)) => name,
-        _ => {
-            return Err(RpcError::invalid_params(
-                "tools/call requires string field 'name'",
-            ));
-        }
+    let Some(Value::String(tool_name)) = params_obj.remove("name") else {
+        return Err(RpcError::invalid_params(
+            "tools/call requires string field 'name'",
+        ));
     };
-    let args = match params_obj.remove("arguments") {
-        Some(Value::Object(map)) => map,
-        _ => Default::default(),
+    let args = if let Some(Value::Object(map)) = params_obj.remove("arguments") {
+        map
+    } else {
+        Default::default()
     };
 
     let (reply_tx, reply_rx) = mpsc::channel();
