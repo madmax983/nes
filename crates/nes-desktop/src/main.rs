@@ -200,7 +200,7 @@ impl Drop for AudioOutput {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("{} {err}", "Error:".with(Color::Red).bold());
     }
 }
 
@@ -1224,7 +1224,7 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
+                eprintln!("{} {err}", "Warning:".with(Color::Yellow).bold());
                 eprintln!("Continuing without audio output.");
                 None
             }
@@ -1543,7 +1543,7 @@ fn run() -> Result<(), String> {
                             },
                         )
                     {
-                        eprintln!("{err}");
+                        eprintln!("{} {err}", "Error:".with(Color::Red).bold());
                         *control_flow = ControlFlow::Exit;
                         return;
                     }
@@ -1623,7 +1623,7 @@ fn run() -> Result<(), String> {
                             &mut netplay_stats,
                             &mut netplay_pending_pings,
                         ) {
-                            eprintln!("{err}");
+                            eprintln!("{} {err}", "Error:".with(Color::Red).bold());
                             *control_flow = ControlFlow::Exit;
                             return;
                         }
