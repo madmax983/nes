@@ -966,13 +966,12 @@ mod tests {
         assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
     }
 
+
     #[test]
     #[should_panic(expected = "capacity overflow")]
     #[ignore = "havoc target"]
     fn havoc_crash_mcp_host_oom() {
-        let mut bad_reader = BufReader::new(Cursor::new(
-            b"Content-Length: 18446744073709551615\r\n\r\n".to_vec(),
-        ));
+        let mut bad_reader = BufReader::new(Cursor::new(b"Content-Length: 18446744073709551615\r\n\r\n".to_vec()));
         let _ = read_framed_message(&mut bad_reader);
     }
 }
