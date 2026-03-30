@@ -7,3 +7,7 @@
 **Refactoring RTA Manager State Machine and I/O logic in nes-desktop/src/rta.rs**
 **Learning:** Found two "God Functions" in the `RtaManager` (`tick` and `write_artifacts_if_finished`). `tick` was a 70+ line method with multiple levels of nesting and sequential state machine steps. `write_artifacts_if_finished` was a monolithic 60+ line method handling both JSON serialization and file writing for multiple artifacts. Additionally, the `select_profile` method used a confusing `.expect()` and `.next()` iterator pattern for filtering.
 **Action:** Flattened `select_profile` by capturing `next()` using `let Some(...) else { return }`. Split the `tick` method into `tick_start`, `tick_pause_resume`, `tick_splits`, and `tick_end`. Split `write_artifacts_if_finished` into `write_run_artifact` and `write_input_log`. This drastically improves readability and reduces nesting.
+
+**Refactoring God Functions in UI/TUI/MCP via Helper Extraction**
+**Learning:** Found massive boilerplate and nesting causing "God Functions" triggering `clippy::too_many_lines` in `nes-tui::main::draw_frame`, `nes-desktop::overlay::draw_overlay`, and `nes-mcp::main::dispatch_output_value`. This creates high cognitive load and violates DRY/YAGNI principles.
+**Action:** Extracted inner closures and match arms into dedicated helper functions (e.g. `draw_tui_hud`, `draw_main_menu_panel`, `dispatch_output_value_rom_and_dsl`). Used `#[allow(clippy::too_many_arguments)]` when an extracted UI helper required many local state parameters without justifying a full context struct refactor yet.

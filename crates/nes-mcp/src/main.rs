@@ -459,88 +459,62 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "bits": { "type": "integer", "minimum": 0, "maximum": 255 },
                 "player": { "type": "integer", "enum": [1, 2] }
             },
-            "required": ["bits"],
-            "additionalProperties": false
+            "required": ["bits"], "additionalProperties": false
         }),
         "press_button" | "release_button" => json!({
             "type": "object",
             "properties": {
-                "button": {
-                    "type": "string",
-                    "enum": ["A", "B", "Select", "Start", "Up", "Down", "Left", "Right"]
-                },
+                "button": { "type": "string", "enum": ["A", "B", "Select", "Start", "Up", "Down", "Left", "Right"] },
                 "player": { "type": "integer", "enum": [1, 2] }
             },
-            "required": ["button"],
-            "additionalProperties": false
+            "required": ["button"], "additionalProperties": false
         }),
         "set_speed" => json!({
             "type": "object",
-            "properties": {
-                "multiplier": { "type": "number", "exclusiveMinimum": 0.0 }
-            },
-            "required": ["multiplier"],
-            "additionalProperties": false
+            "properties": { "multiplier": { "type": "number", "exclusiveMinimum": 0.0 } },
+            "required": ["multiplier"], "additionalProperties": false
         }),
         "read_memory" | "set_breakpoint" | "clear_breakpoint" | "disassemble_at" => json!({
             "type": "object",
-            "properties": {
-                "address": { "type": "integer", "minimum": 0, "maximum": 65535 }
-            },
-            "required": ["address"],
-            "additionalProperties": false
+            "properties": { "address": { "type": "integer", "minimum": 0, "maximum": 65535 } },
+            "required": ["address"], "additionalProperties": false
         }),
         "get_frame" | "get_audio_chunk" => json!({
-            "type": "object",
-            "properties": {
-                "seq": { "type": "integer", "minimum": 0 }
-            },
-            "additionalProperties": false
+            "type": "object", "properties": { "seq": { "type": "integer", "minimum": 0 } }, "additionalProperties": false
         }),
         "capture_frame" => json!({
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "minLength": 1 }
-            },
-            "required": ["path"],
-            "additionalProperties": false
+            "type": "object", "properties": { "path": { "type": "string", "minLength": 1 } }, "required": ["path"], "additionalProperties": false
         }),
         "save_state" | "load_state" => json!({
-            "type": "object",
-            "properties": {
-                "slot": { "type": "string", "minLength": 1 }
-            },
-            "additionalProperties": false
+            "type": "object", "properties": { "slot": { "type": "string", "minLength": 1 } }, "additionalProperties": false
         }),
+        _ => tool_input_schema_rom_and_dsl(tool_name),
+    }
+}
+
+fn tool_input_schema_rom_and_dsl(tool_name: &str) -> Value {
+    match tool_name {
         "load_rom" => json!({
             "type": "object",
             "properties": {
                 "rom_path": { "type": "string", "minLength": 1 },
                 "rom_hex": { "type": "string", "minLength": 2 }
             },
-            "oneOf": [
-                { "required": ["rom_path"] },
-                { "required": ["rom_hex"] }
-            ],
+            "oneOf": [{ "required": ["rom_path"] }, { "required": ["rom_hex"] }],
             "additionalProperties": false
         }),
         "assemble_6502_dsl" => json!({
-            "type": "object",
-            "properties": {
-                "source": { "type": "string", "minLength": 1 }
-            },
-            "required": ["source"],
-            "additionalProperties": false
+            "type": "object", "properties": { "source": { "type": "string", "minLength": 1 } },
+            "required": ["source"], "additionalProperties": false
         }),
-        "load_6502_dsl" => json!({
+        "load_6502_dsl" | "export_6502_dsl_rom_base64" => json!({
             "type": "object",
             "properties": {
                 "source": { "type": "string", "minLength": 1 },
                 "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
                 "chr_hex": { "type": "string", "minLength": 2 }
             },
-            "required": ["source"],
-            "additionalProperties": false
+            "required": ["source"], "additionalProperties": false
         }),
         "export_6502_dsl_rom" => json!({
             "type": "object",
@@ -550,24 +524,9 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
                 "chr_hex": { "type": "string", "minLength": 2 }
             },
-            "required": ["source", "output_path"],
-            "additionalProperties": false
+            "required": ["source", "output_path"], "additionalProperties": false
         }),
-        "export_6502_dsl_rom_base64" => json!({
-            "type": "object",
-            "properties": {
-                "source": { "type": "string", "minLength": 1 },
-                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
-                "chr_hex": { "type": "string", "minLength": 2 }
-            },
-            "required": ["source"],
-            "additionalProperties": false
-        }),
-        _ => json!({
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false
-        }),
+        _ => json!({ "type": "object", "properties": {}, "additionalProperties": false }),
     }
 }
 
