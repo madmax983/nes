@@ -1,0 +1,4 @@
+1. **Understand Goal**: Find an unhandled panic, deadlock, or DOS and write a failing test to demonstrate it. Act as Havoc. Never fix the bug.
+2. **Analysis**: We found a DoS issue in `crates/nes-mcp/src/macro_engine.rs` with `execute_macro_script()`. Wait commands with large values, like `WAIT 18446744073709551615`, cause the function to execute a tight synchronous loop, hanging the MCP daemon. I wrote a test for it earlier, which correctly panicked with a timeout.
+3. **Execution**: I'll create a PR to report the `WAIT` vulnerability using the Havoc format. I will submit the code that includes the test `crates/nes-mcp/tests/havoc_dos_hang.rs` which demonstrates this vulnerability.
+4. **Pre-commit Step**: Verify no regressions by running tests before final submission. I will call `pre_commit_instructions` and then `submit`.
