@@ -23,91 +23,71 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
         if arg == "--help" || arg == "-h" {
             return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
         }
-        if arg == "--bind" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --bind".to_owned());
-            };
-            parsed.bind_addr = value.clone();
-            idx += 2;
+
+        if parse_arg(&args, &mut idx, "--bind", |value| {
+            parsed.bind_addr = value.to_string();
+            Ok(())
+        })? {
             continue;
         }
-        if arg == "--latency-ms" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --latency-ms".to_owned());
-            };
+
+        if parse_arg(&args, &mut idx, "--latency-ms", |value| {
             parsed.link.latency_ms = parse_u64_arg(value, "--latency-ms")?;
-            idx += 2;
+            Ok(())
+        })? {
             continue;
         }
-        if arg == "--jitter-ms" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --jitter-ms".to_owned());
-            };
+
+        if parse_arg(&args, &mut idx, "--jitter-ms", |value| {
             parsed.link.jitter_ms = parse_u64_arg(value, "--jitter-ms")?;
-            idx += 2;
+            Ok(())
+        })? {
             continue;
         }
-        if arg == "--loss-pct" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --loss-pct".to_owned());
-            };
+
+        if parse_arg(&args, &mut idx, "--loss-pct", |value| {
             parsed.link.loss_pct = parse_percent_arg(value, "--loss-pct")?;
-            idx += 2;
+            Ok(())
+        })? {
             continue;
         }
-        if arg == "--reorder-pct" {
-            let Some(value) = args.get(idx + 1) else {
-                return Err("missing value after --reorder-pct".to_owned());
-            };
+
+        if parse_arg(&args, &mut idx, "--reorder-pct", |value| {
             parsed.link.reorder_pct = parse_percent_arg(value, "--reorder-pct")?;
-            idx += 2;
+            Ok(())
+        })? {
             continue;
         }
-        if let Some(value) = arg.strip_prefix("--bind=") {
-            if value.is_empty() {
-                return Err("missing value after --bind=".to_owned());
-            }
-            parsed.bind_addr = value.to_owned();
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--latency-ms=") {
-            if value.is_empty() {
-                return Err("missing value after --latency-ms=".to_owned());
-            }
-            parsed.link.latency_ms = parse_u64_arg(value, "--latency-ms")?;
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--jitter-ms=") {
-            if value.is_empty() {
-                return Err("missing value after --jitter-ms=".to_owned());
-            }
-            parsed.link.jitter_ms = parse_u64_arg(value, "--jitter-ms")?;
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--loss-pct=") {
-            if value.is_empty() {
-                return Err("missing value after --loss-pct=".to_owned());
-            }
-            parsed.link.loss_pct = parse_percent_arg(value, "--loss-pct")?;
-            idx += 1;
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--reorder-pct=") {
-            if value.is_empty() {
-                return Err("missing value after --reorder-pct=".to_owned());
-            }
-            parsed.link.reorder_pct = parse_percent_arg(value, "--reorder-pct")?;
-            idx += 1;
-            continue;
-        }
+
         return Err(format!(
             "unknown argument '{arg}'. Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]"
         ));
     }
     Ok(parsed)
+}
+
+fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
+where
+    F: FnMut(&str) -> Result<(), String>,
+{
+    let arg = &args[*idx];
+    if arg == flag {
+        let Some(value) = args.get(*idx + 1) else {
+            return Err(format!("missing value after {flag}"));
+        };
+        apply(value)?;
+        *idx += 2;
+        Ok(true)
+    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
+        if value.is_empty() {
+            return Err(format!("missing value after {flag}="));
+        }
+        apply(value)?;
+        *idx += 1;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 pub fn parse_u64_arg(value: &str, flag: &str) -> Result<u64, String> {
