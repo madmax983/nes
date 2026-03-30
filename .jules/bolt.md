@@ -28,3 +28,7 @@
 **[VecDeque for FIFO Collections]**
 **Learning:** When using a `Vec` as a FIFO queue (e.g., removing the oldest element with `.remove(0)` on every frame), it triggers an O(n) memory shift of all subsequent elements. This scales poorly for large capacities like 30,000 frames.
 **Action:** Use `VecDeque` with `push_back` and `pop_front` instead of `Vec` for fixed-capacity circular buffers to reduce O(n) shifts to O(1) operations.
+
+**[Avoiding heap allocation when iterating and peeking characters]**
+**Learning:** Converting a string's characters to a `Vec<char>` via `line.chars().collect()` just to index and peek ahead causes an unnecessary O(N) heap allocation, which is especially problematic in hot loops like parsers.
+**Action:** Use the `peekable()` iterator (`line.chars().peekable()`) and `while let Some(ch) = chars.next()` to consume and look ahead (`chars.peek()`) with zero heap allocations.
