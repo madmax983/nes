@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
+use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::style::Stylize;
@@ -245,7 +246,7 @@ fn run() -> Result<(), String> {
         .unwrap_or(rom_path.clone());
     let mut runtime = TuiRuntime {
         core,
-        rom_name,
+        rom_name: rom_name.clone(),
         mapper_id: info.mapper_id,
         prg_rom_bytes: info.prg_rom_bytes,
         frame_rgba: vec![0_u8; FRAME_RGBA_BYTES],
@@ -258,9 +259,19 @@ fn run() -> Result<(), String> {
         show_hud: cli_options.show_hud,
         video_backend: VideoBackend::Halfblocks,
     };
-    if let Some(config_path) = loaded_config_path.as_ref() {
-        eprintln!("Config: {}", config_path.display());
-    }
+    runtime.video_backend = detect_video_backend();
+
+    let table = build_startup_table(
+        Path::new(&rom_path),
+        &rom_name,
+        info.mapper_id as u16,
+        info.prg_rom_bytes as u32,
+        info.reset_pc,
+        loaded_config_path.as_deref(),
+        &runtime.video_backend,
+    );
+    println!("{}", "nes-tui".with(crossterm::style::Color::Cyan).bold());
+    println!("{table}\n");
 
     let mut stdout = io::stdout();
     enable_raw_mode().map_err(|err| format!("Failed to enable raw mode: {err}"))?;
@@ -272,9 +283,6 @@ fn run() -> Result<(), String> {
     terminal
         .clear()
         .map_err(|err| format!("Failed to clear terminal: {err}"))?;
-
-    runtime.video_backend = detect_video_backend();
-    eprintln!("Video backend: {}", runtime.video_backend.label());
 
     let mut event_source = CrosstermEventSource::new();
     let mut loop_timer = SystemLoopTimer::new();
@@ -873,6 +881,49 @@ fn key_pressed_state(kind: KeyEventKind) -> Option<bool> {
 
 fn key_is_pressed(kind: KeyEventKind) -> bool {
     matches!(kind, KeyEventKind::Press | KeyEventKind::Repeat)
+}
+
+fn build_startup_table(
+    rom_path: &Path,
+    rom_name: &str,
+    mapper_id: u16,
+    prg_rom_bytes: u32,
+    reset_pc: u16,
+    config_path: Option<&Path>,
+    video_backend: &VideoBackend,
+) -> Table {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("ROM Path"),
+        Cell::new(rom_path.display().to_string()).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("ROM Info"),
+        Cell::new(format!(
+            "'{rom_name}', Mapper {mapper_id}, PRG {prg_rom_bytes} bytes, reset vector ${reset_pc:04X}"
+        )),
+    ]);
+    if let Some(config_path) = config_path {
+        table.add_row(vec![
+            Cell::new("Config"),
+            Cell::new(config_path.display().to_string()),
+        ]);
+    }
+    table.add_row(vec![
+        Cell::new("Video Backend"),
+        Cell::new(video_backend.label()),
+    ]);
+    table.add_row(vec![
+        Cell::new("Controls"),
+        Cell::new("keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, H=HUD, Esc=Quit"),
+    ]);
+
+    table
 }
 
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {

@@ -3337,6 +3337,7 @@ dependencies = [
 name = "nes-tui"
 version = "0.1.0"
 dependencies = [
+ "comfy-table",
  "crossterm 0.28.1",
  "image",
  "nes-config",
