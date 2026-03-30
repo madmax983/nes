@@ -195,39 +195,45 @@ impl OverlayModel {
     /// Moves selection to the previous entry, wrapping at the top.
     pub fn move_prev(&mut self, cheat_count: usize) {
         match self.panel {
-            OverlayPanel::MainMenu => {
-                if self.main_selection_index == 0 {
-                    self.main_selection_index = self.main_entries.len().saturating_sub(1);
-                } else {
-                    self.main_selection_index -= 1;
-                }
-                self.sync_selected_slot_with_main_selection();
-            }
-            OverlayPanel::Cheats => {
-                let entry_count = cheat_count.saturating_add(1);
-                if self.cheats_selection_index == 0 {
-                    self.cheats_selection_index = entry_count.saturating_sub(1);
-                } else {
-                    self.cheats_selection_index -= 1;
-                }
-            }
+            OverlayPanel::MainMenu => self.move_prev_main(),
+            OverlayPanel::Cheats => self.move_prev_cheats(cheat_count),
+        }
+    }
+
+    fn move_prev_main(&mut self) {
+        if self.main_selection_index == 0 {
+            self.main_selection_index = self.main_entries.len().saturating_sub(1);
+        } else {
+            self.main_selection_index -= 1;
+        }
+        self.sync_selected_slot_with_main_selection();
+    }
+
+    fn move_prev_cheats(&mut self, cheat_count: usize) {
+        let entry_count = cheat_count.saturating_add(1);
+        if self.cheats_selection_index == 0 {
+            self.cheats_selection_index = entry_count.saturating_sub(1);
+        } else {
+            self.cheats_selection_index -= 1;
         }
     }
 
     /// Moves selection to the next entry, wrapping at the bottom.
     pub fn move_next(&mut self, cheat_count: usize) {
         match self.panel {
-            OverlayPanel::MainMenu => {
-                self.main_selection_index =
-                    (self.main_selection_index + 1) % self.main_entries.len();
-                self.sync_selected_slot_with_main_selection();
-            }
-            OverlayPanel::Cheats => {
-                let entry_count = cheat_count.saturating_add(1);
-                self.cheats_selection_index =
-                    (self.cheats_selection_index + 1) % entry_count.max(1);
-            }
+            OverlayPanel::MainMenu => self.move_next_main(),
+            OverlayPanel::Cheats => self.move_next_cheats(cheat_count),
         }
+    }
+
+    fn move_next_main(&mut self) {
+        self.main_selection_index = (self.main_selection_index + 1) % self.main_entries.len();
+        self.sync_selected_slot_with_main_selection();
+    }
+
+    fn move_next_cheats(&mut self, cheat_count: usize) {
+        let entry_count = cheat_count.saturating_add(1);
+        self.cheats_selection_index = (self.cheats_selection_index + 1) % entry_count.max(1);
     }
 
     /// Handles one overlay key press and emits a high-level command when needed.

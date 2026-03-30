@@ -1013,6 +1013,28 @@ fn apply_gamepad_delta_commands(
     Ok(())
 }
 
+macro_rules! create_app_context {
+    ($core:expr, $session:expr, $session_cheats:expr, $overlay:expr, $rollback:expr, $runtime:expr, $audio_output:expr, $time_machine:expr, $rewind_held:expr, $metrics:expr, $keyboard_bits:expr, $gamepad_bits:expr, $window:expr, $rta_manager:expr, $frame_index:expr) => {
+        AppContext {
+            core: $core,
+            session: $session,
+            session_cheats: $session_cheats,
+            overlay: $overlay,
+            rollback_enabled: $rollback.is_some(),
+            runtime: $runtime,
+            audio_output: $audio_output.as_ref(),
+            time_machine: $time_machine,
+            rewind_held: $rewind_held,
+            metrics: $metrics,
+            keyboard_bits: $keyboard_bits,
+            gamepad_bits: $gamepad_bits,
+            window: $window,
+            rta_manager: $rta_manager,
+            frame_index: $frame_index,
+        }
+    };
+}
+
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
 
@@ -1262,23 +1284,23 @@ fn run() -> Result<(), String> {
                         window.request_redraw();
                     }
                     if let Some(command) = action {
-                        let mut ctx = AppContext {
-                            core: &mut core,
-                            session: &mut session,
-                            session_cheats: &mut session_cheats,
-                            overlay: &mut overlay,
-                            rollback_enabled: rollback.is_some(),
-                            runtime: &runtime,
-                            audio_output: audio_output.as_ref(),
-                            time_machine: &mut time_machine,
-                            rewind_held: &mut rewind_held,
-                            metrics: &mut metrics,
+                        let mut ctx = create_app_context!(
+                            &mut core,
+                            &mut session,
+                            &mut session_cheats,
+                            &mut overlay,
+                            rollback,
+                            &runtime,
+                            audio_output,
+                            &mut time_machine,
+                            &mut rewind_held,
+                            &mut metrics,
                             keyboard_bits,
-                            gamepad_bits: &mut gamepad_bits,
-                            window: &window,
-                            rta_manager: &mut rta_manager,
-                            frame_index,
-                        };
+                            &mut gamepad_bits,
+                            &window,
+                            &mut rta_manager,
+                            frame_index
+                        );
                         let _ = dispatch_overlay_command(command, &mut ctx, control_flow);
                     }
                     return;
@@ -1292,23 +1314,23 @@ fn run() -> Result<(), String> {
                     rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 ) {
                     KeyboardDecision::ToggleOverlay => {
-                        let mut ctx = AppContext {
-                            core: &mut core,
-                            session: &mut session,
-                            session_cheats: &mut session_cheats,
-                            overlay: &mut overlay,
-                            rollback_enabled: rollback.is_some(),
-                            runtime: &runtime,
-                            audio_output: audio_output.as_ref(),
-                            time_machine: &mut time_machine,
-                            rewind_held: &mut rewind_held,
-                            metrics: &mut metrics,
+                        let mut ctx = create_app_context!(
+                            &mut core,
+                            &mut session,
+                            &mut session_cheats,
+                            &mut overlay,
+                            rollback,
+                            &runtime,
+                            audio_output,
+                            &mut time_machine,
+                            &mut rewind_held,
+                            &mut metrics,
                             keyboard_bits,
-                            gamepad_bits: &mut gamepad_bits,
-                            window: &window,
-                            rta_manager: &mut rta_manager,
-                            frame_index,
-                        };
+                            &mut gamepad_bits,
+                            &window,
+                            &mut rta_manager,
+                            frame_index
+                        );
                         let _ = dispatch_app_action(AppAction::ToggleOverlay, &mut ctx, control_flow);
                     }
                     KeyboardDecision::ManualSaveState => {
@@ -2045,20 +2067,19 @@ fn controller_state_delta_for_player(
     let mut commands = Vec::with_capacity(CONTROLLER_BUTTONS.len());
     for button in CONTROLLER_BUTTONS {
         let mask = button.bit_mask();
-        match (previous & mask != 0, current & mask != 0) {
-            (false, true) => {
-                commands.push(match player {
-                    nes_core::Player::One => Command::PressButton(button),
-                    nes_core::Player::Two => Command::PressButton2(button),
-                });
-            }
-            (true, false) => {
-                commands.push(match player {
-                    nes_core::Player::One => Command::ReleaseButton(button),
-                    nes_core::Player::Two => Command::ReleaseButton2(button),
-                });
-            }
-            _ => {}
+        let was_pressed = previous & mask != 0;
+        let is_pressed = current & mask != 0;
+
+        if !was_pressed && is_pressed {
+            commands.push(match player {
+                nes_core::Player::One => Command::PressButton(button),
+                nes_core::Player::Two => Command::PressButton2(button),
+            });
+        } else if was_pressed && !is_pressed {
+            commands.push(match player {
+                nes_core::Player::One => Command::ReleaseButton(button),
+                nes_core::Player::Two => Command::ReleaseButton2(button),
+            });
         }
     }
     commands
@@ -2760,35 +2781,33 @@ mod tests {
     fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
         let now = Instant::now();
         let future = now + Duration::from_millis(2);
-        match evaluate_frame_deadline(now, future) {
-            FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
-            FrameDecision::Step { .. } => panic!("expected wait branch"),
-        }
+        let FrameDecision::WaitUntil(deadline) = evaluate_frame_deadline(now, future) else {
+            panic!("expected wait branch");
+        };
+        assert_eq!(deadline, future);
 
-        match evaluate_frame_deadline(now, now) {
-            FrameDecision::Step {
-                missed_deadline,
-                next_deadline,
-            } => {
-                assert!(!missed_deadline);
-                assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
-            }
-            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
-        }
+        let FrameDecision::Step {
+            missed_deadline,
+            next_deadline,
+        } = evaluate_frame_deadline(now, now)
+        else {
+            panic!("expected step branch");
+        };
+        assert!(!missed_deadline);
+        assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
 
-        match evaluate_frame_deadline(now + Duration::from_millis(1), now) {
-            FrameDecision::Step {
-                missed_deadline,
-                next_deadline,
-            } => {
-                assert!(missed_deadline);
-                assert_eq!(
-                    next_deadline,
-                    (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
-                );
-            }
-            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
-        }
+        let FrameDecision::Step {
+            missed_deadline,
+            next_deadline,
+        } = evaluate_frame_deadline(now + Duration::from_millis(1), now)
+        else {
+            panic!("expected step branch");
+        };
+        assert!(missed_deadline);
+        assert_eq!(
+            next_deadline,
+            (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
+        );
     }
 
     #[test]
