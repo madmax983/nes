@@ -53,3 +53,11 @@
 **Mutant:** `replace < with <=` in `Gxrom::from_prg_chr` on line 35 (`if prg_rom.len() < PRG_BANK_32K`).
 **Diagnosis:** `EQUIVALENT_MUTANT`. Changing `<` to `<=` causes the condition to evaluate to true when the ROM length is exactly 32KB. This leads to `resize(PRG_BANK_32K, 0)` being called. Since the vector's length is already equal to 32KB, `resize` does nothing. This mutation does not change observable behavior.
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+## 2026-03-27 - Equivalent Mutant in `nes-dsl` decode_string_literal
+**Mutant:** `crates/nes-dsl/src/lib.rs:1322:41: replace | with ^ in decode_string_literal`
+**Diagnosis:** `EQUIVALENT_MUTANT`. The mutant changes `(hi_val << 4 | lo_val) as u8` to `(hi_val << 4 ^ lo_val) as u8`. Because `lo_val` represents a single hex digit, its value is strictly `0..=15` (which fits in the lower 4 bits). `hi_val << 4` shifts another hex digit into the upper 4 bits, leaving the lower 4 bits exactly 0. Thus, the bits being combined are perfectly disjoint, and a bitwise OR (`|`) is mathematically equivalent to a bitwise XOR (`^`) and even addition (`+`).
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+## 2026-03-27 - Timeout Mutants in `nes-dsl` strip_comments
+**Mutant:** Mutants replacing `idx += 1` with `idx *= 1` or `idx -= 1` in `strip_comments`.
+**Diagnosis:** `TIMEOUT`. These mutations prevent the loop index from advancing, causing an infinite loop when parsing lines with comments, strings, or regular characters. The test suite correctly exercises these paths and hangs as expected. The timeout is the expected behavior when an infinite loop is introduced, meaning the test suite *does* catch this fault (by failing to complete).
+**Kill Shot:** Documented as an expected failure mode (timeout). No additional test needed.

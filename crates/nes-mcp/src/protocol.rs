@@ -169,3 +169,16 @@ impl RpcError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_internal_error() {
+        let err = RpcError::internal_error("something went wrong");
+        assert_eq!(err.code, -32603);
+        assert_eq!(err.message, "something went wrong");
+        assert!(err.data.is_none());
+    }
+}
