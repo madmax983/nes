@@ -20,12 +20,12 @@ use nes_config::{
     parse_config_path_arg,
 };
 use nes_core::{
-    Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore,
-    RomLoadInfo,
+    Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo,
 };
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_desktop::args::parse_runtime_args;
+use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{
     SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
     slot_path_for_rom, slot_paths_for_rom,
@@ -44,7 +44,6 @@ use nes_desktop::rta::{
 use nes_desktop::session_cheats::SessionCheats;
 use nes_netplay::{RollbackConfig, RollbackEngine};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
-use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
