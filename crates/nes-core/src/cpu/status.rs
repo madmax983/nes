@@ -322,6 +322,11 @@ mod tests {
         assert_eq!(irq_push & Status::BREAK_BIT, 0);
         assert_ne!(irq_push & Status::UNUSED_BIT, 0);
 
+        // The bits_for_stack_push should force the break bit to 0, even if it is set.
+        status.set_break(true);
+        let irq_push_with_break_set = status.bits_for_stack_push();
+        assert_eq!(irq_push_with_break_set & Status::BREAK_BIT, 0);
+
         // Push via PHP pushes with B set, U set
         let php_push = status.bits_for_php();
         assert_ne!(php_push & Status::BREAK_BIT, 0);

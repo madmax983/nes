@@ -67,3 +67,30 @@ impl Mapper for Nrom {
         // NROM has fixed PRG bank mapping and ignores bank-select writes.
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nrom_from_prg_rom_16k_resizes_to_16k() {
+        let prg_rom = vec![0_u8; 16 * 1024];
+        let mapper = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(mapper.prg_rom.len(), 16 * 1024);
+    }
+
+    #[test]
+    fn nrom_from_prg_rom_15k_resizes_to_16k() {
+        let prg_rom = vec![0_u8; 15 * 1024];
+        let mapper = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(mapper.prg_rom.len(), 16 * 1024);
+    }
+
+    #[test]
+    fn nrom_write_prg_does_nothing() {
+        let mut mapper = Nrom::new_32k();
+        let initial_val = mapper.read_prg(0x8000);
+        mapper.write_prg(0x8000, initial_val.wrapping_add(1));
+        assert_eq!(mapper.read_prg(0x8000), initial_val);
+    }
+}

@@ -53,3 +53,8 @@
 **Mutant:** `replace < with <=` in `Gxrom::from_prg_chr` on line 35 (`if prg_rom.len() < PRG_BANK_32K`).
 **Diagnosis:** `EQUIVALENT_MUTANT`. Changing `<` to `<=` causes the condition to evaluate to true when the ROM length is exactly 32KB. This leads to `resize(PRG_BANK_32K, 0)` being called. Since the vector's length is already equal to 32KB, `resize` does nothing. This mutation does not change observable behavior.
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+
+## YYYY-MM-DD - Equivalent Mutants in NROM `from_prg_rom`
+**Mutant:** `replace <= with >` in `Nrom::from_prg_rom` on line 36 (`if prg_rom.len() <= PRG_16K_BYTES`).
+**Diagnosis:** `WEAK_TEST`. NROM `from_prg_rom` expects 16K or 32K rom. Changing `<=` to `>` combined with the later `else if prg_rom.len() <= PRG_32K_BYTES` effectively corrupts the size check, but `nes-core` rom parser already guarantees sizes
+**Kill Shot:** Added explicit tests for passing <16K arrays directly to `Nrom::from_prg_rom`.
