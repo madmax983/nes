@@ -469,11 +469,15 @@ pub fn select_profile(
     });
 
     let Some(first_match) = match_iter.next() else {
-        let known = profiles
-            .iter()
-            .map(|profile| profile.profile.id.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        // **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
+        // a String and joining manually.
+        let mut known = String::new();
+        for (i, profile) in profiles.iter().enumerate() {
+            if i > 0 {
+                known.push_str(", ");
+            }
+            known.push_str(profile.profile.id.as_str());
+        }
         return Err(format!(
             "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
             known
@@ -481,12 +485,16 @@ pub fn select_profile(
     };
 
     if let Some(second_match) = match_iter.next() {
-        let mut conflict_names = vec![
-            first_match.profile.id.as_str(),
-            second_match.profile.id.as_str(),
-        ];
-        conflict_names.extend(match_iter.map(|profile| profile.profile.id.as_str()));
-        let conflict = conflict_names.join(", ");
+        // **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
+        // a String and joining manually.
+        let mut conflict = String::new();
+        conflict.push_str(first_match.profile.id.as_str());
+        conflict.push_str(", ");
+        conflict.push_str(second_match.profile.id.as_str());
+        for profile in match_iter {
+            conflict.push_str(", ");
+            conflict.push_str(profile.profile.id.as_str());
+        }
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
