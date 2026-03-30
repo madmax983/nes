@@ -3,6 +3,8 @@ pub mod app;
 pub mod args;
 pub mod manual_state;
 pub mod menu;
+#[cfg(feature = "nova")]
+pub mod metrics_overlay;
 pub mod overlay;
 pub mod rta;
 pub mod session_cheats;

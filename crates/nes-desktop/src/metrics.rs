@@ -7,8 +7,11 @@ use crate::netplay::NetplayRuntimeStats;
 
 const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 
+#[cfg(feature = "nova")]
+use nes_desktop::metrics_overlay::MetricsOverlayData;
+
 pub(crate) struct PerfMetrics {
-    enabled: bool,
+    pub(crate) enabled: bool,
     every_n_frames: u64,
     report_start: Instant,
     report_start_ppu_frame: u64,
@@ -29,6 +32,8 @@ pub(crate) struct PerfMetrics {
     netplay_max_rollback_distance: u64,
     netplay_desyncs: u64,
     netplay_input_delay_frames: u32,
+    #[cfg(feature = "nova")]
+    pub latest_overlay_data: Option<MetricsOverlayData>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -95,6 +100,8 @@ impl PerfMetrics {
             netplay_max_rollback_distance: 0,
             netplay_desyncs: 0,
             netplay_input_delay_frames: 0,
+            #[cfg(feature = "nova")]
+            latest_overlay_data: None,
         }
     }
 
@@ -188,6 +195,18 @@ impl PerfMetrics {
             self.netplay_desyncs,
             self.netplay_input_delay_frames
         );
+
+        #[cfg(feature = "nova")]
+        {
+            self.latest_overlay_data = Some(MetricsOverlayData {
+                emu_fps: snapshot.emu_fps,
+                avg_render_ms: snapshot.avg_render_ms,
+                late_frames: self.late_frames,
+                audio_drops: self.audio_queue_drops,
+                net_rtt_ms: self.netplay_rtt_ms,
+                net_rollbacks: self.netplay_rollbacks,
+            });
+        }
 
         self.report_start = Instant::now();
         self.report_start_ppu_frame = ppu_now;

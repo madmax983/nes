@@ -1745,6 +1745,17 @@ fn run() -> Result<(), String> {
         Event::RedrawRequested(_) => {
             let render_start = Instant::now();
             core.fill_framebuffer_rgba(&mut frame_rgba);
+
+            #[cfg(feature = "nova")]
+            #[allow(clippy::collapsible_if)]
+            if metrics.enabled {
+                if let Some(data) = metrics.latest_overlay_data.as_ref() {
+                    let mut mo = nes_desktop::metrics_overlay::MetricsOverlay::new(true);
+                    mo.update(data.clone());
+                    mo.render(&mut frame_rgba);
+                }
+            }
+
             pixels.frame_mut().copy_from_slice(&frame_rgba);
             if overlay.is_open() {
                 let slot_summaries = overlay_slot_summaries(&session.slot_metadata);
