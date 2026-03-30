@@ -226,7 +226,10 @@ struct TuiRuntime {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{} {err}", "Error:".with(crossterm::style::Color::Red).bold());
+        eprintln!(
+            "{} {err}",
+            "Error:".with(crossterm::style::Color::Red).bold()
+        );
     }
 }
 
