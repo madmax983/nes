@@ -595,309 +595,290 @@ fn reconcile_core_pause_with_overlay(core: &mut NesCore, overlay_open: bool) -> 
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+struct AppContext<'a> {
+    core: &'a mut NesCore,
+    session: &'a mut LoadedRomSession,
+    session_cheats: &'a mut SessionCheats,
+    overlay: &'a mut OverlayModel,
+    rollback_enabled: bool,
+    runtime: &'a RuntimeConfig,
+    audio_output: Option<&'a AudioOutput>,
+    time_machine: &'a mut TimeMachine,
+    rewind_held: &'a mut bool,
+    metrics: &'a mut PerfMetrics,
+    keyboard_bits: u8,
+    gamepad_bits: &'a mut [u8; 2],
+    window: &'a Window,
+    rta_manager: &'a mut Option<RtaManager>,
+    frame_index: u64,
+}
+
 fn dispatch_app_action(
     action: AppAction,
-    core: &mut NesCore,
-    session: &mut LoadedRomSession,
-    session_cheats: &mut SessionCheats,
-    overlay: &mut OverlayModel,
-    rollback_enabled: bool,
-    runtime: &RuntimeConfig,
-    audio_output: Option<&AudioOutput>,
-    time_machine: &mut TimeMachine,
-    rewind_held: &mut bool,
-    metrics: &mut PerfMetrics,
-    keyboard_bits: u8,
-    gamepad_bits: &mut [u8; 2],
-    window: &Window,
-    rta_manager: &mut Option<RtaManager>,
-    frame_index: u64,
+    ctx: &mut AppContext,
     control_flow: &mut ControlFlow,
 ) -> bool {
-    match execute_app_action(
-        action,
-        core,
-        session,
-        session_cheats,
-        overlay,
-        rollback_enabled,
-        runtime,
-        audio_output,
-        time_machine,
-        rewind_held,
-        metrics,
-        keyboard_bits,
-        gamepad_bits,
-        window,
-        rta_manager,
-        frame_index,
-    ) {
+    match execute_app_action(action, ctx) {
         Ok(true) => {
             *control_flow = ControlFlow::Exit;
             true
         }
         Ok(false) => {
-            window.request_redraw();
+            ctx.window.request_redraw();
             false
         }
         Err(err) => {
-            overlay.set_status_message(err);
-            let _ = set_overlay_open(overlay, true, core, audio_output, window, session);
-            window.request_redraw();
+            ctx.overlay.set_status_message(err);
+            let _ = set_overlay_open(
+                ctx.overlay,
+                true,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            );
+            ctx.window.request_redraw();
             false
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn dispatch_overlay_command(
     command: OverlayCommand,
-    core: &mut NesCore,
-    session: &mut LoadedRomSession,
-    session_cheats: &mut SessionCheats,
-    overlay: &mut OverlayModel,
-    rollback_enabled: bool,
-    runtime: &RuntimeConfig,
-    audio_output: Option<&AudioOutput>,
-    time_machine: &mut TimeMachine,
-    rewind_held: &mut bool,
-    metrics: &mut PerfMetrics,
-    keyboard_bits: u8,
-    gamepad_bits: &mut [u8; 2],
-    window: &Window,
-    rta_manager: &mut Option<RtaManager>,
-    frame_index: u64,
+    ctx: &mut AppContext,
     control_flow: &mut ControlFlow,
 ) -> bool {
     match command {
-        OverlayCommand::AppAction(action) => dispatch_app_action(
-            action,
-            core,
-            session,
-            session_cheats,
-            overlay,
-            rollback_enabled,
-            runtime,
-            audio_output,
-            time_machine,
-            rewind_held,
-            metrics,
-            keyboard_bits,
-            gamepad_bits,
-            window,
-            rta_manager,
-            frame_index,
-            control_flow,
-        ),
+        OverlayCommand::AppAction(action) => dispatch_app_action(action, ctx, control_flow),
         OverlayCommand::ToggleCheat(index) => {
-            let Some(raw_code) = session_cheats
+            let Some(raw_code) = ctx
+                .session_cheats
                 .entries()
                 .get(index)
                 .map(|entry| entry.raw_code.clone())
             else {
-                overlay.set_status_message(format!("No cheat entry exists at index {index}"));
-                window.request_redraw();
+                ctx.overlay
+                    .set_status_message(format!("No cheat entry exists at index {index}"));
+                ctx.window.request_redraw();
                 return false;
             };
-            match session_cheats.toggle(index) {
+            match ctx.session_cheats.toggle(index) {
                 Ok(()) => {
-                    if let Err(err) = apply_session_cheats(core, session_cheats) {
-                        overlay.set_status_message(err);
+                    if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
+                        ctx.overlay.set_status_message(err);
                     } else {
-                        let enabled = session_cheats
+                        let enabled = ctx
+                            .session_cheats
                             .entries()
                             .get(index)
                             .is_some_and(|entry| entry.enabled);
-                        overlay.set_status_message(format!(
+                        ctx.overlay.set_status_message(format!(
                             "[cheat] {} {raw_code}",
                             if enabled { "enabled" } else { "disabled" }
                         ));
                     }
                 }
-                Err(err) => overlay.set_status_message(err.to_string()),
+                Err(err) => ctx.overlay.set_status_message(err.to_string()),
             }
-            window.request_redraw();
+            ctx.window.request_redraw();
             false
         }
         OverlayCommand::RemoveCheat(index) => {
-            match session_cheats.remove(index) {
+            match ctx.session_cheats.remove(index) {
                 Ok(removed) => {
-                    if let Err(err) = apply_session_cheats(core, session_cheats) {
-                        overlay.set_status_message(err);
+                    if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
+                        ctx.overlay.set_status_message(err);
                     } else {
-                        overlay.set_status_message(format!("[cheat] removed {}", removed.raw_code));
+                        ctx.overlay
+                            .set_status_message(format!("[cheat] removed {}", removed.raw_code));
                     }
                 }
-                Err(err) => overlay.set_status_message(err.to_string()),
+                Err(err) => ctx.overlay.set_status_message(err.to_string()),
             }
-            window.request_redraw();
+            ctx.window.request_redraw();
             false
         }
         OverlayCommand::SubmitCheatCode(raw_code) => {
-            match session_cheats.add(&raw_code) {
+            match ctx.session_cheats.add(&raw_code) {
                 Ok(()) => {
-                    if let Err(err) = apply_session_cheats(core, session_cheats) {
-                        overlay.set_status_message(err);
+                    if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
+                        ctx.overlay.set_status_message(err);
                     } else {
-                        let new_index = session_cheats.len().saturating_sub(1);
-                        overlay.close_add_cheat_modal();
-                        overlay.focus_cheat(new_index);
-                        overlay.set_status_message(format!(
+                        let new_index = ctx.session_cheats.len().saturating_sub(1);
+                        ctx.overlay.close_add_cheat_modal();
+                        ctx.overlay.focus_cheat(new_index);
+                        ctx.overlay.set_status_message(format!(
                             "[cheat] added {}",
-                            session_cheats.entries()[new_index].raw_code
+                            ctx.session_cheats.entries()[new_index].raw_code
                         ));
                     }
                 }
-                Err(err) => overlay
+                Err(err) => ctx
+                    .overlay
                     .set_status_message(format!("Invalid cheat code '{}': {err}", raw_code.trim())),
             }
-            window.request_redraw();
+            ctx.window.request_redraw();
             false
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn execute_app_action(
-    action: AppAction,
-    core: &mut NesCore,
-    session: &mut LoadedRomSession,
-    session_cheats: &mut SessionCheats,
-    overlay: &mut OverlayModel,
-    rollback_enabled: bool,
-    runtime: &RuntimeConfig,
-    audio_output: Option<&AudioOutput>,
-    time_machine: &mut TimeMachine,
-    rewind_held: &mut bool,
-    metrics: &mut PerfMetrics,
-    keyboard_bits: u8,
-    gamepad_bits: &mut [u8; 2],
-    window: &Window,
-    rta_manager: &mut Option<RtaManager>,
-    frame_index: u64,
-) -> Result<bool, String> {
-    validate_action_allowed(action, rollback_enabled)?;
+fn execute_app_action(action: AppAction, ctx: &mut AppContext) -> Result<bool, String> {
+    validate_action_allowed(action, ctx.rollback_enabled)?;
 
     match action {
         AppAction::ToggleOverlay => {
             set_overlay_open(
-                overlay,
-                !overlay.is_open(),
-                core,
-                audio_output,
-                window,
-                session,
+                ctx.overlay,
+                !ctx.overlay.is_open(),
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
             )?;
             Ok(false)
         }
         AppAction::Resume => {
-            set_overlay_open(overlay, false, core, audio_output, window, session)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::OpenCheats => {
-            if rta_manager.is_some() {
-                overlay.set_status_message("Cheats are unavailable while RTA mode is active");
+            if ctx.rta_manager.is_some() {
+                ctx.overlay
+                    .set_status_message("Cheats are unavailable while RTA mode is active");
                 return Ok(false);
             }
-            if !overlay.is_open() {
-                set_overlay_open(overlay, true, core, audio_output, window, session)?;
+            if !ctx.overlay.is_open() {
+                set_overlay_open(
+                    ctx.overlay,
+                    true,
+                    ctx.core,
+                    ctx.audio_output,
+                    ctx.window,
+                    ctx.session,
+                )?;
             }
-            overlay.open_cheats_panel();
-            window.set_title(&window_title(session, true));
+            ctx.overlay.open_cheats_panel();
+            ctx.window.set_title(&window_title(ctx.session, true));
             Ok(false)
         }
         AppAction::OpenRom => {
-            if rta_manager.is_some() {
-                overlay.set_status_message("Open ROM is unavailable while RTA mode is active");
+            if ctx.rta_manager.is_some() {
+                ctx.overlay
+                    .set_status_message("Open ROM is unavailable while RTA mode is active");
                 return Ok(false);
             }
             if !rom_picker_supported() {
-                overlay.set_status_message("Open ROM picker is unavailable on this platform build");
+                ctx.overlay
+                    .set_status_message("Open ROM picker is unavailable on this platform build");
                 return Ok(false);
             }
             let Some(path) = pick_rom_path() else {
-                overlay.set_status_message("Open ROM cancelled");
+                ctx.overlay.set_status_message("Open ROM cancelled");
                 return Ok(false);
             };
             let cleared_cheats = SessionCheats::new();
-            *session = load_rom_session(core, &path, &cleared_cheats)?;
-            session_cheats.clear();
-            if let Some(output) = audio_output {
+            *ctx.session = load_rom_session(ctx.core, &path, &cleared_cheats)?;
+            ctx.session_cheats.clear();
+            if let Some(output) = ctx.audio_output {
                 output.clear();
             }
-            *rewind_held = false;
-            *time_machine = TimeMachine::new(TimeMachineConfig::default());
-            time_machine.record_frame(core);
-            *metrics = PerfMetrics::new(
-                runtime.metrics_enabled,
-                runtime.metrics_every_frames,
-                core.ppu_frame_counter(),
+            *ctx.rewind_held = false;
+            *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
+            ctx.time_machine.record_frame(ctx.core);
+            *ctx.metrics = PerfMetrics::new(
+                ctx.runtime.metrics_enabled,
+                ctx.runtime.metrics_every_frames,
+                ctx.core.ppu_frame_counter(),
             );
-            resync_restored_inputs(core, keyboard_bits, gamepad_bits)?;
-            overlay.clear_status_message();
-            set_overlay_open(overlay, false, core, audio_output, window, session)?;
+            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
+            ctx.overlay.clear_status_message();
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::SaveSlot(slot) => {
-            if let Some(rta) = rta_manager.as_mut() {
+            if let Some(rta) = ctx.rta_manager.as_mut() {
                 let _ = rta.mark_forbidden_action(
                     ForbiddenAction::SaveLoad,
-                    frame_index,
+                    ctx.frame_index,
                     Instant::now(),
                 );
             }
-            let snapshot = core.save_state();
-            let slot_path = slot_path_for_selection(session, slot);
-            save_state_file(&slot_path, &session.rom_hash, &snapshot)?;
-            refresh_slot_metadata(session)?;
-            overlay.focus_slot(slot, true);
-            overlay.set_status_message(format!("[state] saved {}", slot_path.display()));
+            let snapshot = ctx.core.save_state();
+            let slot_path = slot_path_for_selection(ctx.session, slot);
+            save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
+            refresh_slot_metadata(ctx.session)?;
+            ctx.overlay.focus_slot(slot, true);
+            ctx.overlay
+                .set_status_message(format!("[state] saved {}", slot_path.display()));
             Ok(false)
         }
         AppAction::LoadSlot(slot) => {
-            if let Some(rta) = rta_manager.as_mut() {
+            if let Some(rta) = ctx.rta_manager.as_mut() {
                 let _ = rta.mark_forbidden_action(
                     ForbiddenAction::SaveLoad,
-                    frame_index,
+                    ctx.frame_index,
                     Instant::now(),
                 );
             }
-            let slot_path = slot_path_for_selection(session, slot);
-            let snapshot = load_state_file(&slot_path, &session.rom_hash)?;
-            core.load_state(&snapshot);
-            apply_session_cheats(core, session_cheats)?;
-            reconcile_core_pause_with_overlay(core, overlay.is_open())?;
-            resync_restored_inputs(core, keyboard_bits, gamepad_bits)?;
-            if let Some(output) = audio_output {
+            let slot_path = slot_path_for_selection(ctx.session, slot);
+            let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
+            ctx.core.load_state(&snapshot);
+            apply_session_cheats(ctx.core, ctx.session_cheats)?;
+            reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
+            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
+            if let Some(output) = ctx.audio_output {
                 output.clear();
             }
-            *rewind_held = false;
-            *time_machine = TimeMachine::new(TimeMachineConfig::default());
-            time_machine.record_frame(core);
-            *metrics = PerfMetrics::new(
-                runtime.metrics_enabled,
-                runtime.metrics_every_frames,
-                core.ppu_frame_counter(),
+            *ctx.rewind_held = false;
+            *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
+            ctx.time_machine.record_frame(ctx.core);
+            *ctx.metrics = PerfMetrics::new(
+                ctx.runtime.metrics_enabled,
+                ctx.runtime.metrics_every_frames,
+                ctx.core.ppu_frame_counter(),
             );
-            refresh_slot_metadata(session)?;
-            overlay.focus_slot(slot, false);
-            overlay.set_status_message(format!("[state] loaded {}", slot_path.display()));
+            refresh_slot_metadata(ctx.session)?;
+            ctx.overlay.focus_slot(slot, false);
+            ctx.overlay
+                .set_status_message(format!("[state] loaded {}", slot_path.display()));
             Ok(false)
         }
         AppAction::Reset => {
-            core.execute(Command::Reset)
+            ctx.core
+                .execute(Command::Reset)
                 .map_err(|err| format!("Reset failed: {err}"))?;
-            *rewind_held = false;
-            *time_machine = TimeMachine::new(TimeMachineConfig::default());
-            time_machine.record_frame(core);
-            *metrics = PerfMetrics::new(
-                runtime.metrics_enabled,
-                runtime.metrics_every_frames,
-                core.ppu_frame_counter(),
+            *ctx.rewind_held = false;
+            *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
+            ctx.time_machine.record_frame(ctx.core);
+            *ctx.metrics = PerfMetrics::new(
+                ctx.runtime.metrics_enabled,
+                ctx.runtime.metrics_every_frames,
+                ctx.core.ppu_frame_counter(),
             );
-            overlay.set_status_message("System reset");
-            set_overlay_open(overlay, false, core, audio_output, window, session)?;
+            ctx.overlay.set_status_message("System reset");
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::Quit => Ok(true),
@@ -1281,23 +1262,26 @@ fn run() -> Result<(), String> {
                         window.request_redraw();
                     }
                     if let Some(command) = action {
+                        let mut ctx = AppContext {
+                            core: &mut core,
+                            session: &mut session,
+                            session_cheats: &mut session_cheats,
+                            overlay: &mut overlay,
+                            rollback_enabled: rollback.is_some(),
+                            runtime: &runtime,
+                            audio_output: audio_output.as_ref(),
+                            time_machine: &mut time_machine,
+                            rewind_held: &mut rewind_held,
+                            metrics: &mut metrics,
+                            keyboard_bits,
+                            gamepad_bits: &mut gamepad_bits,
+                            window: &window,
+                            rta_manager: &mut rta_manager,
+                            frame_index,
+                        };
                         let _ = dispatch_overlay_command(
                             command,
-                            &mut core,
-                            &mut session,
-                            &mut session_cheats,
-                            &mut overlay,
-                            rollback.is_some(),
-                            &runtime,
-                            audio_output.as_ref(),
-                            &mut time_machine,
-                            &mut rewind_held,
-                            &mut metrics,
-                            keyboard_bits,
-                            &mut gamepad_bits,
-                            &window,
-                            &mut rta_manager,
-                            frame_index,
+                            &mut ctx,
                             control_flow,
                         );
                     }
@@ -1312,68 +1296,77 @@ fn run() -> Result<(), String> {
                     rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 ) {
                     KeyboardDecision::ToggleOverlay => {
+                        let mut ctx = AppContext {
+                            core: &mut core,
+                            session: &mut session,
+                            session_cheats: &mut session_cheats,
+                            overlay: &mut overlay,
+                            rollback_enabled: rollback.is_some(),
+                            runtime: &runtime,
+                            audio_output: audio_output.as_ref(),
+                            time_machine: &mut time_machine,
+                            rewind_held: &mut rewind_held,
+                            metrics: &mut metrics,
+                            keyboard_bits,
+                            gamepad_bits: &mut gamepad_bits,
+                            window: &window,
+                            rta_manager: &mut rta_manager,
+                            frame_index,
+                        };
                         let _ = dispatch_app_action(
                             AppAction::ToggleOverlay,
-                            &mut core,
-                            &mut session,
-                            &mut session_cheats,
-                            &mut overlay,
-                            rollback.is_some(),
-                            &runtime,
-                            audio_output.as_ref(),
-                            &mut time_machine,
-                            &mut rewind_held,
-                            &mut metrics,
-                            keyboard_bits,
-                            &mut gamepad_bits,
-                            &window,
-                            &mut rta_manager,
-                            frame_index,
+                            &mut ctx,
                             control_flow,
                         );
                     }
                     KeyboardDecision::ManualSaveState => {
                         if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
+                            let mut ctx = AppContext {
+                                core: &mut core,
+                                session: &mut session,
+                                session_cheats: &mut session_cheats,
+                                overlay: &mut overlay,
+                                rollback_enabled: rollback.is_some(),
+                                runtime: &runtime,
+                                audio_output: audio_output.as_ref(),
+                                time_machine: &mut time_machine,
+                                rewind_held: &mut rewind_held,
+                                metrics: &mut metrics,
+                                keyboard_bits,
+                                gamepad_bits: &mut gamepad_bits,
+                                window: &window,
+                                rta_manager: &mut rta_manager,
+                                frame_index,
+                            };
                             let _ = dispatch_app_action(
                                 action,
-                                &mut core,
-                                &mut session,
-                                &mut session_cheats,
-                                &mut overlay,
-                                rollback.is_some(),
-                                &runtime,
-                                audio_output.as_ref(),
-                                &mut time_machine,
-                                &mut rewind_held,
-                                &mut metrics,
-                                keyboard_bits,
-                                &mut gamepad_bits,
-                                &window,
-                                &mut rta_manager,
-                                frame_index,
+                                &mut ctx,
                                 control_flow,
                             );
                         }
                     }
                     KeyboardDecision::ManualLoadState => {
                         if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
+                            let mut ctx = AppContext {
+                                core: &mut core,
+                                session: &mut session,
+                                session_cheats: &mut session_cheats,
+                                overlay: &mut overlay,
+                                rollback_enabled: rollback.is_some(),
+                                runtime: &runtime,
+                                audio_output: audio_output.as_ref(),
+                                time_machine: &mut time_machine,
+                                rewind_held: &mut rewind_held,
+                                metrics: &mut metrics,
+                                keyboard_bits,
+                                gamepad_bits: &mut gamepad_bits,
+                                window: &window,
+                                rta_manager: &mut rta_manager,
+                                frame_index,
+                            };
                             let _ = dispatch_app_action(
                                 action,
-                                &mut core,
-                                &mut session,
-                                &mut session_cheats,
-                                &mut overlay,
-                                rollback.is_some(),
-                                &runtime,
-                                audio_output.as_ref(),
-                                &mut time_machine,
-                                &mut rewind_held,
-                                &mut metrics,
-                                keyboard_bits,
-                                &mut gamepad_bits,
-                                &window,
-                                &mut rta_manager,
-                                frame_index,
+                                &mut ctx,
                                 control_flow,
                             );
                         }
@@ -1461,23 +1454,26 @@ fn run() -> Result<(), String> {
                 rta_manager.is_some(),
             );
             while let Some(action) = desktop_menu.poll_action() {
+                let mut ctx = AppContext {
+                    core: &mut core,
+                    session: &mut session,
+                    session_cheats: &mut session_cheats,
+                    overlay: &mut overlay,
+                    rollback_enabled: rollback.is_some(),
+                    runtime: &runtime,
+                    audio_output: audio_output.as_ref(),
+                    time_machine: &mut time_machine,
+                    rewind_held: &mut rewind_held,
+                    metrics: &mut metrics,
+                    keyboard_bits,
+                    gamepad_bits: &mut gamepad_bits,
+                    window: &window,
+                    rta_manager: &mut rta_manager,
+                    frame_index,
+                };
                 if dispatch_app_action(
                     action,
-                    &mut core,
-                    &mut session,
-                    &mut session_cheats,
-                    &mut overlay,
-                    rollback.is_some(),
-                    &runtime,
-                    audio_output.as_ref(),
-                    &mut time_machine,
-                    &mut rewind_held,
-                    &mut metrics,
-                    keyboard_bits,
-                    &mut gamepad_bits,
-                    &window,
-                    &mut rta_manager,
-                    frame_index,
+                    &mut ctx,
                     control_flow,
                 ) {
                     return;
