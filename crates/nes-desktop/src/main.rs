@@ -723,6 +723,17 @@ fn dispatch_overlay_command(
     }
 }
 
+fn reset_runtime_tracking_state(ctx: &mut AppContext<'_>) {
+    *ctx.rewind_held = false;
+    *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
+    ctx.time_machine.record_frame(ctx.core);
+    *ctx.metrics = PerfMetrics::new(
+        ctx.runtime.metrics_enabled,
+        ctx.runtime.metrics_every_frames,
+        ctx.core.ppu_frame_counter(),
+    );
+}
+
 fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<bool, String> {
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
@@ -790,14 +801,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             if let Some(output) = ctx.audio_output {
                 output.clear();
             }
-            *ctx.rewind_held = false;
-            *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
-            ctx.time_machine.record_frame(ctx.core);
-            *ctx.metrics = PerfMetrics::new(
-                ctx.runtime.metrics_enabled,
-                ctx.runtime.metrics_every_frames,
-                ctx.core.ppu_frame_counter(),
-            );
+            reset_runtime_tracking_state(ctx);
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
             set_overlay_open(
@@ -844,14 +848,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             if let Some(output) = ctx.audio_output {
                 output.clear();
             }
-            *ctx.rewind_held = false;
-            *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
-            ctx.time_machine.record_frame(ctx.core);
-            *ctx.metrics = PerfMetrics::new(
-                ctx.runtime.metrics_enabled,
-                ctx.runtime.metrics_every_frames,
-                ctx.core.ppu_frame_counter(),
-            );
+            reset_runtime_tracking_state(ctx);
             refresh_slot_metadata(ctx.session)?;
             ctx.overlay.focus_slot(slot, false);
             ctx.overlay
@@ -862,14 +859,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             ctx.core
                 .execute(Command::Reset)
                 .map_err(|err| format!("Reset failed: {err}"))?;
-            *ctx.rewind_held = false;
-            *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
-            ctx.time_machine.record_frame(ctx.core);
-            *ctx.metrics = PerfMetrics::new(
-                ctx.runtime.metrics_enabled,
-                ctx.runtime.metrics_every_frames,
-                ctx.core.ppu_frame_counter(),
-            );
+            reset_runtime_tracking_state(ctx);
             ctx.overlay.set_status_message("System reset");
             set_overlay_open(
                 ctx.overlay,

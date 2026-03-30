@@ -7,3 +7,7 @@
 **Refactoring RTA Manager State Machine and I/O logic in nes-desktop/src/rta.rs**
 **Learning:** Found two "God Functions" in the `RtaManager` (`tick` and `write_artifacts_if_finished`). `tick` was a 70+ line method with multiple levels of nesting and sequential state machine steps. `write_artifacts_if_finished` was a monolithic 60+ line method handling both JSON serialization and file writing for multiple artifacts. Additionally, the `select_profile` method used a confusing `.expect()` and `.next()` iterator pattern for filtering.
 **Action:** Flattened `select_profile` by capturing `next()` using `let Some(...) else { return }`. Split the `tick` method into `tick_start`, `tick_pause_resume`, `tick_splits`, and `tick_end`. Split `write_artifacts_if_finished` into `write_run_artifact` and `write_input_log`. This drastically improves readability and reduces nesting.
+
+**Extracting Emulation Reset State Boilerplate**
+**Learning:** Found massive 15-line duplication in the `OpenRom`, `LoadSlot`, and `Reset` branches of the `execute_app_action` match statement in `main.rs`. This violated DRY principles and made the `execute_app_action` function extremely long and hard to navigate.
+**Action:** Extracted this shared logic into a single `reset_runtime_tracking_state(ctx: &mut AppContext)` helper function. This flattened the match statement branches significantly, improved readability, and ensured that tracking state resets consistently across all actions that alter the active emulation session.
