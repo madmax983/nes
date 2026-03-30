@@ -1022,3 +1022,18 @@ mod tests {
         assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
     }
 }
+
+#[cfg(test)]
+mod havoc_tests {
+    use super::*;
+    use std::io::Cursor;
+    use std::io::BufReader;
+
+    #[test]
+    #[ignore = "havoc target"]
+    fn havoc_mcp_host_oom() {
+        // Feed a maliciously large Content-Length header to cause allocation panic
+        let mut reader = BufReader::new(Cursor::new(b"Content-Length: 107374182400\r\n\r\n".to_vec()));
+        let _ = read_framed_message(&mut reader);
+    }
+}
