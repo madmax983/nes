@@ -129,9 +129,11 @@ fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
         }
     };
 
-    let id = request.id.clone();
-    let is_notification = id.is_none();
-    let response_id = id.unwrap_or(Value::Null);
+    // Performance optimization: We avoid cloning the JSON-RPC request ID by first
+    // borrowing it to check if it's a notification, and then consuming it via
+    // `unwrap_or` to assign `response_id`.
+    let is_notification = request.id.is_none();
+    let response_id = request.id.unwrap_or(Value::Null);
 
     if request.jsonrpc != JSONRPC_VERSION {
         if is_notification {
