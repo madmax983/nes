@@ -2061,27 +2061,21 @@ fn controller_state_delta_for_player(
     previous: u8,
     current: u8,
     player: nes_core::Player,
-) -> Vec<Command> {
-    let mut commands = Vec::with_capacity(CONTROLLER_BUTTONS.len());
-    for button in CONTROLLER_BUTTONS {
+) -> impl Iterator<Item = Command> {
+    CONTROLLER_BUTTONS.into_iter().filter_map(move |button| {
         let mask = button.bit_mask();
         match (previous & mask != 0, current & mask != 0) {
-            (false, true) => {
-                commands.push(match player {
-                    nes_core::Player::One => Command::PressButton(button),
-                    nes_core::Player::Two => Command::PressButton2(button),
-                });
-            }
-            (true, false) => {
-                commands.push(match player {
-                    nes_core::Player::One => Command::ReleaseButton(button),
-                    nes_core::Player::Two => Command::ReleaseButton2(button),
-                });
-            }
-            _ => {}
+            (false, true) => Some(match player {
+                nes_core::Player::One => Command::PressButton(button),
+                nes_core::Player::Two => Command::PressButton2(button),
+            }),
+            (true, false) => Some(match player {
+                nes_core::Player::One => Command::ReleaseButton(button),
+                nes_core::Player::Two => Command::ReleaseButton2(button),
+            }),
+            _ => None,
         }
-    }
-    commands
+    })
 }
 
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {
@@ -3037,11 +3031,12 @@ mod tests {
 
     #[test]
     fn controller_state_delta_emits_press_and_release() {
-        let press = controller_state_delta_for_player(
+        let press: Vec<_> = controller_state_delta_for_player(
             0,
             Button::A.bit_mask() | Button::Right.bit_mask(),
             nes_core::Player::One,
-        );
+        )
+        .collect();
         assert_eq!(
             press,
             vec![
@@ -3050,22 +3045,25 @@ mod tests {
             ]
         );
 
-        let release = controller_state_delta_for_player(
+        let release: Vec<_> = controller_state_delta_for_player(
             Button::A.bit_mask() | Button::B.bit_mask(),
             Button::B.bit_mask(),
             nes_core::Player::One,
-        );
+        )
+        .collect();
         assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
     }
 
     #[test]
     fn controller_state_delta_for_player2_uses_player2_commands() {
-        let press =
-            controller_state_delta_for_player(0, Button::A.bit_mask(), nes_core::Player::Two);
+        let press: Vec<_> =
+            controller_state_delta_for_player(0, Button::A.bit_mask(), nes_core::Player::Two)
+                .collect();
         assert_eq!(press, vec![Command::PressButton2(Button::A)]);
 
-        let release =
-            controller_state_delta_for_player(Button::Start.bit_mask(), 0, nes_core::Player::Two);
+        let release: Vec<_> =
+            controller_state_delta_for_player(Button::Start.bit_mask(), 0, nes_core::Player::Two)
+                .collect();
         assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
     }
 
