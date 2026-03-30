@@ -15,3 +15,6 @@
 ## 2026-03-29 - [API Core Command and Query Gaps]
 **Learning:** `nes-core/src/api.rs` had coverage gaps around `Command::ReleaseButton`, `Command::PowerCycle`, invalid `Command::SetSpeed(0)`, and querying `CoreQuery` variants. Because these are critical pathways for client applications to control the emulator, untested behavior here could result in unpredictable frontend state.
 **Action:** Wrote explicit unit tests in `api.rs` asserting correct behavior of button releases clearing bitmasks, power cycling resetting speeds, zero speed returning an error, and all `CoreQuery` variants correctly matching their results. Removed trivial getters/setters tests as per strict "Sentry" policy.
+## 2026-03-30 - [Equivalent Mutant in String Decoding]
+**Learning:** `decode_string_literal` in `crates/nes-dsl/src/lib.rs` combines hex values using `hi_val << 4 | lo_val`. A mutant that replaces `|` with `^` will survive because the two operations are logically equivalent when bits do not overlap (since the lower 4 bits of `hi_val << 4` are strictly 0, and the upper bits of `lo_val` are strictly 0).
+**Action:** Identified as an Equivalent Mutant. Do not write tautological tests just to satisfy mutation tools when the output logic is inherently identical.

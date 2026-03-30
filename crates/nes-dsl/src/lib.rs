@@ -1912,8 +1912,8 @@ mod tests {
         let parts = split_csv(r#""A,B", $10, "C\"D""#).expect("csv parse");
         assert_eq!(parts, vec![r#""A,B""#, "$10", r#""C\"D""#]);
 
-        let decoded = decode_string_literal(r#""A\n\r\t\\\"\x41""#).expect("string decode");
-        assert_eq!(decoded, vec![b'A', b'\n', b'\r', b'\t', b'\\', b'"', 0x41]);
+        let decoded = decode_string_literal(r#""A\n\r\t\\\"\x41\x1A\xFE""#).expect("string decode");
+        assert_eq!(decoded, vec![b'A', b'\n', b'\r', b'\t', b'\\', b'"', 0x41, 0x1A, 0xFE]);
 
         let utf_err = decode_string_literal("\"\u{0100}\"").expect_err("out of byte range");
         assert!(utf_err.contains("outside byte range"));
