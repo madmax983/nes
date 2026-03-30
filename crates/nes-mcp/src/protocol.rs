@@ -149,6 +149,7 @@ impl RpcError {
     /// assert_eq!(json_val["message"], "missing required field 'rom_path'");
     /// assert!(json_val.get("data").is_none());
     /// ```
+    #[must_use]
     pub fn to_json(&self) -> Value {
         let mut value = json!({
             "code": self.code,
@@ -182,6 +183,7 @@ impl RpcError {
 /// layer typically already has an owned arguments object, taking ownership here
 /// entirely eliminates the need to allocate and `.clone()` every string key
 /// and value when inserting them into the returned `ToolParams`.
+#[must_use]
 pub fn map_tool_arguments(arguments: Map<String, Value>) -> ToolParams {
     let mut params = ToolParams::new();
     for (key, value) in arguments {
@@ -195,6 +197,7 @@ pub fn map_tool_arguments(arguments: Map<String, Value>) -> ToolParams {
 /// **Performance optimization:** Taking an owned `Value` allows us to extract
 /// and return the inner `String` directly via pattern matching, avoiding
 /// a heap allocation compared to calling `.to_string()` or `.clone()` on a reference.
+#[must_use]
 pub fn json_arg_to_string(value: Value) -> String {
     match value {
         Value::String(v) => v,
@@ -202,6 +205,7 @@ pub fn json_arg_to_string(value: Value) -> String {
     }
 }
 
+#[must_use]
 pub fn dispatch_output_value(output: DispatchOutput) -> Value {
     match output {
         DispatchOutput::Ack => json!({ "kind": "ack" }),
@@ -352,6 +356,7 @@ pub fn dispatch_output_value(output: DispatchOutput) -> Value {
     }
 }
 
+#[must_use]
 pub fn tool_input_schema(tool_name: &str) -> Value {
     match tool_name {
         "set_controller_state" => json!({
@@ -472,6 +477,7 @@ pub fn tool_input_schema(tool_name: &str) -> Value {
     }
 }
 
+#[must_use]
 pub fn jsonrpc_result(id: Value, result: Value) -> Value {
     json!({
         "jsonrpc": JSONRPC_VERSION,
@@ -480,6 +486,7 @@ pub fn jsonrpc_result(id: Value, result: Value) -> Value {
     })
 }
 
+#[must_use]
 pub fn jsonrpc_error(id: Value, err: RpcError) -> Value {
     json!({
         "jsonrpc": JSONRPC_VERSION,
