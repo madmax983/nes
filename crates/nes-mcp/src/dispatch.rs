@@ -210,6 +210,12 @@ pub enum DispatchOutput {
         /// Total PRG ROM byte size.
         prg_rom_bytes: usize,
     },
+    /// Result returning a base64 encoded BMP image of the CHR RAM sprites.
+    #[cfg(feature = "nova")]
+    SpriteSheet {
+        /// Base64-encoded BMP payload.
+        bmp_base64: String,
+    },
 }
 
 /// Errors raised when parsing or executing MCP tools.
@@ -323,6 +329,8 @@ pub fn dispatch_tool(
         "load_6502_dsl" => handle_load_6502_dsl(core, params),
         "export_6502_dsl_rom" => handle_export_6502_dsl_rom(params),
         "export_6502_dsl_rom_base64" => handle_export_6502_dsl_rom_base64(params),
+        #[cfg(feature = "nova")]
+        "extract_sprite_sheet" => handle_extract_sprite_sheet(core),
         "disassemble_at" | "set_breakpoint" | "clear_breakpoint" => {
             Err(DispatchError::UnsupportedTool(tool_name.to_owned()))
         }
@@ -553,6 +561,16 @@ fn handle_export_6502_dsl_rom_base64(params: &ToolParams) -> Result<DispatchOutp
         bytes: rom.len(),
         mapper_id: 0,
         prg_rom_bytes,
+    })
+}
+
+#[cfg(feature = "nova")]
+fn handle_extract_sprite_sheet(core: &NesCore) -> Result<DispatchOutput, DispatchError> {
+    let bmp_bytes =
+        nes_core::experimental::sprite_extractor::SpriteExtractor::extract_chr_ram_bmp(core)
+            .map_err(|err| DispatchError::Internal(format!("failed to extract sprites: {err}")))?;
+    Ok(DispatchOutput::SpriteSheet {
+        bmp_base64: encode_base64(bmp_bytes.as_slice()),
     })
 }
 
@@ -1164,6 +1182,21 @@ mod tests {
                 assert_eq!(oam_bytes.len(), 256);
             }
             _ => panic!("Expected DispatchOutput::PpuOam"),
+        }
+    }
+
+    #[cfg(feature = "nova")]
+    #[test]
+    fn handle_extract_sprite_sheet_returns_base64_bmp() {
+        let core = NesCore::new();
+        let result = super::handle_extract_sprite_sheet(&core)
+            .expect("Should successfully extract sprite sheet");
+        match result {
+            super::DispatchOutput::SpriteSheet { bmp_base64 } => {
+                assert!(!bmp_base64.is_empty());
+                assert!(bmp_base64.starts_with("Qk0")); // "BM" in base64
+            }
+            _ => panic!("Expected DispatchOutput::SpriteSheet"),
         }
     }
 }

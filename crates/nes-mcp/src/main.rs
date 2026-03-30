@@ -446,6 +446,13 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "prg_rom_bytes": prg_rom_bytes,
             })
         }
+        #[cfg(feature = "nova")]
+        DispatchOutput::SpriteSheet { bmp_base64 } => {
+            json!({
+                "kind": "sprite_sheet",
+                "bmp_base64": bmp_base64,
+            })
+        }
     }
 }
 
@@ -559,6 +566,12 @@ fn tool_input_schema(tool_name: &str) -> Value {
                 "chr_hex": { "type": "string", "minLength": 2 }
             },
             "required": ["source"],
+            "additionalProperties": false
+        }),
+        #[cfg(feature = "nova")]
+        "extract_sprite_sheet" => json!({
+            "type": "object",
+            "properties": {},
             "additionalProperties": false
         }),
         _ => json!({

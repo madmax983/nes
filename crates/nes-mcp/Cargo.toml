@@ -3,6 +3,10 @@ name = "nes-mcp"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+nova = ["nes-core/nova"]
+
 [dependencies]
 comfy-table = "7.1"
 crossterm = "0.28"

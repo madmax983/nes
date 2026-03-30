@@ -442,6 +442,13 @@ fn dispatch_output_value(output: DispatchOutput) -> Value {
                 "oam_bytes": oam_bytes,
             })
         }
+        #[cfg(feature = "nova")]
+        DispatchOutput::SpriteSheet { bmp_base64 } => {
+            json!({
+                "kind": "sprite_sheet",
+                "bmp_base64": bmp_base64,
+            })
+        }
     }
 }
 

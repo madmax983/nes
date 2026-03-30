@@ -29,6 +29,7 @@ pub struct ToolDefinition {
     pub description: &'static str,
 }
 
+#[cfg(not(feature = "nova"))]
 const TOOL_CATALOG: [ToolDefinition; 31] = [
     ToolDefinition {
         name: "get_ppu_oam",
@@ -153,6 +154,138 @@ const TOOL_CATALOG: [ToolDefinition; 31] = [
     ToolDefinition {
         name: "export_6502_dsl_rom_base64",
         description: "Build an iNES NROM ROM from 6502 DSL source and return base64",
+    },
+];
+
+#[cfg(feature = "nova")]
+const TOOL_CATALOG: [ToolDefinition; 32] = [
+    ToolDefinition {
+        name: "get_ppu_oam",
+        description: "Get the current PPU OAM (Object Attribute Memory) data representing 64 sprites",
+    },
+    ToolDefinition {
+        name: "load_rom",
+        description: "Load an iNES ROM into the emulator core",
+    },
+    ToolDefinition {
+        name: "set_controller_state",
+        description: "Set the entire controller button bitfield",
+    },
+    ToolDefinition {
+        name: "press_button",
+        description: "Press a single controller button",
+    },
+    ToolDefinition {
+        name: "release_button",
+        description: "Release a single controller button",
+    },
+    ToolDefinition {
+        name: "reset",
+        description: "Reset the emulator state",
+    },
+    ToolDefinition {
+        name: "power_cycle",
+        description: "Power cycle the emulator",
+    },
+    ToolDefinition {
+        name: "pause",
+        description: "Pause execution",
+    },
+    ToolDefinition {
+        name: "resume",
+        description: "Resume execution",
+    },
+    ToolDefinition {
+        name: "set_speed",
+        description: "Set emulation speed multiplier",
+    },
+    ToolDefinition {
+        name: "get_frame",
+        description: "Get the latest video frame payload",
+    },
+    ToolDefinition {
+        name: "capture_frame",
+        description: "Capture the latest video frame to a PPM or BMP file path",
+    },
+    ToolDefinition {
+        name: "get_audio_chunk",
+        description: "Get the latest audio chunk payload",
+    },
+    ToolDefinition {
+        name: "get_fps",
+        description: "Read the measured emulation FPS",
+    },
+    ToolDefinition {
+        name: "get_ppu_frame_counter",
+        description: "Read the PPU frame counter",
+    },
+    ToolDefinition {
+        name: "get_emulator_state",
+        description: "Read high-level emulator state",
+    },
+    ToolDefinition {
+        name: "read_memory",
+        description: "Read memory at an address",
+    },
+    ToolDefinition {
+        name: "read_registers",
+        description: "Read CPU register state",
+    },
+    ToolDefinition {
+        name: "disassemble_at",
+        description: "Disassemble opcode stream at address",
+    },
+    ToolDefinition {
+        name: "step_cpu",
+        description: "Step one CPU cycle",
+    },
+    ToolDefinition {
+        name: "step_scanline",
+        description: "Step one scanline",
+    },
+    ToolDefinition {
+        name: "step_frame",
+        description: "Step one frame",
+    },
+    ToolDefinition {
+        name: "set_breakpoint",
+        description: "Set a debugger breakpoint",
+    },
+    ToolDefinition {
+        name: "clear_breakpoint",
+        description: "Clear a debugger breakpoint",
+    },
+    ToolDefinition {
+        name: "save_state",
+        description: "Serialize emulator state",
+    },
+    ToolDefinition {
+        name: "load_state",
+        description: "Deserialize emulator state",
+    },
+    ToolDefinition {
+        name: "run_macro",
+        description: "Execute a macro sequence",
+    },
+    ToolDefinition {
+        name: "assemble_6502_dsl",
+        description: "Assemble a 6502 DSL module to standard output blocks",
+    },
+    ToolDefinition {
+        name: "load_6502_dsl",
+        description: "Assemble and load a 6502 DSL module into the live emulator core",
+    },
+    ToolDefinition {
+        name: "export_6502_dsl_rom",
+        description: "Assemble a 6502 DSL module and write an iNES ROM to disk",
+    },
+    ToolDefinition {
+        name: "export_6502_dsl_rom_base64",
+        description: "Assemble a 6502 DSL module directly to a Base64-encoded iNES payload",
+    },
+    ToolDefinition {
+        name: "extract_sprite_sheet",
+        description: "Extract the CHR RAM sprites as a BMP image",
     },
 ];
 
