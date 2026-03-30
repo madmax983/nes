@@ -2353,11 +2353,8 @@ impl Cpu {
         // Track MMIO reads unconditionally so apply_cpu_reads can fire side-effects
         // ($2002 VBlank clear, $2007 PPU data, $4015 APU status, $4016/$4017 controllers)
         // regardless of trace_enabled.
-        match resolved {
-            0x2002 | 0x2007 | 0x4015 | 0x4016 | 0x4017 => {
-                self.mmio_reads.borrow_mut().push(resolved);
-            }
-            _ => {}
+        if matches!(resolved, 0x2002 | 0x2007 | 0x4015 | 0x4016 | 0x4017) {
+            self.mmio_reads.borrow_mut().push(resolved);
         }
         self.record_bus_access(resolved, value, CpuBusAccessKind::Read);
         value

@@ -380,54 +380,22 @@ impl LoadedMapper {
     }
 
     fn apply_delta(&mut self, delta: &MapperDelta, chr_window: &[u8; CHR_8K_BYTES]) {
-        match &delta.kind {
-            MapperDeltaKind::Uxrom(state) => {
-                let Self::Uxrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Mmc1(state) => {
-                let Self::Mmc1(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Cnrom(state) => {
-                let Self::Cnrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Axrom(state) => {
-                let Self::Axrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Gxrom(state) => {
-                let Self::Gxrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Mmc3(state) => {
-                let Self::Mmc3(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Replace(_) => {
+        match (&delta.kind, &mut *self) {
+            (MapperDeltaKind::Uxrom(state), Self::Uxrom(mapper)) => mapper.restore_state(*state),
+            (MapperDeltaKind::Mmc1(state), Self::Mmc1(mapper)) => mapper.restore_state(*state),
+            (MapperDeltaKind::Cnrom(state), Self::Cnrom(mapper)) => mapper.restore_state(*state),
+            (MapperDeltaKind::Axrom(state), Self::Axrom(mapper)) => mapper.restore_state(*state),
+            (MapperDeltaKind::Gxrom(state), Self::Gxrom(mapper)) => mapper.restore_state(*state),
+            (MapperDeltaKind::Mmc3(state), Self::Mmc3(mapper)) => mapper.restore_state(*state),
+            (MapperDeltaKind::Replace(_), _) => {
                 debug_assert!(
                     false,
                     "replacement mapper deltas are handled by CoreSnapshot"
                 );
+                return;
+            }
+            _ => {
+                debug_assert!(false, "mapper delta kind must match mapper variant");
                 return;
             }
         }
@@ -1250,14 +1218,12 @@ impl NesCore {
     }
 
     fn build_nrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
-        match prg_rom.len() {
-            PRG_16K_BYTES | PRG_32K_BYTES => {
-                Ok(LoadedMapper::Nrom(Nrom::from_prg_rom(prg_rom.to_vec())))
-            }
-            other => Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
-                other,
-            ))),
+        if !matches!(prg_rom.len(), PRG_16K_BYTES | PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
         }
+        Ok(LoadedMapper::Nrom(Nrom::from_prg_rom(prg_rom.to_vec())))
     }
 
     fn build_uxrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
@@ -1288,13 +1254,10 @@ impl NesCore {
     }
 
     fn build_cnrom(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
-        match prg_rom.len() {
-            PRG_16K_BYTES | PRG_32K_BYTES => {}
-            other => {
-                return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
-                    other,
-                )));
-            }
+        if !matches!(prg_rom.len(), PRG_16K_BYTES | PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
         }
         if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
             return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(

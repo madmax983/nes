@@ -12,3 +12,7 @@
 **Refactoring guard clauses in nes-core mapper synchronization**
 **Learning:** Found deeply nested `if let` blocks inside mapper synchronization functions (`sync_mapper_prg_window`, `sync_mapper_chr_window`, and `sync_mapper_mirroring`), creating unnecessary indentation and violating early return principles.
 **Action:** Replaced nested `if let` and `&& let` bindings with flat `let Some(...) = ... else { return; }` guard clauses to reduce nesting depth and improve readability.
+
+**Refactoring empty match arms and pyramids in nes-core API**
+**Learning:** Found deeply nested `match` and `if let` pyramids in `apply_delta` and found empty match arms (e.g., `_ => {}`) used to simulate conditionals in `api.rs` and `cpu/engine.rs`.
+**Action:** Flattened `apply_delta` by destructively matching tuples (e.g. `match (&delta.kind, &mut *self)`). Simplified empty match arms using the `matches!` macro with guard clauses (`if matches!(...)` and `if !matches!(...)`).
