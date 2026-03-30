@@ -601,3 +601,18 @@ mod tests {
         assert_eq!(mmc3.chr_data.len(), 8 * 1024);
     }
 }
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    #[test]
+    fn mmc3_mirroring_toggles_between_vertical_and_horizontal() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xA000, 0x00);
+        assert_eq!(m.mirroring(), NametableMirroring::Vertical);
+
+        m.write_prg(0xA000, 0x01);
+        assert_eq!(m.mirroring(), NametableMirroring::Horizontal);
+    }
+}
