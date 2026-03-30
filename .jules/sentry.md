@@ -10,3 +10,6 @@
 ## 2026-03-12 - [GxROM Coverage Improvements]
 **Learning:** `sync_chr_ram_from_ppu_window` in `crates/nes-core/src/mapper/gxrom.rs` was missing unit tests covering whether the PPU window data was correctly synced to the CHR array when `chr_writable` is true or false.
 **Action:** Wrote explicit unit tests instantiating `Gxrom` with empty and non-empty `chr_rom` to cover the true and false branch of `chr_writable` and asserting the correct CHR syncing behavior.
+## 2026-03-24 - [GxROM Initialization Coverage Improvement]
+**Learning:** `from_prg_chr` in `crates/nes-core/src/mapper/gxrom.rs` lacked rigorous unit tests for the `<` versus `<=` boundary condition when checking if `prg_rom.len() < PRG_BANK_32K`. Replacing the check with `is_empty()` resolved unviable mutations and ensured that exactly 32KB ROMs aren't erroneously padded.
+**Action:** Wrote explicit unit tests instantiating `Gxrom::from_prg_chr` with exactly `PRG_BANK_32K` for PRG and `CHR_WINDOW_BYTES` for CHR, covering boundary states to prevent padding regressions.

@@ -32,7 +32,7 @@ impl Gxrom {
     /// - Non-empty CHR is rounded up to a full 8KB window.
     #[must_use]
     pub fn from_prg_chr(mut prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
-        if prg_rom.len() < PRG_BANK_32K {
+        if prg_rom.is_empty() {
             prg_rom.resize(PRG_BANK_32K, 0);
         }
         let prg_remainder = prg_rom.len() % PRG_BANK_32K;
@@ -219,6 +219,13 @@ mod tests {
         // Should pad to 1 bank
         assert_eq!(mapper.prg_bank_count, 1);
         assert_eq!(mapper.prg_rom.len(), PRG_BANK_32K);
+
+        // Test boundary condition: exactly 1 bank length should not be padded again
+        // This ensures the < vs <= condition is properly covered.
+        let exactly_one_bank = vec![0; PRG_BANK_32K];
+        let mapper_exact = Gxrom::from_prg_chr(exactly_one_bank, vec![]);
+        assert_eq!(mapper_exact.prg_bank_count, 1);
+        assert_eq!(mapper_exact.prg_rom.len(), PRG_BANK_32K);
     }
 
     #[test]
@@ -229,6 +236,12 @@ mod tests {
 
         // Should pad CHR to 2 banks
         assert_eq!(mapper.chr_bank_count, 2);
+        assert_eq!(mapper.chr_data.len(), 2 * CHR_WINDOW_BYTES);
+
+        let exact_chr = vec![0; CHR_WINDOW_BYTES];
+        let mapper_exact = Gxrom::from_prg_chr(vec![], exact_chr);
+        assert_eq!(mapper_exact.chr_bank_count, 1);
+        assert_eq!(mapper_exact.chr_data.len(), CHR_WINDOW_BYTES);
     }
 
     #[test]
