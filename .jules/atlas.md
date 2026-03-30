@@ -18,3 +18,7 @@
 **Refactor nes-test-harness test support code into library**
 **Tangle:** Shared ROM path helpers for integration tests were defined in `tests/support/mod.rs`, which violates best practices by duplicating code and relying on implicit modules in tests.
 **Blueprint:** Moved the `tests/support/mod.rs` file into the `nes-test-harness` library as `src/rom_paths.rs`, exposing it publicly. Updated all test files to import the functions directly from the `nes_test_harness` crate, improving encapsulation and reusability.
+
+**Extract Audio Handling from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` contained the internal structures for audio output (`AudioSinkControl`, `RodioSinkAdapter`, `AudioOutput`) alongside fake implementations and test cases mixed with UI loop and generic app state.
+**Blueprint:** Extracted all audio structures, helper implementations, and their dedicated tests into `crates/nes-desktop/src/audio.rs` and exposed them internally via `pub(crate) mod audio`. Updated `main.rs` to import from the new module instead.
