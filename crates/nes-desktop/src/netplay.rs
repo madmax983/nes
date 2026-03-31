@@ -387,9 +387,7 @@ pub fn schedule_netplay_ping(
     *ping_nonce = ping_nonce.wrapping_add(1);
     pending_pings.insert(nonce, now);
     while pending_pings.len() > max_pending {
-        if let Some(oldest_nonce) = pending_pings.keys().next().copied() {
-            pending_pings.remove(&oldest_nonce);
-        }
+        pending_pings.pop_first();
     }
     *next_ping_at = now + ping_interval;
     Some(nonce)

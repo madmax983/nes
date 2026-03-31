@@ -455,6 +455,7 @@ mod tests {
 
         // Let's actually give the worker a moment to process the queue
         // to avoid race conditions.
+        std::thread::sleep(std::time::Duration::from_millis(50));
         assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
 
         // Artificially replace the receiver with a black hole to force a timeout
