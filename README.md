@@ -209,6 +209,12 @@ Force overwrite existing golden files:
 cargo run -p nes-test-harness --bin bbbradsmith_golden_capture -- --config ./nes.toml --force
 ```
 
+## Experimental / Nova Features
+
+> ⚠️ **REQUIRES FEATURE NOVA**
+
+Some experimental features and examples, such as `story_demo` and `NarrativeGenerator`, are hidden behind the `nova` feature flag. You must build or run with `--features nova` to use them.
+
 ## Homebrew ROM
 
 Build the in-repo custom ROM (no external assembler required):
