@@ -15,3 +15,7 @@
 ## 2026-03-29 - [API Core Command and Query Gaps]
 **Learning:** `nes-core/src/api.rs` had coverage gaps around `Command::ReleaseButton`, `Command::PowerCycle`, invalid `Command::SetSpeed(0)`, and querying `CoreQuery` variants. Because these are critical pathways for client applications to control the emulator, untested behavior here could result in unpredictable frontend state.
 **Action:** Wrote explicit unit tests in `api.rs` asserting correct behavior of button releases clearing bitmasks, power cycling resetting speeds, zero speed returning an error, and all `CoreQuery` variants correctly matching their results. Removed trivial getters/setters tests as per strict "Sentry" policy.
+## 2024-05-19 - Mutant testing boolean logic operators
+
+**Learning:** When using `cargo mutants`, testing `||` conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the `||` independently to kill mutations that replace `||` with `&&`.
+**Action:** Always create separate test cases for each independent condition within an `||` statement instead of grouping them together.
