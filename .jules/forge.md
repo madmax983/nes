@@ -11,3 +11,7 @@
 **[Refactoring repetitive parsing logic]**
 **Learning:** Argument parsing routines with many options often devolve into a "pyramid of doom" consisting of nearly identical `if arg == ...` and `if let Some(value) = arg.strip_prefix(...)` blocks, causing unnecessary scrolling and boilerplate.
 **Action:** Extract a helper function (e.g., `parse_arg`) that abstracts the common shape of checking for both exact matches (e.g. `--flag`) and prefix matches (e.g. `--flag=value`), taking a closure to apply the specific field mutations cleanly.
+
+**[Extracting God Function app action dispatcher]
+**Learning:** `execute_app_action` in `nes-desktop/src/main.rs` was a 160-line "God Function" with deeply nested logic for every `AppAction` inside a massive `match` block. Extracting each variant's handler into an individual private helper function keeps the code at the top level very clean and simple while enforcing the behavior logic.
+**Action:** Extract heavy `match` arms of a massive dispatch function into private, properly named helper functions.
