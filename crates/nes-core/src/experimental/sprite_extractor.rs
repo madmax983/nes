@@ -65,9 +65,27 @@ mod tests {
 
     #[test]
     fn can_extract_sprite_sheet() {
-        let core = NesCore::new();
+        let mut core = NesCore::new();
+
+        // To test the `color_idx` match branches inside `extract_chr_ram_bmp`, we need to write
+        // to the PPU's CHR memory. We can do this using `write_memory` by interacting with
+        // PPUADDR ($2006) and PPUDATA ($2007).
+
+        // We must load a mock ROM with CHR data directly, because the public API `NesCore`
+        // doesn't expose a `write_memory` function for arbitrary locations like the PPU registers easily.
+
+        // We can just create a snapshot, modify the CHR, and load it back.
+        let mut snapshot = core.save_state();
+        snapshot.ppu.chr[0] = 0b01010101;
+        snapshot.ppu.chr[8] = 0b00110011;
+        core.load_state(&snapshot);
+
         let bmp_data = SpriteExtractor::extract_chr_ram_bmp(&core).unwrap();
+
         // Check BMP header magic
         assert_eq!(&bmp_data[0..2], b"BM");
+
+        // Output length is 128x256 * 3 + 54 = 98358
+        assert_eq!(bmp_data.len(), 98358);
     }
 }

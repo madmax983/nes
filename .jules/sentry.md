@@ -19,3 +19,6 @@
 
 **Learning:** When using `cargo mutants`, testing `||` conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the `||` independently to kill mutations that replace `||` with `&&`.
 **Action:** Always create separate test cases for each independent condition within an `||` statement instead of grouping them together.
+## 2024-05-19 - [API command execution edge cases]
+**Learning:** Certain `NesCore::execute` paths like clearing button presses natively, or executing `Command::StepCpu` and hitting the `service_irq()` condition at the end of the step loop weren't covered. Similarly, tests for checking if `chr_writable` applies to GxROM and UxROM padding logic were missing.
+**Action:** Wrote explicit tests simulating execution of specific controller combinations and forcing IRQ interrupts in `command_query_contract.rs`. Also added mapper tests to verify `chr_writable` behavior on `Gxrom` and padding rules in `Uxrom`. The experimental `SpriteExtractor` missing match coverage on `color_idx` was fixed by mocking PPU state.

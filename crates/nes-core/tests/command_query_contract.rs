@@ -38,6 +38,7 @@ fn controller_state_and_speed_are_queryable() {
     );
 }
 
+
 #[test]
 fn ppu_frame_counter_is_queryable() {
     let mut core = NesCore::new();

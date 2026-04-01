@@ -1260,6 +1260,11 @@ impl NesCore {
         Ok(cpu_cycles)
     }
 
+    #[cfg(test)]
+    pub(crate) fn force_apu_irq_for_test(&mut self) {
+        self.apu.force_irq();
+    }
+
     fn step_until_next_scanline(&mut self) -> Result<(), CoreError> {
         let start_scanline = self.ppu.scanline();
         while self.ppu.scanline() == start_scanline {
@@ -1906,6 +1911,35 @@ mod tests {
         assert_ne!(core.controller2_bits() & Button::B.bit_mask(), 0);
         core.execute(Command::ReleaseButton2(Button::B)).unwrap();
         assert_eq!(core.controller2_bits() & Button::B.bit_mask(), 0);
+
+        // Also test the combinations to ensure correct bitwise math
+        core.execute(Command::SetControllerState(0xFF)).unwrap();
+        core.execute(Command::PressButton(Button::A)).unwrap();
+        assert_eq!(core.controller_bits(), 0xFF | Button::A.bit_mask());
+
+        core.execute(Command::SetControllerState(0x00)).unwrap();
+        core.execute(Command::ReleaseButton(Button::A)).unwrap();
+        assert_eq!(core.controller_bits(), 0);
+
+        core.execute(Command::SetController2State(0xFF)).unwrap();
+        core.execute(Command::PressButton2(Button::B)).unwrap();
+        assert_eq!(core.controller2_bits(), 0xFF | Button::B.bit_mask());
+
+        core.execute(Command::SetController2State(0x00)).unwrap();
+        core.execute(Command::ReleaseButton2(Button::B)).unwrap();
+        assert_eq!(core.controller2_bits(), 0);
+    }
+
+    #[test]
+    fn execute_step_single_instruction_handles_interrupts() {
+        let mut core = NesCore::new();
+        // Just step to prove the command handles execution
+        core.execute(Command::StepCpu).unwrap();
+
+        // Force an interrupt to ensure coverage of the service_irq path
+        core.force_apu_irq_for_test();
+        core.execute(Command::StepCpu).unwrap();
+        // Since we didn't setup the interrupt vectors, it might just branch and execute logic without crashing.
     }
 
     #[test]

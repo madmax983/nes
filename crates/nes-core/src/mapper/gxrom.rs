@@ -253,6 +253,13 @@ mod tests {
     }
 
     #[test]
+    fn gxrom_chr_writable_returns_false_for_non_empty_chr() {
+        let chr_rom = vec![0; 1];
+        let mapper = Gxrom::from_prg_chr(vec![], chr_rom);
+        assert!(!mapper.chr_writable());
+    }
+
+    #[test]
     fn gxrom_from_prg_chr_pads_chr() {
         // Test CHR padding logic: `chr_data.resize(chr_data.len() + (CHR_WINDOW_BYTES - chr_remainder), 0);`
         let chr_rom = vec![0; CHR_WINDOW_BYTES + 1];

@@ -934,6 +934,11 @@ impl Apu {
         self.dmc.irq_pending()
     }
 
+    #[cfg(test)]
+    pub(crate) fn force_irq(&mut self) {
+        self.frame_irq_pending = true;
+    }
+
     /// Returns remaining bytes in active DMC sample playback.
     #[must_use]
     pub fn dmc_bytes_remaining(&self) -> u16 {

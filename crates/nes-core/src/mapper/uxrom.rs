@@ -138,4 +138,11 @@ mod tests {
         assert_eq!(mapper.bank_count, 2);
         assert_eq!(mapper.prg_rom.len(), 2 * PRG_BANK_BYTES);
     }
+
+    #[test]
+    fn uxrom_from_prg_rom_pads_empty_prg() {
+        let mapper = Uxrom::from_prg_rom(vec![]);
+        assert_eq!(mapper.bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), PRG_BANK_BYTES);
+    }
 }
