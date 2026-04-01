@@ -21,7 +21,7 @@ fn parse_hex_bytes(raw: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-fn decode_hex_nibble(ch: u8, index: usize) -> Result<u8, String> {
+fn decode_hex_nibble(ch: u8, _index: usize) -> Result<u8, String> {
     match ch {
         b'0'..=b'9' => Ok(ch - b'0'),
         b'a'..=b'f' => Ok(ch - b'a' + 10),

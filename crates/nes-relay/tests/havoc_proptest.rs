@@ -1,5 +1,5 @@
+use nes_relay::config::parse_args;
 use proptest::prelude::*;
-use nes_relay::config::{parse_args};
 
 proptest! {
     #[test]

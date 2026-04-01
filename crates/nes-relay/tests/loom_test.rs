@@ -1,23 +1,10 @@
 use loom::sync::{Arc, Mutex};
 use loom::thread;
-use std::collections::HashMap;
 
 // Mock to test lock acquisition patterns
 #[derive(Default)]
 struct MockRelayState {
-    rooms: HashMap<String, MockRoomState>,
-}
-
-#[derive(Default)]
-struct MockRoomState {
-    players: Vec<u8>,
-}
-
-fn mock_cleanup_client(state: &Arc<Mutex<MockRelayState>>, room: &str, player: u8) {
-    let mut guard = state.lock().unwrap();
-    if let Some(room_state) = guard.rooms.get_mut(room) {
-        room_state.players.retain(|&p| p != player);
-    }
+    // Empty state struct to just act as a Mutex placeholder
 }
 
 // An actual mock to cause a deadlock by grabbing two Mutexes out of order,
@@ -29,7 +16,10 @@ fn mock_trade_players(state1: &Arc<Mutex<MockRelayState>>, state2: &Arc<Mutex<Mo
     let _guard2 = state2.lock().unwrap();
 }
 
-fn mock_trade_players_reverse(state1: &Arc<Mutex<MockRelayState>>, state2: &Arc<Mutex<MockRelayState>>) {
+fn mock_trade_players_reverse(
+    state1: &Arc<Mutex<MockRelayState>>,
+    state2: &Arc<Mutex<MockRelayState>>,
+) {
     let _guard2 = state2.lock().unwrap();
     // Simulate some work
     loom::thread::yield_now();
