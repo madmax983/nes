@@ -291,15 +291,16 @@ fn slot_path_for_selection(session: &LoadedRomSession, slot: u8) -> PathBuf {
     slot_path_for_rom(&session.rom_path, &session.rom_hash, slot)
 }
 
-fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
-    let status_label = match metadata.status {
+fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary<'_> {
+    let status_label = std::borrow::Cow::Borrowed(match metadata.status {
         SaveSlotStatus::Empty => "Empty",
         SaveSlotStatus::Saved => "Saved",
         SaveSlotStatus::Corrupt => "Corrupt",
         SaveSlotStatus::IncompatibleRom => "Mismatch",
-    }
-    .to_owned();
-    let detail = metadata.modified_unix_secs.map(|secs| secs.to_string());
+    });
+    let detail = metadata
+        .modified_unix_secs
+        .map(|secs| std::borrow::Cow::Owned(secs.to_string()));
     OverlaySlotSummary {
         slot: metadata.slot,
         status_label,
@@ -307,16 +308,16 @@ fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
     }
 }
 
-fn overlay_slot_summaries(metadata: &[SaveSlotMetadata]) -> Vec<OverlaySlotSummary> {
+fn overlay_slot_summaries(metadata: &[SaveSlotMetadata]) -> Vec<OverlaySlotSummary<'_>> {
     metadata.iter().map(format_slot_status).collect()
 }
 
-fn overlay_cheat_summaries(cheats: &SessionCheats) -> Vec<OverlayCheatSummary> {
+fn overlay_cheat_summaries(cheats: &SessionCheats) -> Vec<OverlayCheatSummary<'_>> {
     cheats
         .entries()
         .iter()
         .map(|entry| OverlayCheatSummary {
-            raw_code: entry.raw_code.clone(),
+            raw_code: std::borrow::Cow::Borrowed(&entry.raw_code),
             enabled: entry.enabled,
         })
         .collect()
