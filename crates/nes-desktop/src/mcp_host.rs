@@ -1022,3 +1022,15 @@ mod tests {
         assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
     }
 }
+#[cfg(test)]
+mod havoc {
+    use super::*;
+
+    #[test]
+    #[ignore = "Havoc Memory/Overflow Attack"]
+    fn havoc_crash_mcp_host_oom() {
+        let mut reader = std::io::BufReader::new(std::io::Cursor::new(b"Content-Length: 18446744073709551615\r\n\r\n".to_vec()));
+        let result = read_framed_message(&mut reader);
+        assert!(result.is_err(), "Server survived the memory overflow attack!");
+    }
+}
