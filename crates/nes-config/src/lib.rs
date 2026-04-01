@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crossterm::style::{Color, Stylize};
 use serde::Deserialize;
 
 /// Default path to the configuration file.
@@ -213,6 +214,25 @@ pub fn normalize_nonzero_u32(value: u32, fallback: u32) -> u32 {
 /// Returns the value if it is non-zero, otherwise returns the fallback.
 pub fn normalize_nonzero_u64(value: u64, fallback: u64) -> u64 {
     if value == 0 { fallback } else { value }
+}
+
+/// Formats a ROM read error with color and style.
+pub fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            "Error:".with(Color::Red).bold(),
+            rom_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read ROM at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            rom_path,
+            err
+        )
+    }
 }
 
 /// Extracts the `--config` argument from a list of command-line arguments, returning the parsed path and the remaining arguments.
@@ -426,5 +446,20 @@ window_scal = 7
 
         assert!(err.contains("unknown field"));
         assert!(err.contains("window_scal"));
+    }
+
+    #[test]
+    fn format_rom_read_error_handles_not_found_and_other_errors() {
+        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let msg = super::format_rom_read_error("bad.nes", &not_found);
+        assert!(msg.contains("Could not find the ROM file at"));
+        assert!(msg.contains("bad.nes"));
+        assert!(msg.contains("homebrew.nes"));
+
+        let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = super::format_rom_read_error("bad.nes", &other);
+        assert!(msg.contains("Failed to read ROM at"));
+        assert!(msg.contains("bad.nes"));
+        assert!(msg.contains("permission denied"));
     }
 }

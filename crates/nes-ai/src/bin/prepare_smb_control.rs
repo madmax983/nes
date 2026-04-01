@@ -3,30 +3,13 @@ use std::{env, fs, path::PathBuf};
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use nes_ai::snapshot::{sha256_hex, write_snapshot_bundle};
+use nes_config::format_rom_read_error;
 use nes_core::{NesCore, tas::TasMovie};
 
 fn main() {
     if let Err(err) = run() {
         eprintln!("\n{err}");
         std::process::exit(1);
-    }
-}
-
-fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
-    if err.kind() == std::io::ErrorKind::NotFound {
-        format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
-        )
-    } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path,
-            err
-        )
     }
 }
 

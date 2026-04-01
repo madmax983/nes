@@ -6,12 +6,11 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
-use crossterm::style::Stylize;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use image::{DynamicImage, Rgba, RgbaImage};
-use nes_config::{DEFAULT_CONFIG_PATH, NesConfig, parse_config_path_arg};
+use nes_config::{DEFAULT_CONFIG_PATH, NesConfig, format_rom_read_error, parse_config_path_arg};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_tui::app::map_key_event_to_command;
 use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
@@ -875,31 +874,13 @@ fn key_is_pressed(kind: KeyEventKind) -> bool {
     matches!(kind, KeyEventKind::Press | KeyEventKind::Repeat)
 }
 
-fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
-    if err.kind() == std::io::ErrorKind::NotFound {
-        format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            "Hint:".with(crossterm::style::Color::Cyan).bold()
-        )
-    } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path,
-            err
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         CrosstermEventSource, EventSource, FrameTick, LoopAction, LoopTimer,
         PROTOCOL_FRAME_INTERVAL, ProtocolRenderer, SystemLoopTimer, TARGET_FRAME_TIME, TuiRuntime,
         VideoBackend, VideoBackendKind, drain_protocol_results, draw_frame, evaluate_frame_tick,
-        event_loop, fit_nes_viewport, format_rom_read_error, frame_rgba_to_rgba_image,
+        event_loop, fit_nes_viewport, frame_rgba_to_rgba_image,
         handle_runtime_key_event, key_is_pressed, key_pressed_state, make_protocol_state,
         maybe_step_runtime_frame, parse_tui_args, protocol_image_resize, refresh_runtime_fps,
         select_video_backend_kind, should_quit, should_refresh_protocol_frame,
@@ -1103,21 +1084,6 @@ mod tests {
     fn parse_tui_args_rejects_unknown_flag() {
         let err = parse_tui_args(vec!["--bogus".to_owned()]).expect_err("parse should fail");
         assert!(err.contains("unknown flag '--bogus'"));
-    }
-
-    #[test]
-    fn format_rom_read_error_handles_not_found_and_other_errors() {
-        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
-        let msg = format_rom_read_error("bad.nes", &not_found);
-        assert!(msg.contains("Could not find the ROM file at"));
-        assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("homebrew.nes"));
-
-        let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        let msg = format_rom_read_error("bad.nes", &other);
-        assert!(msg.contains("Failed to read ROM at"));
-        assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("permission denied"));
     }
 
     #[test]
