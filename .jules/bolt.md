@@ -1,3 +1,6 @@
+## 2025-03-26 - [BTreeMap pop_first optimization]
+**Learning:** Removing the smallest key/entry from a `BTreeMap` using `keys().next().copied()` followed by a `remove(&key)` is inefficient because it requires two O(log N) tree traversals (one to find the first element, one to traverse down to remove it by key).
+**Action:** Always use the `BTreeMap::pop_first()` method to perform this action in a single step, saving a lookup and avoiding the `.copied()` allocation.
 ## 2025-06-19 - Removed format! heap allocation on hot IO path
 
 **Learning:** When writing formatted strings (like headers) to an IO writer (like `TcpStream` or `Stdout`), using `writer.write_all(format!("...").as_bytes())` causes an unnecessary intermediate `String` allocation on the heap for every write.
