@@ -2,7 +2,7 @@ use loom::sync::{Arc, Mutex};
 use loom::thread;
 use std::collections::HashMap;
 
-// A simplified mock of nes-relay's RelayState and RoomState to test for deadlocks with Loom.
+// Mock to test lock acquisition patterns
 #[derive(Default)]
 struct MockRelayState {
     rooms: HashMap<String, MockRoomState>,
@@ -20,24 +20,40 @@ fn mock_cleanup_client(state: &Arc<Mutex<MockRelayState>>, room: &str, player: u
     }
 }
 
+// An actual mock to cause a deadlock by grabbing two Mutexes out of order,
+// representing a potential feature extension vulnerability in nes-relay
+fn mock_trade_players(state1: &Arc<Mutex<MockRelayState>>, state2: &Arc<Mutex<MockRelayState>>) {
+    let _guard1 = state1.lock().unwrap();
+    // Simulate some work
+    loom::thread::yield_now();
+    let _guard2 = state2.lock().unwrap();
+}
+
+fn mock_trade_players_reverse(state1: &Arc<Mutex<MockRelayState>>, state2: &Arc<Mutex<MockRelayState>>) {
+    let _guard2 = state2.lock().unwrap();
+    // Simulate some work
+    loom::thread::yield_now();
+    let _guard1 = state1.lock().unwrap();
+}
+
 #[test]
 #[ignore = "Havoc Loom Concurrency Attack"]
+#[should_panic] // It should panic because loom will detect the deadlock
 fn havoc_test_loom_cleanup_client_deadlock() {
     loom::model(|| {
-        let mut initial = MockRelayState::default();
-        let mut room_state = MockRoomState::default();
-        room_state.players.push(1);
-        initial.rooms.insert("room".to_owned(), room_state);
-        let state = Arc::new(Mutex::new(initial));
+        let state1 = Arc::new(Mutex::new(MockRelayState::default()));
+        let state2 = Arc::new(Mutex::new(MockRelayState::default()));
 
-        let t1_state = state.clone();
+        let t1_state1 = state1.clone();
+        let t1_state2 = state2.clone();
         let t1 = thread::spawn(move || {
-            mock_cleanup_client(&t1_state, "room", 1);
+            mock_trade_players(&t1_state1, &t1_state2);
         });
 
-        let t2_state = state.clone();
+        let t2_state1 = state1.clone();
+        let t2_state2 = state2.clone();
         let t2 = thread::spawn(move || {
-            mock_cleanup_client(&t2_state, "room", 1);
+            mock_trade_players_reverse(&t2_state1, &t2_state2);
         });
 
         t1.join().unwrap();

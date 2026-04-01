@@ -3273,6 +3273,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nes-fuzz"
+version = "0.0.0"
+dependencies = [
+ "libfuzzer-sys",
+ "nes-core",
+ "nes-mcp",
+ "nes-relay",
+]
+
+[[package]]
 name = "nes-mcp"
 version = "0.1.0"
 dependencies = [

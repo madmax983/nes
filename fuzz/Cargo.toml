@@ -1,0 +1,32 @@
+[package]
+name = "nes-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nes-core = { path = "../crates/nes-core" }
+nes-relay = { path = "../crates/nes-relay" }
+nes-mcp = { path = "../crates/nes-mcp" }
+
+[[bin]]
+name = "fuzz_relay_args"
+path = "fuzz_targets/fuzz_relay_args.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_rom_parser"
+path = "fuzz_targets/fuzz_rom_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_mcp_hex"
+path = "fuzz_targets/fuzz_mcp_hex.rs"
+test = false
+doc = false

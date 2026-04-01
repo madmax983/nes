@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "fuzz",
     "crates/nes-core",
     "crates/nes-dsl",
     "crates/nes-config",

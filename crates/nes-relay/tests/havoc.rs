@@ -71,3 +71,12 @@ fn havoc_test_forward_to_room_peers_large_payload() {
 fn havoc_test_cleanup_client_deadlock() {
     // Tests thread exhaustion and mutex locking when concurrently cleaning the same client slot
 }
+
+#[test]
+#[ignore = "Havoc Thread Bomb Attack"]
+fn havoc_test_thread_bomb() {
+    // Tests the thread exhaustion vulnerability in `forward_to_room_peers`.
+    // The server spawns a new OS thread for every single packet that requires delay.
+    // If an attacker sends 1,000,000 packets per second with latency-ms > 0,
+    // the server will attempt to spawn 1,000,000 threads and crash due to OOM or OS limits.
+}
