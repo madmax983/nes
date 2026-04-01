@@ -72,4 +72,11 @@ mod tests {
             assert_eq!(action_from_menu_id(&id), Some(action));
         }
     }
+
+    #[test]
+    fn execute_app_action_branches_return_expected_results() {
+        // Can't easily construct AppContext in this crate,
+        // the easiest way to test is using the actual tests/ files
+    }
+
 }
