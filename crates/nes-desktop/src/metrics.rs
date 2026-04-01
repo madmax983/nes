@@ -3,8 +3,7 @@ use std::time::{Duration, Instant};
 use comfy_table::Table;
 use nes_config::normalize_nonzero_u64;
 use nes_core::NesCore;
-
-use crate::netplay::NetplayRuntimeStats;
+use nes_netplay::NetplayRuntimeStats;
 
 const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 

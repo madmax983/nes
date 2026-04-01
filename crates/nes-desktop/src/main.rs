@@ -55,7 +55,8 @@ use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
-use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
+use crate::netplay::{NetplayClient, NetplayRuntimeConfig};
+use nes_netplay::NetplayRuntimeStats;
 
 const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
 const DEFAULT_WINDOW_SCALE: u32 = 3;
@@ -2199,16 +2200,15 @@ mod tests {
 
     use super::{
         DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
-        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
-        overlay_input_requires_redraw, recommended_input_delay_frames,
+        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, StepMode, TARGET_FRAME_TIME,
+        WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
+        apply_overlay_keyboard_input, apply_runtime_cheat_codes, audio_queue_dropped,
+        capture_config_from_parts, capture_path_for_frame, classify_keyboard_input,
+        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        netplay_feature_enabled, overlay_input_requires_redraw, recommended_input_delay_frames,
         reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
         scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
         should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
@@ -2820,39 +2820,6 @@ mod tests {
             controller_state_delta_for_player(Button::Start.bit_mask(), 0, nes_core::Player::Two)
                 .collect();
         assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
-    }
-
-    #[test]
-    fn netplay_runtime_stats_tracks_rtt_jitter_rollbacks_and_desyncs() {
-        let mut stats = NetplayRuntimeStats::new(2);
-        assert_eq!(stats.latest_rtt_ms_or_zero(), 0.0);
-        assert_eq!(stats.input_delay_frames, 2);
-        assert_eq!(stats.rollback_count, 0);
-        assert_eq!(stats.max_rollback_distance, 0);
-        assert_eq!(stats.desync_count, 0);
-        assert_eq!(stats.jitter_ms, 0.0);
-
-        stats.observe_rtt_ms(20.0);
-        assert_eq!(stats.latest_rtt_ms_or_zero(), 20.0);
-        assert_eq!(stats.jitter_ms, 0.0);
-
-        stats.observe_rtt_ms(28.0);
-        assert_eq!(stats.latest_rtt_ms_or_zero(), 28.0);
-        assert_eq!(stats.jitter_ms, 8.0);
-
-        stats.observe_rtt_ms(40.0);
-        assert!((stats.jitter_ms - 8.5).abs() < 1e-9);
-
-        stats.observe_rollback(0);
-        assert_eq!(stats.rollback_count, 0);
-        stats.observe_rollback(2);
-        stats.observe_rollback(5);
-        assert_eq!(stats.rollback_count, 2);
-        assert_eq!(stats.max_rollback_distance, 5);
-
-        stats.observe_desync();
-        stats.observe_desync();
-        assert_eq!(stats.desync_count, 2);
     }
 
     #[test]

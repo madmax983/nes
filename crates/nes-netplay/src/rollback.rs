@@ -778,6 +778,76 @@ fn prune_before<T>(map: &mut BTreeMap<u64, T>, keep_from: u64) {
     }
 }
 
+/// Tracks the health of a live rollback netplay session.
+///
+/// The goal of netplay is the illusion of local multiplayer. This struct acts as the
+/// pulse monitor, recording how often the illusion breaks (rollbacks), how far time
+/// had to rewind (`max_rollback_distance`), and how much the network is struggling (`rtt_ms`, `jitter_ms`).
+/// These metrics are vital for dynamically tuning `input_delay_frames` mid-game to hide latency.
+#[derive(Debug)]
+pub struct NetplayRuntimeStats {
+    pub latest_rtt_ms: Option<f64>,
+    pub jitter_ms: f64,
+    pub rollback_count: u64,
+    pub max_rollback_distance: u64,
+    pub desync_count: u64,
+    pub input_delay_frames: u32,
+}
+
+impl NetplayRuntimeStats {
+    /// Initializes tracking metrics, seeding the initial `input_delay_frames`.
+    pub fn new(input_delay_frames: u32) -> Self {
+        Self {
+            latest_rtt_ms: None,
+            jitter_ms: 0.0,
+            rollback_count: 0,
+            max_rollback_distance: 0,
+            desync_count: 0,
+            input_delay_frames,
+        }
+    }
+
+    /// Records an observed Round-Trip Time sample to calculate average latency and jitter.
+    pub fn observe_rtt_ms(&mut self, rtt_ms: f64) {
+        if let Some(previous) = self.latest_rtt_ms {
+            let delta = (rtt_ms - previous).abs();
+            if self.jitter_ms <= f64::EPSILON {
+                self.jitter_ms = delta;
+            } else {
+                // RFC3550-style EWMA jitter estimator.
+                self.jitter_ms += (delta - self.jitter_ms) * 0.125;
+            }
+        }
+        self.latest_rtt_ms = Some(rtt_ms);
+    }
+
+    /// Logs that a rollback occurred and updates the maximum rollback distance seen.
+    pub fn observe_rollback(&mut self, distance: u64) {
+        if distance == 0 {
+            return;
+        }
+        self.rollback_count = self.rollback_count.saturating_add(1);
+        self.max_rollback_distance = self.max_rollback_distance.max(distance);
+    }
+
+    /// Tallies a catastrophic timeline divergence.
+    ///
+    /// Desyncs happen when Player 1 and Player 2 calculate different state hashes for the same frame.
+    /// It means the emulators have disagreed on reality. We track this to alert the players
+    /// that they are no longer playing the same game.
+    pub fn observe_desync(&mut self) {
+        self.desync_count = self.desync_count.saturating_add(1);
+    }
+
+    /// Computes the last known round-trip time, defaulting to zero if unknown.
+    ///
+    /// We use this zero fallback to keep the dynamic delay logic mathematically
+    /// safe during the initial connection handshake before the first ping returns.
+    pub fn latest_rtt_ms_or_zero(&self) -> f64 {
+        self.latest_rtt_ms.unwrap_or(0.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{HashComparison, RollbackConfig, RollbackEngine, RollbackError};
@@ -1080,5 +1150,38 @@ mod tests {
         assert!(manual_engine.frame_hashes.contains_key(&1));
         assert!(!manual_engine.frame_hashes.contains_key(&2));
         assert!(!manual_engine.frame_hashes.contains_key(&3));
+    }
+
+    #[test]
+    fn netplay_runtime_stats_tracks_rtt_jitter_rollbacks_and_desyncs() {
+        let mut stats = super::NetplayRuntimeStats::new(2);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 0.0);
+        assert_eq!(stats.input_delay_frames, 2);
+        assert_eq!(stats.rollback_count, 0);
+        assert_eq!(stats.max_rollback_distance, 0);
+        assert_eq!(stats.desync_count, 0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(20.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 20.0);
+        assert_eq!(stats.jitter_ms, 0.0);
+
+        stats.observe_rtt_ms(28.0);
+        assert_eq!(stats.latest_rtt_ms_or_zero(), 28.0);
+        assert_eq!(stats.jitter_ms, 8.0);
+
+        stats.observe_rtt_ms(40.0);
+        assert!((stats.jitter_ms - 8.5).abs() < 1e-9);
+
+        stats.observe_rollback(0);
+        assert_eq!(stats.rollback_count, 0);
+        stats.observe_rollback(2);
+        stats.observe_rollback(5);
+        assert_eq!(stats.rollback_count, 2);
+        assert_eq!(stats.max_rollback_distance, 5);
+
+        stats.observe_desync();
+        stats.observe_desync();
+        assert_eq!(stats.desync_count, 2);
     }
 }

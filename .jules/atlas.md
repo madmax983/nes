@@ -22,3 +22,7 @@
 **Extract Audio Handling from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` contained the internal structures for audio output (`AudioSinkControl`, `RodioSinkAdapter`, `AudioOutput`) alongside fake implementations and test cases mixed with UI loop and generic app state.
 **Blueprint:** Extracted all audio structures, helper implementations, and their dedicated tests into `crates/nes-desktop/src/audio.rs` and exposed them internally via `pub(crate) mod audio`. Updated `main.rs` to import from the new module instead.
+
+**Extract NetplayRuntimeStats to nes-netplay**
+**Tangle:** The `NetplayRuntimeStats` struct and its associated implementation were defined in `crates/nes-desktop/src/netplay.rs`, which is part of the UI crate, but the `nes-netplay` crate handles the netplay engine and protocol layer. This creates unnecessary coupling, pulling netplay-specific tracking logic into the UI crate.
+**Blueprint:** Moved `NetplayRuntimeStats` out of `nes-desktop/src/netplay.rs` and into the more appropriate `nes-netplay/src/rollback.rs` library file. Also moved the associated tests to `nes-netplay`. This improves the domain boundary of `nes-netplay`.
