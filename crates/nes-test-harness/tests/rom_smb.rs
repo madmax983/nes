@@ -2,13 +2,12 @@ use std::collections::HashSet;
 use std::fs;
 
 use nes_core::{AUDIO_CHUNK_SAMPLES, Button, Command, NesCore};
-
-mod support;
+use nes_test_harness::smb_rom_path;
 
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_rom_loads_and_exposes_reset_vector() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -23,7 +22,7 @@ fn smb_rom_loads_and_exposes_reset_vector() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_boot_window_runs_without_unknown_opcode() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -42,7 +41,7 @@ fn smb_boot_window_runs_without_unknown_opcode() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_boot_frames_use_nes_palette_bounds_and_stable_delta() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -79,7 +78,7 @@ fn smb_boot_frames_use_nes_palette_bounds_and_stable_delta() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_start_input_changes_execution_trajectory() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
 
@@ -116,7 +115,7 @@ fn smb_start_input_changes_execution_trajectory() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_start_and_move_right_keeps_video_progressing() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -151,7 +150,7 @@ fn smb_start_and_move_right_keeps_video_progressing() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_does_not_stall_in_sprite_zero_wait_loop() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -178,7 +177,7 @@ fn smb_does_not_stall_in_sprite_zero_wait_loop() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_run_and_jump_keeps_progressing() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -238,7 +237,7 @@ fn smb_run_and_jump_keeps_progressing() {
 #[test]
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_run_and_jump_audio_chunks_stay_live() {
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();
@@ -314,7 +313,7 @@ fn smb_run_and_jump_audio_chunks_stay_live() {
 #[ignore = "requires roms.smb or desktop.rom_path in nes.toml"]
 fn smb_run_and_jump_keeps_progressing_under_cpu_budget_loop() {
     const CPU_STEPS_PER_HOST_FRAME: u32 = 10_000;
-    let rom_path = support::smb_rom_path();
+    let rom_path = smb_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read SMB ROM");
     let mut core = NesCore::new();

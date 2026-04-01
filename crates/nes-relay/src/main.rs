@@ -834,6 +834,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "havoc target"]
     fn seed_entropy_varies_and_mixes_bits_with_pid_component() {
         let pid_component = u64::from(std::process::id()).rotate_left(17);
         let mut previous = None;

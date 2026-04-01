@@ -1,14 +1,13 @@
-**Refactoring `LoadedMapper` and `NesCore` API**
-**Learning:** Found deep nested `if let` matching in `apply_delta` which created unneeded pyramids, and discovered "boolean blindness" in controller state functions (`player2: bool` arguments). Also found `match` statements across enums returning `Ok(())` in every block.
-**Action:** Replaced `player2: bool` with `pub(crate) enum Player { One, Two }`. Rewrote `apply_delta` to use `let ... else` guard clauses to break deep nesting. Rewrote the `execute` match block to evaluate to `()` and return a single `Ok(())` at the end to drastically simplify repetitive code.
+**[Refactoring redundant controller input updates in nes-core api.rs]
+**Learning:** Found massive boilerplate in the `execute` method of `api.rs` where every controller state modification command manually called `self.ports.set_controller_bits` and `self.sync_ppu_register_image()`. This increased risk of forgetting the sync call for future input commands.
+**Action:** Flattened the execution block using early returns inside the `match` expression for non-input commands, letting input commands evaluate to a `(player, bits)` tuple. The actual state modification and synchronization is now performed exactly once at the bottom of the function.**Context Struct Extraction for Action Dispatchers**
+**Learning:** Functions like `dispatch_app_action` and `dispatch_overlay_command` had grown to take 17 arguments, requiring `#[allow(clippy::too_many_arguments)]`.
+**Action:** Grouped all these references into a single `struct AppContext<'a>` and passed `ctx: &mut AppContext<'_>` instead. This dramatically reduces signature size, makes the code much more readable, and allows removing the clippy suppression.
 
-**Refactoring boolean conversions and nested iterators in nes-core**
-**Learning:** Found several boolean blindness issues using `if condition { 1 } else { 0 }` instead of idiomatic `From` trait implementations. Also found a case of intermediate Vec allocation during iterator filtering in `apply_cpu_writes` that could be optimized out using `filter`.
-**Action:** Replaced boolean conversions with `u64::from` and `i32::from`. Simplified `apply_cpu_writes` by chaining `iter().filter()` to eliminate unneeded variable mutation and nesting.
-**Refactoring hardware cycle loops in nes-core API**
-**Learning:** Found scattered and repeated logic manually running `self.step_hardware_cycle()` inside `for _ in 0..cycles` loops in `api.rs`, hiding the fact that chained DMC requests handled within `step_hardware_cycle` implicitly recurse back to `apply_dmc_dma_request`.
-**Action:** Extracted `advance_hardware_cycles` helper function and replaced manual loops in `step_single_instruction` and `run_oam_dma`. Deliberately avoided refactoring `apply_dmc_dma_request` because its inline loop explicitly handles chained requests without triggering recursive stalls, which is required for accurate hardware timing.
+**Refactoring RTA Manager State Machine and I/O logic in nes-desktop/src/rta.rs**
+**Learning:** Found two "God Functions" in the `RtaManager` (`tick` and `write_artifacts_if_finished`). `tick` was a 70+ line method with multiple levels of nesting and sequential state machine steps. `write_artifacts_if_finished` was a monolithic 60+ line method handling both JSON serialization and file writing for multiple artifacts. Additionally, the `select_profile` method used a confusing `.expect()` and `.next()` iterator pattern for filtering.
+**Action:** Flattened `select_profile` by capturing `next()` using `let Some(...) else { return }`. Split the `tick` method into `tick_start`, `tick_pause_resume`, `tick_splits`, and `tick_end`. Split `write_artifacts_if_finished` into `write_run_artifact` and `write_input_log`. This drastically improves readability and reduces nesting.
 
-**Refactoring guard clauses in nes-core mapper synchronization**
-**Learning:** Found deeply nested `if let` blocks inside mapper synchronization functions (`sync_mapper_prg_window`, `sync_mapper_chr_window`, and `sync_mapper_mirroring`), creating unnecessary indentation and violating early return principles.
-**Action:** Replaced nested `if let` and `&& let` bindings with flat `let Some(...) = ... else { return; }` guard clauses to reduce nesting depth and improve readability.
+**[Refactoring repetitive parsing logic]**
+**Learning:** Argument parsing routines with many options often devolve into a "pyramid of doom" consisting of nearly identical `if arg == ...` and `if let Some(value) = arg.strip_prefix(...)` blocks, causing unnecessary scrolling and boilerplate.
+**Action:** Extract a helper function (e.g., `parse_arg`) that abstracts the common shape of checking for both exact matches (e.g. `--flag`) and prefix matches (e.g. `--flag=value`), taking a closure to apply the specific field mutations cleanly.

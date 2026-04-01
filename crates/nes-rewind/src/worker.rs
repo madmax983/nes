@@ -276,6 +276,10 @@ mod tests {
     /// frames. Returns `true` if it synced successfully, or `false` if it timed out.
     /// This avoids flaky hardcoded sleep delays in tests.
     fn wait_for_sync(tm: &mut TimeMachine) -> bool {
+        // Drain the queue completely OUTSIDE the polling cycle to prevent
+        // inadvertently discarding asynchronous responses from previous iterations.
+        while tm.rx.try_recv().is_ok() {}
+
         let start = std::time::Instant::now();
         // Give it up to 5000ms to process the queue in extremely slow CI environments.
         while start.elapsed() < Duration::from_millis(5000) {
@@ -284,23 +288,29 @@ mod tests {
             if tm.last_recorded_frame == 0 {
                 return true;
             }
-            // Drain the queue to prevent reading a stale `Reconstruct` response
-            while tm.rx.try_recv().is_ok() {}
 
             let _ = tm.tx.send(WorkerMsg::Reconstruct {
                 target_frame: tm.last_recorded_frame,
             });
 
-            if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
-                tm.rx.recv_timeout(Duration::from_millis(500))
-            {
-                // The test core isn't mutated until `tm.rewind_step` does it.
-                // But we just sent a raw message.
-                // Since we received the reply, the worker is caught up.
-                if frame_id == tm.last_recorded_frame {
-                    return true;
+            // We must loop on the receiver here, because the worker might have
+            // queued up multiple responses (e.g. to previous `Reconstruct` requests)
+            // before we started listening, or during our loop. We keep draining
+            // until we see the one we want, or we timeout.
+            let inner_start = std::time::Instant::now();
+            while inner_start.elapsed() < Duration::from_millis(500) {
+                if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
+                    tm.rx.recv_timeout(Duration::from_millis(100))
+                {
+                    // The test core isn't mutated until `tm.rewind_step` does it.
+                    // But we just sent a raw message.
+                    // Since we received the reply, the worker is caught up.
+                    if frame_id == tm.last_recorded_frame {
+                        return true;
+                    }
                 }
             }
+            // If it failed or we didn't match, loop around and try again.
         }
         false
     }
@@ -443,14 +453,26 @@ mod tests {
         }
         assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
 
+        // Let's actually give the worker a moment to process the queue
+        // to avoid race conditions.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+
         // Artificially replace the receiver with a black hole to force a timeout
-        let (_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
+        let (_dummy_reply_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
+        let (dummy_work_tx, _dummy_work_rx) = std::sync::mpsc::sync_channel(1);
+
+        // Replace BOTH rx and tx to avoid panicking the worker thread when the dummy sender goes out of scope or the actual channel closes.
         tm.rx = dummy_rx;
+        let old_tx = std::mem::replace(&mut tm.tx, dummy_work_tx);
 
         // This call will time out waiting for the dummy_rx
         let result = tm.rewind_step(&mut core);
 
         assert_eq!(result, None);
         assert_eq!(tm.state(), TimeMachineState::Exhausted);
+
+        // Restore tx to allow graceful shutdown
+        tm.tx = old_tx;
     }
 }

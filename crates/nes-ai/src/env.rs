@@ -39,6 +39,13 @@ pub struct ControlStepOutput {
     pub done: bool,
 }
 
+/// Connects an NES emulator to a specific AI control profile, executing frames
+/// and evaluating success/failure for the training feedback loop.
+///
+/// We need this wrapper so the AI doesn't interact directly with raw NES opcodes.
+/// It creates a clean boundary: "Here are the buttons to press, and here is how
+/// good you did." It maintains the `NesCore`, processes frame stacks, calculates
+/// rewards, and ultimately spits out TAS (Tool-Assisted Speedrun) artifacts.
 pub struct ProfileEnv<P>
 where
     P: TaskProfile,
@@ -235,6 +242,12 @@ impl ProfileEnv<SmbProfile> {
 
 pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 
+/// Type-erased wrapper for concrete environment specializations like SMB.
+///
+/// In Rust, generic types `ProfileEnv<P>` infect your entire API surface. This enum
+/// exists to hide that complexity behind a single enum, making it trivial to pass
+/// "some control environment" across thread bounds without dealing with `Box<dyn Any>`
+/// trait object headaches.
 pub enum AnyControlEnv {
     Smb(Box<SmbControlEnv>),
 }

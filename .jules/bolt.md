@@ -32,3 +32,17 @@
 **[Iterator Clone Performance Pitfall]
 **Learning:** Refactoring UI render slices (`&[T]`) to lazy iterators (`impl Iterator<Item = T> + Clone`) successfully eliminates intermediate collections, but if the map closure performs allocations (like `to_string()`), cloning the iterator and traversing it repeatedly (e.g. `.find()`) will trigger $O(N^2)$ allocations, destroying performance.
 **Action:** When using iterators to defer collections on the hot path, ensure all expensive operations or heap allocations inside the map closure are fully removed and deferred until the absolute last moment during the final rendering.
+**[VecDeque for FIFO Collections]**
+**Learning:** When using a `Vec` as a FIFO queue (e.g., removing the oldest element with `.remove(0)` on every frame), it triggers an O(n) memory shift of all subsequent elements. This scales poorly for large capacities like 30,000 frames.
+**Action:** Use `VecDeque` with `push_back` and `pop_front` instead of `Vec` for fixed-capacity circular buffers to reduce O(n) shifts to O(1) operations.
+**Removing String allocation when string parsing and mapping**
+**Learning:** Chaining `.collect::<String>()` on an iterator with operations like `.chars().map(...).collect::<String>()` allocates memory but cannot guarantee a single allocation if the final length isn't perfectly predictable to the allocator, resulting in potential re-allocations on the hot path.
+**Action:** Use `String::with_capacity()` to pre-allocate the exact known maximum size, and a `for` loop with `.push()` to append characters manually. This guarantees exactly one heap allocation.
+
+## 2025-06-19 - Replace O(N) allocation in DSL parser with peekable iterator
+**Learning:** Found an unnecessary intermediate heap allocation `let chars: Vec<char> = line.chars().collect();` in `nes-dsl/src/lib.rs` while doing string look-ahead for comment stripping.
+**Action:** Replaced the collected vector with `let mut chars = line.chars().peekable();`. A peekable iterator allows the look-ahead behavior needed (`chars.peek() == Some(&'/')`) without needing to load the entire line into memory.
+
+## 2025-06-19 - Removed format! and Vec::new() on hot emulator path
+**Learning:** Returning `String` and `Vec<u8>` from inner parsing routines on the CPU emulation hot loop causes multiple allocations per executed opcode, degrading performance.
+**Action:** Replace `format!` and `vec![]` with `format_args!` and array slices (`&[u8]`). Pass `fmt::Arguments` to diagnostic functions that only evaluate and allocate them when tracing is explicitly enabled.

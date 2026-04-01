@@ -1,10 +1,35 @@
+//! Reusable testing utilities and integration harnesses for the NES emulator.
+//!
+//! When developing an emulator, unit tests only verify the smallest components.
+//! True confidence comes from integration testing—feeding a known ROM into the `NesCore`,
+//! executing it for several thousand cycles, and verifying the resulting hardware state.
+//!
+//! This crate prevents duplication across the workspace by providing tools to:
+//! - Build and inject minimal homebrew ROMs.
+//! - Trace APU register writes to ensure cycle-accurate sound events.
+//! - Capture and analyze `.pcm` audio streams against "golden" known-good recordings.
+//!
+//! ## Examples
+//!
+//! Using the harness to collect audio states:
+//!
+//! ```rust
+//! use nes_test_harness::{AudioStats, audio_stats};
+//!
+//! let sine_wave = [0, 16000, 32000, 16000, 0, -16000, -32000, -16000];
+//! let stats = audio_stats(&sine_wave);
+//! assert_eq!(stats.sample_count, 8);
+//! assert_eq!(stats.peak, 32000);
+//! ```
 use std::f64::consts::PI;
 use std::fs;
 use std::path::Path;
 
 mod homebrew;
+pub mod rom_paths;
 
 pub use homebrew::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
+pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
@@ -35,6 +60,21 @@ pub struct WaveformComparison {
 const INES_HEADER_LEN: usize = 16;
 const INES_MAGIC: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
+/// Steps the core and records all writes made to the APU registers (`0x4000`..=`0x4017`).
+///
+/// This is heavily used in `bbbradsmith_golden_capture` style tests. By inspecting the sequence
+/// and exact cycle timestamps of these writes, we can prove the CPU execution timing is flawless.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_core::{NesCore, Command};
+/// use nes_test_harness::collect_apu_register_writes;
+///
+/// let mut core = NesCore::new();
+/// // In a real test, load a test ROM here.
+/// let writes = collect_apu_register_writes(&mut core, 10).unwrap();
+/// ```
 pub fn collect_apu_register_writes(
     core: &mut NesCore,
     cpu_steps: u32,
@@ -70,6 +110,23 @@ pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     hash
 }
 
+/// Steps the given [`NesCore`] for a specific number of frames and collects the generated audio samples.
+///
+/// This is useful for writing test assertions against audio output (e.g., verifying a square wave).
+/// Ensure that the [`NesCore`] has a valid ROM loaded prior to calling this; stepping an empty
+/// core will result in silent samples.
+///
+/// # Examples
+///
+/// ```
+/// use nes_core::{NesCore, Command};
+/// use nes_test_harness::collect_audio_for_frames;
+///
+/// let mut core = NesCore::new();
+/// // In a real test, load a ROM here before stepping
+/// let audio = collect_audio_for_frames(&mut core, 2).unwrap();
+/// assert_eq!(audio.len(), nes_core::AUDIO_CHUNK_SAMPLES * 2);
+/// ```
 pub fn collect_audio_for_frames(core: &mut NesCore, frames: u32) -> Result<Vec<i16>, CoreError> {
     let mut samples = Vec::new();
     for _ in 0..frames {
@@ -79,6 +136,25 @@ pub fn collect_audio_for_frames(core: &mut NesCore, frames: u32) -> Result<Vec<i
     Ok(samples)
 }
 
+/// Loads a ROM, advances past an initial warmup period, and captures a window of audio samples.
+///
+/// This helper handles the full lifecycle for audio testing, including ROM loading and skipping
+/// the initial frames (where the game is booting or silent) to capture the target sound.
+///
+/// # Errors
+///
+/// Returns an error if the ROM is invalid or if the core fails to step during execution.
+///
+/// # Examples
+///
+/// ```
+/// use nes_test_harness::{capture_audio_window, build_homebrew_rom};
+///
+/// let rom_bytes = build_homebrew_rom().unwrap();
+/// // Skip the first 10 frames, then capture 5 frames of audio
+/// let audio = capture_audio_window(&rom_bytes, 10, 5).unwrap();
+/// assert_eq!(audio.len(), nes_core::AUDIO_CHUNK_SAMPLES * 5);
+/// ```
 pub fn capture_audio_window(
     rom_bytes: &[u8],
     warmup_frames: u32,
@@ -200,6 +276,19 @@ pub fn pearson_correlation(lhs: &[i16], rhs: &[i16]) -> f64 {
     (numerator / denom).clamp(-1.0, 1.0)
 }
 
+/// Serializes raw 16-bit PCM audio samples to disk for offline analysis.
+///
+/// These files can be opened in Audacity (Import -> Raw Data, Signed 16-bit PCM, Little-Endian, 1 Channel).
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::write_pcm_i16le;
+///
+/// // In tests, use a temp directory.
+/// // write_pcm_i16le(Path::new("test_output.pcm"), &[0, 100, -100, 0]).unwrap();
+/// ```
 pub fn write_pcm_i16le(path: &Path, samples: &[i16]) -> Result<(), String> {
     let mut bytes = Vec::with_capacity(samples.len() * 2);
     for sample in samples {
@@ -208,6 +297,18 @@ pub fn write_pcm_i16le(path: &Path, samples: &[i16]) -> Result<(), String> {
     fs::write(path, bytes).map_err(|err| format!("failed to write '{}': {err}", path.display()))
 }
 
+/// Deserializes a raw 16-bit PCM audio file from disk into a vector of samples.
+///
+/// Typically used to load a "golden" output stream to compare against generated emulator output.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::read_pcm_i16le;
+///
+/// // let samples = read_pcm_i16le(Path::new("golden_reference.pcm")).unwrap();
+/// ```
 pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     let bytes =
         fs::read(path).map_err(|err| format!("failed to read '{}': {err}", path.display()))?;

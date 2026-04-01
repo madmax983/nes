@@ -2,8 +2,7 @@ use std::collections::VecDeque;
 use std::fs;
 
 use nes_core::{Command, NesCore};
-
-mod support;
+use nes_test_harness::blargg_cpu_rom_path;
 
 const BLARGG_STATUS_ADDR: u16 = 0x6000;
 const BLARGG_MESSAGE_ADDR: u16 = 0x6004;
@@ -25,7 +24,7 @@ fn read_blargg_message(core: &NesCore) -> String {
 #[test]
 #[ignore = "requires roms.blargg_cpu in nes.toml"]
 fn blargg_cpu_rom_reports_pass() {
-    let rom_path = support::blargg_cpu_rom_path();
+    let rom_path = blargg_cpu_rom_path();
 
     let bytes = fs::read(&rom_path).expect("failed to read blargg cpu ROM");
     let mut core = NesCore::new();

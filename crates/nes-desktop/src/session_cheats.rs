@@ -306,4 +306,40 @@ mod tests {
         let err = cheats.toggle(0).expect_err("missing entry should fail");
         assert_eq!(err, SessionCheatError::MissingIndex { index: 0, len: 0 });
     }
+
+    #[test]
+    fn clear_removes_all_entries() {
+        let mut cheats =
+            SessionCheats::from_raw_codes(&["GOSSIP".to_owned(), "ZEXPYGLA".to_owned()])
+                .expect("seeded codes should validate");
+        assert_eq!(cheats.len(), 2);
+        cheats.clear();
+        assert_eq!(cheats.len(), 0);
+    }
+
+    #[test]
+    fn is_empty_returns_true_for_empty_list() {
+        let mut cheats = SessionCheats::new();
+        assert!(cheats.is_empty());
+        cheats.add("GOSSIP").unwrap();
+        assert!(!cheats.is_empty());
+        cheats.clear();
+        assert!(cheats.is_empty());
+    }
+
+    #[test]
+    fn session_cheat_error_fmt() {
+        use nes_core::CheatCodeError;
+        let missing_index = SessionCheatError::MissingIndex { index: 5, len: 3 };
+        assert_eq!(
+            missing_index.to_string(),
+            "cheat entry index 5 is out of bounds for 3 entries"
+        );
+
+        let invalid_code = SessionCheatError::InvalidCode(CheatCodeError::InvalidLength(4));
+        assert_eq!(
+            invalid_code.to_string(),
+            CheatCodeError::InvalidLength(4).to_string()
+        );
+    }
 }

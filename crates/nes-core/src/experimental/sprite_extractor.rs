@@ -1,13 +1,44 @@
+//! Experimental tools for extracting sprite and tile data directly from the emulator's memory.
+//!
+//! This module provides utilities like [`SpriteExtractor`] to parse CHR-RAM data and convert it
+//! into recognizable image formats (such as BMP files). It is primarily useful for debugging,
+//! automated sprite sheet generation, or external visualization tools that need to inspect
+//! graphics state without manually reading individual bytes.
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]
 use crate::bmp::encode_bmp;
 
+/// A utility for extracting CHR-RAM data from an NES core and converting it into image formats.
+///
+/// `SpriteExtractor` is an experimental feature that reads raw pattern tables from the PPU's memory
+/// and maps the 2-bit NES color indices to a standard grayscale palette, allowing developers
+/// to visualize the current tile set in standard formats like BMP.
 #[cfg(feature = "nova")]
 pub struct SpriteExtractor;
 
 #[cfg(feature = "nova")]
 impl SpriteExtractor {
+    /// Extracts the entire CHR-RAM memory (pattern tables) and encodes it as a BMP image.
+    ///
+    /// This function converts the 8x8 pixel tiles stored in the NES core into a 128x256 pixel image.
+    /// It is extremely useful for debugging the PPU memory visually. The 2-bit color indices
+    /// are mapped to grayscale values (0, 85, 170, 255).
+    ///
+    /// ## Examples
+    ///
+    /// ```rust
+    /// use nes_core::NesCore;
+    /// use nes_core::experimental::sprite_extractor::SpriteExtractor;
+    ///
+    /// let core = NesCore::new();
+    /// // Extract the current sprite sheet from CHR-RAM
+    /// let bmp_bytes = SpriteExtractor::extract_chr_ram_bmp(&core).unwrap();
+    ///
+    /// // The resulting bytes contain a valid BMP file starting with the "BM" magic bytes
+    /// assert_eq!(&bmp_bytes[0..2], b"BM");
+    /// ```
     pub fn extract_chr_ram_bmp(core: &NesCore) -> Result<Vec<u8>, String> {
         let snapshot = core.save_state();
         let chr = snapshot.ppu.chr;

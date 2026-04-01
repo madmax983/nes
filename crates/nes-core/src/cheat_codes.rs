@@ -71,11 +71,17 @@ impl FromStr for CheatCode {
     type Err = CheatCodeError;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        let normalized: String = raw
-            .chars()
-            .filter(|ch| !ch.is_ascii_whitespace() && *ch != '-')
-            .map(|ch| ch.to_ascii_uppercase())
-            .collect();
+        // **Performance optimization:** Instead of using `.filter(...).map(...).collect::<String>()`
+        // which cannot predict the final length and may re-allocate the heap buffer multiple times,
+        // we pre-allocate exactly 8 bytes (the maximum valid length of a NES cheat code)
+        // and push characters manually. This guarantees a single, zero-overhead allocation.
+        let mut normalized = String::with_capacity(8);
+        for ch in raw.chars() {
+            if ch.is_ascii_whitespace() || ch == '-' {
+                continue;
+            }
+            normalized.push(ch.to_ascii_uppercase());
+        }
 
         if normalized.len() != 6 && normalized.len() != 8 {
             return Err(CheatCodeError::InvalidLength(normalized.len()));
@@ -202,6 +208,68 @@ mod tests {
         let code3 = CheatCode::from_str("S X-T P-O U").unwrap();
         assert_eq!(code3.raw(), "SXTPOU");
         assert_eq!(code3.address(), 0x9BE1);
+
+        let code_only_hyphens = CheatCode::from_str("SXT-POU").unwrap();
+        assert_eq!(code_only_hyphens.raw(), "SXTPOU");
+
+        let code_only_spaces = CheatCode::from_str("SXT POU").unwrap();
+        assert_eq!(code_only_spaces.raw(), "SXTPOU");
+    }
+
+    #[test]
+    fn cheat_code_parser_fails_with_invalid_characters() {
+        let err = CheatCode::from_str("123456").unwrap_err();
+        assert_eq!(err, CheatCodeError::InvalidCharacter { ch: '1', index: 0 });
+
+        let err2 = CheatCode::from_str("SXTPO1").unwrap_err();
+        assert_eq!(err2, CheatCodeError::InvalidCharacter { ch: '1', index: 5 });
+    }
+
+    #[test]
+    fn cheat_code_applies_to_logic() {
+        let code_6 = CheatCode::from_str("SXTPOU").unwrap();
+        // Applies to exact address
+        assert!(code_6.applies_to(0x9BE1, 0xFF));
+        // Doesn't apply to wrong address
+        assert!(!code_6.applies_to(0x9BE2, 0xFF));
+
+        let code_8 = CheatCode::from_str("ZEXPYGLA").unwrap();
+        // Applies to exact address and matching original value
+        assert!(code_8.applies_to(0x94A7, 0x03));
+        // Doesn't apply if original value doesn't match compare byte
+        assert!(!code_8.applies_to(0x94A7, 0x04));
+        // Doesn't apply if address is wrong
+        assert!(!code_8.applies_to(0x94A8, 0x03));
+    }
+
+    #[test]
+    fn cheat_code_error_formatting() {
+        let err_len = CheatCodeError::InvalidLength(5);
+        assert_eq!(
+            err_len.to_string(),
+            "cheat code length must be 6 or 8 characters, got 5"
+        );
+
+        let err_char = CheatCodeError::InvalidCharacter { ch: '1', index: 0 };
+        assert_eq!(
+            err_char.to_string(),
+            format!(
+                "invalid cheat code character '1' at position 0; expected letters from {}",
+                CHEAT_CODE_ALPHABET
+            )
+        );
+    }
+
+    #[test]
+    fn invalid_cheat_codes_return_errors() {
+        let err_5 = CheatCode::from_str("SXTPO").unwrap_err();
+        assert_eq!(err_5, CheatCodeError::InvalidLength(5));
+
+        let err_7 = CheatCode::from_str("ZEXPYGL").unwrap_err();
+        assert_eq!(err_7, CheatCodeError::InvalidLength(7));
+
+        let err_9 = CheatCode::from_str("ZEXPYGLAZ").unwrap_err();
+        assert_eq!(err_9, CheatCodeError::InvalidLength(9));
     }
 
     #[test]

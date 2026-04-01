@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use comfy_table::Table;
 use nes_config::normalize_nonzero_u64;
 use nes_core::NesCore;
 
@@ -170,24 +171,70 @@ impl PerfMetrics {
             return;
         };
 
-        println!(
-            "[metrics] wall_fps={:.1} emu_fps={:.1} avg_step_ms={:.2} avg_render_ms={:.2} late_frames={} pc_stall_frames={} unchanged_frames={} audio_peak_q={} audio_drop_chunks={} net_rtt_ms={:.1} net_jitter_ms={:.1} net_rollbacks={} net_max_rb={} net_desyncs={} net_delay_frames={}",
-            snapshot.wall_fps,
-            snapshot.emu_fps,
-            snapshot.avg_step_ms,
-            snapshot.avg_render_ms,
-            self.late_frames,
-            self.pc_stall_frames,
-            self.unchanged_frame_count,
-            self.audio_queue_peak,
-            self.audio_queue_drops,
-            self.netplay_rtt_ms,
-            self.netplay_jitter_ms,
-            self.netplay_rollbacks,
-            self.netplay_max_rollback_distance,
-            self.netplay_desyncs,
-            self.netplay_input_delay_frames
-        );
+        let mut table = Table::new();
+        table.set_header(vec!["Metric", "Value"]);
+        table.add_row(vec![
+            "wall_fps".to_string(),
+            format!("{:.1}", snapshot.wall_fps),
+        ]);
+        table.add_row(vec![
+            "emu_fps".to_string(),
+            format!("{:.1}", snapshot.emu_fps),
+        ]);
+        table.add_row(vec![
+            "avg_step_ms".to_string(),
+            format!("{:.2}", snapshot.avg_step_ms),
+        ]);
+        table.add_row(vec![
+            "avg_render_ms".to_string(),
+            format!("{:.2}", snapshot.avg_render_ms),
+        ]);
+        table.add_row(vec![
+            "late_frames".to_string(),
+            self.late_frames.to_string(),
+        ]);
+        table.add_row(vec![
+            "pc_stall_frames".to_string(),
+            self.pc_stall_frames.to_string(),
+        ]);
+        table.add_row(vec![
+            "unchanged_frames".to_string(),
+            self.unchanged_frame_count.to_string(),
+        ]);
+        table.add_row(vec![
+            "audio_peak_q".to_string(),
+            self.audio_queue_peak.to_string(),
+        ]);
+        table.add_row(vec![
+            "audio_drop_chunks".to_string(),
+            self.audio_queue_drops.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_rtt_ms".to_string(),
+            format!("{:.1}", self.netplay_rtt_ms),
+        ]);
+        table.add_row(vec![
+            "net_jitter_ms".to_string(),
+            format!("{:.1}", self.netplay_jitter_ms),
+        ]);
+        table.add_row(vec![
+            "net_rollbacks".to_string(),
+            self.netplay_rollbacks.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_max_rb".to_string(),
+            self.netplay_max_rollback_distance.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_desyncs".to_string(),
+            self.netplay_desyncs.to_string(),
+        ]);
+        table.add_row(vec![
+            "net_delay_frames".to_string(),
+            self.netplay_input_delay_frames.to_string(),
+        ]);
+
+        println!("{table}");
 
         self.report_start = Instant::now();
         self.report_start_ppu_frame = ppu_now;

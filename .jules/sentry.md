@@ -9,4 +9,13 @@
 **Action:** Wrote explicit unit tests instantiating mapper implementations directly (`Mmc3::from_prg_chr`, `Axrom::from_prg_rom`, etc.) and wrapping them in `LoadedMapper` variants to assert execution paths, reducing mutation survivability and ensuring correct integration behavior.
 ## 2026-03-12 - [GxROM Coverage Improvements]
 **Learning:** `sync_chr_ram_from_ppu_window` in `crates/nes-core/src/mapper/gxrom.rs` was missing unit tests covering whether the PPU window data was correctly synced to the CHR array when `chr_writable` is true or false.
-**Action:** Wrote explicit unit tests instantiating `Gxrom` with empty and non-empty `chr_rom` to cover the true and false branch of `chr_writable` and asserting the correct CHR syncing behavior.
+**Action:** Wrote explicit unit tests instantiating `Gxrom` with empty and non-empty `chr_rom` to cover the true and false branch of `chr_writable` and asserting the correct CHR syncing behavior.## 2026-03-26 - [RollbackEngine Clear History]
+**Learning:** `RollbackEngine::clear_from` in `crates/nes-netplay/src/rollback.rs` lacked specific test coverage, making mutations to its clearing logic (e.g. replacing it with `()`) survivable. This logic is crucial for ensuring that predicted future states are correctly purged upon a network desync and rollback.
+**Action:** Wrote an explicit unit test `rollback_engine_clears_from_frame_on_rollback` that manually constructs a rollback engine's internal buffers and directly asserts that `clear_from` drops future state arrays while preserving history before the target frame.
+## 2026-03-29 - [API Core Command and Query Gaps]
+**Learning:** `nes-core/src/api.rs` had coverage gaps around `Command::ReleaseButton`, `Command::PowerCycle`, invalid `Command::SetSpeed(0)`, and querying `CoreQuery` variants. Because these are critical pathways for client applications to control the emulator, untested behavior here could result in unpredictable frontend state.
+**Action:** Wrote explicit unit tests in `api.rs` asserting correct behavior of button releases clearing bitmasks, power cycling resetting speeds, zero speed returning an error, and all `CoreQuery` variants correctly matching their results. Removed trivial getters/setters tests as per strict "Sentry" policy.
+## 2024-05-19 - Mutant testing boolean logic operators
+
+**Learning:** When using `cargo mutants`, testing `||` conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the `||` independently to kill mutations that replace `||` with `&&`.
+**Action:** Always create separate test cases for each independent condition within an `||` statement instead of grouping them together.

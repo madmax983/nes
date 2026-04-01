@@ -117,3 +117,56 @@ fn ensure_dir_exists(label: &str, path: &str) {
     assert!(dir.exists(), "{label} does not exist: {path}");
     assert!(dir.is_dir(), "{label} is not a directory: {path}");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires nes.toml or defaults to panic if absent in pure CI"]
+    fn config_loads_without_panic() {
+        let _ = load_config();
+    }
+
+    #[test]
+    #[should_panic = "TEST path cannot be empty in nes.toml"]
+    fn ensure_path_exists_panics_on_empty() {
+        ensure_path_exists("TEST", " ");
+    }
+
+    #[test]
+    #[should_panic = "TEST path does not exist: /does/not/exist/12345"]
+    fn ensure_path_exists_panics_on_missing() {
+        ensure_path_exists("TEST", "/does/not/exist/12345");
+    }
+
+    #[test]
+    #[should_panic = "TEST path cannot be empty in nes.toml"]
+    fn ensure_dir_exists_panics_on_empty() {
+        ensure_dir_exists("TEST", "   ");
+    }
+
+    #[test]
+    #[should_panic = "TEST does not exist: /does/not/exist/12345"]
+    fn ensure_dir_exists_panics_on_missing() {
+        ensure_dir_exists("TEST", "/does/not/exist/12345");
+    }
+
+    #[test]
+    #[should_panic = "TEST is not a directory:"]
+    fn ensure_dir_exists_panics_on_file() {
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let toml = Path::new(manifest).join("Cargo.toml");
+        ensure_dir_exists("TEST", toml.to_string_lossy().as_ref());
+    }
+
+    #[test]
+    #[ignore = "purely to verify panics locally for coverage without crashing pure CI"]
+    fn cover_rom_path_helpers() {
+        let _ = std::panic::catch_unwind(smb_rom_path);
+        let _ = std::panic::catch_unwind(nestest_rom_path);
+        let _ = std::panic::catch_unwind(blargg_cpu_rom_path);
+        let _ = std::panic::catch_unwind(bbbradsmith_audio_suite_rom_paths);
+        let _ = std::panic::catch_unwind(bbbradsmith_audio_golden_dir_path);
+    }
+}

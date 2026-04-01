@@ -48,21 +48,31 @@ fn portable_stem_for_rom_path(rom_path: &Path) -> String {
         .to_owned()
 }
 
+/// **Performance optimization:** Avoids `.collect::<String>()` by pre-allocating
+/// `String::with_capacity` and pushing characters in a loop, guaranteeing exactly
+/// one heap allocation instead of reallocating dynamically.
 fn sanitized_stem_for_rom_path(rom_path: &Path) -> String {
-    portable_stem_for_rom_path(rom_path)
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    let stem = portable_stem_for_rom_path(rom_path);
+    let mut sanitized = String::with_capacity(stem.len());
+    for ch in stem.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+            sanitized.push(ch);
+        } else {
+            sanitized.push('_');
+        }
+    }
+    sanitized
 }
 
+/// **Performance optimization:** Avoids `.collect::<String>()` by pre-allocating
+/// `String::with_capacity` and pushing characters in a loop, guaranteeing exactly
+/// one heap allocation instead of reallocating dynamically.
 fn hash_prefix(rom_hash: &str) -> String {
-    rom_hash.chars().take(HASH_PREFIX_LEN).collect()
+    let mut prefix = String::with_capacity(HASH_PREFIX_LEN);
+    for ch in rom_hash.chars().take(HASH_PREFIX_LEN) {
+        prefix.push(ch);
+    }
+    prefix
 }
 
 fn read_save_state_file(path: &Path) -> Result<SaveStateFile, String> {
@@ -140,6 +150,27 @@ pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     PathBuf::from(SAVE_STATE_DIR).join(format!("{sanitized_stem}-{hash_prefix}.state.json"))
 }
 
+/// Serializes a complete emulator snapshot to a JSON file on disk.
+///
+/// We do this to provide the player with an emergency fallback—a way to freeze time.
+/// By embedding the `rom_hash` directly into the file, we protect the user from
+/// accidentally loading a save state meant for *Super Mario Bros.* into *Zelda*,
+/// which would otherwise cause the emulator to vividly hallucinate and crash.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::NesCore;
+/// use nes_desktop::manual_state::save_state_file;
+/// use std::path::PathBuf;
+///
+/// let core = NesCore::new();
+/// let snapshot = core.save_state();
+/// let mut path = std::env::temp_dir();
+/// path.push("example_save.json");
+///
+/// save_state_file(&path, "abc123hash", &snapshot).expect("Failed to write save state");
+/// ```
 pub fn save_state_file(path: &Path, rom_hash: &str, snapshot: &CoreSnapshot) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -165,6 +196,34 @@ pub fn save_state_file(path: &Path, rom_hash: &str, snapshot: &CoreSnapshot) -> 
     })
 }
 
+/// Reads and deserializes an emulator snapshot from a JSON file.
+///
+/// Why do we need the `expected_rom_hash`? Because loading the memory of one game
+/// into another game is a recipe for digital chaos. This function acts as a bouncer,
+/// ensuring the save state actually belongs to the cartridge currently inserted.
+///
+/// ## Panics
+///
+/// This function does not panic, but it will return an `Err` containing a detailed
+/// `String` message if the file doesn't exist, is corrupted, or if the ROM hash mismatches.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::NesCore;
+/// use nes_desktop::manual_state::{save_state_file, load_state_file};
+/// use std::path::PathBuf;
+///
+/// let core = NesCore::new();
+/// let mut path = std::env::temp_dir();
+/// path.push("example_load.json");
+///
+/// // Create a dummy save file first
+/// save_state_file(&path, "expected_hash", &core.save_state()).unwrap();
+///
+/// // Now load it back
+/// let loaded_snapshot = load_state_file(&path, "expected_hash").unwrap();
+/// ```
 pub fn load_state_file(path: &Path, expected_rom_hash: &str) -> Result<CoreSnapshot, String> {
     let payload = read_save_state_file(path)?;
     if payload.rom_hash != expected_rom_hash {
@@ -177,6 +236,26 @@ pub fn load_state_file(path: &Path, expected_rom_hash: &str) -> Result<CoreSnaps
     Ok(payload.snapshot)
 }
 
+/// Reads lightweight metadata (like the timestamp) for a specific save state slot.
+///
+/// Instead of aggressively deserializing the entire 100KB+ JSON save state just to see
+/// if the slot is empty, this function selectively peeks at the file system and
+/// the top-level JSON structure. This allows UI overlays to render the save state menu
+/// efficiently without stuttering the gameplay loop.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_desktop::manual_state::{read_slot_metadata, SaveSlotStatus};
+/// use std::path::PathBuf;
+///
+/// let rom_path = PathBuf::from("super_mario.slot1.state.json");
+/// // Check if slot 1 has a save for this ROM
+/// let meta = read_slot_metadata(&rom_path, "smb_hash");
+/// if let Ok(meta) = meta {
+///     // Data is present
+/// }
+/// ```
 pub fn read_slot_metadata(
     path: &Path,
     expected_rom_hash: &str,

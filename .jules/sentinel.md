@@ -43,3 +43,13 @@
 **Mutant:** `replace RollbackEngine::clear_from with ()` in `crates/nes-netplay/src/rollback.rs`
 **Diagnosis:** `EQUIVALENT_MUTANT` / `SUSPECTED_BUG`. The `clear_from` method uses `BTreeMap::split_off` to remove all state mappings for frames `>= start_frame`. However, immediately after `clear_from` is called in `rollback_from`, the logic iterates exactly from `start_frame..self.next_frame`, calling `simulate_frame` which re-inserts and perfectly overwrites all of these "cleared" future values. Therefore, replacing `clear_from` with `()` does not change any observable state, leaving the mutant alive. The operation is mathematically functionally redundant and adds unnecessary `BTreeMap` node deallocation/reallocation overhead compared to simply overwriting the values.
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT` / `SUSPECTED_BUG`. No test can assert the absence of `clear_from` because the state is fully overwritten in standard execution.
+
+## YYYY-MM-DD - Equivalent Mutants in MMC3 `from_prg_chr`
+**Mutant:** `replace < with <=` in `Mmc3::from_prg_chr` on line 89 (`if prg_rom.len() < min_prg_bytes`) and line 103 (`if chr_data.len() < CHR_WINDOW_BYTES`).
+**Diagnosis:** `EQUIVALENT_MUTANT`. Changing `<` to `<=` causes the condition to evaluate to true when the ROM length is exactly the minimum required bytes. This leads to `resize(min_bytes, 0)` being called. However, since the vector's length is already equal to `min_bytes`, `resize` effectively does nothing, leaving the vector untouched. The operation is mathematically identical, meaning no test can catch this behavior change because there is no behavior change.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+
+## YYYY-MM-DD - Equivalent Mutants in GxROM `from_prg_chr`
+**Mutant:** `replace < with <=` in `Gxrom::from_prg_chr` on line 35 (`if prg_rom.len() < PRG_BANK_32K`).
+**Diagnosis:** `EQUIVALENT_MUTANT`. Changing `<` to `<=` causes the condition to evaluate to true when the ROM length is exactly 32KB. This leads to `resize(PRG_BANK_32K, 0)` being called. Since the vector's length is already equal to 32KB, `resize` does nothing. This mutation does not change observable behavior.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
