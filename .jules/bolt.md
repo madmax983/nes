@@ -24,3 +24,11 @@
 **Removing String allocation in IO write**
 **Learning:** `writer.write_all(format!("...").as_bytes())` dynamically allocates a temporary `String`, formats text into it, copies the bytes into the `writer`, and drops the `String`. This generates an unnecessary heap allocation on every MCP JSON-RPC response.
 **Action:** Use `write!(writer, "...")` instead of allocating an intermediate `String` via `format!` to avoid the heap allocation.
+
+**[Overlay Rendering Loop Allocations]
+**Learning:** Passing slices `&[T]` to UI rendering loops often forces the caller to eagerly collect mapped states (like strings or toggles) into temporary `Vec`s, causing frequent heap allocations.
+**Action:** Use `impl Iterator<Item = T> + Clone` directly in the UI render signature to pull and map states dynamically from the underlying source without allocating intermediate collections.
+
+**[Iterator Clone Performance Pitfall]
+**Learning:** Refactoring UI render slices (`&[T]`) to lazy iterators (`impl Iterator<Item = T> + Clone`) successfully eliminates intermediate collections, but if the map closure performs allocations (like `to_string()`), cloning the iterator and traversing it repeatedly (e.g. `.find()`) will trigger $O(N^2)$ allocations, destroying performance.
+**Action:** When using iterators to defer collections on the hot path, ensure all expensive operations or heap allocations inside the map closure are fully removed and deferred until the absolute last moment during the final rendering.

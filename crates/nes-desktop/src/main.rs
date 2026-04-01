@@ -379,29 +379,12 @@ fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
         SaveSlotStatus::Saved => "Saved",
         SaveSlotStatus::Corrupt => "Corrupt",
         SaveSlotStatus::IncompatibleRom => "Mismatch",
-    }
-    .to_owned();
-    let detail = metadata.modified_unix_secs.map(|secs| secs.to_string());
+    };
     OverlaySlotSummary {
         slot: metadata.slot,
         status_label,
-        detail,
+        modified_unix_secs: metadata.modified_unix_secs,
     }
-}
-
-fn overlay_slot_summaries(metadata: &[SaveSlotMetadata]) -> Vec<OverlaySlotSummary> {
-    metadata.iter().map(format_slot_status).collect()
-}
-
-fn overlay_cheat_summaries(cheats: &SessionCheats) -> Vec<OverlayCheatSummary> {
-    cheats
-        .entries()
-        .iter()
-        .map(|entry| OverlayCheatSummary {
-            raw_code: entry.raw_code.clone(),
-            enabled: entry.enabled,
-        })
-        .collect()
 }
 
 fn rom_display_name(path: &Path) -> String {
@@ -1767,15 +1750,17 @@ fn run() -> Result<(), String> {
             core.fill_framebuffer_rgba(&mut frame_rgba);
             pixels.frame_mut().copy_from_slice(&frame_rgba);
             if overlay.is_open() {
-                let slot_summaries = overlay_slot_summaries(&session.slot_metadata);
-                let cheat_summaries = overlay_cheat_summaries(&session_cheats);
                 draw_overlay(
                     pixels.frame_mut(),
                     FRAME_WIDTH,
                     FRAME_HEIGHT,
                     &overlay,
-                    &slot_summaries,
-                    &cheat_summaries,
+                    session.slot_metadata.iter().map(format_slot_status),
+                    session_cheats.entries().iter().map(|entry| OverlayCheatSummary {
+                        raw_code: &entry.raw_code,
+                        enabled: entry.enabled,
+                    }),
+                    session_cheats.len(),
                 );
             }
             if let Some(config) = capture.as_ref()

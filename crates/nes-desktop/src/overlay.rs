@@ -66,27 +66,26 @@ pub enum OverlayCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
     pub slot: u8,
-    pub status_label: String,
-    pub detail: Option<String>,
+    pub status_label: &'static str,
+    pub modified_unix_secs: Option<u64>,
 }
 
 impl OverlaySlotSummary {
     /// Returns a human-readable suffix for rendering beside slot actions.
     pub fn render_suffix(&self, out: &mut String) {
         use std::fmt::Write;
-        match self.detail.as_deref() {
-            Some(detail) if !detail.is_empty() => {
-                let _ = write!(out, "{} ({detail})", self.status_label);
-            }
-            _ => out.push_str(&self.status_label),
+        if let Some(secs) = self.modified_unix_secs {
+            let _ = write!(out, "{} ({secs})", self.status_label);
+        } else {
+            out.push_str(self.status_label);
         }
     }
 }
 
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OverlayCheatSummary {
-    pub raw_code: String,
+pub struct OverlayCheatSummary<'a> {
+    pub raw_code: &'a str,
     pub enabled: bool,
 }
 
@@ -465,13 +464,18 @@ pub fn draw_text(
 }
 
 /// Draws the full modal overlay on top of the existing frame.
-pub fn draw_overlay(
+///
+/// **Bolt Optimization:** The `slot_summaries` and `cheat_summaries` arguments use
+/// lazy iterators instead of collecting into `Vec` slices. This eliminates repeated heap
+/// allocations and mappings for the UI list states on every redraw tick.
+pub fn draw_overlay<'a>(
     frame: &mut [u8],
     frame_width: usize,
     frame_height: usize,
     model: &OverlayModel,
-    slot_summaries: &[OverlaySlotSummary],
-    cheat_summaries: &[OverlayCheatSummary],
+    slot_summaries: impl Iterator<Item = OverlaySlotSummary> + Clone,
+    mut cheat_summaries: impl Iterator<Item = OverlayCheatSummary<'a>>,
+    cheat_count: usize,
 ) {
     if !model.is_open() || frame_width == 0 || frame_height == 0 {
         return;
@@ -538,7 +542,7 @@ pub fn draw_overlay(
                 }
 
                 text_buffer.clear();
-                main_entry_label(*entry, slot_summaries, &mut text_buffer);
+                main_entry_label(*entry, slot_summaries.clone(), &mut text_buffer);
                 draw_text(
                     frame,
                     frame_width,
@@ -567,8 +571,8 @@ pub fn draw_overlay(
             );
             text_y = text_y.saturating_add(LINE_HEIGHT + 6);
 
-            for index in 0..cheat_summaries.len().saturating_add(1) {
-                let is_selected = index == model.cheats_selection_index.min(cheat_summaries.len());
+            for index in 0..cheat_count.saturating_add(1) {
+                let is_selected = index == model.cheats_selection_index.min(cheat_count);
                 let line_top = text_y.saturating_sub(2);
                 if is_selected {
                     fill_rect(
@@ -587,8 +591,8 @@ pub fn draw_overlay(
                 text_buffer.clear();
                 if index == 0 {
                     text_buffer.push_str("Add Code");
-                } else {
-                    cheat_label(&cheat_summaries[index - 1], &mut text_buffer);
+                } else if let Some(summary) = cheat_summaries.next() {
+                    cheat_label(&summary, &mut text_buffer);
                 }
                 draw_text(
                     frame,
@@ -739,7 +743,7 @@ fn set_pixel(frame: &mut [u8], frame_width: usize, x: usize, y: usize, color: [u
 /// by writing directly to a reusable `String` buffer via `std::fmt::Write`.
 fn main_entry_label(
     entry: MainMenuSelection,
-    slot_summaries: &[OverlaySlotSummary],
+    mut slot_summaries: impl Iterator<Item = OverlaySlotSummary>,
     out: &mut String,
 ) {
     use std::fmt::Write;
@@ -749,11 +753,11 @@ fn main_entry_label(
         MainMenuSelection::OpenCheats => out.push_str("Cheats..."),
         MainMenuSelection::SaveSlot(slot) => {
             let _ = write!(out, "Save Slot {slot}: ");
-            slot_suffix(slot, slot_summaries, out);
+            slot_suffix(slot, &mut slot_summaries, out);
         }
         MainMenuSelection::LoadSlot(slot) => {
             let _ = write!(out, "Load Slot {slot}: ");
-            slot_suffix(slot, slot_summaries, out);
+            slot_suffix(slot, &mut slot_summaries, out);
         }
         MainMenuSelection::Reset => out.push_str("Reset"),
         MainMenuSelection::Quit => out.push_str("Quit"),
@@ -770,8 +774,12 @@ fn cheat_label(summary: &OverlayCheatSummary, out: &mut String) {
     );
 }
 
-fn slot_suffix(slot: u8, slot_summaries: &[OverlaySlotSummary], out: &mut String) {
-    if let Some(summary) = slot_summaries.iter().find(|summary| summary.slot == slot) {
+fn slot_suffix(
+    slot: u8,
+    slot_summaries: &mut impl Iterator<Item = OverlaySlotSummary>,
+    out: &mut String,
+) {
+    if let Some(summary) = slot_summaries.find(|summary| summary.slot == slot) {
         summary.render_suffix(out);
     } else {
         out.push_str("Unknown");
@@ -880,17 +888,25 @@ mod tests {
         let slots = vec![
             OverlaySlotSummary {
                 slot: 1,
-                status_label: "Saved".to_owned(),
-                detail: Some("now".to_owned()),
+                status_label: "Saved",
+                modified_unix_secs: Some(1_700_000_000),
             },
             OverlaySlotSummary {
                 slot: 2,
-                status_label: "Empty".to_owned(),
-                detail: None,
+                status_label: "Empty",
+                modified_unix_secs: None,
             },
         ];
 
-        draw_overlay(&mut frame, 128, 96, &overlay, &slots, &[]);
+        draw_overlay(
+            &mut frame,
+            128,
+            96,
+            &overlay,
+            slots.into_iter(),
+            std::iter::empty(),
+            0,
+        );
 
         assert!(
             frame.iter().any(|component| *component != 16),
@@ -980,15 +996,23 @@ mod tests {
         let _ = overlay.handle_key(VirtualKeyCode::G, true, 0);
         let slots = vec![OverlaySlotSummary {
             slot: 1,
-            status_label: "Empty".to_owned(),
-            detail: None,
+            status_label: "Empty",
+            modified_unix_secs: None,
         }];
         let cheats = vec![OverlayCheatSummary {
-            raw_code: "GOSSIP".to_owned(),
+            raw_code: "GOSSIP",
             enabled: true,
         }];
 
-        draw_overlay(&mut frame, 160, 120, &overlay, &slots, &cheats);
+        draw_overlay(
+            &mut frame,
+            160,
+            120,
+            &overlay,
+            slots.into_iter(),
+            cheats.into_iter(),
+            1,
+        );
 
         assert!(
             frame.iter().any(|component| *component != 32),
