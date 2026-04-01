@@ -90,7 +90,7 @@ fn main() {
 fn run(stdout: &mut impl Write) -> Result<(), String> {
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
     if raw_args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        println!("Usage: bbbradsmith_golden_capture [--config <path>] [--force]");
+        println!("{}", "Usage: bbbradsmith_golden_capture [--config <path>] [--force]".with(Color::Cyan).bold());
         std::process::exit(0);
     }
 

@@ -68,8 +68,10 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     while idx < args.len() {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
+            use crossterm::style::Stylize;
             return Err(format!(
-                "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "{}\nDefault config path: {DEFAULT_CONFIG_PATH}",
+                RUNTIME_USAGE.with(crossterm::style::Color::Cyan).bold()
             ));
         }
 

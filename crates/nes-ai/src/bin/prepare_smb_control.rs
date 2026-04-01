@@ -33,11 +33,11 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        println!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        println!("{}", "Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>".with(Color::Cyan).bold());
         std::process::exit(0);
     }
     if args.len() != 4 {
-        eprintln!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        eprintln!("{}", "Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>".with(Color::Cyan).bold());
         std::process::exit(1);
     }
 

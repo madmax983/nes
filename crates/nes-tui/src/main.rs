@@ -809,7 +809,10 @@ fn parse_tui_args(pass_through: Vec<String>) -> Result<(Option<String>, TuiCliOp
 
     for arg in pass_through {
         match arg.as_str() {
-            "--help" | "-h" => return Err(usage_message()),
+            "--help" | "-h" => {
+                use crossterm::style::Stylize;
+                return Err(usage_message().with(crossterm::style::Color::Cyan).bold().to_string());
+            }
             "--hud" => {
                 options.show_hud = true;
                 continue;
@@ -1122,11 +1125,13 @@ mod tests {
 
     #[test]
     fn parse_tui_args_help_flags_return_usage_message() {
+        use crossterm::style::Stylize;
+        let expected = usage_message().with(crossterm::style::Color::Cyan).bold().to_string();
         let long_help = parse_tui_args(vec!["--help".to_owned()]).expect_err("help should stop");
-        assert_eq!(long_help, usage_message());
+        assert_eq!(long_help, expected);
 
         let short_help = parse_tui_args(vec!["-h".to_owned()]).expect_err("help should stop");
-        assert_eq!(short_help, usage_message());
+        assert_eq!(short_help, expected);
     }
 
     #[test]

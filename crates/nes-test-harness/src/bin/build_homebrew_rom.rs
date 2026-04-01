@@ -20,8 +20,8 @@ fn run() -> Result<(), String> {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!(
-                    "Usage: build_homebrew_rom [--out <path>]\nDefault output: {}",
-                    out_path.display()
+                    "{}",
+                    format!("Usage: build_homebrew_rom [--out <path>]\nDefault output: {}", out_path.display()).with(Color::Cyan).bold()
                 );
                 return Ok(());
             }

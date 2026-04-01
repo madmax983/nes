@@ -21,7 +21,11 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     while idx < args.len() {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
-            return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
+            use crossterm::style::Stylize;
+            return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545"
+                .with(crossterm::style::Color::Cyan)
+                .bold()
+                .to_string());
         }
 
         if parse_arg(&args, &mut idx, "--bind", |value| {
