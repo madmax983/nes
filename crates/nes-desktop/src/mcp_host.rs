@@ -578,11 +578,14 @@ fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, Str
     Ok(Some(payload))
 }
 
+/// ⚡ Bolt Optimization:
+/// Eliminates per-message `String` heap allocations on the hot path.
+/// By using `write!` directly to the writer instead of `format!(...).as_bytes()`,
+/// we avoid allocating and dropping an intermediate `String` buffer for every MCP response.
 fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), String> {
     let payload = serde_json::to_vec(value)
         .map_err(|err| format!("failed serializing JSON response: {err}"))?;
-    writer
-        .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
+    write!(writer, "Content-Length: {}\r\n\r\n", payload.len())
         .and_then(|_| writer.write_all(&payload))
         .and_then(|_| writer.flush())
         .map_err(|err| format!("failed writing framed response: {err}"))
