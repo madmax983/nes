@@ -2946,4 +2946,50 @@ mod tests {
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
     }
+
+    #[test]
+    use super::*; fn execute_app_action_branches_return_expected_results() {
+        let mut core = NesCore::new();
+        let mut session = LoadedRomSession {
+            rom_path: std::path::PathBuf::from("test.nes"),
+            rom_hash: String::from("12345678"),
+            state_dir: std::path::PathBuf::from("states"),
+        };
+        let mut session_cheats = SessionCheats::new();
+        let mut overlay = OverlayModel::new(5);
+        let runtime = RuntimeConfig::default();
+        let mut time_machine = TimeMachine::new(TimeMachineConfig::default());
+        let mut rewind_held = false;
+        let mut metrics = PerfMetrics::new(false, 60, 0);
+        let mut gamepad_bits = [0_u8; 2];
+        let event_loop = winit::event_loop::EventLoop::new();
+        let window = Window::new(&event_loop).unwrap();
+        let mut rta_manager = None;
+
+        let mut ctx = AppContext {
+            core: &mut core,
+            session: &mut session,
+            session_cheats: &mut session_cheats,
+            overlay: &mut overlay,
+            rollback_enabled: false,
+            runtime: &runtime,
+            audio_output: None,
+            time_machine: &mut time_machine,
+            rewind_held: &mut rewind_held,
+            metrics: &mut metrics,
+            keyboard_bits: 0,
+            gamepad_bits: &mut gamepad_bits,
+            window: &window,
+            rta_manager: &mut rta_manager,
+            frame_index: 0,
+        };
+
+        // Quit returns true
+        assert_eq!(execute_app_action(AppAction::Quit, &mut ctx), Ok(true));
+
+        // Other actions return false
+        assert_eq!(execute_app_action(AppAction::ToggleOverlay, &mut ctx), Ok(false));
+        assert_eq!(execute_app_action(AppAction::Resume, &mut ctx), Ok(false));
+        assert_eq!(execute_app_action(AppAction::Reset, &mut ctx), Ok(false));
+    }
 }
