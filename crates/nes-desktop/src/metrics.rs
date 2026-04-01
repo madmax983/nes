@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use comfy_table::Table;
+use comfy_table::{Cell, Table};
 use nes_config::normalize_nonzero_u64;
 use nes_core::NesCore;
 
@@ -172,66 +172,66 @@ impl PerfMetrics {
         };
 
         let mut table = Table::new();
-        table.set_header(vec!["Metric", "Value"]);
-        table.add_row(vec![
-            "wall_fps".to_string(),
-            format!("{:.1}", snapshot.wall_fps),
+        table.set_header(["Metric", "Value"]);
+        table.add_row([
+            Cell::new("wall_fps"),
+            Cell::new(format!("{:.1}", snapshot.wall_fps)),
         ]);
-        table.add_row(vec![
-            "emu_fps".to_string(),
-            format!("{:.1}", snapshot.emu_fps),
+        table.add_row([
+            Cell::new("emu_fps"),
+            Cell::new(format!("{:.1}", snapshot.emu_fps)),
         ]);
-        table.add_row(vec![
-            "avg_step_ms".to_string(),
-            format!("{:.2}", snapshot.avg_step_ms),
+        table.add_row([
+            Cell::new("avg_step_ms"),
+            Cell::new(format!("{:.2}", snapshot.avg_step_ms)),
         ]);
-        table.add_row(vec![
-            "avg_render_ms".to_string(),
-            format!("{:.2}", snapshot.avg_render_ms),
+        table.add_row([
+            Cell::new("avg_render_ms"),
+            Cell::new(format!("{:.2}", snapshot.avg_render_ms)),
         ]);
-        table.add_row(vec![
-            "late_frames".to_string(),
-            self.late_frames.to_string(),
+        table.add_row([
+            Cell::new("late_frames"),
+            Cell::new(self.late_frames.to_string()),
         ]);
-        table.add_row(vec![
-            "pc_stall_frames".to_string(),
-            self.pc_stall_frames.to_string(),
+        table.add_row([
+            Cell::new("pc_stall_frames"),
+            Cell::new(self.pc_stall_frames.to_string()),
         ]);
-        table.add_row(vec![
-            "unchanged_frames".to_string(),
-            self.unchanged_frame_count.to_string(),
+        table.add_row([
+            Cell::new("unchanged_frames"),
+            Cell::new(self.unchanged_frame_count.to_string()),
         ]);
-        table.add_row(vec![
-            "audio_peak_q".to_string(),
-            self.audio_queue_peak.to_string(),
+        table.add_row([
+            Cell::new("audio_peak_q"),
+            Cell::new(self.audio_queue_peak.to_string()),
         ]);
-        table.add_row(vec![
-            "audio_drop_chunks".to_string(),
-            self.audio_queue_drops.to_string(),
+        table.add_row([
+            Cell::new("audio_drop_chunks"),
+            Cell::new(self.audio_queue_drops.to_string()),
         ]);
-        table.add_row(vec![
-            "net_rtt_ms".to_string(),
-            format!("{:.1}", self.netplay_rtt_ms),
+        table.add_row([
+            Cell::new("net_rtt_ms"),
+            Cell::new(format!("{:.1}", self.netplay_rtt_ms)),
         ]);
-        table.add_row(vec![
-            "net_jitter_ms".to_string(),
-            format!("{:.1}", self.netplay_jitter_ms),
+        table.add_row([
+            Cell::new("net_jitter_ms"),
+            Cell::new(format!("{:.1}", self.netplay_jitter_ms)),
         ]);
-        table.add_row(vec![
-            "net_rollbacks".to_string(),
-            self.netplay_rollbacks.to_string(),
+        table.add_row([
+            Cell::new("net_rollbacks"),
+            Cell::new(self.netplay_rollbacks.to_string()),
         ]);
-        table.add_row(vec![
-            "net_max_rb".to_string(),
-            self.netplay_max_rollback_distance.to_string(),
+        table.add_row([
+            Cell::new("net_max_rb"),
+            Cell::new(self.netplay_max_rollback_distance.to_string()),
         ]);
-        table.add_row(vec![
-            "net_desyncs".to_string(),
-            self.netplay_desyncs.to_string(),
+        table.add_row([
+            Cell::new("net_desyncs"),
+            Cell::new(self.netplay_desyncs.to_string()),
         ]);
-        table.add_row(vec![
-            "net_delay_frames".to_string(),
-            self.netplay_input_delay_frames.to_string(),
+        table.add_row([
+            Cell::new("net_delay_frames"),
+            Cell::new(self.netplay_input_delay_frames.to_string()),
         ]);
 
         println!("{table}");
