@@ -63,10 +63,15 @@ pub(crate) fn compute_metrics_snapshot(
     })
 }
 
+/// Computes a lightweight rolling hash of the framebuffer to detect changes.
+///
+/// **Performance optimization:** Uses `chunks_exact(64)` rather than `.step_by(64)`
+/// and indexing `rgba[idx]`. This allows the Rust compiler to elide the bounds check
+/// because it knows the slice is length 64, avoiding 3,840 bounds checks per frame.
 pub(crate) fn frame_signature(rgba: &[u8]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for idx in (0..rgba.len()).step_by(64) {
-        hash ^= u64::from(rgba[idx]);
+    for chunk in rgba.chunks_exact(64) {
+        hash ^= u64::from(chunk[0]);
         hash = hash.wrapping_mul(0x0000_0001_0000_01b3);
     }
     hash
