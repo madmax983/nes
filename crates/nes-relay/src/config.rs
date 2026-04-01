@@ -12,6 +12,22 @@ pub struct RelayArgs {
     pub link: LinkCondition,
 }
 
+/// Parses raw command-line arguments into a structured `RelayArgs` configuration.
+///
+/// This function acts as the entry point for the `nes-relay` configuration parsing. It maps
+/// command-line flags (e.g., `--bind`, `--latency-ms`) to their respective fields in the
+/// [`RelayArgs`] struct. Unrecognized arguments or malformed values will return an error string.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_relay::config::parse_args;
+///
+/// let args = vec!["--latency-ms".to_string(), "50".to_string()];
+/// let parsed = parse_args(args).unwrap();
+///
+/// assert_eq!(parsed.link.latency_ms, 50);
+/// ```
 pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     let mut parsed = RelayArgs {
         bind_addr: "127.0.0.1:4545".to_owned(),
@@ -90,12 +106,40 @@ where
     }
 }
 
+/// Parses a string representation of a non-negative integer into a `u64`.
+///
+/// This utility function is used to parse configuration values like latency or jitter
+/// that must be purely numeric. If the parse fails, it returns a descriptive error mentioning
+/// the original `flag` that failed.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_relay::config::parse_u64_arg;
+///
+/// assert_eq!(parse_u64_arg("42", "--latency-ms"), Ok(42));
+/// assert!(parse_u64_arg("abc", "--latency-ms").is_err());
+/// ```
 pub fn parse_u64_arg(value: &str, flag: &str) -> Result<u64, String> {
     value
         .parse::<u64>()
         .map_err(|_| format!("{flag} must be a non-negative integer"))
 }
 
+/// Parses a string representation of a percentage into a `u8` bounded between 0 and 100.
+///
+/// This function is specifically used for parsing network loss and reordering probabilities.
+/// It ensures that users cannot configure impossible conditions (like 150% packet loss).
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_relay::config::parse_percent_arg;
+///
+/// assert_eq!(parse_percent_arg("50", "--loss-pct"), Ok(50));
+/// assert!(parse_percent_arg("101", "--loss-pct").is_err());
+/// assert!(parse_percent_arg("-5", "--loss-pct").is_err());
+/// ```
 pub fn parse_percent_arg(value: &str, flag: &str) -> Result<u8, String> {
     let parsed = value
         .parse::<u8>()

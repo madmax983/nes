@@ -180,11 +180,21 @@ pub(crate) mod tests {
         pub stop_calls: usize,
     }
 
+    /// A mock implementation of [`AudioSinkControl`] for unit testing without audio hardware.
+    ///
+    /// The `FakeAudioSink` captures all interactions (queueing samples, clearing, stopping)
+    /// into a shared `FakeAudioState`. This allows tests to assert that the `AudioOutput`
+    /// correctly forwards commands or applies backpressure without needing a real `rodio::Sink`.
     pub struct FakeAudioSink {
         pub state: Arc<Mutex<FakeAudioState>>,
     }
 
     impl FakeAudioSink {
+        /// Creates a new `FakeAudioSink` with a starting queue length and returns
+        /// a shared handle to its state.
+        ///
+        /// The `initial_len` parameter is typically used to simulate a full queue
+        /// to test backpressure logic.
         pub fn with_len(initial_len: usize) -> (Self, Arc<Mutex<FakeAudioState>>) {
             let state = Arc::new(Mutex::new(FakeAudioState {
                 queue_len: initial_len,
