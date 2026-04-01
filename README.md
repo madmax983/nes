@@ -147,9 +147,9 @@ For in-process automation, `nes_core::tas` is now the stable foundation when `ne
 `nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
 
 ```powershell
-# 1. Prepare the fixed SMB 1-1 control snapshot (replace with your SMB1 ROM path)
+# 1. Prepare the fixed SMB 1-1 control snapshot (using the bundled homebrew ROM for demonstration)
 cargo run -p nes-ai --bin prepare_smb_control -- `
-  "<path-to-your-smb1-rom>.nes" `
+  "./roms/homebrew/homebrew.nes" `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
 

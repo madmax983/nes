@@ -2,6 +2,12 @@ use vstd::prelude::*;
 
 verus! {
 
+/// A formalized model of the NES CPU state used for formal verification with Verus.
+///
+/// `CpuModel` abstracts the core registers of the 6502 processor into mathematical natural
+/// numbers (`nat`). This mathematical representation enables the `vstd` verifier to logically
+/// prove properties about the emulator's transitions without dealing with raw binary boundaries
+/// immediately, instead enforcing bounds via specifications (e.g. `is_byte`).
 pub struct CpuModel {
     pub a: nat,
     pub x: nat,

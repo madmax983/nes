@@ -1886,4 +1886,67 @@ mod tests {
         let mapper = LoadedMapper::Nrom(nrom);
         assert_eq!(mapper.mirroring_override(), None);
     }
+
+    #[test]
+    fn set_speed_returns_error_on_zero() {
+        let mut core = NesCore::new();
+        let result = core.execute(Command::SetSpeed(0));
+        assert_eq!(result, Err(CoreError::InvalidSpeed(0)));
+    }
+
+    #[test]
+    fn command_release_button_clears_controller_bit() {
+        let mut core = NesCore::new();
+        core.execute(Command::PressButton(Button::A)).unwrap();
+        assert_ne!(core.controller_bits() & Button::A.bit_mask(), 0);
+        core.execute(Command::ReleaseButton(Button::A)).unwrap();
+        assert_eq!(core.controller_bits() & Button::A.bit_mask(), 0);
+
+        core.execute(Command::PressButton2(Button::B)).unwrap();
+        assert_ne!(core.controller2_bits() & Button::B.bit_mask(), 0);
+        core.execute(Command::ReleaseButton2(Button::B)).unwrap();
+        assert_eq!(core.controller2_bits() & Button::B.bit_mask(), 0);
+    }
+
+    #[test]
+    fn command_power_cycle_resets_speed_to_default() {
+        let mut core = NesCore::new();
+        core.execute(Command::SetSpeed(2000)).unwrap();
+        assert_eq!(core.speed_permille(), 2000);
+        core.execute(Command::PowerCycle).unwrap();
+        assert_eq!(core.speed_permille(), DEFAULT_SPEED_PERMILLE);
+    }
+
+    #[test]
+    fn core_query_returns_expected_variants() {
+        let mut core = NesCore::new();
+        // FpsMilli
+        core.execute(Command::SetSpeed(2000)).unwrap();
+        if let QueryResult::FpsMilli(fps) = core.query(CoreQuery::FpsMilli) {
+            assert_eq!(fps, 120_000);
+        } else {
+            panic!("Expected FpsMilli");
+        }
+
+        // PpuFrameCounter
+        if let QueryResult::PpuFrameCounter(frames) = core.query(CoreQuery::PpuFrameCounter) {
+            assert_eq!(frames, 0);
+        } else {
+            panic!("Expected PpuFrameCounter");
+        }
+
+        // Registers
+        if let QueryResult::Registers(regs) = core.query(CoreQuery::Registers) {
+            assert_eq!(regs.pc, DEFAULT_START_PC);
+        } else {
+            panic!("Expected Registers");
+        }
+
+        // Memory
+        if let QueryResult::Memory(val) = core.query(CoreQuery::Memory(0x0000)) {
+            assert_eq!(val, 0);
+        } else {
+            panic!("Expected Memory");
+        }
+    }
 }

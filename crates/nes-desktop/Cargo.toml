@@ -30,3 +30,6 @@ winit = "0.28"
 [target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
 muda = "0.15"
 rfd = "0.15"
+
+[dev-dependencies]
+proptest = "1.11.0"

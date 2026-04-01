@@ -7,13 +7,14 @@ use std::time::Duration;
 use nes_core::NesCore;
 use nes_mcp::{
     DispatchError, DispatchOutput, ToolParams, dispatch_tool,
-    protocol::{RpcError, RpcRequest},
+    protocol::{
+        DEFAULT_PROTOCOL_VERSION, JSONRPC_VERSION, RpcError, RpcRequest, dispatch_output_value,
+        jsonrpc_error, jsonrpc_result, map_tool_arguments, tool_input_schema,
+    },
     tool_catalog,
 };
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
-const JSONRPC_VERSION: &str = "2.0";
-const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A background server that bridges the emulator core to the Model Context Protocol (MCP).
@@ -260,25 +261,20 @@ fn handle_tools_call(
     params: Option<Value>,
     request_tx: &Sender<ToolRequest>,
 ) -> Result<Option<Value>, RpcError> {
-    let mut params_obj = match params {
-        Some(Value::Object(map)) => map,
-        _ => {
-            return Err(RpcError::invalid_params(
-                "tools/call params must be an object",
-            ));
-        }
+    let Some(Value::Object(mut params_obj)) = params else {
+        return Err(RpcError::invalid_params(
+            "tools/call params must be an object",
+        ));
     };
-    let tool_name = match params_obj.remove("name") {
-        Some(Value::String(name)) => name,
-        _ => {
-            return Err(RpcError::invalid_params(
-                "tools/call requires string field 'name'",
-            ));
-        }
+    let Some(Value::String(tool_name)) = params_obj.remove("name") else {
+        return Err(RpcError::invalid_params(
+            "tools/call requires string field 'name'",
+        ));
     };
-    let args = match params_obj.remove("arguments") {
-        Some(Value::Object(map)) => map,
-        _ => Default::default(),
+    let args = if let Some(Value::Object(map)) = params_obj.remove("arguments") {
+        map
+    } else {
+        Default::default()
     };
 
     let (reply_tx, reply_rx) = mpsc::channel();
@@ -322,303 +318,6 @@ fn handle_tools_call(
     };
 
     Ok(Some(response))
-}
-
-/// Maps raw JSON RPC arguments into a strongly typed `ToolParams` map.
-///
-/// **Performance optimization:** This function consumes an owned `Map<String, Value>`
-/// rather than taking a borrowed reference `&Map`. Because the MCP dispatch
-/// layer typically already has an owned arguments object, taking ownership here
-/// entirely eliminates the need to allocate and `.clone()` every string key
-/// and value when inserting them into the returned `ToolParams`.
-fn map_tool_arguments(arguments: Map<String, Value>) -> ToolParams {
-    let mut params = ToolParams::new();
-    for (key, value) in arguments {
-        params.insert(key, json_arg_to_string(value));
-    }
-    params
-}
-
-/// Converts a JSON `Value` into a `String` without extra allocations if possible.
-///
-/// **Performance optimization:** Taking an owned `Value` allows us to extract
-/// and return the inner `String` directly via pattern matching, avoiding
-/// a heap allocation compared to calling `.to_string()` or `.clone()` on a reference.
-fn json_arg_to_string(value: Value) -> String {
-    match value {
-        Value::String(v) => v,
-        _ => value.to_string(),
-    }
-}
-
-fn dispatch_output_value(output: DispatchOutput) -> Value {
-    match output {
-        DispatchOutput::Ack => json!({ "kind": "ack" }),
-        DispatchOutput::CpuStep { trace, cpu_cycles } => {
-            json!({ "kind": "cpu_step", "trace": trace, "cpu_cycles": cpu_cycles })
-        }
-        DispatchOutput::CycleCount { cpu_cycles } => {
-            json!({ "kind": "cycle_count", "cpu_cycles": cpu_cycles })
-        }
-        DispatchOutput::ControllerState { controller_bits } => {
-            json!({ "kind": "controller_state", "controller_bits": controller_bits })
-        }
-        DispatchOutput::EmulatorState {
-            paused,
-            speed_permille,
-            controller_bits,
-        } => {
-            json!({
-                "kind": "emulator_state",
-                "paused": paused,
-                "speed_permille": speed_permille,
-                "controller_bits": controller_bits
-            })
-        }
-        DispatchOutput::Registers {
-            pc,
-            a,
-            x,
-            y,
-            sp,
-            status,
-        } => {
-            json!({
-                "kind": "registers",
-                "pc": pc,
-                "a": a,
-                "x": x,
-                "y": y,
-                "sp": sp,
-                "status": status
-            })
-        }
-        DispatchOutput::Memory { address, value } => {
-            json!({ "kind": "memory", "address": address, "value": value })
-        }
-        DispatchOutput::Fps { fps_milli } => json!({ "kind": "fps", "fps_milli": fps_milli }),
-        DispatchOutput::PpuFrameCounter { frame_counter } => {
-            json!({ "kind": "ppu_frame_counter", "frame_counter": frame_counter })
-        }
-        DispatchOutput::Frame { seq, bytes } => {
-            json!({ "kind": "frame", "seq": seq, "bytes": bytes })
-        }
-        DispatchOutput::FrameCaptured { path, bytes } => {
-            json!({ "kind": "frame_captured", "path": path, "bytes": bytes })
-        }
-        DispatchOutput::Audio { seq, samples } => {
-            json!({ "kind": "audio", "seq": seq, "samples": samples })
-        }
-        DispatchOutput::StateSlot { slot } => {
-            json!({ "kind": "state_slot", "slot": slot })
-        }
-        DispatchOutput::RomLoaded {
-            mapper_id,
-            prg_rom_bytes,
-            reset_pc,
-        } => {
-            json!({
-                "kind": "rom_loaded",
-                "mapper_id": mapper_id,
-                "prg_rom_bytes": prg_rom_bytes,
-                "reset_pc": reset_pc
-            })
-        }
-        DispatchOutput::MacroExecuted {
-            frames_elapsed,
-            final_controller_bits,
-        } => {
-            json!({
-                "kind": "macro_executed",
-                "frames_elapsed": frames_elapsed,
-                "final_controller_bits": final_controller_bits,
-            })
-        }
-        DispatchOutput::DslAssembled {
-            bytes_written,
-            label_count,
-            nmi_vector,
-            reset_vector,
-            irq_vector,
-        } => {
-            json!({
-                "kind": "dsl_assembled",
-                "bytes_written": bytes_written,
-                "label_count": label_count,
-                "nmi_vector": nmi_vector,
-                "reset_vector": reset_vector,
-                "irq_vector": irq_vector,
-            })
-        }
-        DispatchOutput::DslRomLoaded {
-            mapper_id,
-            prg_rom_bytes,
-            reset_pc,
-            rom_bytes,
-        } => {
-            json!({
-                "kind": "dsl_rom_loaded",
-                "mapper_id": mapper_id,
-                "prg_rom_bytes": prg_rom_bytes,
-                "reset_pc": reset_pc,
-                "rom_bytes": rom_bytes,
-            })
-        }
-        DispatchOutput::DslRomExported {
-            path,
-            bytes,
-            mapper_id,
-            prg_rom_bytes,
-        } => {
-            json!({
-                "kind": "dsl_rom_exported",
-                "path": path,
-                "bytes": bytes,
-                "mapper_id": mapper_id,
-                "prg_rom_bytes": prg_rom_bytes,
-            })
-        }
-        DispatchOutput::DslRomExportedBase64 {
-            rom_base64,
-            bytes,
-            mapper_id,
-            prg_rom_bytes,
-        } => {
-            json!({
-                "kind": "dsl_rom_exported_base64",
-                "rom_base64": rom_base64,
-                "bytes": bytes,
-                "mapper_id": mapper_id,
-                "prg_rom_bytes": prg_rom_bytes,
-            })
-        }
-        DispatchOutput::PpuOam { oam_bytes } => {
-            json!({
-                "kind": "ppu_oam",
-                "oam_bytes": oam_bytes,
-            })
-        }
-    }
-}
-
-fn tool_input_schema(tool_name: &str) -> Value {
-    match tool_name {
-        "set_controller_state" => json!({
-            "type": "object",
-            "properties": {
-                "bits": { "type": "integer", "minimum": 0, "maximum": 255 },
-                "player": { "type": "integer", "enum": [1, 2] }
-            },
-            "required": ["bits"],
-            "additionalProperties": false
-        }),
-        "press_button" | "release_button" => json!({
-            "type": "object",
-            "properties": {
-                "button": {
-                    "type": "string",
-                    "enum": ["A", "B", "Select", "Start", "Up", "Down", "Left", "Right"]
-                },
-                "player": { "type": "integer", "enum": [1, 2] }
-            },
-            "required": ["button"],
-            "additionalProperties": false
-        }),
-        "set_speed" => json!({
-            "type": "object",
-            "properties": {
-                "multiplier": { "type": "number", "exclusiveMinimum": 0.0 }
-            },
-            "required": ["multiplier"],
-            "additionalProperties": false
-        }),
-        "read_memory" | "set_breakpoint" | "clear_breakpoint" | "disassemble_at" => json!({
-            "type": "object",
-            "properties": {
-                "address": { "type": "integer", "minimum": 0, "maximum": 65535 }
-            },
-            "required": ["address"],
-            "additionalProperties": false
-        }),
-        "get_frame" | "get_audio_chunk" => json!({
-            "type": "object",
-            "properties": {
-                "seq": { "type": "integer", "minimum": 0 }
-            },
-            "additionalProperties": false
-        }),
-        "capture_frame" => json!({
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "minLength": 1 }
-            },
-            "required": ["path"],
-            "additionalProperties": false
-        }),
-        "save_state" | "load_state" => json!({
-            "type": "object",
-            "properties": {
-                "slot": { "type": "string", "minLength": 1 }
-            },
-            "additionalProperties": false
-        }),
-        "load_rom" => json!({
-            "type": "object",
-            "properties": {
-                "rom_path": { "type": "string", "minLength": 1 },
-                "rom_hex": { "type": "string", "minLength": 2 }
-            },
-            "oneOf": [
-                { "required": ["rom_path"] },
-                { "required": ["rom_hex"] }
-            ],
-            "additionalProperties": false
-        }),
-        "assemble_6502_dsl" => json!({
-            "type": "object",
-            "properties": {
-                "source": { "type": "string", "minLength": 1 }
-            },
-            "required": ["source"],
-            "additionalProperties": false
-        }),
-        "load_6502_dsl" => json!({
-            "type": "object",
-            "properties": {
-                "source": { "type": "string", "minLength": 1 },
-                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
-                "chr_hex": { "type": "string", "minLength": 2 }
-            },
-            "required": ["source"],
-            "additionalProperties": false
-        }),
-        "export_6502_dsl_rom" => json!({
-            "type": "object",
-            "properties": {
-                "source": { "type": "string", "minLength": 1 },
-                "output_path": { "type": "string", "minLength": 1 },
-                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
-                "chr_hex": { "type": "string", "minLength": 2 }
-            },
-            "required": ["source", "output_path"],
-            "additionalProperties": false
-        }),
-        "export_6502_dsl_rom_base64" => json!({
-            "type": "object",
-            "properties": {
-                "source": { "type": "string", "minLength": 1 },
-                "mirroring": { "type": "string", "enum": ["horizontal", "vertical"] },
-                "chr_hex": { "type": "string", "minLength": 2 }
-            },
-            "required": ["source"],
-            "additionalProperties": false
-        }),
-        _ => json!({
-            "type": "object",
-            "properties": {},
-            "additionalProperties": false
-        }),
-    }
 }
 
 fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
@@ -667,22 +366,6 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
         .map_err(|err| format!("failed writing framed response: {err}"))
 }
 
-fn jsonrpc_result(id: Value, result: Value) -> Value {
-    json!({
-        "jsonrpc": JSONRPC_VERSION,
-        "id": id,
-        "result": result
-    })
-}
-
-fn jsonrpc_error(id: Value, err: RpcError) -> Value {
-    json!({
-        "jsonrpc": JSONRPC_VERSION,
-        "id": id,
-        "error": err.to_json()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -719,63 +402,6 @@ mod tests {
                 Err(err) => panic!("{context}: {err}"),
             }
         }
-    }
-
-    #[test]
-    fn rpc_error_constructors_use_jsonrpc_standard_codes() {
-        let parse = RpcError::parse_error("bad json");
-        assert_eq!(parse.code, -32700);
-        assert_eq!(parse.message, "bad json");
-
-        let invalid_request = RpcError::invalid_request("missing id");
-        assert_eq!(invalid_request.code, -32600);
-        assert_eq!(invalid_request.message, "missing id");
-
-        let method_not_found = RpcError::method_not_found("unknown method");
-        assert_eq!(method_not_found.code, -32601);
-        assert_eq!(method_not_found.message, "unknown method");
-
-        let invalid_params = RpcError::invalid_params("bad args");
-        assert_eq!(invalid_params.code, -32602);
-        assert_eq!(invalid_params.message, "bad args");
-
-        let internal = RpcError::internal_error("boom");
-        assert_eq!(internal.code, -32603);
-        assert_eq!(internal.message, "boom");
-
-        let json = internal.to_json();
-        assert_eq!(json["code"], -32603);
-        assert_eq!(json["message"], "boom");
-    }
-
-    #[test]
-    fn jsonrpc_helper_envelopes_include_version_ids_and_payloads() {
-        let result = jsonrpc_result(json!(7), json!({"ok": true}));
-        assert_eq!(result["jsonrpc"], JSONRPC_VERSION);
-        assert_eq!(result["id"], 7);
-        assert_eq!(result["result"]["ok"], true);
-
-        let error = jsonrpc_error(json!("abc"), RpcError::invalid_request("bad request"));
-        assert_eq!(error["jsonrpc"], JSONRPC_VERSION);
-        assert_eq!(error["id"], "abc");
-        assert_eq!(error["error"]["code"], -32600);
-        assert_eq!(error["error"]["message"], "bad request");
-    }
-
-    #[test]
-    fn json_arg_and_tool_argument_mapping_stringify_scalars_and_structures() {
-        assert_eq!(json_arg_to_string(json!("x")), "x");
-        assert_eq!(json_arg_to_string(json!(42)), "42");
-        assert_eq!(json_arg_to_string(json!(true)), "true");
-        assert_eq!(json_arg_to_string(Value::Null), "null");
-        assert_eq!(json_arg_to_string(json!({"k": "v"})), "{\"k\":\"v\"}");
-
-        let mut args = Map::<String, Value>::new();
-        args.insert("a".to_owned(), json!(5));
-        args.insert("b".to_owned(), json!(false));
-        let mapped = map_tool_arguments(args);
-        assert_eq!(mapped.get("a").map(String::as_str), Some("5"));
-        assert_eq!(mapped.get("b").map(String::as_str), Some("false"));
     }
 
     #[test]
@@ -916,39 +542,6 @@ mod tests {
         let err =
             read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
         assert!(err.contains("missing Content-Length"));
-    }
-
-    #[test]
-    fn tool_input_schema_covers_all_specialized_method_shapes() {
-        let methods_with_property = [
-            ("set_controller_state", "bits"),
-            ("press_button", "button"),
-            ("release_button", "button"),
-            ("set_speed", "multiplier"),
-            ("read_memory", "address"),
-            ("set_breakpoint", "address"),
-            ("clear_breakpoint", "address"),
-            ("disassemble_at", "address"),
-            ("get_frame", "seq"),
-            ("get_audio_chunk", "seq"),
-            ("capture_frame", "path"),
-            ("save_state", "slot"),
-            ("load_state", "slot"),
-            ("load_rom", "rom_path"),
-            ("assemble_6502_dsl", "source"),
-            ("load_6502_dsl", "source"),
-            ("export_6502_dsl_rom", "output_path"),
-            ("export_6502_dsl_rom_base64", "source"),
-        ];
-
-        for (method, property) in methods_with_property {
-            let schema = tool_input_schema(method);
-            assert_eq!(schema["type"], "object", "schema type for {method}");
-            assert!(schema["properties"][property].is_object());
-        }
-        let fallback = tool_input_schema("unknown");
-        assert_eq!(fallback["type"], "object");
-        assert!(fallback["properties"].is_object());
     }
 
     #[test]

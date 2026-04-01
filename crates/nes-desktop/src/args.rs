@@ -72,17 +72,14 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
                 "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
             ));
         }
-        if arg == "--cheat-code" {
-            let Some(code) = args.get(idx + 1) else {
-                return Err("missing value after --cheat-code".to_owned());
-            };
-            parsed.cheat_codes.push(code.clone());
-            idx += 2;
-            continue;
-        }
-        if let Some(code) = arg.strip_prefix("--cheat-code=") {
-            parsed.cheat_codes.push(code.to_owned());
-            idx += 1;
+
+        if parse_arg(
+            args,
+            &mut idx,
+            "--cheat-code",
+            |v| parsed.cheat_codes.push(v),
+            parse_string_arg,
+        )? {
             continue;
         }
         if arg == "--mcp-host" {
@@ -90,19 +87,16 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
-        if arg == "--mcp-bind" {
-            let Some(addr) = args.get(idx + 1) else {
-                return Err("missing value after --mcp-bind".to_owned());
-            };
-            parsed.mcp_enabled = true;
-            parsed.mcp_bind_addr = addr.clone();
-            idx += 2;
-            continue;
-        }
-        if let Some(addr) = arg.strip_prefix("--mcp-bind=") {
-            parsed.mcp_enabled = true;
-            parsed.mcp_bind_addr = addr.to_owned();
-            idx += 1;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--mcp-bind",
+            |v| {
+                parsed.mcp_enabled = true;
+                parsed.mcp_bind_addr = v;
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
         if arg == "--netplay" {
@@ -110,98 +104,76 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
-        if arg == "--netplay-relay" {
-            let Some(addr) = args.get(idx + 1) else {
-                return Err("missing value after --netplay-relay".to_owned());
-            };
-            parsed.netplay_enabled = true;
-            parsed.netplay_relay_addr = Some(addr.clone());
-            idx += 2;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--netplay-relay",
+            |v| {
+                parsed.netplay_enabled = true;
+                parsed.netplay_relay_addr = Some(v);
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
-        if let Some(addr) = arg.strip_prefix("--netplay-relay=") {
-            parsed.netplay_enabled = true;
-            parsed.netplay_relay_addr = Some(addr.to_owned());
-            idx += 1;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--netplay-room",
+            |v| {
+                parsed.netplay_enabled = true;
+                parsed.netplay_room = Some(v);
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
-        if arg == "--netplay-room" {
-            let Some(room) = args.get(idx + 1) else {
-                return Err("missing value after --netplay-room".to_owned());
-            };
-            parsed.netplay_enabled = true;
-            parsed.netplay_room = Some(room.clone());
-            idx += 2;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--netplay-player",
+            |v| {
+                parsed.netplay_enabled = true;
+                parsed.netplay_player = Some(v);
+            },
+            parse_u8_arg,
+        )? {
             continue;
         }
-        if let Some(room) = arg.strip_prefix("--netplay-room=") {
-            parsed.netplay_enabled = true;
-            parsed.netplay_room = Some(room.to_owned());
-            idx += 1;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--netplay-delay",
+            |v| {
+                parsed.netplay_enabled = true;
+                parsed.netplay_input_delay_frames = Some(v);
+            },
+            parse_u32_arg,
+        )? {
             continue;
         }
-        if arg == "--netplay-player" {
-            let Some(val) = args.get(idx + 1) else {
-                return Err("missing value after --netplay-player".to_owned());
-            };
-            parsed.netplay_enabled = true;
-            parsed.netplay_player = Some(parse_u8_arg(val, "--netplay-player")?);
-            idx += 2;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--netplay-max-rollback",
+            |v| {
+                parsed.netplay_enabled = true;
+                parsed.netplay_max_rollback_frames = Some(v);
+            },
+            parse_u32_arg,
+        )? {
             continue;
         }
-        if let Some(val) = arg.strip_prefix("--netplay-player=") {
-            parsed.netplay_enabled = true;
-            parsed.netplay_player = Some(parse_u8_arg(val, "--netplay-player")?);
-            idx += 1;
-            continue;
-        }
-        if arg == "--netplay-delay" {
-            let Some(val) = args.get(idx + 1) else {
-                return Err("missing value after --netplay-delay".to_owned());
-            };
-            parsed.netplay_enabled = true;
-            parsed.netplay_input_delay_frames = Some(parse_u32_arg(val, "--netplay-delay")?);
-            idx += 2;
-            continue;
-        }
-        if let Some(val) = arg.strip_prefix("--netplay-delay=") {
-            parsed.netplay_enabled = true;
-            parsed.netplay_input_delay_frames = Some(parse_u32_arg(val, "--netplay-delay")?);
-            idx += 1;
-            continue;
-        }
-        if arg == "--netplay-max-rollback" {
-            let Some(val) = args.get(idx + 1) else {
-                return Err("missing value after --netplay-max-rollback".to_owned());
-            };
-            parsed.netplay_enabled = true;
-            parsed.netplay_max_rollback_frames =
-                Some(parse_u32_arg(val, "--netplay-max-rollback")?);
-            idx += 2;
-            continue;
-        }
-        if let Some(val) = arg.strip_prefix("--netplay-max-rollback=") {
-            parsed.netplay_enabled = true;
-            parsed.netplay_max_rollback_frames =
-                Some(parse_u32_arg(val, "--netplay-max-rollback")?);
-            idx += 1;
-            continue;
-        }
-        if arg == "--netplay-hash-every" {
-            let Some(val) = args.get(idx + 1) else {
-                return Err("missing value after --netplay-hash-every".to_owned());
-            };
-            parsed.netplay_enabled = true;
-            parsed.netplay_hash_check_every_frames =
-                Some(parse_u64_arg(val, "--netplay-hash-every")?);
-            idx += 2;
-            continue;
-        }
-        if let Some(val) = arg.strip_prefix("--netplay-hash-every=") {
-            parsed.netplay_enabled = true;
-            parsed.netplay_hash_check_every_frames =
-                Some(parse_u64_arg(val, "--netplay-hash-every")?);
-            idx += 1;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--netplay-hash-every",
+            |v| {
+                parsed.netplay_enabled = true;
+                parsed.netplay_hash_check_every_frames = Some(v);
+            },
+            parse_u64_arg,
+        )? {
             continue;
         }
         if arg == "--rta" {
@@ -209,49 +181,40 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
-        if arg == "--rta-profile" {
-            let Some(id) = args.get(idx + 1) else {
-                return Err("missing value after --rta-profile".to_owned());
-            };
-            parsed.rta_enabled = true;
-            parsed.rta_profile_id = Some(id.clone());
-            idx += 2;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--rta-profile",
+            |v| {
+                parsed.rta_enabled = true;
+                parsed.rta_profile_id = Some(v);
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
-        if let Some(id) = arg.strip_prefix("--rta-profile=") {
-            parsed.rta_enabled = true;
-            parsed.rta_profile_id = Some(id.to_owned());
-            idx += 1;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--rta-profiles-dir",
+            |v| {
+                parsed.rta_enabled = true;
+                parsed.rta_profiles_dir = Some(v);
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
-        if arg == "--rta-profiles-dir" {
-            let Some(dir) = args.get(idx + 1) else {
-                return Err("missing value after --rta-profiles-dir".to_owned());
-            };
-            parsed.rta_enabled = true;
-            parsed.rta_profiles_dir = Some(dir.clone());
-            idx += 2;
-            continue;
-        }
-        if let Some(dir) = arg.strip_prefix("--rta-profiles-dir=") {
-            parsed.rta_enabled = true;
-            parsed.rta_profiles_dir = Some(dir.to_owned());
-            idx += 1;
-            continue;
-        }
-        if arg == "--rta-runs-dir" {
-            let Some(dir) = args.get(idx + 1) else {
-                return Err("missing value after --rta-runs-dir".to_owned());
-            };
-            parsed.rta_enabled = true;
-            parsed.rta_runs_dir = Some(dir.clone());
-            idx += 2;
-            continue;
-        }
-        if let Some(dir) = arg.strip_prefix("--rta-runs-dir=") {
-            parsed.rta_enabled = true;
-            parsed.rta_runs_dir = Some(dir.to_owned());
-            idx += 1;
+        if parse_arg(
+            args,
+            &mut idx,
+            "--rta-runs-dir",
+            |v| {
+                parsed.rta_enabled = true;
+                parsed.rta_runs_dir = Some(v);
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
         if arg == "--rta-calibrate" {
@@ -276,6 +239,38 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         idx += 1;
     }
     Ok(parsed)
+}
+
+fn parse_string_arg(value: &str, _flag: &str) -> Result<String, String> {
+    Ok(value.to_owned())
+}
+
+fn parse_arg<T, F, P>(
+    args: &[String],
+    idx: &mut usize,
+    flag: &str,
+    mut apply: F,
+    parse: P,
+) -> Result<bool, String>
+where
+    F: FnMut(T),
+    P: Fn(&str, &str) -> Result<T, String>,
+{
+    let arg = &args[*idx];
+    if arg == flag {
+        let Some(val) = args.get(*idx + 1) else {
+            return Err(format!("missing value after {flag}"));
+        };
+        apply(parse(val, flag)?);
+        *idx += 2;
+        Ok(true)
+    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
+        apply(parse(val, flag)?);
+        *idx += 1;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {
