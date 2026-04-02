@@ -185,6 +185,10 @@ where
         &self.core
     }
 
+    pub fn core_mut(&mut self) -> &mut NesCore {
+        &mut self.core
+    }
+
     /// Returns the current observation as flattened stacked frames and encoded numeric features.
     ///
     /// # Errors
