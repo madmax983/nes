@@ -195,3 +195,57 @@ fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     format!("{digest:x}")
 }
+
+#[test]
+fn profile_env_applies_stall_penalty_when_no_progress_made() {
+    let mut env = make_mock_env();
+    let _ = env.reset().unwrap();
+
+    // Config sets stall_frames to 30. Frame skip is 1. We take 30 Noop steps.
+    // The stall penalty is applied when stalled_frames >= 30.
+    // 29th step: stalled_frames becomes 29.
+    for _ in 0..29 {
+        env.step(ControlAction::Noop).unwrap();
+    }
+
+    // 30th step: stalled_frames becomes 30. Stall penalty is applied.
+    let step = env.step(ControlAction::Noop).unwrap();
+
+    assert!((step.reward.stall_penalty - -0.02).abs() < f32::EPSILON);
+}
+
+#[test]
+fn profile_env_resets_stall_penalty_when_progress_increases() {
+    let mut env = make_mock_env();
+    let _ = env.reset().unwrap();
+
+    // 29th step: stalled_frames becomes 29.
+    for _ in 0..29 {
+        env.step(ControlAction::Noop).unwrap();
+    }
+
+    // Simulate progress: write to 0x006D (level_progress memory address for SmbProfile).
+    env.core_mut().load_cpu_bytes(0x006D, &[0x01]);
+
+    // 30th step: next.level_progress() > prev.level_progress().
+    // stalled_frames resets to 0. Stall penalty is NOT applied.
+    let step = env.step(ControlAction::Noop).unwrap();
+
+    assert!(step.reward.stall_penalty.abs() < f32::EPSILON);
+}
+
+#[test]
+fn profile_env_step_sets_done_when_budget_done() {
+    let mut env = make_mock_env();
+    let _ = env.reset().unwrap();
+
+    // Simulate budget done by forcing episode frames to max.
+    // Frame skip is 1, so step increments episode_frames by 1.
+    for _ in 0..60 {
+        let step = env.step(ControlAction::Noop).unwrap();
+        if step.done {
+            return;
+        }
+    }
+    panic!("Should have been done");
+}

@@ -53,3 +53,7 @@
 **Mutant:** `replace < with <=` in `Gxrom::from_prg_chr` on line 35 (`if prg_rom.len() < PRG_BANK_32K`).
 **Diagnosis:** `EQUIVALENT_MUTANT`. Changing `<` to `<=` causes the condition to evaluate to true when the ROM length is exactly 32KB. This leads to `resize(PRG_BANK_32K, 0)` being called. Since the vector's length is already equal to 32KB, `resize` does nothing. This mutation does not change observable behavior.
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+**[Stall Penalty Boundary Logic]**
+**Mutant:** `replace > with ==`, `<` and `>=` in `next.level_progress() > prev.level_progress()` at `crates/nes-ai/src/env.rs:163`
+**Diagnosis:** `MISSING_COVERAGE` - Tests using the mock profile never advanced `level_progress` and never triggered the `stalled_frames >= stall_frames` penalty. Thus, mutants that inverted or changed the reset condition survived because `stalled_frames` never hit the penalty threshold or never reset correctly on a simulated positive progression.
+**Kill Shot:** Exposed `core_mut()` in `ProfileEnv` to allow tests to manually write to the mock ROM memory location `0x006D` (the `level_progress` counter). Added `profile_env_applies_stall_penalty_when_no_progress_made` to test hitting the stall boundary and `profile_env_resets_stall_penalty_when_progress_increases` to test that the threshold resets to 0 when `level_progress` advances.
