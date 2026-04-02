@@ -786,7 +786,8 @@ mod tests {
         // Spawn 20,000 delayed messages, which will trigger 20,000 thread::spawn calls.
         // This causes OS thread limit exhaustion and panics.
         for _ in 0..100000 {
-            forward_to_room_peers(&state, &delayed_net, "duel", 1, message.clone()).expect("forward");
+            forward_to_room_peers(&state, &delayed_net, "duel", 1, message.clone())
+                .expect("forward");
         }
     }
 
