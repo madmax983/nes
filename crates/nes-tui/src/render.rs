@@ -1,7 +1,36 @@
+//! Terminal rendering engine for the NES emulator.
+//!
+//! This module provides high-performance routines for downsampling the raw `256x240` RGBA
+//! framebuffer from the NES PPU into stylized text structures compatible with the `ratatui`
+//! terminal UI library. It supports multiple block-character resolutions (e.g., half-block
+//! and quarter-block) to approximate the display in a standard monospaced terminal.
+
 use nes_core::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 
+/// Downsamples the raw RGBA NES framebuffer into a smaller grid of RGB tuples.
+///
+/// Uses nearest-neighbor sampling. Useful for building raw color maps or basic
+/// single-character (space) rendering modes.
+///
+/// ## Panics
+///
+/// This function does not panic, provided the `frame_rgba` matches the expected
+/// length of `nes_core::FRAME_RGBA_BYTES`. If the inputs are invalid or target
+/// dimensions are zero, it returns an empty vector.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::FRAME_RGBA_BYTES;
+/// use nes_tui::render::downsample_frame_rgb;
+///
+/// let frame = vec![0_u8; FRAME_RGBA_BYTES];
+/// // Downsample to a 64x60 grid
+/// let cells = downsample_frame_rgb(&frame, 64, 60);
+/// assert_eq!(cells.len(), 64 * 60);
+/// ```
 #[must_use]
 pub fn downsample_frame_rgb(
     frame_rgba: &[u8],
@@ -40,6 +69,21 @@ pub fn downsample_frame_rgb(
     out
 }
 
+/// Converts a flat slice of RGB tuples into a list of `ratatui` [`Line`]s using spaces.
+///
+/// Each cell is rendered as a single space character with the background color
+/// set to the RGB tuple. This creates a low-resolution "full block" appearance.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_tui::render::frame_lines_from_rgb;
+///
+/// let cells = vec![(255, 0, 0), (0, 255, 0)];
+/// let lines = frame_lines_from_rgb(&cells, 2);
+/// assert_eq!(lines.len(), 1);
+/// assert_eq!(lines[0].spans.len(), 2);
+/// ```
 #[must_use]
 pub fn frame_lines_from_rgb(cells: &[(u8, u8, u8)], width: u16) -> Vec<Line<'static>> {
     if width == 0 {
@@ -63,6 +107,23 @@ pub fn frame_lines_from_rgb(cells: &[(u8, u8, u8)], width: u16) -> Vec<Line<'sta
     lines
 }
 
+/// Renders the NES framebuffer into `ratatui` lines using Unicode half-blocks (`▀`).
+///
+/// This technique doubles the vertical resolution in the terminal by using the
+/// foreground color for the top half of the character cell and the background color
+/// for the bottom half. It averages pixel regions to produce smooth colors.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::FRAME_RGBA_BYTES;
+/// use nes_tui::render::frame_lines_half_blocks;
+///
+/// let frame = vec![0_u8; FRAME_RGBA_BYTES];
+/// // Requesting a 64x24 terminal area
+/// let lines = frame_lines_half_blocks(&frame, 64, 24);
+/// assert_eq!(lines.len(), 24);
+/// ```
 #[must_use]
 pub fn frame_lines_half_blocks(
     frame_rgba: &[u8],
@@ -104,6 +165,22 @@ pub fn frame_lines_half_blocks(
     lines
 }
 
+/// Renders the NES framebuffer into `ratatui` lines using Unicode quarter-blocks.
+///
+/// This provides the highest perceived resolution in a terminal by fitting 4 "pixels"
+/// (a 2x2 grid) into a single character cell, selecting an optimal foreground, background,
+/// and block glyph mask for each cell.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::FRAME_RGBA_BYTES;
+/// use nes_tui::render::frame_lines_quarter_blocks;
+///
+/// let frame = vec![0_u8; FRAME_RGBA_BYTES];
+/// let lines = frame_lines_quarter_blocks(&frame, 64, 24);
+/// assert_eq!(lines.len(), 24);
+/// ```
 #[must_use]
 pub fn frame_lines_quarter_blocks(
     frame_rgba: &[u8],
@@ -153,6 +230,22 @@ pub fn frame_lines_quarter_blocks(
     lines
 }
 
+/// Extracts a small sequence of color swatches directly from the center of the framebuffer.
+///
+/// This is used by the TUI to display a quick "color summary" or ambient theme palette
+/// based on the current screen contents.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::FRAME_RGBA_BYTES;
+/// use nes_tui::render::mini_palette_spans;
+///
+/// let frame = vec![0_u8; FRAME_RGBA_BYTES];
+/// // Extract 5 color swatches
+/// let spans = mini_palette_spans(&frame, 5);
+/// assert_eq!(spans.len(), 5);
+/// ```
 #[must_use]
 pub fn mini_palette_spans(frame_rgba: &[u8], swatches: usize) -> Vec<Span<'static>> {
     if frame_rgba.len() != FRAME_RGBA_BYTES || swatches == 0 {
