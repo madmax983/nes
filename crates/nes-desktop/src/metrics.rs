@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use comfy_table::{Cell, Table};
+use comfy_table::{Cell, Color as TableColor, Table};
 use nes_config::normalize_nonzero_u64;
 use nes_core::NesCore;
 
@@ -176,70 +176,7 @@ impl PerfMetrics {
             return;
         };
 
-        let mut table = Table::new();
-        table.set_header(["Metric", "Value"]);
-        table.add_row([
-            Cell::new("wall_fps"),
-            Cell::new(format!("{:.1}", snapshot.wall_fps)),
-        ]);
-        table.add_row([
-            Cell::new("emu_fps"),
-            Cell::new(format!("{:.1}", snapshot.emu_fps)),
-        ]);
-        table.add_row([
-            Cell::new("avg_step_ms"),
-            Cell::new(format!("{:.2}", snapshot.avg_step_ms)),
-        ]);
-        table.add_row([
-            Cell::new("avg_render_ms"),
-            Cell::new(format!("{:.2}", snapshot.avg_render_ms)),
-        ]);
-        table.add_row([
-            Cell::new("late_frames"),
-            Cell::new(self.late_frames.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("pc_stall_frames"),
-            Cell::new(self.pc_stall_frames.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("unchanged_frames"),
-            Cell::new(self.unchanged_frame_count.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("audio_peak_q"),
-            Cell::new(self.audio_queue_peak.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("audio_drop_chunks"),
-            Cell::new(self.audio_queue_drops.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("net_rtt_ms"),
-            Cell::new(format!("{:.1}", self.netplay_rtt_ms)),
-        ]);
-        table.add_row([
-            Cell::new("net_jitter_ms"),
-            Cell::new(format!("{:.1}", self.netplay_jitter_ms)),
-        ]);
-        table.add_row([
-            Cell::new("net_rollbacks"),
-            Cell::new(self.netplay_rollbacks.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("net_max_rb"),
-            Cell::new(self.netplay_max_rollback_distance.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("net_desyncs"),
-            Cell::new(self.netplay_desyncs.to_string()),
-        ]);
-        table.add_row([
-            Cell::new("net_delay_frames"),
-            Cell::new(self.netplay_input_delay_frames.to_string()),
-        ]);
-
-        println!("{table}");
+        print_metrics_table(&snapshot, self);
 
         self.report_start = Instant::now();
         self.report_start_ppu_frame = ppu_now;
@@ -275,6 +212,95 @@ impl PerfMetrics {
         self.netplay_desyncs = stats.desync_count;
         self.netplay_input_delay_frames = stats.input_delay_frames;
     }
+}
+
+fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
+    let mut table = Table::new();
+    table.set_header(vec![
+        Cell::new("Metric").fg(TableColor::Cyan),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("wall_fps"),
+        Cell::new(format!("{:.1}", snapshot.wall_fps)).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("emu_fps"),
+        Cell::new(format!("{:.1}", snapshot.emu_fps)).fg(TableColor::Green),
+    ]);
+    table.add_row(vec![
+        Cell::new("avg_step_ms"),
+        Cell::new(format!("{:.2}", snapshot.avg_step_ms)).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("avg_render_ms"),
+        Cell::new(format!("{:.2}", snapshot.avg_render_ms)).fg(TableColor::Yellow),
+    ]);
+    table.add_row(vec![
+        Cell::new("late_frames"),
+        Cell::new(metrics.late_frames.to_string()).fg(if metrics.late_frames > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
+    ]);
+    table.add_row(vec![
+        Cell::new("pc_stall_frames"),
+        Cell::new(metrics.pc_stall_frames.to_string()).fg(if metrics.pc_stall_frames > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
+    ]);
+    table.add_row(vec![
+        Cell::new("unchanged_frames"),
+        Cell::new(metrics.unchanged_frame_count.to_string()).fg(TableColor::DarkGrey),
+    ]);
+    table.add_row(vec![
+        Cell::new("audio_peak_q"),
+        Cell::new(metrics.audio_queue_peak.to_string()),
+    ]);
+    table.add_row(vec![
+        Cell::new("audio_drop_chunks"),
+        Cell::new(metrics.audio_queue_drops.to_string()).fg(if metrics.audio_queue_drops > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
+    ]);
+    table.add_row(vec![
+        Cell::new("net_rtt_ms"),
+        Cell::new(format!("{:.1}", metrics.netplay_rtt_ms)),
+    ]);
+    table.add_row(vec![
+        Cell::new("net_jitter_ms"),
+        Cell::new(format!("{:.1}", metrics.netplay_jitter_ms)),
+    ]);
+    table.add_row(vec![
+        Cell::new("net_rollbacks"),
+        Cell::new(metrics.netplay_rollbacks.to_string()),
+    ]);
+    table.add_row(vec![
+        Cell::new("net_max_rb"),
+        Cell::new(metrics.netplay_max_rollback_distance.to_string()),
+    ]);
+    table.add_row(vec![
+        Cell::new("net_desyncs"),
+        Cell::new(metrics.netplay_desyncs.to_string()).fg(if metrics.netplay_desyncs > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
+    ]);
+    table.add_row(vec![
+        Cell::new("net_delay_frames"),
+        Cell::new(metrics.netplay_input_delay_frames.to_string()),
+    ]);
+
+    // Clear terminal and move to top left so metrics act like a dashboard
+    print!("\x1B[2J\x1B[1;1H");
+    println!("{table}");
 }
 
 #[cfg(test)]
