@@ -239,11 +239,19 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     ]);
     table.add_row(vec![
         Cell::new("late_frames"),
-        Cell::new(metrics.late_frames.to_string()).fg(if metrics.late_frames > 0 { TableColor::Red } else { TableColor::White }),
+        Cell::new(metrics.late_frames.to_string()).fg(if metrics.late_frames > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
     ]);
     table.add_row(vec![
         Cell::new("pc_stall_frames"),
-        Cell::new(metrics.pc_stall_frames.to_string()).fg(if metrics.pc_stall_frames > 0 { TableColor::Red } else { TableColor::White }),
+        Cell::new(metrics.pc_stall_frames.to_string()).fg(if metrics.pc_stall_frames > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
     ]);
     table.add_row(vec![
         Cell::new("unchanged_frames"),
@@ -255,7 +263,11 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     ]);
     table.add_row(vec![
         Cell::new("audio_drop_chunks"),
-        Cell::new(metrics.audio_queue_drops.to_string()).fg(if metrics.audio_queue_drops > 0 { TableColor::Red } else { TableColor::White }),
+        Cell::new(metrics.audio_queue_drops.to_string()).fg(if metrics.audio_queue_drops > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
     ]);
     table.add_row(vec![
         Cell::new("net_rtt_ms"),
@@ -275,7 +287,11 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     ]);
     table.add_row(vec![
         Cell::new("net_desyncs"),
-        Cell::new(metrics.netplay_desyncs.to_string()).fg(if metrics.netplay_desyncs > 0 { TableColor::Red } else { TableColor::White }),
+        Cell::new(metrics.netplay_desyncs.to_string()).fg(if metrics.netplay_desyncs > 0 {
+            TableColor::Red
+        } else {
+            TableColor::White
+        }),
     ]);
     table.add_row(vec![
         Cell::new("net_delay_frames"),
