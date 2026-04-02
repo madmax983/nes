@@ -764,6 +764,7 @@ mod tests {
         assert_eq!(received, message);
     }
 
+    // coverage:ignore-start
     #[test]
     #[ignore = "Havoc Target"]
     fn havoc_test_thread_exhaustion() {
@@ -790,6 +791,7 @@ mod tests {
                 .expect("forward");
         }
     }
+    // coverage:ignore-end
 
     #[test]
     fn forward_to_room_peers_applies_drop_and_delay_rules() {
