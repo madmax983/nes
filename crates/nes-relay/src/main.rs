@@ -765,6 +765,32 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Havoc Target"]
+    fn havoc_test_thread_exhaustion() {
+        let (state, _rx1, _rx2) = room_with_two_players("duel");
+        let delayed_net = make_net_sim(
+            LinkCondition {
+                latency_ms: 1000,
+                jitter_ms: 0,
+                loss_pct: 0,
+                reorder_pct: 0,
+            },
+            58,
+        );
+        let message = ServerMessage::PeerInput {
+            player: 1,
+            frame: 7,
+            bits: 0x3C,
+        };
+
+        // Spawn 20,000 delayed messages, which will trigger 20,000 thread::spawn calls.
+        // This causes OS thread limit exhaustion and panics.
+        for _ in 0..100000 {
+            forward_to_room_peers(&state, &delayed_net, "duel", 1, message.clone()).expect("forward");
+        }
+    }
+
+    #[test]
     fn forward_to_room_peers_applies_drop_and_delay_rules() {
         let (state, _, rx2) = room_with_two_players("duel");
         let drop_net = make_net_sim(
