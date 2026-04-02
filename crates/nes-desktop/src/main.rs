@@ -2449,6 +2449,14 @@ mod tests {
     }
 
     #[test]
+    fn sync_native_menu_state_executes_without_panic_in_test_mode() {
+        use nes_desktop::menu::build_native_menu;
+        use crate::sync_native_menu_state;
+        let menu = build_native_menu(3);
+        sync_native_menu_state(&menu, false, false, false);
+    }
+
+    #[test]
     fn reconcile_core_pause_with_overlay_matches_overlay_visibility() {
         let mut core = NesCore::new();
         core.execute(Command::Pause)
