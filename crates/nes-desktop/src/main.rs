@@ -403,61 +403,24 @@ fn sync_native_menu_state(
     rollback_enabled: bool,
     rta_active: bool,
 ) {
-    menu.set_action_enabled(
-        AppAction::Resume,
-        menu_action_enabled(
-            AppAction::Resume,
-            overlay_open,
-            rollback_enabled,
-            rta_active,
-        ),
-    );
-    menu.set_action_enabled(
-        AppAction::OpenRom,
-        menu_action_enabled(
-            AppAction::OpenRom,
-            overlay_open,
-            rollback_enabled,
-            rta_active,
-        ),
-    );
-    menu.set_action_enabled(
-        AppAction::OpenCheats,
-        menu_action_enabled(
-            AppAction::OpenCheats,
-            overlay_open,
-            rollback_enabled,
-            rta_active,
-        ),
-    );
+    let set_enabled = |action: AppAction| {
+        menu.set_action_enabled(
+            action,
+            menu_action_enabled(action, overlay_open, rollback_enabled, rta_active),
+        );
+    };
+
+    set_enabled(AppAction::Resume);
+    set_enabled(AppAction::OpenRom);
+    set_enabled(AppAction::OpenCheats);
+
     for slot in 1..=SAVE_SLOT_COUNT {
-        menu.set_action_enabled(
-            AppAction::SaveSlot(slot),
-            menu_action_enabled(
-                AppAction::SaveSlot(slot),
-                overlay_open,
-                rollback_enabled,
-                rta_active,
-            ),
-        );
-        menu.set_action_enabled(
-            AppAction::LoadSlot(slot),
-            menu_action_enabled(
-                AppAction::LoadSlot(slot),
-                overlay_open,
-                rollback_enabled,
-                rta_active,
-            ),
-        );
+        set_enabled(AppAction::SaveSlot(slot));
+        set_enabled(AppAction::LoadSlot(slot));
     }
-    menu.set_action_enabled(
-        AppAction::Reset,
-        menu_action_enabled(AppAction::Reset, overlay_open, rollback_enabled, rta_active),
-    );
-    menu.set_action_enabled(
-        AppAction::Quit,
-        menu_action_enabled(AppAction::Quit, overlay_open, rollback_enabled, rta_active),
-    );
+
+    set_enabled(AppAction::Reset);
+    set_enabled(AppAction::Quit);
 }
 
 fn set_overlay_open(
