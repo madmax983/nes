@@ -123,75 +123,137 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     Ok(parsed)
 }
 
-fn parse_netplay_arg(args: &[String], idx: &mut usize, parsed: &mut RuntimeArgs) -> Result<bool, String> {
+fn parse_netplay_arg(
+    args: &[String],
+    idx: &mut usize,
+    parsed: &mut RuntimeArgs,
+) -> Result<bool, String> {
     let arg = &args[*idx];
     if arg == "--netplay" {
         parsed.netplay_enabled = true;
         *idx += 1;
         return Ok(true);
     }
-    if parse_arg(args, idx, "--netplay-relay", |v| {
-        parsed.netplay_enabled = true;
-        parsed.netplay_relay_addr = Some(v);
-    }, parse_string_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--netplay-relay",
+        |v| {
+            parsed.netplay_enabled = true;
+            parsed.netplay_relay_addr = Some(v);
+        },
+        parse_string_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--netplay-room", |v| {
-        parsed.netplay_enabled = true;
-        parsed.netplay_room = Some(v);
-    }, parse_string_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--netplay-room",
+        |v| {
+            parsed.netplay_enabled = true;
+            parsed.netplay_room = Some(v);
+        },
+        parse_string_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--netplay-player", |v| {
-        parsed.netplay_enabled = true;
-        parsed.netplay_player = Some(v);
-    }, parse_u8_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--netplay-player",
+        |v| {
+            parsed.netplay_enabled = true;
+            parsed.netplay_player = Some(v);
+        },
+        parse_u8_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--netplay-delay", |v| {
-        parsed.netplay_enabled = true;
-        parsed.netplay_input_delay_frames = Some(v);
-    }, parse_u32_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--netplay-delay",
+        |v| {
+            parsed.netplay_enabled = true;
+            parsed.netplay_input_delay_frames = Some(v);
+        },
+        parse_u32_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--netplay-max-rollback", |v| {
-        parsed.netplay_enabled = true;
-        parsed.netplay_max_rollback_frames = Some(v);
-    }, parse_u32_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--netplay-max-rollback",
+        |v| {
+            parsed.netplay_enabled = true;
+            parsed.netplay_max_rollback_frames = Some(v);
+        },
+        parse_u32_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--netplay-hash-every", |v| {
-        parsed.netplay_enabled = true;
-        parsed.netplay_hash_check_every_frames = Some(v);
-    }, parse_u64_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--netplay-hash-every",
+        |v| {
+            parsed.netplay_enabled = true;
+            parsed.netplay_hash_check_every_frames = Some(v);
+        },
+        parse_u64_arg,
+    )? {
         return Ok(true);
     }
     Ok(false)
 }
 
-fn parse_rta_arg(args: &[String], idx: &mut usize, parsed: &mut RuntimeArgs) -> Result<bool, String> {
+fn parse_rta_arg(
+    args: &[String],
+    idx: &mut usize,
+    parsed: &mut RuntimeArgs,
+) -> Result<bool, String> {
     let arg = &args[*idx];
     if arg == "--rta" {
         parsed.rta_enabled = true;
         *idx += 1;
         return Ok(true);
     }
-    if parse_arg(args, idx, "--rta-profile", |v| {
-        parsed.rta_enabled = true;
-        parsed.rta_profile_id = Some(v);
-    }, parse_string_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--rta-profile",
+        |v| {
+            parsed.rta_enabled = true;
+            parsed.rta_profile_id = Some(v);
+        },
+        parse_string_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--rta-profiles-dir", |v| {
-        parsed.rta_enabled = true;
-        parsed.rta_profiles_dir = Some(v);
-    }, parse_string_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--rta-profiles-dir",
+        |v| {
+            parsed.rta_enabled = true;
+            parsed.rta_profiles_dir = Some(v);
+        },
+        parse_string_arg,
+    )? {
         return Ok(true);
     }
-    if parse_arg(args, idx, "--rta-runs-dir", |v| {
-        parsed.rta_enabled = true;
-        parsed.rta_runs_dir = Some(v);
-    }, parse_string_arg)? {
+    if parse_arg(
+        args,
+        idx,
+        "--rta-runs-dir",
+        |v| {
+            parsed.rta_enabled = true;
+            parsed.rta_runs_dir = Some(v);
+        },
+        parse_string_arg,
+    )? {
         return Ok(true);
     }
     if arg == "--rta-calibrate" {
