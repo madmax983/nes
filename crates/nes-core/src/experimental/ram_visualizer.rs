@@ -74,4 +74,19 @@ mod tests {
         assert!(bmp_bytes.len() > 54); // BMP header size
         assert_eq!(&bmp_bytes[0..2], b"BM");
     }
+
+    #[test]
+    fn test_ram_visualizer_heatmap() {
+        let mut core = NesCore::new();
+        // Set values that trigger all 4 branches of the heatmap logic
+        core.write_cpu_bus(0x0000, 0); // Black
+        core.write_cpu_bus(0x0001, 50); // Blue
+        core.write_cpu_bus(0x0002, 100); // Yellow
+        core.write_cpu_bus(0x0003, 200); // Red
+
+        let bmp_bytes = RamVisualizer::extract_ram_bmp(&core, RamPalette::Heatmap).unwrap();
+
+        assert!(bmp_bytes.len() > 54); // BMP header size
+        assert_eq!(&bmp_bytes[0..2], b"BM");
+    }
 }
