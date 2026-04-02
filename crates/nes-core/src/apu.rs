@@ -59,7 +59,7 @@ pub struct DmcDmaRequest {
     pub stall_cycles: u16,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct PulseChannel {
     is_pulse1: bool,
     enabled: bool,
@@ -254,7 +254,7 @@ impl PulseChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct TriangleChannel {
     enabled: bool,
     control: u8,
@@ -352,7 +352,7 @@ impl TriangleChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct NoiseChannel {
     enabled: bool,
     control: u8,
@@ -478,7 +478,7 @@ impl NoiseChannel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct DmcChannel {
     enabled: bool,
     irq_enabled: bool,
@@ -666,6 +666,13 @@ impl DmcChannel {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable APU snapshot.
+///
+/// **Performance optimization:** The `samples` field uses `VecDeque<i16>` instead of `Vec<i16>`
+/// to match `Apu`'s internal storage exactly. This avoids an expensive `Vec::from()` allocation
+/// and underlying buffer rotation (to make the ring buffer contiguous) on every snapshot.
+/// The APU channel structs (`PulseChannel`, `TriangleChannel`, etc.) derive `Copy` rather than
+/// relying on `.clone()` since they contain only scalar primitives, replacing deep clones with
+/// fast memcpys.
 pub struct ApuSnapshot {
     cpu_cycles: u64,
     frame_cycle: u16,
@@ -685,7 +692,7 @@ pub struct ApuSnapshot {
     hp440_prev_out_q16: i64,
     hp440_prev_in_q16: i64,
     lp14k_prev_out_q16: i64,
-    samples: Vec<i16>,
+    samples: std::collections::VecDeque<i16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -755,18 +762,18 @@ impl Apu {
             frame_irq_pending: self.frame_irq_pending,
             frame_irq_inhibit: self.frame_irq_inhibit,
             frame_mode_5: self.frame_mode_5,
-            pulse1: self.pulse1.clone(),
-            pulse2: self.pulse2.clone(),
-            triangle: self.triangle.clone(),
-            noise: self.noise.clone(),
-            dmc: self.dmc.clone(),
+            pulse1: self.pulse1,
+            pulse2: self.pulse2,
+            triangle: self.triangle,
+            noise: self.noise,
+            dmc: self.dmc,
             sample_accumulator: self.sample_accumulator,
             hp90_prev_out_q16: self.hp90_prev_out_q16,
             hp90_prev_in_q16: self.hp90_prev_in_q16,
             hp440_prev_out_q16: self.hp440_prev_out_q16,
             hp440_prev_in_q16: self.hp440_prev_in_q16,
             lp14k_prev_out_q16: self.lp14k_prev_out_q16,
-            samples: Vec::from(self.samples.clone()),
+            samples: self.samples.clone(),
         }
     }
 
@@ -790,7 +797,7 @@ impl Apu {
         self.hp440_prev_out_q16 = snapshot.hp440_prev_out_q16;
         self.hp440_prev_in_q16 = snapshot.hp440_prev_in_q16;
         self.lp14k_prev_out_q16 = snapshot.lp14k_prev_out_q16;
-        self.samples = snapshot.samples.into();
+        self.samples = snapshot.samples;
     }
 
     /// Writes an APU/MMIO register (`$4000-$4017`).
