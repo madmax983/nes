@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+use crossterm::style::{Color, Stylize};
 use nes_config::normalize_nonzero_u64;
 use nes_core::NesCore;
 
@@ -216,6 +217,7 @@ impl PerfMetrics {
 
 fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("Metric").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
@@ -300,7 +302,12 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
 
     // Clear terminal and move to top left so metrics act like a dashboard
     print!("\x1B[2J\x1B[1;1H");
-    println!("{table}");
+    println!(
+        "{}\n{table}",
+        " nes-desktop | Performance Dashboard "
+            .with(Color::Cyan)
+            .bold()
+    );
 }
 
 #[cfg(test)]

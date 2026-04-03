@@ -1,4 +1,4 @@
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -100,6 +100,7 @@ fn main() {
 
 fn build_startup_table(args: &RelayArgs) -> Table {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
