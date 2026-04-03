@@ -900,9 +900,14 @@ fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
         .border_style(Style::default().fg(Color::LightRed))
         .style(Style::default().bg(Color::Black));
 
-    let paragraph = Paragraph::new(
-        Line::styled(text, Style::default().fg(Color::LightRed).add_modifier(ratatui::style::Modifier::BOLD))
-    ).block(block).alignment(Alignment::Center);
+    let paragraph = Paragraph::new(Line::styled(
+        text,
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(ratatui::style::Modifier::BOLD),
+    ))
+    .block(block)
+    .alignment(Alignment::Center);
 
     frame.render_widget(Clear, popup_area);
     frame.render_widget(paragraph, popup_area);
