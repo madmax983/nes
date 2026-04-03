@@ -8,15 +8,21 @@ fn dom_key_maps_to_press_button_command() {
 }
 
 #[test]
+fn bridge_command_tool_name_returns_unsupported() {
+    let cmd = nes_web::bridge::BridgeCommand { core: nes_core::Command::StepFrame };
+    assert_eq!(cmd.tool_name(), "unsupported");
+}
+
+#[test]
 fn dom_key_maps_all_supported_keys() {
-    assert!(map_dom_key_to_command("KeyZ", true).is_some());
-    assert!(map_dom_key_to_command("KeyX", true).is_some());
-    assert!(map_dom_key_to_command("Enter", true).is_some());
-    assert!(map_dom_key_to_command("ShiftRight", true).is_some());
-    assert!(map_dom_key_to_command("ArrowUp", true).is_some());
-    assert!(map_dom_key_to_command("ArrowDown", true).is_some());
-    assert!(map_dom_key_to_command("ArrowLeft", true).is_some());
-    assert!(map_dom_key_to_command("ArrowRight", true).is_some());
+    assert_eq!(map_dom_key_to_command("KeyZ", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::A));
+    assert_eq!(map_dom_key_to_command("KeyX", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::B));
+    assert_eq!(map_dom_key_to_command("Enter", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::Start));
+    assert_eq!(map_dom_key_to_command("ShiftRight", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::Select));
+    assert_eq!(map_dom_key_to_command("ArrowUp", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::Up));
+    assert_eq!(map_dom_key_to_command("ArrowDown", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::Down));
+    assert_eq!(map_dom_key_to_command("ArrowLeft", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::Left));
+    assert_eq!(map_dom_key_to_command("ArrowRight", true).unwrap().core, nes_core::Command::PressButton(nes_core::Button::Right));
 }
 
 #[test]
