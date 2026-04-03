@@ -453,17 +453,12 @@ mod tests {
         }
         assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
 
-        // Let's actually give the worker a moment to process the queue
-        // to avoid race conditions.
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
-
         // Artificially replace the receiver with a black hole to force a timeout
         let (_dummy_reply_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
         let (dummy_work_tx, _dummy_work_rx) = std::sync::mpsc::sync_channel(1);
 
         // Replace BOTH rx and tx to avoid panicking the worker thread when the dummy sender goes out of scope or the actual channel closes.
-        tm.rx = dummy_rx;
+        let old_rx = std::mem::replace(&mut tm.rx, dummy_rx);
         let old_tx = std::mem::replace(&mut tm.tx, dummy_work_tx);
 
         // This call will time out waiting for the dummy_rx
@@ -472,7 +467,8 @@ mod tests {
         assert_eq!(result, None);
         assert_eq!(tm.state(), TimeMachineState::Exhausted);
 
-        // Restore tx to allow graceful shutdown
+        // Restore tx and rx to allow graceful shutdown and prevent panic in wait_for_sync
+        tm.rx = old_rx;
         tm.tx = old_tx;
     }
 }
