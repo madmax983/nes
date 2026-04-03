@@ -312,11 +312,34 @@ fn expected_frame_len(width: u32, height: u32) -> Option<usize> {
 }
 
 #[cfg(test)]
+pub(crate) fn reset_output_state_for_test() -> std::sync::MutexGuard<'static, ()> {
+    static TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let guard = TEST_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("output test lock");
+
+    let mut state = output_state().lock().expect("output state lock");
+    *state = OutputState {
+        frame_seq: 0,
+        audio_seq: 0,
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+        frame_rgba: Arc::new(vec![0; FRAME_RGBA_BYTES]),
+        audio_samples: Arc::new(vec![0; DEFAULT_AUDIO_SAMPLE_COUNT]),
+    };
+    drop(state);
+
+    guard
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn should_return_none_when_expected_frame_len_overflows() {
+        let _guard = reset_output_state_for_test();
         assert_eq!(
             expected_frame_len(u32::MAX, u32::MAX),
             None,
@@ -328,6 +351,7 @@ mod tests {
 
     #[test]
     fn should_calculate_correct_frame_length_for_valid_dimensions() {
+        let _guard = reset_output_state_for_test();
         assert_eq!(
             expected_frame_len(256, 240),
             Some(245_760),
@@ -337,6 +361,7 @@ mod tests {
 
     #[test]
     fn should_ignore_publish_frame_if_rgba_length_is_invalid() {
+        let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();
 
         // Pass an array that is definitely wrong sized (1 byte)
@@ -351,6 +376,7 @@ mod tests {
 
     #[test]
     fn should_fast_forward_frame_chunk_sequence_when_requested_seq_is_newer() {
+        let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();
         let future_seq = initial_meta.frame_seq + 10;
 
@@ -369,6 +395,7 @@ mod tests {
 
     #[test]
     fn should_fast_forward_audio_chunk_sequence_when_requested_seq_is_newer() {
+        let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();
         let future_seq = initial_meta.audio_seq + 5;
 
@@ -387,6 +414,7 @@ mod tests {
 
     #[test]
     fn should_reuse_memory_when_publishing_frame_with_closure() {
+        let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();
         publish_frame_with(256, 240, |buf| {
             assert_eq!(buf.len(), 245_760);
@@ -400,6 +428,7 @@ mod tests {
 
     #[test]
     fn should_reuse_memory_when_publishing_audio_with_closure() {
+        let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();
         publish_audio_with(735, |buf| {
             assert_eq!(buf.len(), 735);
@@ -413,6 +442,7 @@ mod tests {
 
     #[test]
     fn should_resize_memory_when_publishing_audio_with_closure_if_length_differs() {
+        let _guard = reset_output_state_for_test();
         publish_audio(vec![0; 100]);
         publish_audio_with(200, |samples| {
             assert_eq!(samples.len(), 200);
@@ -421,6 +451,7 @@ mod tests {
 
     #[test]
     fn should_resize_memory_when_publishing_frame_with_closure_if_length_differs() {
+        let _guard = reset_output_state_for_test();
         publish_frame(256, 240, vec![0; 256 * 240 * 4]);
         publish_frame_with(128, 120, |rgba| {
             assert_eq!(rgba.len(), 128 * 120 * 4);
@@ -429,6 +460,7 @@ mod tests {
 
     #[test]
     fn should_increment_audio_seq_and_update_samples_on_publish_audio() {
+        let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();
 
         publish_audio(vec![42; 735]);

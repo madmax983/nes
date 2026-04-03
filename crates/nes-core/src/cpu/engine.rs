@@ -5,7 +5,7 @@
 //! the outer core.
 
 use core::fmt;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use crate::cpu::status::Status;
 
@@ -82,6 +82,8 @@ pub struct CpuWrite {
     pub addr: u16,
     /// Written value.
     pub value: u8,
+    /// 1-based CPU bus cycle within the instruction when the write occurred.
+    pub bus_cycle: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +93,17 @@ pub struct CpuPrgWrite {
     pub addr: u16,
     /// Written value.
     pub value: u8,
+    /// 1-based CPU bus cycle within the instruction when the write occurred.
+    pub bus_cycle: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// MMIO read observed during instruction execution.
+pub struct CpuMmioRead {
+    /// MMIO address read by the CPU.
+    pub addr: u16,
+    /// 1-based CPU bus cycle within the instruction when the read occurred.
+    pub bus_cycle: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,8 +154,9 @@ pub struct Cpu {
     /// core to apply MMIO read side-effects ($2002, $2007, $4015–$4017).
     /// Always populated regardless of `trace_enabled`. Uses interior mutability
     /// so `read()` can push without requiring `&mut self`.
-    mmio_reads: RefCell<Vec<u16>>,
+    mmio_reads: RefCell<Vec<CpuMmioRead>>,
     bus_trace: RefCell<Vec<CpuBusAccess>>,
+    bus_cycle: Cell<u8>,
     /// When `false`, skips bus-trace recording and trace-string formatting.
     /// Set to `false` for throughput-critical paths (AI training, rewind, netplay).
     trace_enabled: bool,
@@ -172,6 +186,7 @@ impl Cpu {
             prg_writes: Vec::new(),
             mmio_reads: RefCell::new(Vec::new()),
             bus_trace: RefCell::new(Vec::new()),
+            bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }
     }
@@ -273,7 +288,9 @@ impl Cpu {
         self.memory[0..2048].copy_from_slice(&snapshot.work_ram);
         self.writes.clear();
         self.prg_writes.clear();
+        self.mmio_reads.borrow_mut().clear();
         self.bus_trace.borrow_mut().clear();
+        self.bus_cycle.set(0);
     }
 
     /// Resets CPU registers and clears transient trace buffers.
@@ -295,7 +312,9 @@ impl Cpu {
         self.status = Status::with_bits(0x24);
         self.writes.clear();
         self.prg_writes.clear();
+        self.mmio_reads.borrow_mut().clear();
         self.bus_trace.borrow_mut().clear();
+        self.bus_cycle.set(0);
     }
 
     /// Copies raw bytes into CPU memory image at `start`.
@@ -391,6 +410,7 @@ impl Cpu {
         self.writes.clear();
         self.prg_writes.clear();
         self.mmio_reads.borrow_mut().clear();
+        self.bus_cycle.set(0);
         if self.trace_enabled {
             self.bus_trace.borrow_mut().clear();
         }
@@ -2386,16 +2406,19 @@ impl Cpu {
     fn read(&self, addr: u16) -> u8 {
         let resolved = normalize_cpu_addr(addr);
         let value = self.memory[resolved as usize];
+        let bus_cycle = self.observe_bus_access(resolved, value, CpuBusAccessKind::Read);
         // Track MMIO reads unconditionally so apply_cpu_reads can fire side-effects
         // ($2002 VBlank clear, $2007 PPU data, $4015 APU status, $4016/$4017 controllers)
         // regardless of trace_enabled.
         match resolved {
             0x2002 | 0x2007 | 0x4015 | 0x4016 | 0x4017 => {
-                self.mmio_reads.borrow_mut().push(resolved);
+                self.mmio_reads.borrow_mut().push(CpuMmioRead {
+                    addr: resolved,
+                    bus_cycle,
+                });
             }
             _ => {}
         }
-        self.record_bus_access(resolved, value, CpuBusAccessKind::Read);
         value
     }
 
@@ -2423,10 +2446,18 @@ impl Cpu {
 
     fn write_and_track(&mut self, addr: u16, value: u8) {
         self.write_byte(addr, value);
-        self.record_bus_access(addr, value, CpuBusAccessKind::Write);
-        self.writes.push(CpuWrite { addr, value });
+        let bus_cycle = self.observe_bus_access(addr, value, CpuBusAccessKind::Write);
+        self.writes.push(CpuWrite {
+            addr,
+            value,
+            bus_cycle,
+        });
         if addr >= 0x8000 {
-            self.prg_writes.push(CpuPrgWrite { addr, value });
+            self.prg_writes.push(CpuPrgWrite {
+                addr,
+                value,
+                bus_cycle,
+            });
         }
     }
 
@@ -2716,7 +2747,7 @@ impl Cpu {
     /// Always populated regardless of `trace_enabled` — the outer core uses
     /// this to apply MMIO read side-effects ($2002 VBlank clear, $4016 controller
     /// shift, etc.). Swap-reuse eliminates per-step heap allocations.
-    pub fn swap_mmio_reads(&mut self, dest: &mut Vec<u16>) {
+    pub fn swap_mmio_reads(&mut self, dest: &mut Vec<CpuMmioRead>) {
         std::mem::swap(&mut *self.mmio_reads.borrow_mut(), dest);
     }
 
@@ -2759,7 +2790,7 @@ impl Cpu {
     fn push(&mut self, value: u8) {
         let addr = STACK_BASE.wrapping_add(self.sp as u16);
         self.memory[addr as usize] = value;
-        self.record_bus_access(addr, value, CpuBusAccessKind::Write);
+        let _ = self.observe_bus_access(addr, value, CpuBusAccessKind::Write);
         self.sp = self.sp.wrapping_sub(1);
     }
 
@@ -2788,12 +2819,15 @@ impl Cpu {
         }
     }
 
-    fn record_bus_access(&self, addr: u16, value: u8, kind: CpuBusAccessKind) {
+    fn observe_bus_access(&self, addr: u16, value: u8, kind: CpuBusAccessKind) -> u8 {
+        let next_cycle = self.bus_cycle.get().saturating_add(1);
+        self.bus_cycle.set(next_cycle);
         if self.trace_enabled {
             self.bus_trace
                 .borrow_mut()
                 .push(CpuBusAccess { addr, value, kind });
         }
+        next_cycle
     }
 
     fn pad_microphase_to_cycle_count(&self, pc: u16, cycles: u8) {

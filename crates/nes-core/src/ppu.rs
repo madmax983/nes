@@ -101,7 +101,7 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable PPU state snapshot.
 pub struct PpuSnapshot {
     /// PPUCTRL (`$2000`).
@@ -140,6 +140,20 @@ pub struct PpuSnapshot {
     pub chr: [u8; CHR_BYTES],
     /// Whether CHR writes are allowed (CHR RAM mode).
     pub chr_writable: bool,
+    /// CHR view used by the live background renderer.
+    pub live_chr: Vec<u8>,
+    /// Delayed live background CHR swaps waiting on the fetch pipeline.
+    pending_live_chr_updates: Vec<PendingLiveChrWindowUpdate>,
+    /// PPUCTRL shadow used by the live background renderer.
+    live_ctrl: u8,
+    /// Live X scroll used by the visible-dot background renderer.
+    live_scroll_x: u8,
+    /// Live Y scroll used by the visible-dot background renderer.
+    live_scroll_y: u8,
+    /// Delayed live background state updates waiting on the fetch pipeline.
+    pending_live_bg_updates: Vec<PendingLiveBgStateUpdate>,
+    /// Whether live background state is currently following a mid-frame $2006 split.
+    live_bg_tracks_vram_addr: bool,
     /// Internal nametable RAM.
     #[serde(
         serialize_with = "crate::serde_array::serialize_u8_array",
@@ -171,6 +185,14 @@ pub struct PpuSnapshot {
     pub render_ctrl: u8,
     /// Whether a VBlank render capture has been recorded.
     pub render_capture_valid: bool,
+    /// Scanline whose sprite pattern bytes have been prefetched.
+    prefetched_sprite_scanline: Option<u16>,
+    /// Which prefetched sprite slots contain valid pattern bytes.
+    prefetched_sprite_valid: [bool; 8],
+    /// Low pattern planes prefetched for the first eight sprites of a scanline.
+    prefetched_sprite_plane0: [u8; 8],
+    /// High pattern planes prefetched for the first eight sprites of a scanline.
+    prefetched_sprite_plane1: [u8; 8],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -189,6 +211,13 @@ pub struct Ppu {
     mirroring: NametableMirroring,
     chr: [u8; CHR_BYTES],
     chr_writable: bool,
+    live_chr: Box<[u8; CHR_BYTES]>,
+    pending_live_chr_updates: Vec<PendingLiveChrWindowUpdate>,
+    live_ctrl: u8,
+    live_scroll_x: u8,
+    live_scroll_y: u8,
+    pending_live_bg_updates: Vec<PendingLiveBgStateUpdate>,
+    live_bg_tracks_vram_addr: bool,
     nametable_ram: [u8; NAMETABLE_RAM_BYTES],
     palette_ram: [u8; PALETTE_RAM_BYTES],
     write_toggle: bool,
@@ -202,6 +231,10 @@ pub struct Ppu {
     render_scroll_y: u8,
     render_ctrl: u8,
     render_capture_valid: bool,
+    prefetched_sprite_scanline: Option<u16>,
+    prefetched_sprite_valid: [bool; 8],
+    prefetched_sprite_plane0: [u8; 8],
+    prefetched_sprite_plane1: [u8; 8],
     framebuffer: Vec<u8>,
     render_revision: u64,
     bg_tile_cache: BgTileCache,
@@ -246,6 +279,20 @@ struct SpriteScanlineCache {
     entries: [SpriteScanlineEntry; 64],
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct PendingLiveChrWindowUpdate {
+    due_cycle_in_frame: u32,
+    chr: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct PendingLiveBgStateUpdate {
+    due_cycle_in_frame: u32,
+    ctrl: u8,
+    scroll_x: u8,
+    scroll_y: u8,
+}
+
 impl Default for SpriteScanlineCache {
     fn default() -> Self {
         Self {
@@ -274,6 +321,13 @@ impl Ppu {
             mirroring: NametableMirroring::Horizontal,
             chr: [0; CHR_BYTES],
             chr_writable: true,
+            live_chr: Box::new([0; CHR_BYTES]),
+            pending_live_chr_updates: Vec::new(),
+            live_ctrl: 0,
+            live_scroll_x: 0,
+            live_scroll_y: 0,
+            pending_live_bg_updates: Vec::new(),
+            live_bg_tracks_vram_addr: false,
             nametable_ram: [0; NAMETABLE_RAM_BYTES],
             palette_ram: [0; PALETTE_RAM_BYTES],
             write_toggle: false,
@@ -287,6 +341,10 @@ impl Ppu {
             render_scroll_y: 0,
             render_ctrl: 0,
             render_capture_valid: false,
+            prefetched_sprite_scanline: None,
+            prefetched_sprite_valid: [false; 8],
+            prefetched_sprite_plane0: [0; 8],
+            prefetched_sprite_plane1: [0; 8],
             framebuffer: blank_framebuffer(),
             render_revision: 0,
             bg_tile_cache: BgTileCache::default(),
@@ -301,6 +359,17 @@ impl Ppu {
         let copy_len = chr_rom.len().min(CHR_BYTES);
         self.chr[..copy_len].copy_from_slice(&chr_rom[..copy_len]);
         self.chr_writable = chr_rom.is_empty();
+        *self.live_chr = self.chr;
+        self.pending_live_chr_updates.clear();
+        self.live_ctrl = self.ctrl;
+        self.live_scroll_x = self.scroll_x;
+        self.live_scroll_y = self.scroll_y;
+        self.pending_live_bg_updates.clear();
+        self.live_bg_tracks_vram_addr = false;
+        self.prefetched_sprite_scanline = None;
+        self.prefetched_sprite_valid = [false; 8];
+        self.prefetched_sprite_plane0 = [0; 8];
+        self.prefetched_sprite_plane1 = [0; 8];
         self.framebuffer = blank_framebuffer();
         self.mark_render_state_dirty();
     }
@@ -311,6 +380,19 @@ impl Ppu {
         let copy_len = chr_window.len().min(CHR_BYTES);
         self.chr[..copy_len].copy_from_slice(&chr_window[..copy_len]);
         self.chr_writable = writable;
+        if self.scanline < FRAME_HEIGHT as u16
+            && (1..=FRAME_WIDTH as u16).contains(&self.dot)
+            && self.rendering_enabled()
+        {
+            self.pending_live_chr_updates
+                .push(PendingLiveChrWindowUpdate {
+                    due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
+                    chr: self.chr.to_vec(),
+                });
+        } else {
+            *self.live_chr = self.chr;
+            self.pending_live_chr_updates.clear();
+        }
         self.mark_render_state_dirty();
     }
 
@@ -345,6 +427,17 @@ impl Ppu {
         self.render_scroll_y = 0;
         self.render_ctrl = 0;
         self.render_capture_valid = false;
+        *self.live_chr = self.chr;
+        self.pending_live_chr_updates.clear();
+        self.live_ctrl = self.ctrl;
+        self.live_scroll_x = self.scroll_x;
+        self.live_scroll_y = self.scroll_y;
+        self.pending_live_bg_updates.clear();
+        self.live_bg_tracks_vram_addr = false;
+        self.prefetched_sprite_scanline = None;
+        self.prefetched_sprite_valid = [false; 8];
+        self.prefetched_sprite_plane0 = [0; 8];
+        self.prefetched_sprite_plane1 = [0; 8];
         self.framebuffer = blank_framebuffer();
         self.render_revision = 0;
         self.bg_tile_cache = BgTileCache::default();
@@ -367,6 +460,16 @@ impl Ppu {
         self.mirroring = snapshot.mirroring;
         self.chr = snapshot.chr;
         self.chr_writable = snapshot.chr_writable;
+        let mut live_chr = Box::new([0; CHR_BYTES]);
+        let live_chr_len = snapshot.live_chr.len().min(CHR_BYTES);
+        live_chr[..live_chr_len].copy_from_slice(&snapshot.live_chr[..live_chr_len]);
+        self.live_chr = live_chr;
+        self.pending_live_chr_updates = snapshot.pending_live_chr_updates;
+        self.live_ctrl = snapshot.live_ctrl;
+        self.live_scroll_x = snapshot.live_scroll_x;
+        self.live_scroll_y = snapshot.live_scroll_y;
+        self.pending_live_bg_updates = snapshot.pending_live_bg_updates;
+        self.live_bg_tracks_vram_addr = snapshot.live_bg_tracks_vram_addr;
         self.nametable_ram = snapshot.nametable_ram;
         self.palette_ram = snapshot.palette_ram;
         self.write_toggle = snapshot.write_toggle;
@@ -380,6 +483,10 @@ impl Ppu {
         self.render_scroll_y = snapshot.render_scroll_y;
         self.render_ctrl = snapshot.render_ctrl;
         self.render_capture_valid = snapshot.render_capture_valid;
+        self.prefetched_sprite_scanline = snapshot.prefetched_sprite_scanline;
+        self.prefetched_sprite_valid = snapshot.prefetched_sprite_valid;
+        self.prefetched_sprite_plane0 = snapshot.prefetched_sprite_plane0;
+        self.prefetched_sprite_plane1 = snapshot.prefetched_sprite_plane1;
         self.render_revision = 0;
         self.bg_tile_cache = BgTileCache::default();
         self.sprite_scanline_cache = SpriteScanlineCache::default();
@@ -405,6 +512,13 @@ impl Ppu {
             mirroring: self.mirroring,
             chr: self.chr,
             chr_writable: self.chr_writable,
+            live_chr: self.live_chr.to_vec(),
+            pending_live_chr_updates: self.pending_live_chr_updates.clone(),
+            live_ctrl: self.live_ctrl,
+            live_scroll_x: self.live_scroll_x,
+            live_scroll_y: self.live_scroll_y,
+            pending_live_bg_updates: self.pending_live_bg_updates.clone(),
+            live_bg_tracks_vram_addr: self.live_bg_tracks_vram_addr,
             nametable_ram: self.nametable_ram,
             palette_ram: self.palette_ram,
             write_toggle: self.write_toggle,
@@ -418,6 +532,10 @@ impl Ppu {
             render_scroll_y: self.render_scroll_y,
             render_ctrl: self.render_ctrl,
             render_capture_valid: self.render_capture_valid,
+            prefetched_sprite_scanline: self.prefetched_sprite_scanline,
+            prefetched_sprite_valid: self.prefetched_sprite_valid,
+            prefetched_sprite_plane0: self.prefetched_sprite_plane0,
+            prefetched_sprite_plane1: self.prefetched_sprite_plane1,
         }
     }
 
@@ -466,9 +584,30 @@ impl Ppu {
             self.update_sprite_zero_hit(self.dot as usize - 1, self.scanline as usize);
         }
         if self.scanline < 240 && self.dot == 257 {
+            if self.rendering_enabled() {
+                self.reload_horizontal_scroll_from_temp();
+            }
             self.update_sprite_overflow(self.scanline as usize);
         }
+        self.apply_due_live_chr_updates();
+        self.apply_due_live_bg_updates();
+        self.prefetch_sprite_pattern_slot();
         self.render_visible_dot();
+
+        if self.scanline < FRAME_HEIGHT as u16
+            && self.dot == 256
+            && self.rendering_enabled()
+            && self.live_bg_tracks_vram_addr
+        {
+            self.increment_vertical_scroll();
+        }
+
+        if self.scanline == PRE_RENDER_SCANLINE
+            && (280..=304).contains(&self.dot)
+            && self.rendering_enabled()
+        {
+            self.reload_vertical_scroll_from_temp();
+        }
 
         if self.scanline == PRE_RENDER_SCANLINE && self.dot == VBLANK_EDGE_DOT {
             self.status &= !(STATUS_VBLANK | STATUS_SPRITE_ZERO_HIT | STATUS_SPRITE_OVERFLOW);
@@ -486,6 +625,17 @@ impl Ppu {
                 if !nmi_before && nmi_after && self.status & STATUS_VBLANK != 0 {
                     self.nmi_pending = true;
                 }
+                if self.scanline < FRAME_HEIGHT as u16
+                    && self.dot > FRAME_WIDTH as u16
+                    && self.rendering_enabled()
+                    && self.live_bg_tracks_vram_addr
+                {
+                    // A late visible-frame $2000 write seeds the temp scroll bits for later reloads,
+                    // but it must not stomp the live nametable/Y state already being driven from `v`.
+                    self.live_ctrl = (value & !0x03) | (self.live_ctrl & 0x03);
+                } else {
+                    self.sync_live_bg_state();
+                }
                 self.mark_render_state_dirty();
             }
             0x2001 => {
@@ -502,17 +652,25 @@ impl Ppu {
                 self.mark_render_state_dirty();
             }
             0x2005 => {
+                let update_live_scroll = self.scanline >= 240 || self.dot < 257;
                 if !self.write_toggle {
-                    self.scroll_x = value;
+                    if update_live_scroll {
+                        self.scroll_x = value;
+                    }
                     self.fine_x = value & 0x07;
                     self.temp_addr = (self.temp_addr & !0x001F) | u16::from(value >> 3);
                 } else {
-                    self.scroll_y = value;
+                    if update_live_scroll {
+                        self.scroll_y = value;
+                    }
                     self.temp_addr =
                         (self.temp_addr & !0x03E0) | (u16::from((value >> 3) & 0x1F) << 5);
                     self.temp_addr = (self.temp_addr & !0x7000) | (u16::from(value & 0x07) << 12);
                 }
                 self.write_toggle = !self.write_toggle;
+                if update_live_scroll {
+                    self.sync_live_bg_state();
+                }
                 self.mark_render_state_dirty();
             }
             0x2006 => {
@@ -528,10 +686,41 @@ impl Ppu {
                         let coarse_x = (self.vram_addr & 0x001F) as u8;
                         let coarse_y = ((self.vram_addr >> 5) & 0x001F) as u8;
                         let fine_y = ((self.vram_addr >> 12) & 0x07) as u8;
-                        let nt = ((self.vram_addr >> 10) & 0x03) as u8;
-                        self.scroll_x = coarse_x.wrapping_mul(8).wrapping_add(self.fine_x);
-                        self.scroll_y = coarse_y.wrapping_mul(8).wrapping_add(fine_y);
-                        self.ctrl = (self.ctrl & !0x03) | nt;
+                        let nt = ((self.vram_addr >> 10) & 0x03) as usize;
+                        let world_x =
+                            (nt & 1) * 256 + usize::from(coarse_x) * 8 + usize::from(self.fine_x);
+                        let world_y =
+                            ((nt >> 1) & 1) * 240 + usize::from(coarse_y) * 8 + usize::from(fine_y);
+                        let (screen_x, screen_y) = if self.dot > FRAME_WIDTH as u16 {
+                            // HBlank-visible $2006 writes feed the next scanline, not the
+                            // already-finished current one.
+                            (
+                                0,
+                                usize::from(
+                                    self.scanline
+                                        .saturating_add(1)
+                                        .min((FRAME_HEIGHT.saturating_sub(1)) as u16),
+                                ),
+                            )
+                        } else {
+                            (
+                                usize::from(self.dot.min(FRAME_WIDTH as u16)),
+                                usize::from(self.scanline),
+                            )
+                        };
+                        let origin_x = (world_x + 512 - screen_x) % 512;
+                        let origin_y = (world_y + 480 - screen_y) % 480;
+                        let origin_nt =
+                            (((origin_y / 240) & 1) << 1 | ((origin_x / 256) & 1)) as u8;
+                        self.scroll_x = (origin_x % 256) as u8;
+                        self.scroll_y = (origin_y % 240) as u8;
+                        self.ctrl = (self.ctrl & !0x03) | origin_nt;
+                        if self.dot > FRAME_WIDTH as u16 || !self.rendering_enabled() {
+                            self.sync_live_bg_state();
+                            self.live_bg_tracks_vram_addr = true;
+                        } else {
+                            self.queue_live_bg_state_update();
+                        }
                         self.mark_render_state_dirty();
                     }
                 }
@@ -670,6 +859,72 @@ impl Ppu {
         self.sprite_scanline_cache = SpriteScanlineCache::default();
     }
 
+    fn sync_live_bg_state(&mut self) {
+        self.live_ctrl = self.ctrl;
+        self.live_scroll_x = self.scroll_x;
+        self.live_scroll_y = self.scroll_y;
+        self.pending_live_bg_updates.clear();
+        self.live_bg_tracks_vram_addr = false;
+        self.mark_render_state_dirty();
+    }
+
+    fn queue_live_bg_state_update(&mut self) {
+        self.live_bg_tracks_vram_addr = true;
+        self.pending_live_bg_updates.push(PendingLiveBgStateUpdate {
+            due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
+            ctrl: self.ctrl,
+            scroll_x: self.scroll_x,
+            scroll_y: self.scroll_y,
+        });
+        self.mark_render_state_dirty();
+    }
+
+    fn apply_due_live_chr_updates(&mut self) {
+        let current_cycle = self.cycle_in_frame();
+        let mut applied = false;
+        while self
+            .pending_live_chr_updates
+            .first()
+            .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
+        {
+            let update = self.pending_live_chr_updates.remove(0);
+            self.live_chr.fill(0);
+            let copy_len = update.chr.len().min(CHR_BYTES);
+            self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
+            applied = true;
+        }
+        if applied {
+            self.mark_render_state_dirty();
+        }
+    }
+
+    fn apply_due_live_bg_updates(&mut self) {
+        let current_cycle = self.cycle_in_frame();
+        let mut applied = false;
+        while self
+            .pending_live_bg_updates
+            .first()
+            .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
+        {
+            let update = self.pending_live_bg_updates.remove(0);
+            let preserve_split_vertical = self.live_bg_tracks_vram_addr
+                && self.scanline < FRAME_HEIGHT as u16
+                && self.dot > FRAME_WIDTH as u16;
+            if preserve_split_vertical {
+                self.live_ctrl = (update.ctrl & !0x02) | (self.live_ctrl & 0x02);
+                self.live_scroll_x = update.scroll_x;
+            } else {
+                self.live_ctrl = update.ctrl;
+                self.live_scroll_x = update.scroll_x;
+                self.live_scroll_y = update.scroll_y;
+            }
+            applied = true;
+        }
+        if applied {
+            self.mark_render_state_dirty();
+        }
+    }
+
     /// Returns whether background or sprite rendering is currently enabled.
     #[must_use]
     pub fn rendering_enabled_for_mapper_irq(&self) -> bool {
@@ -697,7 +952,15 @@ impl Ppu {
         NES_PALETTE_RGB[(palette_index & 0x3F) as usize]
     }
 
-    fn background_palette_index(&self, x: usize, y: usize) -> (u8, bool) {
+    fn background_palette_index_impl(
+        &self,
+        x: usize,
+        y: usize,
+        ctrl: u8,
+        scroll_x: u8,
+        scroll_y: u8,
+        chr: &[u8],
+    ) -> (u8, bool) {
         if self.mask & MASK_SHOW_BG == 0 {
             return (self.read_palette(0x3F00), false);
         }
@@ -705,33 +968,31 @@ impl Ppu {
             return (self.read_palette(0x3F00), false);
         }
 
-        let base_nt = (self.ctrl & 0x03) as usize;
+        let base_nt = (ctrl & 0x03) as usize;
         let base_nt_x = base_nt & 1;
         let base_nt_y = (base_nt >> 1) & 1;
 
-        let world_x = (x + usize::from(self.scroll_x)) % 512;
-        let world_y = (y + usize::from(self.scroll_y)) % 480;
+        let world_x = (x + usize::from(scroll_x)) % 512;
         let nt_x = (base_nt_x + world_x / 256) & 1;
-        let nt_y = (base_nt_y + world_y / 240) & 1;
+        let (nt_y, local_y) = Self::vertical_position_from_scroll(base_nt_y, scroll_y, y);
         let table = (nt_y << 1) | nt_x;
 
         let local_x = world_x % 256;
-        let local_y = world_y % 240;
         let tile_x = local_x / 8;
         let tile_y = local_y / 8;
 
         let nametable_addr = 0x2000 + (table as u16 * 0x400) + (tile_y as u16 * 32) + tile_x as u16;
         let tile_index = self.read_ppu_data(nametable_addr);
 
-        let pattern_base = if self.ctrl & CTRL_BG_TABLE_ADDR != 0 {
+        let pattern_base = if ctrl & CTRL_BG_TABLE_ADDR != 0 {
             0x1000
         } else {
             0x0000
         };
         let fine_y = (local_y % 8) as u8;
         let pattern_addr = pattern_base + (u16::from(tile_index) * 16) + u16::from(fine_y);
-        let plane0 = self.read_ppu_data(pattern_addr);
-        let plane1 = self.read_ppu_data(pattern_addr + 8);
+        let plane0 = chr[pattern_addr as usize];
+        let plane1 = chr[(pattern_addr + 8) as usize];
         let bit = 7 - (local_x % 8) as u8;
         let low = (plane0 >> bit) & 1;
         let high = (plane1 >> bit) & 1;
@@ -749,6 +1010,21 @@ impl Ppu {
         let palette = (attr >> shift) & 0x03;
         let palette_color = self.read_palette(0x3F00 + (u16::from(palette) * 4) + u16::from(color));
         (palette_color, true)
+    }
+
+    fn background_palette_index(&self, x: usize, y: usize) -> (u8, bool) {
+        self.background_palette_index_impl(x, y, self.ctrl, self.scroll_x, self.scroll_y, &self.chr)
+    }
+
+    fn background_palette_index_live(&self, x: usize, y: usize) -> (u8, bool) {
+        self.background_palette_index_impl(
+            x,
+            y,
+            self.live_ctrl,
+            self.live_scroll_x,
+            self.live_scroll_y,
+            self.live_chr.as_ref(),
+        )
     }
 
     fn sprite_pixel_details(
@@ -827,7 +1103,22 @@ impl Ppu {
             return None;
         }
 
+        let mut scanline_sprites = 0usize;
         for sprite in 0..64 {
+            let base = sprite * 4;
+            let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
+            let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
+                16
+            } else {
+                8
+            };
+            if y < sprite_y || y >= sprite_y + sprite_height {
+                continue;
+            }
+            if scanline_sprites == 8 {
+                break;
+            }
+            scanline_sprites += 1;
             if let Some((color, palette, behind_bg)) = self.sprite_pixel_details(sprite, x, y) {
                 if behind_bg && bg_opaque {
                     continue;
@@ -865,23 +1156,21 @@ impl Ppu {
             return (self.read_palette(0x3F00), false);
         }
 
-        let base_nt = (self.ctrl & 0x03) as usize;
+        let base_nt = (self.live_ctrl & 0x03) as usize;
         let base_nt_x = base_nt & 1;
         let base_nt_y = (base_nt >> 1) & 1;
 
-        let world_x = (x + usize::from(self.scroll_x)) % 512;
-        let world_y = (y + usize::from(self.scroll_y)) % 480;
+        let world_x = (x + usize::from(self.live_scroll_x)) % 512;
         let nt_x = (base_nt_x + world_x / 256) & 1;
-        let nt_y = (base_nt_y + world_y / 240) & 1;
+        let (nt_y, local_y) = Self::vertical_position_from_scroll(base_nt_y, self.live_scroll_y, y);
         let table = (nt_y << 1) | nt_x;
 
         let local_x = world_x % 256;
-        let local_y = world_y % 240;
         let tile_x = local_x / 8;
         let tile_y = local_y / 8;
 
         let nametable_addr = 0x2000 + (table as u16 * 0x400) + (tile_y as u16 * 32) + tile_x as u16;
-        let pattern_base = if self.ctrl & CTRL_BG_TABLE_ADDR != 0 {
+        let pattern_base = if self.live_ctrl & CTRL_BG_TABLE_ADDR != 0 {
             0x1000
         } else {
             0x0000
@@ -903,8 +1192,8 @@ impl Ppu {
         if self.bg_tile_cache.key != Some(key) {
             let tile_index = self.read_ppu_data(nametable_addr);
             let pattern_addr = pattern_base + (u16::from(tile_index) * 16) + u16::from(fine_y);
-            let plane0 = self.read_ppu_data(pattern_addr);
-            let plane1 = self.read_ppu_data(pattern_addr + 8);
+            let plane0 = self.live_chr[pattern_addr as usize];
+            let plane1 = self.live_chr[(pattern_addr + 8) as usize];
             let attr = self.read_ppu_data(attr_addr);
             let palette = (attr >> attr_shift) & 0x03;
             let palette_base = 0x3F00 + (u16::from(palette) * 4);
@@ -976,7 +1265,10 @@ impl Ppu {
         let mut entries = [SpriteScanlineEntry::default(); 64];
         let mut len = 0usize;
         for sprite_index in 0..64 {
-            if let Some(entry) = self.build_sprite_scanline_entry(sprite_index, y) {
+            if len == 8 {
+                break;
+            }
+            if let Some(entry) = self.build_sprite_scanline_entry(sprite_index, y, len) {
                 entries[len] = entry;
                 len += 1;
             }
@@ -991,6 +1283,7 @@ impl Ppu {
         &self,
         sprite_index: usize,
         scanline: usize,
+        slot: usize,
     ) -> Option<SpriteScanlineEntry> {
         let base = sprite_index * 4;
         let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
@@ -1003,32 +1296,20 @@ impl Ppu {
             return None;
         }
 
-        let tile = self.oam[base + 1];
         let attr = self.oam[base + 2];
         let sprite_x = self.oam[base + 3];
 
-        let mut local_y = (scanline - sprite_y) as u8;
-        if attr & 0x80 != 0 {
-            local_y = (sprite_height as u8 - 1) - local_y;
-        }
-
-        let pattern_addr = if sprite_height == 16 {
-            let table = u16::from(tile & 1) * 0x1000;
-            let tile_top = u16::from(tile & 0xFE);
-            let tile_offset = u16::from(local_y / 8);
-            let row = u16::from(local_y % 8);
-            table + (tile_top + tile_offset) * 16 + row
+        let (plane0, plane1) = if self.prefetched_sprite_scanline == Some(scanline as u16)
+            && slot < 8
+            && self.prefetched_sprite_valid[slot]
+        {
+            (
+                self.prefetched_sprite_plane0[slot],
+                self.prefetched_sprite_plane1[slot],
+            )
         } else {
-            let table = if self.ctrl & CTRL_SPRITE_TABLE_ADDR != 0 {
-                0x1000
-            } else {
-                0x0000
-            };
-            table + u16::from(tile) * 16 + u16::from(local_y)
+            self.sprite_pattern_planes(sprite_index, scanline, &self.chr)?
         };
-
-        let plane0 = self.read_ppu_data(pattern_addr);
-        let plane1 = self.read_ppu_data(pattern_addr + 8);
         let palette = attr & 0x03;
         let palette_base = 0x3F10 + (u16::from(palette) * 4);
         let palette_colors = [
@@ -1063,6 +1344,105 @@ impl Ppu {
         })
     }
 
+    fn sprite_pattern_planes(
+        &self,
+        sprite_index: usize,
+        scanline: usize,
+        chr: &[u8; CHR_BYTES],
+    ) -> Option<(u8, u8)> {
+        let base = sprite_index * 4;
+        let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
+        let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
+            16
+        } else {
+            8
+        };
+        if scanline < sprite_y || scanline >= sprite_y + sprite_height {
+            return None;
+        }
+
+        let tile = self.oam[base + 1];
+        let attr = self.oam[base + 2];
+        let mut local_y = (scanline - sprite_y) as u8;
+        if attr & 0x80 != 0 {
+            local_y = (sprite_height as u8 - 1) - local_y;
+        }
+
+        let pattern_addr = if sprite_height == 16 {
+            let table = u16::from(tile & 1) * 0x1000;
+            let tile_top = u16::from(tile & 0xFE);
+            let tile_offset = u16::from(local_y / 8);
+            let row = u16::from(local_y % 8);
+            table + (tile_top + tile_offset) * 16 + row
+        } else {
+            let table = if self.ctrl & CTRL_SPRITE_TABLE_ADDR != 0 {
+                0x1000
+            } else {
+                0x0000
+            };
+            table + u16::from(tile) * 16 + u16::from(local_y)
+        };
+
+        Some((chr[pattern_addr as usize], chr[(pattern_addr + 8) as usize]))
+    }
+
+    fn prefetch_sprite_pattern_slot(&mut self) {
+        let target_scanline = match self.scanline {
+            0..=238 if (257..=320).contains(&self.dot) && self.rendering_enabled() => {
+                self.scanline + 1
+            }
+            PRE_RENDER_SCANLINE if (257..=320).contains(&self.dot) && self.rendering_enabled() => 0,
+            _ => return,
+        };
+        if self.dot == 257 {
+            self.prefetched_sprite_scanline = Some(target_scanline);
+            self.prefetched_sprite_valid = [false; 8];
+            self.prefetched_sprite_plane0 = [0; 8];
+            self.prefetched_sprite_plane1 = [0; 8];
+        }
+
+        let slot = usize::from((self.dot - 257) / 8);
+        if slot >= 8 {
+            return;
+        }
+
+        let Some(sprite_index) = self.nth_scanline_sprite(target_scanline as usize, slot) else {
+            return;
+        };
+        let Some((plane0, plane1)) =
+            self.sprite_pattern_planes(sprite_index, target_scanline as usize, &self.chr)
+        else {
+            return;
+        };
+        self.prefetched_sprite_valid[slot] = true;
+        self.prefetched_sprite_plane0[slot] = plane0;
+        self.prefetched_sprite_plane1[slot] = plane1;
+    }
+
+    fn nth_scanline_sprite(&self, scanline: usize, slot: usize) -> Option<usize> {
+        let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
+            16
+        } else {
+            8
+        };
+        let mut count = 0usize;
+        for sprite_index in 0..64 {
+            let base = sprite_index * 4;
+            let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
+            if scanline < sprite_y || scanline >= sprite_y + sprite_height {
+                continue;
+            }
+            if count == slot {
+                return Some(sprite_index);
+            }
+            count += 1;
+            if count >= 8 {
+                break;
+            }
+        }
+        None
+    }
+
     fn update_sprite_zero_hit(&mut self, x: usize, y: usize) {
         if self.status & STATUS_SPRITE_ZERO_HIT != 0 {
             return;
@@ -1079,7 +1459,7 @@ impl Ppu {
         if !self.sprite_zero_opaque_at(x, y) {
             return;
         }
-        let (_, bg_opaque) = self.background_palette_index(x, y);
+        let (_, bg_opaque) = self.background_palette_index_live(x, y);
         if !bg_opaque {
             // Our current background pipeline is an approximation for mid-frame
             // scroll/latch behavior. Relaxing sprite-0 hit to any visible opaque
@@ -1137,6 +1517,52 @@ impl Ppu {
         self.framebuffer[idx + 1] = g;
         self.framebuffer[idx + 2] = b;
         self.framebuffer[idx + 3] = 0xFF;
+    }
+
+    fn reload_horizontal_scroll_from_temp(&mut self) {
+        self.vram_addr = (self.vram_addr & !0x041F) | (self.temp_addr & 0x041F);
+        let coarse_x = (self.vram_addr & 0x001F) as u8;
+        let nt_x = ((self.vram_addr >> 10) & 0x01) as u8;
+        self.scroll_x = (coarse_x << 3) | self.fine_x;
+        self.ctrl = (self.ctrl & !0x01) | nt_x;
+        self.live_scroll_x = self.scroll_x;
+        self.live_ctrl = (self.live_ctrl & !0x01) | nt_x;
+        self.mark_render_state_dirty();
+    }
+
+    fn reload_vertical_scroll_from_temp(&mut self) {
+        self.vram_addr = (self.vram_addr & !0x7BE0) | (self.temp_addr & 0x7BE0);
+        let coarse_y = ((self.vram_addr >> 5) & 0x001F) as u8;
+        let fine_y = ((self.vram_addr >> 12) & 0x07) as u8;
+        let nt_y = ((self.vram_addr >> 11) & 0x01) as u8;
+        self.live_scroll_y = (coarse_y << 3) | fine_y;
+        self.live_ctrl = (self.live_ctrl & !0x02) | (nt_y << 1);
+        self.mark_render_state_dirty();
+    }
+
+    fn increment_vertical_scroll(&mut self) {
+        if self.vram_addr & 0x7000 != 0x7000 {
+            self.vram_addr = self.vram_addr.wrapping_add(0x1000);
+        } else {
+            self.vram_addr &= !0x7000;
+            let mut coarse_y = (self.vram_addr & 0x03E0) >> 5;
+            if coarse_y == 29 {
+                coarse_y = 0;
+                self.vram_addr ^= 0x0800;
+            } else if coarse_y == 31 {
+                coarse_y = 0;
+            } else {
+                coarse_y = coarse_y.saturating_add(1);
+            }
+            self.vram_addr = (self.vram_addr & !0x03E0) | (coarse_y << 5);
+        }
+
+        let coarse_y = ((self.vram_addr >> 5) & 0x001F) as u8;
+        let fine_y = ((self.vram_addr >> 12) & 0x07) as u8;
+        let nt_y = ((self.vram_addr >> 11) & 0x01) as u8;
+        self.live_scroll_y = (coarse_y << 3) | fine_y;
+        self.live_ctrl = (self.live_ctrl & !0x02) | (nt_y << 1);
+        self.mark_render_state_dirty();
     }
 
     fn render_full_framebuffer(&mut self) {
@@ -1218,6 +1644,12 @@ impl Ppu {
                 let index = addr as usize;
                 if self.chr[index] != value {
                     self.chr[index] = value;
+                    self.live_chr[index] = value;
+                    for update in &mut self.pending_live_chr_updates {
+                        if index < update.chr.len() {
+                            update.chr[index] = value;
+                        }
+                    }
                     changed = true;
                 }
             }
@@ -1242,6 +1674,37 @@ impl Ppu {
         if changed {
             self.mark_render_state_dirty();
         }
+    }
+
+    fn vertical_position_from_scroll(
+        base_nt_y: usize,
+        scroll_y: u8,
+        screen_y: usize,
+    ) -> (usize, usize) {
+        if scroll_y < 240 {
+            let world_y = screen_y + usize::from(scroll_y);
+            return ((base_nt_y + world_y / 240) & 1, world_y % 240);
+        }
+
+        let mut nt_y = base_nt_y;
+        let mut coarse_y = usize::from(scroll_y >> 3);
+        let mut fine_y = usize::from(scroll_y & 0x07);
+        for _ in 0..screen_y {
+            if fine_y < 7 {
+                fine_y += 1;
+                continue;
+            }
+            fine_y = 0;
+            if coarse_y == 29 {
+                coarse_y = 0;
+                nt_y ^= 1;
+            } else if coarse_y == 31 {
+                coarse_y = 0;
+            } else {
+                coarse_y += 1;
+            }
+        }
+        (nt_y, coarse_y * 8 + fine_y)
     }
 
     #[must_use]
@@ -1301,8 +1764,8 @@ fn blank_framebuffer() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK,
-        VBLANK_EDGE_DOT, VBLANK_SCANLINE,
+        CHR_BYTES, DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW,
+        STATUS_VBLANK, VBLANK_EDGE_DOT, VBLANK_SCANLINE,
     };
     use crate::api::{FRAME_RGBA_BYTES, FRAME_WIDTH};
     use crate::rom::NametableMirroring;
@@ -1460,6 +1923,8 @@ mod tests {
         step_until(&mut ppu, |p| {
             p.scanline() == VBLANK_SCANLINE && p.dot() == VBLANK_EDGE_DOT
         });
+        assert!(ppu.render_capture_valid);
+        assert_eq!(ppu.render_scroll_y, 8);
 
         // Emulate NMI handler resetting scroll after VBlank edge.
         ppu.write_register(0x2005, 0);
@@ -1516,6 +1981,243 @@ mod tests {
     }
 
     #[test]
+    fn visible_scanline_chr_window_change_is_delayed_until_prefetch_boundary() {
+        let mut ppu = Ppu::new();
+        configure_chr_window_timing_scene(&mut ppu);
+        let old_window = solid_tile_chr_window(false);
+        let new_window = solid_tile_chr_window(true);
+        ppu.set_chr_window(&old_window, false);
+
+        ppu.scanline = 0;
+        ppu.dot = 0;
+        ppu.step_dot();
+        assert_eq!(pixel_rgb(&ppu, 0, 0), (236, 238, 236));
+
+        ppu.set_chr_window(&new_window, false);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 0 && ppu.dot() == 16);
+        assert_eq!(pixel_rgb(&ppu, 1, 0), (236, 238, 236));
+        assert_eq!(pixel_rgb(&ppu, 15, 0), (236, 238, 236));
+
+        ppu.step_dot();
+        assert_eq!(pixel_rgb(&ppu, 16, 0), (236, 106, 100));
+    }
+
+    #[test]
+    fn hblank_chr_window_change_is_visible_on_next_scanline_start() {
+        let mut ppu = Ppu::new();
+        configure_chr_window_timing_scene(&mut ppu);
+        let old_window = solid_tile_chr_window(false);
+        let new_window = solid_tile_chr_window(true);
+        ppu.set_chr_window(&old_window, false);
+
+        ppu.scanline = 0;
+        ppu.dot = 300;
+        ppu.set_chr_window(&new_window, false);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 1);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 106, 100));
+    }
+
+    #[test]
+    fn chr_window_change_after_sprite_prefetch_keeps_next_scanline_sprite_tiles() {
+        let mut ppu = Ppu::new();
+        configure_sprite_chr_window_timing_scene(&mut ppu);
+        let old_window = solid_tile_chr_window(false);
+        let new_window = solid_tile_chr_window(true);
+        ppu.set_chr_window(&old_window, false);
+
+        ppu.scanline = 0;
+        ppu.dot = 256;
+        step_until(&mut ppu, |ppu| ppu.scanline() == 0 && ppu.dot() == 330);
+        ppu.set_chr_window(&new_window, false);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 1);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 238, 236));
+    }
+
+    #[test]
+    fn chr_window_change_before_sprite_prefetch_updates_next_scanline_sprite_tiles() {
+        let mut ppu = Ppu::new();
+        configure_sprite_chr_window_timing_scene(&mut ppu);
+        let old_window = solid_tile_chr_window(false);
+        let new_window = solid_tile_chr_window(true);
+        ppu.set_chr_window(&old_window, false);
+
+        ppu.scanline = 0;
+        ppu.dot = 200;
+        ppu.set_chr_window(&new_window, false);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 1);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 106, 100));
+    }
+
+    #[test]
+    fn chr_window_change_mid_sprite_prefetch_splits_next_scanline_sprite_banks() {
+        let mut ppu = Ppu::new();
+        configure_sprite_prefetch_split_scene(&mut ppu);
+        let old_window = solid_tile_chr_window(false);
+        let new_window = solid_tile_chr_window(true);
+        ppu.set_chr_window(&old_window, false);
+
+        ppu.scanline = 0;
+        ppu.dot = 256;
+        step_until(&mut ppu, |ppu| ppu.scanline() == 0 && ppu.dot() == 300);
+        ppu.set_chr_window(&new_window, false);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 25);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 238, 236));
+        assert_eq!(pixel_rgb(&ppu, 24, 1), (236, 106, 100));
+    }
+
+    #[test]
+    fn only_first_eight_sprites_render_on_a_scanline() {
+        let mut ppu = Ppu::new();
+        configure_nine_sprite_limit_scene(&mut ppu);
+        let sprite_window = solid_tile_chr_window(false);
+        ppu.set_chr_window(&sprite_window, false);
+        ppu.ensure_sprite_scanline_cache(1);
+        assert_eq!(ppu.sprite_scanline_cache.len, 8);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 73);
+        assert_eq!(pixel_rgb(&ppu, 56, 1), (236, 238, 236));
+        assert_eq!(pixel_rgb(&ppu, 64, 1), (0, 0, 0));
+    }
+
+    #[test]
+    fn visible_scanline_ppuaddr_change_is_delayed_until_prefetch_boundary() {
+        let mut ppu = Ppu::new();
+        configure_two_tile_scroll_scene(&mut ppu);
+        ppu.write_ppu_data(0x2000, 0x00);
+        ppu.write_ppu_data(0x2001, 0x00);
+        ppu.write_ppu_data(0x2002, 0x00);
+        ppu.write_ppu_data(0x2003, 0x01);
+
+        ppu.scanline = 0;
+        ppu.dot = 0;
+        ppu.step_dot();
+        assert_eq!(pixel_rgb(&ppu, 0, 0), (236, 238, 236));
+        let mut baseline = ppu.clone();
+
+        ppu.write_register(0x2006, 0x00);
+        ppu.write_register(0x2006, 0x01);
+
+        step_until(&mut baseline, |ppu| ppu.scanline() == 0 && ppu.dot() == 16);
+        step_until(&mut ppu, |ppu| ppu.scanline() == 0 && ppu.dot() == 16);
+        assert_eq!(pixel_rgb(&ppu, 1, 0), pixel_rgb(&baseline, 1, 0));
+        assert_eq!(pixel_rgb(&ppu, 15, 0), pixel_rgb(&baseline, 15, 0));
+
+        baseline.step_dot();
+        ppu.step_dot();
+        assert_eq!(pixel_rgb(&ppu, 16, 0), pixel_rgb(&baseline, 16, 0));
+
+        baseline.step_dot();
+        ppu.step_dot();
+        assert_ne!(pixel_rgb(&ppu, 17, 0), pixel_rgb(&baseline, 17, 0));
+    }
+
+    #[test]
+    fn hblank_ppuaddr_change_is_visible_on_next_scanline_start() {
+        let mut ppu = Ppu::new();
+        configure_two_tile_scroll_scene(&mut ppu);
+
+        ppu.scanline = 0;
+        ppu.dot = 300;
+        ppu.write_register(0x2006, 0x00);
+        ppu.write_register(0x2006, 0x01);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 1);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 106, 100));
+    }
+
+    #[test]
+    fn late_visible_ppuaddr_change_that_matures_in_hblank_hits_next_scanline_start() {
+        let mut ppu = Ppu::new();
+        configure_two_tile_scroll_scene(&mut ppu);
+
+        ppu.scanline = 0;
+        ppu.dot = 250;
+        ppu.write_register(0x2006, 0x00);
+        ppu.write_register(0x2006, 0x01);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 1);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 106, 100));
+    }
+
+    #[test]
+    fn visible_ppuaddr_split_write_advances_vertical_vram_at_dot_256() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x08); // enable background rendering
+        ppu.write_register(0x2005, 0);
+        ppu.write_register(0x2005, 0);
+
+        ppu.scanline = 100;
+        ppu.dot = 250;
+        ppu.write_register(0x2006, 0x35);
+        ppu.write_register(0x2006, 0x45);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 100 && ppu.dot() == 256);
+
+        assert_eq!(ppu.vram_addr, 0x4545);
+        assert_eq!(ppu.live_scroll_y, 84);
+    }
+
+    #[test]
+    fn hblank_ppuctrl_write_preserves_split_vertical_scroll() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x08); // enable background rendering
+        ppu.write_register(0x2005, 0);
+        ppu.write_register(0x2005, 0);
+
+        ppu.scanline = 100;
+        ppu.dot = 250;
+        ppu.write_register(0x2006, 0x35);
+        ppu.write_register(0x2006, 0x45);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 100 && ppu.dot() == 268);
+        let split_live_scroll_y = ppu.live_scroll_y;
+        let split_nt_y = ppu.live_ctrl & 0x02;
+        assert_eq!(split_live_scroll_y, 84);
+
+        ppu.write_register(0x2005, 0x00);
+        step_until(&mut ppu, |ppu| ppu.scanline() == 100 && ppu.dot() == 280);
+        ppu.write_register(0x2005, 0x00);
+        step_until(&mut ppu, |ppu| ppu.scanline() == 100 && ppu.dot() == 301);
+        assert_eq!(ppu.live_scroll_y, split_live_scroll_y);
+        ppu.write_register(0x2000, 0xA8);
+
+        assert_eq!(ppu.live_scroll_y, split_live_scroll_y);
+        assert_eq!(ppu.live_ctrl & 0x02, split_nt_y);
+    }
+
+    #[test]
+    fn pre_render_scroll_y_ff_wraps_back_to_row_zero_on_second_visible_scanline() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x0A); // background + leftmost 8px background
+
+        ppu.write_ppu_data(0x3F00, 0x0F);
+        ppu.write_ppu_data(0x3F01, 0x30); // tile 1 => white
+        ppu.write_ppu_data(0x3F02, 0x26); // tile 2 => red
+
+        ppu.write_ppu_data(0x0010, 0xFF);
+        ppu.write_ppu_data(0x0018, 0x00);
+        ppu.write_ppu_data(0x0020, 0x00);
+        ppu.write_ppu_data(0x0028, 0xFF);
+
+        ppu.write_ppu_data(0x2000, 0x01); // row 0 tile
+        ppu.write_ppu_data(0x2040, 0x02); // row 2 tile
+
+        ppu.scanline = PRE_RENDER_SCANLINE;
+        ppu.dot = 279;
+        ppu.write_register(0x2005, 0x00);
+        ppu.write_register(0x2005, 0xFF);
+        ppu.write_register(0x2000, 0x00);
+
+        step_until(&mut ppu, |ppu| ppu.scanline() == 1 && ppu.dot() == 1);
+        assert_eq!(pixel_rgb(&ppu, 0, 1), (236, 238, 236));
+    }
+
+    #[test]
     fn visible_dot_sprite_cache_invalidates_after_oam_write() {
         let mut ppu = Ppu::new();
         ppu.write_register(0x2001, 0x14); // sprites + leftmost 8px sprites
@@ -1566,10 +2268,51 @@ mod tests {
         ppu.write_register(0x2006, 0x35); // high byte
         ppu.write_register(0x2006, 0x45); // low byte -> vram_addr = 0x3545
 
-        // Expected: scroll_x = 5*8 + fine_x(0) = 40, scroll_y = 10*8 + 3 = 83
-        assert_eq!(ppu.scroll_x, 40);
-        assert_eq!(ppu.scroll_y, 83);
-        assert_eq!(ppu.ctrl & 0x03, 1); // nametable bits updated
+        // The current screen point should now resolve to the address just loaded via $2006.
+        let screen_x = usize::from(ppu.dot.min(FRAME_WIDTH as u16));
+        let screen_y = usize::from(ppu.scanline);
+        let base_nt = (ppu.ctrl & 0x03) as usize;
+        let base_nt_x = base_nt & 1;
+        let base_nt_y = (base_nt >> 1) & 1;
+        let world_x = screen_x + usize::from(ppu.scroll_x);
+        let world_y = screen_y + usize::from(ppu.scroll_y);
+        let table =
+            (((base_nt_y + (world_y / 240)) & 1) << 1) | ((base_nt_x + (world_x / 256)) & 1);
+        let local_x = world_x % 256;
+        let local_y = world_y % 240;
+
+        assert_eq!(ppu.vram_addr, 0x3545);
+        assert_eq!(table, 1);
+        assert_eq!(local_x, 40);
+        assert_eq!(local_y, 83);
+    }
+
+    #[test]
+    fn ppuaddr_write_during_hblank_targets_next_scanline() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x0A); // enable background rendering
+
+        ppu.scanline = 100;
+        ppu.dot = 300; // HBlank: the next visible pixel is scanline 101, x=0.
+
+        ppu.write_register(0x2006, 0x35);
+        ppu.write_register(0x2006, 0x45);
+
+        let screen_x = 0usize;
+        let screen_y = 101usize;
+        let base_nt = (ppu.ctrl & 0x03) as usize;
+        let base_nt_x = base_nt & 1;
+        let base_nt_y = (base_nt >> 1) & 1;
+        let world_x = screen_x + usize::from(ppu.scroll_x);
+        let world_y = screen_y + usize::from(ppu.scroll_y);
+        let table =
+            (((base_nt_y + (world_y / 240)) & 1) << 1) | ((base_nt_x + (world_x / 256)) & 1);
+        let local_x = world_x % 256;
+        let local_y = world_y % 240;
+
+        assert_eq!(table, 1);
+        assert_eq!(local_x, 40);
+        assert_eq!(local_y, 83);
     }
 
     #[test]
@@ -1589,6 +2332,35 @@ mod tests {
         // Scroll should NOT change during VBlank
         assert_eq!(ppu.scroll_x, 10);
         assert_eq!(ppu.scroll_y, 20);
+    }
+
+    #[test]
+    fn dot_257_reloads_horizontal_scroll_from_temp_addr() {
+        let mut ppu = Ppu::new();
+        ppu.write_register(0x2001, 0x0A); // enable background rendering
+
+        // Simulate Tecmo-style split setup: first establish the immediate split point with $2006.
+        ppu.scanline = 157;
+        ppu.dot = 250;
+        ppu.write_register(0x2006, 0x29);
+        ppu.write_register(0x2006, 0x40);
+        let split_vertical_scroll = ppu.scroll_y;
+        let split_nt_y = ppu.ctrl & 0x02;
+
+        // Then seed the next scanline's horizontal bits through $2005/$2000.
+        ppu.dot = 268;
+        ppu.write_register(0x2005, 0x00);
+        ppu.dot = 280;
+        ppu.write_register(0x2005, 0x00);
+        ppu.dot = 301;
+        ppu.write_register(0x2000, 0xA8);
+
+        ppu.reload_horizontal_scroll_from_temp();
+
+        assert_eq!(ppu.scroll_x, 0);
+        assert_eq!(ppu.ctrl & 0x01, 0);
+        assert_eq!(ppu.scroll_y, split_vertical_scroll);
+        assert_eq!(ppu.ctrl & 0x02, split_nt_y);
     }
 
     fn step_until(mut_ppu: &mut Ppu, done: impl Fn(&Ppu) -> bool) {
@@ -1626,6 +2398,69 @@ mod tests {
         ppu.write_ppu_data(0x2001, 0x01);
         // Tile directly below top-left.
         ppu.write_ppu_data(0x2020, 0x01);
+    }
+
+    fn configure_chr_window_timing_scene(ppu: &mut Ppu) {
+        ppu.write_register(0x2001, 0x0A); // background + leftmost 8px background
+        ppu.write_ppu_data(0x3F00, 0x0F);
+        ppu.write_ppu_data(0x3F01, 0x30);
+        ppu.write_ppu_data(0x3F02, 0x26);
+
+        for addr in [0x2000, 0x2001, 0x2002, 0x2020] {
+            ppu.write_ppu_data(addr, 0x00);
+        }
+    }
+
+    fn configure_sprite_chr_window_timing_scene(ppu: &mut Ppu) {
+        ppu.write_register(0x2001, 0x14); // sprites + leftmost 8px sprites
+        ppu.write_ppu_data(0x3F00, 0x0F); // black background
+        ppu.write_ppu_data(0x3F11, 0x30); // sprite palette color 1
+        ppu.write_ppu_data(0x3F12, 0x26); // sprite palette color 2
+        ppu.oam = [0xFF; 256];
+        ppu.oam[0] = 0x00; // sprite starts on scanline 1
+        ppu.oam[1] = 0x00; // tile 0
+        ppu.oam[2] = 0x00; // palette 0, in front of background
+        ppu.oam[3] = 0x00; // x = 0
+    }
+
+    fn configure_sprite_prefetch_split_scene(ppu: &mut Ppu) {
+        ppu.write_register(0x2001, 0x14); // sprites + leftmost 8px sprites
+        ppu.write_ppu_data(0x3F00, 0x0F); // black background
+        ppu.write_ppu_data(0x3F11, 0x30); // sprite palette color 1
+        ppu.write_ppu_data(0x3F12, 0x26); // sprite palette color 2
+        ppu.oam = [0xFF; 256];
+        for sprite in 0..8 {
+            let base = sprite * 4;
+            ppu.oam[base] = 0x00; // all eight sprites overlap scanline 1
+            ppu.oam[base + 1] = 0x00; // tile 0
+            ppu.oam[base + 2] = 0x00; // palette 0
+            ppu.oam[base + 3] = 0xF8; // keep middle sprites off the sampled pixels
+        }
+        ppu.oam[3] = 0x00; // sprite 0 at x = 0
+        ppu.oam[7 * 4 + 3] = 0x18; // sprite 7 at x = 24
+    }
+
+    fn configure_nine_sprite_limit_scene(ppu: &mut Ppu) {
+        ppu.write_register(0x2001, 0x14); // sprites + leftmost 8px sprites
+        ppu.write_ppu_data(0x3F00, 0x0F); // black background
+        ppu.write_ppu_data(0x3F11, 0x30); // sprite palette color 1
+        ppu.oam = [0xFF; 256];
+        for sprite in 0..9 {
+            let base = sprite * 4;
+            ppu.oam[base] = 0x00; // all sprites overlap scanline 1
+            ppu.oam[base + 1] = 0x00; // tile 0
+            ppu.oam[base + 2] = 0x00; // palette 0
+            ppu.oam[base + 3] = (sprite as u8) * 8;
+        }
+    }
+
+    fn solid_tile_chr_window(use_color_two: bool) -> [u8; CHR_BYTES] {
+        let mut chr = [0_u8; CHR_BYTES];
+        for row in 0..8 {
+            chr[row] = if use_color_two { 0x00 } else { 0xFF };
+            chr[row + 8] = if use_color_two { 0xFF } else { 0x00 };
+        }
+        chr
     }
 
     fn pixel_rgb(ppu: &Ppu, x: usize, y: usize) -> (u8, u8, u8) {

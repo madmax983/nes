@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cheat_codes::{CheatCode, CheatCodeError};
-use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuSnapshot, CpuWrite};
+use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuMmioRead, CpuSnapshot, CpuWrite};
 use crate::mapper::{
     Axrom, AxromState, Cnrom, CnromState, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State,
     Nrom, Uxrom, UxromState,
@@ -357,9 +357,9 @@ impl LoadedMapper {
         }
     }
 
-    fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool) {
+    fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool, ppu_ctrl: u8) {
         if let Self::Mmc3(mapper) = self {
-            mapper.on_ppu_dot(scanline, dot, rendering_enabled);
+            mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl);
         }
     }
 
@@ -578,7 +578,7 @@ pub struct NesCore {
     last_cpu_trace: Option<String>,
     last_cpu_bus_trace: Vec<CpuBusAccess>,
     scratch_writes: Vec<CpuWrite>,
-    scratch_mmio_reads: Vec<u16>,
+    scratch_mmio_reads: Vec<CpuMmioRead>,
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
@@ -803,7 +803,7 @@ impl NesCore {
     /// Writes to CPU bus then applies mapped side-effects immediately.
     pub fn write_cpu_bus(&mut self, addr: u16, value: u8) {
         self.cpu.write_byte(addr, value);
-        self.apply_cpu_writes(&[CpuWrite { addr, value }]);
+        self.apply_cpu_write_side_effect(addr, value);
         self.sync_ppu_register_image();
     }
 
@@ -1000,7 +1000,7 @@ impl NesCore {
         self.ports.controllers[0].bits = snapshot.controller_bits;
         self.ports.controllers[1].bits = snapshot.controller2_bits;
         self.scheduler.restore(snapshot.scheduler);
-        self.ppu.restore(snapshot.ppu);
+        self.ppu.restore(snapshot.ppu.clone());
         self.apu.restore(snapshot.apu.clone());
         self.cpu.restore(snapshot.cpu);
         self.ports.controller_strobe = snapshot.controller_strobe;
@@ -1236,17 +1236,16 @@ impl NesCore {
         let mut writes = core::mem::take(&mut self.scratch_writes);
         writes.clear();
         self.cpu.swap_writes(&mut writes);
-        self.apply_cpu_writes(&writes);
-        self.scratch_writes = writes;
 
         let mut mmio_reads = core::mem::take(&mut self.scratch_mmio_reads);
         mmio_reads.clear();
         self.cpu.swap_mmio_reads(&mut mmio_reads);
-        self.apply_cpu_reads(&mmio_reads);
+
+        self.replay_cpu_bus_side_effects(cpu_cycles, &writes, &mmio_reads);
+        self.scratch_writes = writes;
         self.scratch_mmio_reads = mmio_reads;
 
         let cpu_cycles = u64::from(cpu_cycles);
-        self.advance_hardware_cycles(cpu_cycles);
 
         if let Some(page) = self.pending_oam_dma_page.take() {
             self.run_oam_dma(page);
@@ -1440,16 +1439,53 @@ impl NesCore {
         self.ppu.set_mirroring(mirroring);
     }
 
-    fn apply_cpu_writes(&mut self, writes: &[CpuWrite]) {
-        let remap_needed = if let Some(mapper) = self.mapper.as_mut() {
-            let mut prg_writes = writes.iter().filter(|w| w.addr >= 0x8000).peekable();
-            if prg_writes.peek().is_some() {
+    fn replay_cpu_bus_side_effects(
+        &mut self,
+        cpu_cycles: u8,
+        writes: &[CpuWrite],
+        mmio_reads: &[CpuMmioRead],
+    ) {
+        if writes.is_empty() && mmio_reads.is_empty() {
+            self.advance_hardware_cycles(u64::from(cpu_cycles));
+            return;
+        }
+
+        let mut write_index = 0usize;
+        let mut read_index = 0usize;
+
+        for cycle in 1..=cpu_cycles {
+            while read_index < mmio_reads.len() && mmio_reads[read_index].bus_cycle == cycle {
+                self.apply_cpu_read_side_effect(mmio_reads[read_index].addr);
+                read_index += 1;
+            }
+
+            while write_index < writes.len() && writes[write_index].bus_cycle == cycle {
+                let write = writes[write_index];
+                self.apply_cpu_write_side_effect(write.addr, write.value);
+                write_index += 1;
+            }
+
+            self.advance_hardware_cycles(1);
+        }
+
+        while read_index < mmio_reads.len() {
+            self.apply_cpu_read_side_effect(mmio_reads[read_index].addr);
+            read_index += 1;
+        }
+        while write_index < writes.len() {
+            let write = writes[write_index];
+            self.apply_cpu_write_side_effect(write.addr, write.value);
+            write_index += 1;
+        }
+    }
+
+    fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
+        let remap_needed = if addr >= 0x8000 {
+            if let Some(mapper) = self.mapper.as_mut() {
                 // Persist CHR-RAM writes made through PPUDATA before bank remapping.
                 let chr_window = self.ppu.chr_window_snapshot();
                 mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                for write in prg_writes {
-                    mapper.write_prg(write.addr, write.value);
-                }
+                mapper.write_prg(addr, value);
                 true
             } else {
                 false
@@ -1458,36 +1494,28 @@ impl NesCore {
             false
         };
 
-        let ppu_changed = {
-            let mut changed = false;
-            for write in writes {
-                if (0x2000..=0x3FFF).contains(&write.addr) {
-                    self.ppu
-                        .write_register(normalize_ppu_register_addr(write.addr), write.value);
-                    changed = true;
-                }
-            }
-            changed
+        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
+            self.ppu
+                .write_register(normalize_ppu_register_addr(addr), value);
+            true
+        } else {
+            false
         };
 
-        for write in writes {
-            if (0x4000..=0x4017).contains(&write.addr) {
-                if write.addr == 0x4014 {
-                    self.pending_oam_dma_page = Some(write.value);
-                    continue;
-                }
-                if write.addr == 0x4016 {
-                    self.ports.write_controller_strobe(write.value);
-                    continue;
-                }
-                self.apu.write_register(write.addr, write.value);
+        if (0x4000..=0x4017).contains(&addr) {
+            if addr == 0x4014 {
+                self.pending_oam_dma_page = Some(value);
+            } else if addr == 0x4016 {
+                self.ports.write_controller_strobe(value);
+            } else {
+                self.apu.write_register(addr, value);
             }
         }
 
         if remap_needed {
             self.sync_mapper_prg_window();
-            self.sync_mapper_chr_window();
             self.sync_mapper_mirroring();
+            self.sync_mapper_chr_window();
         }
         if ppu_changed {
             self.sync_ppu_register_image();
@@ -1544,38 +1572,18 @@ impl NesCore {
             .write_byte(0x4017, self.ports.controller_port_sample(Player::Two));
     }
 
-    fn apply_cpu_reads(&mut self, mmio_reads: &[u16]) {
-        let mut saw_ppu_status_read = false;
-        let mut ppu_data_reads = 0_u8;
-        let mut apu_status_reads = 0_u8;
-        let mut controller1_reads = 0_u8;
-        let mut controller2_reads = 0_u8;
-
-        for &addr in mmio_reads {
-            match addr {
-                0x2002 => saw_ppu_status_read = true,
-                0x2007 => ppu_data_reads = ppu_data_reads.saturating_add(1),
-                0x4015 => apu_status_reads = apu_status_reads.saturating_add(1),
-                0x4016 => controller1_reads = controller1_reads.saturating_add(1),
-                0x4017 => controller2_reads = controller2_reads.saturating_add(1),
-                _ => {}
+    fn apply_cpu_read_side_effect(&mut self, addr: u16) {
+        match addr {
+            0x2002 => self.ppu.on_status_read(),
+            0x2007 => {
+                let _ = self.ppu.consume_data_read();
             }
-        }
-
-        if saw_ppu_status_read {
-            self.ppu.on_status_read();
-        }
-        for _ in 0..ppu_data_reads {
-            let _ = self.ppu.consume_data_read();
-        }
-        for _ in 0..apu_status_reads {
-            let _ = self.apu.read_status();
-        }
-        for _ in 0..controller1_reads {
-            self.ports.consume_controller_read(Player::One);
-        }
-        for _ in 0..controller2_reads {
-            self.ports.consume_controller_read(Player::Two);
+            0x4015 => {
+                let _ = self.apu.read_status();
+            }
+            0x4016 => self.ports.consume_controller_read(Player::One),
+            0x4017 => self.ports.consume_controller_read(Player::Two),
+            _ => {}
         }
     }
 
@@ -1609,6 +1617,7 @@ impl NesCore {
                         self.ppu.scanline(),
                         self.ppu.dot(),
                         self.ppu.rendering_enabled_for_mapper_irq(),
+                        self.ppu.ctrl(),
                     );
                 }
             }
@@ -1633,6 +1642,7 @@ impl NesCore {
                         self.ppu.scanline(),
                         self.ppu.dot(),
                         self.ppu.rendering_enabled_for_mapper_irq(),
+                        self.ppu.ctrl(),
                     );
                 }
             }
@@ -1722,8 +1732,8 @@ mod tests {
         mmc3.write_prg(0xC001, 0); // IRQ reload clear
         mmc3.write_prg(0xE001, 0); // IRQ enable
         // Trigger A12 edges to decrement counter and trigger IRQ (visible scanline < 240)
-        mmc3.on_ppu_dot(0, 260, true);
-        mmc3.on_ppu_dot(0, 260, true);
+        mmc3.on_ppu_dot(0, 260, true, 0x08);
+        mmc3.on_ppu_dot(0, 260, true, 0x08);
 
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.irq_pending());
@@ -1743,8 +1753,8 @@ mod tests {
 
         let mut mapper = LoadedMapper::Mmc3(mmc3);
 
-        mapper.on_ppu_dot(0, 260, true);
-        mapper.on_ppu_dot(0, 260, true);
+        mapper.on_ppu_dot(0, 260, true, 0x08);
+        mapper.on_ppu_dot(0, 260, true, 0x08);
 
         assert!(mapper.irq_pending());
     }
@@ -1829,7 +1839,7 @@ mod tests {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mut mapper = LoadedMapper::Nrom(nrom);
         // This should not panic
-        mapper.on_ppu_dot(0, 0, true);
+        mapper.on_ppu_dot(0, 0, true, 0x08);
     }
 
     #[test]
@@ -1846,8 +1856,8 @@ mod tests {
         mmc3.write_prg(0xC000, 1);
         mmc3.write_prg(0xC001, 0);
         mmc3.write_prg(0xE001, 0);
-        mmc3.on_ppu_dot(0, 260, true);
-        mmc3.on_ppu_dot(0, 260, true);
+        mmc3.on_ppu_dot(0, 260, true, 0x08);
+        mmc3.on_ppu_dot(0, 260, true, 0x08);
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.irq_pending());
     }
