@@ -180,11 +180,47 @@ where
         })
     }
 
+    /// Returns a shared reference to the underlying emulator core.
+    ///
+    /// This is useful for inspecting the current internal state of the NES
+    /// without advancing the simulation or mutating its state.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let env = SmbControlEnv::from_config(config)?;
+    /// // Inspect the current state hash of the emulator.
+    /// let hash = env.core().state_hash();
+    /// println!("State Hash: {}", hash);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn core(&self) -> &NesCore {
         &self.core
     }
 
+    /// Returns a mutable reference to the underlying emulator core.
+    ///
+    /// This allows direct manipulation of the emulator's state, such as
+    /// injecting custom commands, modifying memory, or forcibly loading state.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # use nes_core::Command;
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = SmbControlEnv::from_config(config)?;
+    /// // Directly execute a command on the underlying core.
+    /// env.core_mut().execute(Command::StepFrame).unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn core_mut(&mut self) -> &mut NesCore {
         &mut self.core
     }
