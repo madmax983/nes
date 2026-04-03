@@ -1,5 +1,5 @@
 use nes_relay::config::parse_args;
-use std::io::Write;
+use std::io::{Write, BufReader, BufRead};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
@@ -70,4 +70,28 @@ fn havoc_test_forward_to_room_peers_large_payload() {
 #[ignore = "Havoc Concurrency Attack"]
 fn havoc_test_cleanup_client_deadlock() {
     // Tests thread exhaustion and mutex locking when concurrently cleaning the same client slot
+}
+
+#[test]
+#[ignore = "Havoc Target"]
+fn havoc_test_dos_panic() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let handle = thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        // Demonstrate the unbound memory bug in `read_line`
+        let bytes = reader.read_line(&mut line).unwrap();
+        assert!(bytes < 1_000_000, "Should not accept payloads > 1MB");
+    });
+
+    let mut client = TcpStream::connect(addr).unwrap();
+    let chunk = vec![b'A'; 2_000_000]; // 2MB chunk
+    client.write_all(&chunk).unwrap();
+    client.write_all(b"\n").unwrap();
+
+    let res = handle.join();
+    assert!(res.is_err(), "Thread panicked because of unbounded payload buffer");
 }
