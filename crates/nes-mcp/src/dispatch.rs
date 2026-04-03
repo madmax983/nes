@@ -989,7 +989,7 @@ mod tests {
         parse_dsl_rom_options, parse_hex_bytes, parse_player2, parse_slot, parse_speed_permille,
         parse_u64, sync_audio_output, sync_frame_output,
     };
-    use crate::output::latest_output_metadata;
+    use crate::output::{latest_output_metadata, reset_output_state_for_test};
 
     fn params(pairs: &[(&str, &str)]) -> ToolParams {
         let mut map = ToolParams::new();
@@ -1141,6 +1141,7 @@ mod tests {
 
     #[test]
     fn sync_outputs_publish_frame_and_audio_sequences() {
+        let _guard = reset_output_state_for_test();
         let mut core = NesCore::new();
         let before = latest_output_metadata();
 

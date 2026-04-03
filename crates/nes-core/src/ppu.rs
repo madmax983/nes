@@ -141,11 +141,7 @@ pub struct PpuSnapshot {
     /// Whether CHR writes are allowed (CHR RAM mode).
     pub chr_writable: bool,
     /// CHR view used by the live background renderer.
-    #[serde(
-        serialize_with = "crate::serde_array::serialize_u8_array",
-        deserialize_with = "crate::serde_array::deserialize_u8_array"
-    )]
-    pub live_chr: [u8; CHR_BYTES],
+    pub live_chr: Vec<u8>,
     /// Delayed live background CHR swaps waiting on the fetch pipeline.
     pending_live_chr_updates: Vec<PendingLiveChrWindowUpdate>,
     /// PPUCTRL shadow used by the live background renderer.
@@ -215,7 +211,7 @@ pub struct Ppu {
     mirroring: NametableMirroring,
     chr: [u8; CHR_BYTES],
     chr_writable: bool,
-    live_chr: [u8; CHR_BYTES],
+    live_chr: Box<[u8; CHR_BYTES]>,
     pending_live_chr_updates: Vec<PendingLiveChrWindowUpdate>,
     live_ctrl: u8,
     live_scroll_x: u8,
@@ -325,7 +321,7 @@ impl Ppu {
             mirroring: NametableMirroring::Horizontal,
             chr: [0; CHR_BYTES],
             chr_writable: true,
-            live_chr: [0; CHR_BYTES],
+            live_chr: Box::new([0; CHR_BYTES]),
             pending_live_chr_updates: Vec::new(),
             live_ctrl: 0,
             live_scroll_x: 0,
@@ -363,7 +359,7 @@ impl Ppu {
         let copy_len = chr_rom.len().min(CHR_BYTES);
         self.chr[..copy_len].copy_from_slice(&chr_rom[..copy_len]);
         self.chr_writable = chr_rom.is_empty();
-        self.live_chr = self.chr;
+        *self.live_chr = self.chr;
         self.pending_live_chr_updates.clear();
         self.live_ctrl = self.ctrl;
         self.live_scroll_x = self.scroll_x;
@@ -394,7 +390,7 @@ impl Ppu {
                     chr: self.chr.to_vec(),
                 });
         } else {
-            self.live_chr = self.chr;
+            *self.live_chr = self.chr;
             self.pending_live_chr_updates.clear();
         }
         self.mark_render_state_dirty();
@@ -431,7 +427,7 @@ impl Ppu {
         self.render_scroll_y = 0;
         self.render_ctrl = 0;
         self.render_capture_valid = false;
-        self.live_chr = self.chr;
+        *self.live_chr = self.chr;
         self.pending_live_chr_updates.clear();
         self.live_ctrl = self.ctrl;
         self.live_scroll_x = self.scroll_x;
@@ -464,7 +460,10 @@ impl Ppu {
         self.mirroring = snapshot.mirroring;
         self.chr = snapshot.chr;
         self.chr_writable = snapshot.chr_writable;
-        self.live_chr = snapshot.live_chr;
+        let mut live_chr = Box::new([0; CHR_BYTES]);
+        let live_chr_len = snapshot.live_chr.len().min(CHR_BYTES);
+        live_chr[..live_chr_len].copy_from_slice(&snapshot.live_chr[..live_chr_len]);
+        self.live_chr = live_chr;
         self.pending_live_chr_updates = snapshot.pending_live_chr_updates;
         self.live_ctrl = snapshot.live_ctrl;
         self.live_scroll_x = snapshot.live_scroll_x;
@@ -513,7 +512,7 @@ impl Ppu {
             mirroring: self.mirroring,
             chr: self.chr,
             chr_writable: self.chr_writable,
-            live_chr: self.live_chr,
+            live_chr: self.live_chr.to_vec(),
             pending_live_chr_updates: self.pending_live_chr_updates.clone(),
             live_ctrl: self.live_ctrl,
             live_scroll_x: self.live_scroll_x,
@@ -889,7 +888,7 @@ impl Ppu {
             .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
         {
             let update = self.pending_live_chr_updates.remove(0);
-            self.live_chr = [0; CHR_BYTES];
+            self.live_chr.fill(0);
             let copy_len = update.chr.len().min(CHR_BYTES);
             self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
             applied = true;
@@ -960,7 +959,7 @@ impl Ppu {
         ctrl: u8,
         scroll_x: u8,
         scroll_y: u8,
-        chr: &[u8; CHR_BYTES],
+        chr: &[u8],
     ) -> (u8, bool) {
         if self.mask & MASK_SHOW_BG == 0 {
             return (self.read_palette(0x3F00), false);
@@ -1024,7 +1023,7 @@ impl Ppu {
             self.live_ctrl,
             self.live_scroll_x,
             self.live_scroll_y,
-            &self.live_chr,
+            self.live_chr.as_ref(),
         )
     }
 
