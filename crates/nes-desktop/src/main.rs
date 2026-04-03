@@ -7,11 +7,13 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
+pub(crate) mod gamepad;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 pub(crate) mod metrics;
 mod netplay;
 
+use crate::gamepad::*;
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
@@ -19,9 +21,7 @@ use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
 };
-use nes_core::{
-    Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo,
-};
+use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_desktop::args::parse_runtime_args;
@@ -62,21 +62,10 @@ const DEFAULT_WINDOW_SCALE: u32 = 3;
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
 const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
-const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 const SAVE_SLOT_COUNT: u8 = 5;
-const CONTROLLER_BUTTONS: [Button; 8] = [
-    Button::A,
-    Button::B,
-    Button::Select,
-    Button::Start,
-    Button::Up,
-    Button::Down,
-    Button::Left,
-    Button::Right,
-];
 
 struct RuntimeConfig {
     rom_path: String,
@@ -1815,116 +1804,6 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
         VirtualKeyCode::Right => Some("ArrowRight"),
         _ => None,
     }
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct GamepadSnapshot {
-    connected: bool,
-    south_pressed: bool,
-    east_pressed: bool,
-    west_pressed: bool,
-    north_pressed: bool,
-    select_pressed: bool,
-    start_pressed: bool,
-    dpad_up_pressed: bool,
-    dpad_down_pressed: bool,
-    dpad_left_pressed: bool,
-    dpad_right_pressed: bool,
-    left_x: f32,
-    left_y: f32,
-}
-
-fn connected_gamepad_ids(gamepads: impl IntoIterator<Item = (GamepadId, bool)>) -> Vec<GamepadId> {
-    gamepads
-        .into_iter()
-        .filter_map(|(id, connected)| connected.then_some(id))
-        .collect()
-}
-
-fn select_active_gamepad_ids(
-    connected: &[GamepadId],
-    current: [Option<GamepadId>; 2],
-) -> [Option<GamepadId>; 2] {
-    let mut next = [None::<GamepadId>; 2];
-
-    for player in 0..next.len() {
-        if let Some(gamepad_id) = current[player]
-            && connected.contains(&gamepad_id)
-            && !next.contains(&Some(gamepad_id))
-        {
-            next[player] = Some(gamepad_id);
-        }
-    }
-
-    for &gamepad_id in connected {
-        if next.iter().all(|slot| *slot != Some(gamepad_id))
-            && let Some(slot) = next.iter_mut().find(|slot| slot.is_none())
-        {
-            *slot = Some(gamepad_id);
-        }
-    }
-
-    next
-}
-
-fn gamepad_snapshot_to_bits(snapshot: GamepadSnapshot) -> u8 {
-    if !snapshot.connected {
-        return 0;
-    }
-
-    let mut bits = 0_u8;
-    // Keep both common face layouts usable across Xbox/Switch-style controllers.
-    if snapshot.south_pressed || snapshot.east_pressed {
-        bits |= Button::A.bit_mask();
-    }
-    if snapshot.west_pressed || snapshot.north_pressed {
-        bits |= Button::B.bit_mask();
-    }
-    if snapshot.select_pressed {
-        bits |= Button::Select.bit_mask();
-    }
-    if snapshot.start_pressed {
-        bits |= Button::Start.bit_mask();
-    }
-
-    if snapshot.dpad_up_pressed || snapshot.left_y <= -GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Up.bit_mask();
-    }
-    if snapshot.dpad_down_pressed || snapshot.left_y >= GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Down.bit_mask();
-    }
-    if snapshot.dpad_left_pressed || snapshot.left_x <= -GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Left.bit_mask();
-    }
-    if snapshot.dpad_right_pressed || snapshot.left_x >= GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Right.bit_mask();
-    }
-
-    bits
-}
-
-/// **Performance optimization:** Returns an `impl Iterator` instead of `Vec<Command>`
-/// to eliminate a per-frame heap allocation when processing small, bounded state changes
-/// for the NES controllers.
-fn controller_state_delta_for_player(
-    previous: u8,
-    current: u8,
-    player: nes_core::Player,
-) -> impl Iterator<Item = Command> {
-    CONTROLLER_BUTTONS.into_iter().filter_map(move |button| {
-        let mask = button.bit_mask();
-        match (previous & mask != 0, current & mask != 0) {
-            (false, true) => Some(match player {
-                nes_core::Player::One => Command::PressButton(button),
-                nes_core::Player::Two => Command::PressButton2(button),
-            }),
-            (true, false) => Some(match player {
-                nes_core::Player::One => Command::ReleaseButton(button),
-                nes_core::Player::Two => Command::ReleaseButton2(button),
-            }),
-            _ => None,
-        }
-    })
 }
 
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {

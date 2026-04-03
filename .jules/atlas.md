@@ -22,3 +22,7 @@
 **Extract Audio Handling from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` contained the internal structures for audio output (`AudioSinkControl`, `RodioSinkAdapter`, `AudioOutput`) alongside fake implementations and test cases mixed with UI loop and generic app state.
 **Blueprint:** Extracted all audio structures, helper implementations, and their dedicated tests into `crates/nes-desktop/src/audio.rs` and exposed them internally via `pub(crate) mod audio`. Updated `main.rs` to import from the new module instead.
+
+**Extract Gamepad Logic from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` contained several gamepad-specific structs (`GamepadSnapshot`), constants (`CONTROLLER_BUTTONS`, `GAMEPAD_AXIS_THRESHOLD`), and helper methods mapping external inputs to internal NES core bits mixed in with generic UI state logic.
+**Blueprint:** Extracted all gamepad translation logic and related structs/constants into a new internal module `crates/nes-desktop/src/gamepad.rs`. Registered the module in `main.rs` as `pub(crate) mod gamepad;` to maintain strict boundary isolation from the public API while reducing `main.rs` bloat.
