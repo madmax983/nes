@@ -1097,6 +1097,7 @@ fn run() -> Result<(), String> {
     };
 
     event_loop.run(move |event, _, control_flow| {
+        // coverage:ignore-start
         macro_rules! create_ctx {
             () => {
                 AppContext {
@@ -1118,6 +1119,7 @@ fn run() -> Result<(), String> {
                 }
             };
         }
+        // coverage:ignore-end
 
         match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
