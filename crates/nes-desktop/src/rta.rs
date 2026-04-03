@@ -1558,6 +1558,27 @@ impl CalibrationRecorder {
         })?;
 
         let candidates = self.infer_candidates();
+        let draft_profile = self.build_draft_profile(rom_hash, &candidates);
+
+        let profile_path = profiles_dir.join(format!("{}.draft.toml", self.profile_id));
+        let profile_text = toml::to_string_pretty(&draft_profile)
+            .map_err(|err| format!("failed to serialize draft profile: {err}"))?;
+        fs::write(&profile_path, profile_text).map_err(|err| {
+            format!(
+                "failed to write draft profile '{}': {err}",
+                profile_path.display()
+            )
+        })?;
+
+        let report_path = self.write_draft_report(profiles_dir, candidates)?;
+
+        Ok(DraftOutput {
+            profile_path,
+            report_path,
+        })
+    }
+
+    fn build_draft_profile(&self, rom_hash: &str, candidates: &[DraftCandidate]) -> RtaProfile {
         let start_rule = candidates
             .first()
             .map(|candidate| TriggerRule {
@@ -1578,7 +1599,7 @@ impl CalibrationRecorder {
                 ..TriggerRule::default()
             });
 
-        let draft_profile = RtaProfile {
+        RtaProfile {
             id: self.profile_id.clone(),
             game: None,
             category: None,
@@ -1604,18 +1625,14 @@ impl CalibrationRecorder {
                     },
                 })
                 .collect(),
-        };
+        }
+    }
 
-        let profile_path = profiles_dir.join(format!("{}.draft.toml", self.profile_id));
-        let profile_text = toml::to_string_pretty(&draft_profile)
-            .map_err(|err| format!("failed to serialize draft profile: {err}"))?;
-        fs::write(&profile_path, profile_text).map_err(|err| {
-            format!(
-                "failed to write draft profile '{}': {err}",
-                profile_path.display()
-            )
-        })?;
-
+    fn write_draft_report(
+        &self,
+        profiles_dir: &Path,
+        candidates: Vec<DraftCandidate>,
+    ) -> Result<PathBuf, String> {
         let report = DraftReport {
             profile_id: self.profile_id.clone(),
             source_split_count: self.splits.len(),
@@ -1631,11 +1648,7 @@ impl CalibrationRecorder {
                 report_path.display()
             )
         })?;
-
-        Ok(DraftOutput {
-            profile_path,
-            report_path,
-        })
+        Ok(report_path)
     }
 
     fn infer_candidates(&self) -> Vec<DraftCandidate> {
