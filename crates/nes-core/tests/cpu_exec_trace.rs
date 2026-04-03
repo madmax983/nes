@@ -205,7 +205,8 @@ fn sta_absolute_writes_memory_and_emits_prg_write() {
         prg_writes,
         vec![CpuPrgWrite {
             addr: 0x8000,
-            value: 0x05
+            value: 0x05,
+            bus_cycle: 4
         }]
     );
 }
@@ -268,7 +269,8 @@ fn sta_absolute_x_writes_indexed_target() {
         prg_writes,
         vec![CpuPrgWrite {
             addr: 0x8001,
-            value: 0x77
+            value: 0x77,
+            bus_cycle: 4
         }]
     );
 }

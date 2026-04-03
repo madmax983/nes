@@ -6,6 +6,9 @@ use super::Mapper;
 const PRG_BANK_8K: usize = 8 * 1024;
 const CHR_BANK_1K: usize = 1024;
 const CHR_WINDOW_BYTES: usize = 8 * 1024;
+const PPUCTRL_SPRITE_TABLE_ADDR: u8 = 0x08;
+const PPUCTRL_BG_TABLE_ADDR: u8 = 0x10;
+const PPUCTRL_SPRITE_SIZE_8X16: u8 = 0x20;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 4 (MMC3): banked PRG/CHR with scanline IRQ support.
@@ -333,8 +336,11 @@ impl Mmc3 {
     }
 
     /// Advances scanline IRQ logic based on current PPU dot.
-    pub fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool) {
-        if !rendering_enabled || dot != 260 {
+    pub fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool, ppu_ctrl: u8) {
+        let Some(clock_dot) = Self::irq_clock_dot(ppu_ctrl) else {
+            return;
+        };
+        if !rendering_enabled || dot != clock_dot {
             return;
         }
         if scanline >= 240 && scanline != 261 {
@@ -350,6 +356,23 @@ impl Mmc3 {
 
         if self.irq_counter == 0 && self.irq_enabled {
             self.irq_pending = true;
+        }
+    }
+
+    #[must_use]
+    fn irq_clock_dot(ppu_ctrl: u8) -> Option<u16> {
+        if ppu_ctrl & PPUCTRL_SPRITE_SIZE_8X16 != 0 {
+            // 8x16 sprite timing depends on per-sprite tile parity and real A12 filtering.
+            // Keep the legacy approximation until the fetch pipeline is modeled explicitly.
+            return Some(260);
+        }
+
+        let bg_uses_high = ppu_ctrl & PPUCTRL_BG_TABLE_ADDR != 0;
+        let sprite_uses_high = ppu_ctrl & PPUCTRL_SPRITE_TABLE_ADDR != 0;
+        match (bg_uses_high, sprite_uses_high) {
+            (false, true) => Some(260),
+            (true, false) => Some(325),
+            _ => None,
         }
     }
 
@@ -612,12 +635,12 @@ mod tests {
         m.write_prg(0xE001, 0); // enable IRQ
 
         // First clock: counter reloads from latch (5)
-        m.on_ppu_dot(0, 260, true);
+        m.on_ppu_dot(0, 260, true, 0x08);
         assert_eq!(m.state().irq_counter, 5);
 
         // Decrement twice: counter = 3
-        m.on_ppu_dot(1, 260, true);
-        m.on_ppu_dot(2, 260, true);
+        m.on_ppu_dot(1, 260, true, 0x08);
+        m.on_ppu_dot(2, 260, true, 0x08);
         assert_eq!(m.state().irq_counter, 3);
 
         // Write $C001 mid-count: should clear counter to 0 and set reload
@@ -626,8 +649,39 @@ mod tests {
         assert!(m.state().irq_reload);
 
         // Next clock: counter reloads from latch (5) again
-        m.on_ppu_dot(3, 260, true);
+        m.on_ppu_dot(3, 260, true, 0x08);
         assert_eq!(m.state().irq_counter, 5);
+    }
+
+    #[test]
+    fn mmc3_irq_uses_previous_scanline_phase_when_bg_uses_high_table() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xC000, 1);
+        m.write_prg(0xC001, 0);
+        m.write_prg(0xE001, 0);
+
+        m.on_ppu_dot(0, 260, true, 0x10);
+        assert_eq!(m.state().irq_counter, 0);
+        assert!(!m.irq_pending());
+
+        m.on_ppu_dot(0, 325, true, 0x10);
+        assert_eq!(m.state().irq_counter, 1);
+
+        m.on_ppu_dot(1, 325, true, 0x10);
+        assert!(m.irq_pending());
+    }
+
+    #[test]
+    fn mmc3_irq_does_not_clock_when_bg_and_sprites_share_pattern_table_in_8x8_mode() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xC000, 1);
+        m.write_prg(0xC001, 0);
+        m.write_prg(0xE001, 0);
+
+        m.on_ppu_dot(0, 260, true, 0x00);
+        m.on_ppu_dot(0, 324, true, 0x00);
+        assert_eq!(m.state().irq_counter, 0);
+        assert!(!m.irq_pending());
     }
 }
 

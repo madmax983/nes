@@ -70,11 +70,11 @@ fn mmc3_irq_counter_reloads_and_raises_pending_flag() {
     m.write_prg(0xE001, 0x00); // enable IRQ
 
     for scanline in 0..3 {
-        m.on_ppu_dot(scanline, 260, true);
+        m.on_ppu_dot(scanline, 260, true, 0x08);
         assert!(!m.irq_pending());
     }
 
-    m.on_ppu_dot(3, 260, true);
+    m.on_ppu_dot(3, 260, true, 0x08);
     assert!(m.irq_pending());
 
     m.write_prg(0xE000, 0x00); // disable + acknowledge
@@ -90,8 +90,8 @@ fn mmc3_irq_disabled_and_acknowledged_on_write_to_e000() {
     m.write_prg(0xC001, 0x00); // reload
     m.write_prg(0xE001, 0x00); // enable
 
-    m.on_ppu_dot(0, 260, true);
-    m.on_ppu_dot(1, 260, true);
+    m.on_ppu_dot(0, 260, true, 0x08);
+    m.on_ppu_dot(1, 260, true, 0x08);
     assert!(m.irq_pending());
 
     m.write_prg(0xE000, 0x00); // disable and acknowledge
@@ -105,8 +105,8 @@ fn mmc3_irq_not_triggered_if_rendering_disabled() {
     m.write_prg(0xC001, 0x00);
     m.write_prg(0xE001, 0x00);
 
-    m.on_ppu_dot(0, 260, false);
-    m.on_ppu_dot(1, 260, false);
+    m.on_ppu_dot(0, 260, false, 0x08);
+    m.on_ppu_dot(1, 260, false, 0x08);
     assert!(!m.irq_pending());
 }
 
@@ -117,8 +117,8 @@ fn mmc3_irq_not_triggered_on_wrong_dot() {
     m.write_prg(0xC001, 0x00);
     m.write_prg(0xE001, 0x00);
 
-    m.on_ppu_dot(0, 259, true);
-    m.on_ppu_dot(1, 259, true);
+    m.on_ppu_dot(0, 259, true, 0x08);
+    m.on_ppu_dot(1, 259, true, 0x08);
     assert!(!m.irq_pending());
 }
 
@@ -129,8 +129,8 @@ fn mmc3_irq_not_triggered_on_wrong_scanline() {
     m.write_prg(0xC001, 0x00);
     m.write_prg(0xE001, 0x00);
 
-    m.on_ppu_dot(240, 260, true);
-    m.on_ppu_dot(241, 260, true);
+    m.on_ppu_dot(240, 260, true, 0x08);
+    m.on_ppu_dot(241, 260, true, 0x08);
     assert!(!m.irq_pending());
 }
 
