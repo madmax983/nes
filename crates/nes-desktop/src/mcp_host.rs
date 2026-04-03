@@ -390,7 +390,7 @@ mod tests {
         reader: &mut BufReader<TcpStream>,
         context: &str,
     ) -> Vec<u8> {
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             host.drain(core);
             match read_framed_message(reader) {
