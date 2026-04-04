@@ -31,6 +31,28 @@ pub struct GamepadSnapshot {
     pub left_y: f32,
 }
 
+/// Filters a list of gamepads to return only those that are currently connected.
+///
+/// This is a convenience helper used when polling gamepads from `gilrs` to
+/// easily collect the IDs of active controllers.
+///
+/// # Examples
+/// ```
+/// use gilrs::GamepadId;
+/// use nes_desktop::gamepad::connected_gamepad_ids;
+///
+/// // Unsafe is used here only to mock Gilrs' opaque `GamepadId` for the doctest.
+/// let id0 = unsafe { std::mem::transmute::<usize, GamepadId>(0) };
+/// let id1 = unsafe { std::mem::transmute::<usize, GamepadId>(1) };
+/// let id2 = unsafe { std::mem::transmute::<usize, GamepadId>(2) };
+///
+/// let gamepads = vec![(id0, true), (id1, false), (id2, true)];
+/// let connected = connected_gamepad_ids(gamepads);
+///
+/// assert_eq!(connected.len(), 2);
+/// assert!(connected.contains(&id0));
+/// assert!(connected.contains(&id2));
+/// ```
 pub fn connected_gamepad_ids(
     gamepads: impl IntoIterator<Item = (GamepadId, bool)>,
 ) -> Vec<GamepadId> {
@@ -40,6 +62,28 @@ pub fn connected_gamepad_ids(
         .collect()
 }
 
+/// Selects up to two active gamepads to assign to Player 1 and Player 2.
+///
+/// This function prioritizes keeping currently assigned gamepads in their
+/// respective slots if they are still connected. If a slot is empty and
+/// there are unassigned connected gamepads available, it will fill the slot.
+///
+/// # Examples
+/// ```
+/// use gilrs::GamepadId;
+/// use nes_desktop::gamepad::select_active_gamepad_ids;
+///
+/// let id0 = unsafe { std::mem::transmute::<usize, GamepadId>(0) };
+/// let id1 = unsafe { std::mem::transmute::<usize, GamepadId>(1) };
+///
+/// let connected = vec![id0, id1];
+/// // Currently, no controllers are assigned.
+/// let current = [None, None];
+///
+/// let next = select_active_gamepad_ids(&connected, current);
+/// assert_eq!(next[0], Some(id0));
+/// assert_eq!(next[1], Some(id1));
+/// ```
 pub fn select_active_gamepad_ids(
     connected: &[GamepadId],
     current: [Option<GamepadId>; 2],
@@ -66,6 +110,31 @@ pub fn select_active_gamepad_ids(
     next
 }
 
+/// Converts a raw `GamepadSnapshot` into an 8-bit NES button mask.
+///
+/// This mapping translates modern controller inputs (like analog sticks and face buttons)
+/// into the standard 8 buttons recognized by the NES: A, B, Select, Start, Up, Down, Left, Right.
+///
+/// It correctly handles mapping both South/East to A and West/North to B, accommodating both
+/// Xbox-style and Switch-style layouts. Stick thresholds are also applied for d-pad behavior.
+///
+/// # Examples
+/// ```
+/// use nes_core::Button;
+/// use nes_desktop::gamepad::{GamepadSnapshot, gamepad_snapshot_to_bits};
+///
+/// let mut snapshot = GamepadSnapshot::default();
+/// snapshot.connected = true;
+/// snapshot.south_pressed = true; // Typically 'A' or 'B' depending on layout, mapped to NES 'A'
+/// snapshot.start_pressed = true;
+///
+/// let bits = gamepad_snapshot_to_bits(snapshot);
+///
+/// // Assert the correct NES bit masks are set
+/// assert_ne!(bits & Button::A.bit_mask(), 0);
+/// assert_ne!(bits & Button::Start.bit_mask(), 0);
+/// assert_eq!(bits & Button::B.bit_mask(), 0);
+/// ```
 pub fn gamepad_snapshot_to_bits(snapshot: GamepadSnapshot) -> u8 {
     if !snapshot.connected {
         return 0;
