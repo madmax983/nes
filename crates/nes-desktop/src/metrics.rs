@@ -502,8 +502,8 @@ mod tests {
         let signature_a = frame_signature(&frame);
 
         let mut reference = 0xcbf2_9ce4_8422_2325_u64;
-        for idx in (0..frame.len()).step_by(64) {
-            reference ^= u64::from(frame[idx]);
+        for chunk in frame.chunks_exact(64) {
+            reference ^= u64::from(chunk[0]);
             reference = reference.wrapping_mul(0x0000_0001_0000_01b3);
         }
         assert_eq!(signature_a, reference);
