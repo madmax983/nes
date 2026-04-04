@@ -2222,11 +2222,25 @@ mod tests {
             KeyboardDecision::SetRewindHeld(true)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, false, KeyboardInputMode { rollback_enabled: true, ..base_mode }),
+            classify_keyboard_input(
+                VirtualKeyCode::R,
+                false,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::SetRewindHeld(false)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Z, true, KeyboardInputMode { rollback_enabled: true, ..base_mode }),
+            classify_keyboard_input(
+                VirtualKeyCode::Z,
+                true,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::UpdateKeyboardBits {
                 mask: Button::A.bit_mask(),
                 pressed: true
@@ -2241,11 +2255,26 @@ mod tests {
             KeyboardDecision::Noop
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F9, true, KeyboardInputMode { rta_enabled: true, ..base_mode }),
+            classify_keyboard_input(
+                VirtualKeyCode::F9,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::RtaManualSplit
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F10, true, KeyboardInputMode { rta_enabled: true, rta_calibrate: true, ..base_mode }),
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::RtaFinish
         );
         assert_eq!(
