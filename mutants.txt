@@ -1,0 +1,91 @@
+crates/nes-core/src/cheat_codes.rs:44:9: replace CheatCode::raw -> &str with ""
+crates/nes-core/src/cheat_codes.rs:44:9: replace CheatCode::raw -> &str with "xyzzy"
+crates/nes-core/src/cheat_codes.rs:50:9: replace CheatCode::address -> u16 with 0
+crates/nes-core/src/cheat_codes.rs:50:9: replace CheatCode::address -> u16 with 1
+crates/nes-core/src/cheat_codes.rs:56:9: replace CheatCode::value -> u8 with 0
+crates/nes-core/src/cheat_codes.rs:56:9: replace CheatCode::value -> u8 with 1
+crates/nes-core/src/cheat_codes.rs:62:9: replace CheatCode::compare -> Option<u8> with None
+crates/nes-core/src/cheat_codes.rs:62:9: replace CheatCode::compare -> Option<u8> with Some(0)
+crates/nes-core/src/cheat_codes.rs:62:9: replace CheatCode::compare -> Option<u8> with Some(1)
+crates/nes-core/src/cheat_codes.rs:66:9: replace CheatCode::applies_to -> bool with true
+crates/nes-core/src/cheat_codes.rs:66:9: replace CheatCode::applies_to -> bool with false
+crates/nes-core/src/cheat_codes.rs:66:30: replace && with || in CheatCode::applies_to
+crates/nes-core/src/cheat_codes.rs:66:22: replace == with != in CheatCode::applies_to
+crates/nes-core/src/cheat_codes.rs:66:75: replace == with != in CheatCode::applies_to
+crates/nes-core/src/cheat_codes.rs:78:9: replace <impl FromStr for CheatCode>::from_str -> Result<Self, Self::Err> with Ok(Default::default())
+crates/nes-core/src/cheat_codes.rs:80:41: replace || with && in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:80:47: replace == with != in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:86:34: replace && with || in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:86:29: replace != with == in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:86:54: replace != with == in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:105:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:105:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:104:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:104:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:103:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:103:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:102:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:102:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:101:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:101:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:100:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:100:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:99:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:99:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:99:43: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:99:36: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:99:36: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:100:43: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:100:36: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:100:36: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:101:43: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:101:36: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:101:36: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:102:43: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:102:36: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:102:36: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:103:43: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:103:36: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:103:36: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:104:35: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:104:35: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:105:35: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:105:35: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:109:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:109:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:108:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:108:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:107:13: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:107:13: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:106:40: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:106:33: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:106:33: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:107:34: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:107:27: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:107:27: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:108:26: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:108:26: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:109:26: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:109:26: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:110:43: replace == with != in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:115:21: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:115:21: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:114:21: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:114:21: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:113:21: replace | with & in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:113:21: replace | with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:112:36: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:112:29: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:112:29: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:113:42: replace << with >> in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:113:35: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:113:35: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:114:34: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:114:34: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:115:34: replace & with | in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:115:34: replace & with ^ in <impl FromStr for CheatCode>::from_str
+crates/nes-core/src/cheat_codes.rs:173:9: replace <impl fmt::Display for CheatCodeError>::fmt -> fmt::Result with Ok(Default::default())
+crates/nes-core/src/cheat_codes.rs:188:5: replace alphabet_digit -> Option<u8> with None
+crates/nes-core/src/cheat_codes.rs:188:5: replace alphabet_digit -> Option<u8> with Some(0)
+crates/nes-core/src/cheat_codes.rs:188:5: replace alphabet_digit -> Option<u8> with Some(1)
+crates/nes-core/src/cheat_codes.rs:190:41: replace == with != in alphabet_digit
