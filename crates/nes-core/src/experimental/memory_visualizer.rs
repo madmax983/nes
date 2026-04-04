@@ -10,6 +10,31 @@ pub struct MemoryVisualizer;
 
 #[cfg(feature = "nova")]
 impl MemoryVisualizer {
+    /// Dumps the current NES CPU memory map as a 256x256 BMP image.
+    ///
+    /// This function visualizes the entire 64KB address space of the CPU.
+    /// Each pixel represents a single byte of memory, where its coordinates (X, Y)
+    /// map to the address `Y * 256 + X`. The colors indicate the region of memory:
+    /// - Green: Internal RAM
+    /// - Blue: PPU Registers
+    /// - Yellow: APU and I/O Registers
+    /// - Purple: Cartridge Expansion ROM
+    /// - Cyan: PRG RAM
+    /// - Grayscale: PRG ROM
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// use nes_core::experimental::memory_visualizer::MemoryVisualizer;
+    ///
+    /// let core = NesCore::new();
+    /// let bmp_bytes = MemoryVisualizer::dump_memory_bmp(&core).unwrap();
+    /// assert_eq!(&bmp_bytes[0..2], b"BM");
+    /// ```
+    ///
+    /// # Errors
+    /// Returns a `Result::Err` if the BMP encoding process fails (e.g., due to an invalid width/height combination, though hardcoded values here make this highly unlikely).
     pub fn dump_memory_bmp(core: &NesCore) -> Result<Vec<u8>, String> {
         let width = 256;
         let height = 256;
