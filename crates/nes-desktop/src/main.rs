@@ -1137,14 +1137,8 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
-                match classify_keyboard_input(
-                    key,
-                    pressed,
-                    rollback.is_some(),
-                    rta_manager.is_some(),
-                    rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
-                ) {
-                    KeyboardDecision::ToggleOverlay => {
+                macro_rules! dispatch_action {
+                    ($action:expr) => {{
                         let mut ctx = AppContext {
                             core: &mut core,
                             session: &mut session,
@@ -1162,54 +1156,28 @@ fn run() -> Result<(), String> {
                             rta_manager: &mut rta_manager,
                             frame_index,
                         };
-                        let _ = dispatch_app_action(AppAction::ToggleOverlay, &mut ctx, control_flow);
+                        dispatch_app_action($action, &mut ctx, control_flow)
+                    }};
+                }
+
+                match classify_keyboard_input(
+                    key,
+                    pressed,
+                    rollback.is_some(),
+                    rta_manager.is_some(),
+                    rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
+                ) {
+                    KeyboardDecision::ToggleOverlay => {
+                        let _ = dispatch_action!(AppAction::ToggleOverlay);
                     }
                     KeyboardDecision::ManualSaveState => {
                         if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = AppContext {
-                                    core: &mut core,
-                                    session: &mut session,
-                                    session_cheats: &mut session_cheats,
-                                    overlay: &mut overlay,
-                                    rollback_enabled: rollback.is_some(),
-                                    runtime: &runtime,
-                                    audio_output: audio_output.as_ref(),
-                                    time_machine: &mut time_machine,
-                                    rewind_held: &mut rewind_held,
-                                    metrics: &mut metrics,
-                                    keyboard_bits,
-                                    gamepad_bits: &mut gamepad_bits,
-                                    window: &window,
-                                    rta_manager: &mut rta_manager,
-                                    frame_index,
-                                };
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
+                            let _ = dispatch_action!(action);
                         }
                     }
                     KeyboardDecision::ManualLoadState => {
                         if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = AppContext {
-                                    core: &mut core,
-                                    session: &mut session,
-                                    session_cheats: &mut session_cheats,
-                                    overlay: &mut overlay,
-                                    rollback_enabled: rollback.is_some(),
-                                    runtime: &runtime,
-                                    audio_output: audio_output.as_ref(),
-                                    time_machine: &mut time_machine,
-                                    rewind_held: &mut rewind_held,
-                                    metrics: &mut metrics,
-                                    keyboard_bits,
-                                    gamepad_bits: &mut gamepad_bits,
-                                    window: &window,
-                                    rta_manager: &mut rta_manager,
-                                    frame_index,
-                                };
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
+                            let _ = dispatch_action!(action);
                         }
                     }
                     KeyboardDecision::SetRewindHeld(held) => {
