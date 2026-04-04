@@ -1753,10 +1753,16 @@ impl Default for Ppu {
     }
 }
 
+/// Creates a blank framebuffer initialized to fully transparent black.
+///
+/// **Performance optimization:** Uses `chunks_exact_mut(4)` instead of `iter_mut().step_by(4)`.
+/// This allows the Rust compiler (LLVM) to elide bounds checks completely and improves the
+/// potential for loop unrolling and auto-vectorization, as the slice is always guaranteed
+/// to be a multiple of 4 (RGBA format).
 fn blank_framebuffer() -> Vec<u8> {
     let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
-    for alpha in frame[3..].iter_mut().step_by(4) {
-        *alpha = 0xFF;
+    for chunk in frame.chunks_exact_mut(4) {
+        chunk[3] = 0xFF;
     }
     frame
 }

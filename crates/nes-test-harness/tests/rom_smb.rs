@@ -405,8 +405,8 @@ fn changed_pixel_count(a: &[u8], b: &[u8]) -> usize {
 
 fn frame_signature(frame: &[u8]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for idx in (0..frame.len()).step_by(64) {
-        hash ^= u64::from(frame[idx]);
+    for chunk in frame.chunks_exact(64) {
+        hash ^= u64::from(chunk[0]);
         hash = hash.wrapping_mul(0x0000_0001_0000_01b3);
     }
     hash
