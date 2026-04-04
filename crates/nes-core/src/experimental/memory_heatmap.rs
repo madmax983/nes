@@ -125,4 +125,34 @@ mod tests {
         let bmp = heatmap.render_bmp().unwrap();
         assert_eq!(&bmp[0..2], b"BM");
     }
+
+    #[test]
+    fn heatmap_covers_color_bands_and_dummy_reads() {
+        let mut heatmap = MemoryHeatmap::new(0.5, 0.1);
+
+        // Manually inject heat levels to cover color bands
+        heatmap.heat[0] = 0.1; // Cool
+        heatmap.heat[1] = 0.5; // Warm
+        heatmap.heat[2] = 0.9; // Hot
+
+        // Render BMP to hit the color logic
+        let bmp = heatmap.render_bmp().unwrap();
+        assert_eq!(&bmp[0..2], b"BM");
+
+        // Force decay to cover the 0.0 clamping
+        heatmap.decay_frame();
+        heatmap.decay_frame();
+        heatmap.decay_frame();
+        heatmap.decay_frame();
+        heatmap.decay_frame();
+        heatmap.decay_frame();
+        heatmap.decay_frame();
+        assert_eq!(heatmap.heat[0], 0.0);
+
+        // Cover dummy reads
+        let mut core = NesCore::new();
+        core.set_trace_enabled(true);
+        let _ = core.execute(Command::StepFrame); // Causes dummy reads internally
+        heatmap.record_trace(&core);
+    }
 }
