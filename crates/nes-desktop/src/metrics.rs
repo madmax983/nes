@@ -273,11 +273,23 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     ]);
     table.add_row(vec![
         Cell::new("net_rtt_ms"),
-        Cell::new(format!("{:.1}", metrics.netplay_rtt_ms)),
+        Cell::new(format!("{:.1}", metrics.netplay_rtt_ms)).fg(if metrics.netplay_rtt_ms > 100.0 {
+            TableColor::Red
+        } else if metrics.netplay_rtt_ms > 50.0 {
+            TableColor::Yellow
+        } else {
+            TableColor::White
+        }),
     ]);
     table.add_row(vec![
         Cell::new("net_jitter_ms"),
-        Cell::new(format!("{:.1}", metrics.netplay_jitter_ms)),
+        Cell::new(format!("{:.1}", metrics.netplay_jitter_ms)).fg(if metrics.netplay_jitter_ms > 20.0 {
+            TableColor::Red
+        } else if metrics.netplay_jitter_ms > 5.0 {
+            TableColor::Yellow
+        } else {
+            TableColor::White
+        }),
     ]);
     table.add_row(vec![
         Cell::new("net_rollbacks"),
@@ -297,7 +309,13 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     ]);
     table.add_row(vec![
         Cell::new("net_delay_frames"),
-        Cell::new(metrics.netplay_input_delay_frames.to_string()),
+        Cell::new(metrics.netplay_input_delay_frames.to_string()).fg(if metrics.netplay_input_delay_frames > 2 {
+            TableColor::Red
+        } else if metrics.netplay_input_delay_frames > 0 {
+            TableColor::Yellow
+        } else {
+            TableColor::White
+        }),
     ]);
 
     // Clear terminal and move to top left so metrics act like a dashboard
