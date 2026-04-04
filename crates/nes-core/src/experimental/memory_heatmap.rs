@@ -6,9 +6,9 @@
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]
-use crate::cpu::CpuBusAccessKind;
-#[cfg(feature = "nova")]
 use crate::bmp::encode_bmp;
+#[cfg(feature = "nova")]
+use crate::cpu::CpuBusAccessKind;
 
 #[cfg(feature = "nova")]
 /// Tracks CPU memory accesses to generate a visual heatmap.
@@ -81,10 +81,18 @@ impl MemoryHeatmap {
                 (0, 0, (heat * 3.0 * 255.0) as u8)
             } else if heat < 0.66 {
                 // Warm: Blue to Green
-                (0, ((heat - 0.33) * 3.0 * 255.0) as u8, 255 - ((heat - 0.33) * 3.0 * 255.0) as u8)
+                (
+                    0,
+                    ((heat - 0.33) * 3.0 * 255.0) as u8,
+                    255 - ((heat - 0.33) * 3.0 * 255.0) as u8,
+                )
             } else {
                 // Hot: Green to Red
-                (((heat - 0.66) * 3.0 * 255.0) as u8, 255 - ((heat - 0.66) * 3.0 * 255.0) as u8, 0)
+                (
+                    ((heat - 0.66) * 3.0 * 255.0) as u8,
+                    255 - ((heat - 0.66) * 3.0 * 255.0) as u8,
+                    0,
+                )
             };
 
             rgba[idx] = r;
@@ -100,8 +108,8 @@ impl MemoryHeatmap {
 #[cfg(all(test, feature = "nova"))]
 mod tests {
     use super::*;
-    use crate::NesCore;
     use crate::Command;
+    use crate::NesCore;
 
     #[test]
     fn heatmap_records_and_decays() {
