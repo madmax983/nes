@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
 use nes_test_harness::{
@@ -213,6 +213,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
 fn build_summary_table(rows: &[RowData]) -> Table {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("ROM").fg(TableColor::Cyan),
         Cell::new("Status").fg(TableColor::Cyan),
