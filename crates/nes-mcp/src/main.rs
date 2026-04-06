@@ -88,6 +88,7 @@ fn run() -> Result<(), McpError> {
     let mut state = ServerState::new();
 
     let mut table = Table::new();
+    table.load_preset(comfy_table::presets::UTF8_FULL);
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
@@ -106,7 +107,7 @@ fn run() -> Result<(), McpError> {
         Cell::new("Listening on stdio").fg(TableColor::Green),
     ]);
 
-    eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
+    eprintln!("\x1B[2J\x1B[1;1H{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
 
     while let Some(payload) = read_stdio_message(&mut reader)? {
