@@ -118,11 +118,60 @@ mod tests {
     use super::*;
     use crate::NesCore;
 
+    fn create_rom_with_mirroring(vertical: bool, mapper: u8) -> Vec<u8> {
+        let mut rom = vec![0; 16 + 16384 + 8192];
+        rom[0..4].copy_from_slice(b"NES\x1A");
+        rom[4] = 1; // 1 PRG bank
+        rom[5] = 1; // 1 CHR bank
+        let mirror_bit = if vertical { 1 } else { 0 };
+        rom[6] = (mapper << 4) | mirror_bit; // Mapper lower nybble + mirroring
+        rom[7] = mapper & 0xF0; // Mapper upper nybble
+        rom
+    }
+
     #[test]
-    fn can_extract_nametables() {
-        let core = NesCore::new();
+    fn test_horizontal_mirroring() {
+        let mut core = NesCore::new();
+        core.load_ines_rom(&create_rom_with_mirroring(false, 0))
+            .unwrap();
         let bmp_data = NametableViewer::extract_nametables_bmp(&core).unwrap();
-        // Check BMP header magic
         assert_eq!(&bmp_data[0..2], b"BM");
+    }
+
+    #[test]
+    fn test_vertical_mirroring() {
+        let mut core = NesCore::new();
+        core.load_ines_rom(&create_rom_with_mirroring(true, 0))
+            .unwrap();
+        let bmp_data = NametableViewer::extract_nametables_bmp(&core).unwrap();
+        assert_eq!(&bmp_data[0..2], b"BM");
+    }
+
+    #[test]
+    fn test_one_screen_mirroring() {
+        let mut core = NesCore::new();
+        // MMC1 (mapper 1) minimum PRG is 1 bank (16KB), but for our simplistic mock
+        // sometimes 1 PRG bank isn't enough depending on mapper initialization logic.
+        // Wait, MMC1 usually requires powers of two.
+        // Let's use AxROM (Mapper 7) which supports OneScreen mirroring and is simpler.
+        // AxROM expects 32KB PRG, so we provide 2 PRG banks.
+        let mut rom = vec![0; 16 + 32768 + 8192];
+        rom[0..4].copy_from_slice(b"NES\x1A");
+        rom[4] = 2; // 2 PRG banks
+        rom[5] = 1; // 1 CHR bank
+        rom[6] = 7 << 4; // Mapper 7
+
+        core.load_ines_rom(&rom).unwrap();
+
+        // Default AxROM mirroring should be OneScreenLower (page 0)
+        let bmp_data = NametableViewer::extract_nametables_bmp(&core).unwrap();
+        assert_eq!(&bmp_data[0..2], b"BM");
+
+        // Switch AxROM to OneScreenUpper via CPU write to $8000
+        // AxROM: $8000-$FFFF bit 4 selects nametable page.
+        core.write_cpu_bus(0x8000, 0x10);
+
+        let bmp_data2 = NametableViewer::extract_nametables_bmp(&core).unwrap();
+        assert_eq!(&bmp_data2[0..2], b"BM");
     }
 }
