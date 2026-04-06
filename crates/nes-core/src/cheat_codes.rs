@@ -240,6 +240,8 @@ mod tests {
         assert!(!code_8.applies_to(0x94A7, 0x04));
         // Doesn't apply if address is wrong
         assert!(!code_8.applies_to(0x94A8, 0x03));
+        // Doesn't apply if address is wrong AND value doesn't match compare byte
+        assert!(!code_8.applies_to(0x94A8, 0x04));
     }
 
     #[test]

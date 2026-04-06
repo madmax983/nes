@@ -19,3 +19,7 @@
 
 **Learning:** When using `cargo mutants`, testing `||` conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the `||` independently to kill mutations that replace `||` with `&&`.
 **Action:** Always create separate test cases for each independent condition within an `||` statement instead of grouping them together.
+## 2024-05-19 - Mutant testing boolean logic operators
+
+**Learning:** When using cargo mutants, testing && and || conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the logic operators independently to kill mutations that replace || with && or && with ||.
+**Action:** Always create separate test cases for each independent condition within an || or && statement instead of grouping them together.
