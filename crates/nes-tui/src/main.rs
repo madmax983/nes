@@ -19,10 +19,10 @@ use ratatui::Frame;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui_image::errors::Errors as ImageEncodingError;
 use ratatui_image::picker::{Picker, ProtocolType};
 use ratatui_image::protocol::{ImageSource, StatefulProtocol, StatefulProtocolType};
@@ -421,6 +421,10 @@ fn draw_frame(
                 f.render_widget(matte, full_area);
                 render_video_region(f, runtime, video_viewport.area);
 
+                if runtime.paused {
+                    render_pause_overlay(f, video_viewport.area);
+                }
+
                 return;
             }
 
@@ -470,6 +474,10 @@ fn draw_frame(
             let matte = Block::default().style(Style::default().bg(Color::Black));
             f.render_widget(matte, video_inner);
             render_video_region(f, runtime, video_viewport.area);
+
+            if runtime.paused {
+                render_pause_overlay(f, video_viewport.area);
+            }
 
             let panels = Layout::default()
                 .direction(Direction::Horizontal)
@@ -873,6 +881,36 @@ fn key_pressed_state(kind: KeyEventKind) -> Option<bool> {
 
 fn key_is_pressed(kind: KeyEventKind) -> bool {
     matches!(kind, KeyEventKind::Press | KeyEventKind::Repeat)
+}
+
+fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
+    if area.width < 14 || area.height < 3 {
+        return;
+    }
+    let text = " [ PAUSED ] ";
+    let popup_area = Rect {
+        x: area.x.saturating_add((area.width.saturating_sub(14)) / 2),
+        y: area.y.saturating_add((area.height.saturating_sub(3)) / 2),
+        width: 14,
+        height: 3,
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::LightRed))
+        .style(Style::default().bg(Color::Black));
+
+    let paragraph = Paragraph::new(Line::styled(
+        text,
+        Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(ratatui::style::Modifier::BOLD),
+    ))
+    .block(block)
+    .alignment(Alignment::Center);
+
+    frame.render_widget(Clear, popup_area);
+    frame.render_widget(paragraph, popup_area);
 }
 
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
