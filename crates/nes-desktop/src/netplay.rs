@@ -88,6 +88,10 @@ impl NetplayClient {
     ///
     /// let client = NetplayClient::connect(&config).expect("Relay is down!");
     /// ```
+    ///
+    /// ## Panics
+    ///
+    /// This function does not panic, but it returns an error if the relay server is unreachable.
     pub fn connect(config: &NetplayRuntimeConfig) -> Result<Self, String> {
         if !matches!(config.player, 1 | 2) {
             return Err(format!(
@@ -149,6 +153,10 @@ impl NetplayClient {
     /// // Frame 120, holding 'Right' (0x01)
     /// client.send_input(120, 0x01).unwrap();
     /// ```
+    ///
+    /// ## Errors
+    ///
+    /// Returns an error if the underlying network channel has been disconnected or broken.
     pub fn send_input(&self, frame: u64, bits: u8) -> Result<(), String> {
         self.tx
             .send(ClientMessage::Input { frame, bits })
