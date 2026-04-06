@@ -172,12 +172,17 @@ fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct KeyboardInputMode {
+    pub rollback_enabled: bool,
+    pub rta_enabled: bool,
+    pub rta_calibrate: bool,
+}
+
 fn classify_keyboard_input(
     key: VirtualKeyCode,
     pressed: bool,
-    rollback_enabled: bool,
-    rta_enabled: bool,
-    rta_calibrate: bool,
+    mode: KeyboardInputMode,
 ) -> KeyboardDecision {
     if key == VirtualKeyCode::Escape && pressed {
         return KeyboardDecision::ToggleOverlay;
@@ -191,10 +196,10 @@ fn classify_keyboard_input(
     if key == VirtualKeyCode::R {
         return KeyboardDecision::SetRewindHeld(pressed);
     }
-    if rta_enabled && pressed && key == VirtualKeyCode::F9 {
+    if mode.rta_enabled && pressed && key == VirtualKeyCode::F9 {
         return KeyboardDecision::RtaManualSplit;
     }
-    if rta_enabled && rta_calibrate && pressed && key == VirtualKeyCode::F10 {
+    if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
         return KeyboardDecision::RtaFinish;
     }
 
@@ -202,7 +207,7 @@ fn classify_keyboard_input(
         return KeyboardDecision::Noop;
     };
 
-    if rollback_enabled {
+    if mode.rollback_enabled {
         if let Some(mask) = map_key_event_to_button_bit(key_code) {
             KeyboardDecision::UpdateKeyboardBits { mask, pressed }
         } else {
@@ -1137,13 +1142,13 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
-                match classify_keyboard_input(
-                    key,
-                    pressed,
-                    rollback.is_some(),
-                    rta_manager.is_some(),
-                    rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
-                ) {
+                let mode = KeyboardInputMode {
+                    rollback_enabled: rollback.is_some(),
+                    rta_enabled: rta_manager.is_some(),
+                    rta_calibrate: rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
+                };
+
+                match classify_keyboard_input(key, pressed, mode) {
                     KeyboardDecision::ToggleOverlay => {
                         let mut ctx = AppContext {
                             core: &mut core,
@@ -1980,6 +1985,7 @@ fn build_startup_table(
 
 #[cfg(test)]
 mod tests {
+    use super::KeyboardInputMode;
 
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
@@ -2193,51 +2199,86 @@ mod tests {
 
     #[test]
     fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
+        let base_mode = KeyboardInputMode {
+            rollback_enabled: false,
+            rta_enabled: false,
+            rta_calibrate: false,
+        };
+
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::Escape, true, base_mode),
             KeyboardDecision::ToggleOverlay
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::F5, true, base_mode),
             KeyboardDecision::ManualSaveState
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F8, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::F8, true, base_mode),
             KeyboardDecision::ManualLoadState
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::R, true, base_mode),
             KeyboardDecision::SetRewindHeld(true)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, false, true, false, false),
+            classify_keyboard_input(
+                VirtualKeyCode::R,
+                false,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::SetRewindHeld(false)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Z, true, true, false, false),
+            classify_keyboard_input(
+                VirtualKeyCode::Z,
+                true,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::UpdateKeyboardBits {
                 mask: Button::A.bit_mask(),
                 pressed: true
             }
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::X, false, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::X, false, base_mode),
             KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, false, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::Escape, false, base_mode),
             KeyboardDecision::Noop
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F9, true, false, true, false),
+            classify_keyboard_input(
+                VirtualKeyCode::F9,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::RtaManualSplit
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::RtaFinish
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::F5, false, base_mode),
             KeyboardDecision::Noop
         );
     }
