@@ -3,6 +3,23 @@ use nes_config::DEFAULT_CONFIG_PATH;
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
+/// Defines the configuration used by the desktop runtime.
+///
+/// This struct holds all of the flags and arguments passed from the command line,
+/// such as whether to enable `mcp-host`, `netplay`, or `rta` modes.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_desktop::args::{RuntimeArgs, parse_runtime_args};
+///
+/// let args = vec![
+///     "--mcp-host".to_string(),
+///     "./game.nes".to_string()
+/// ];
+/// let parsed = parse_runtime_args(&args).unwrap();
+/// assert!(parsed.mcp_enabled);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
     pub rom_path: Option<String>,
