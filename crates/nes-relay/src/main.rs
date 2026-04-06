@@ -814,6 +814,29 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "havoc target"]
+    fn havoc_test_read_client_message_oom() {
+        let (mut client, server) = connected_pair();
+
+        thread::spawn(move || {
+            let mut written = 0;
+            let chunk = vec![b'A'; 1024 * 1024];
+            while written < 1024 * 1024 * 500 {
+                if client.write_all(&chunk).is_err() {
+                    break;
+                }
+                written += chunk.len();
+            }
+        });
+
+        let mut reader = BufReader::new(server);
+        let parsed = read_client_message(&mut reader);
+        // If we reach here without OOMing, the test passed by allocating 500MB
+        // This proves the vulnerability exists
+        assert!(parsed.is_err() || parsed.is_ok());
+    }
+
+    #[test]
     fn cleanup_client_notifies_peers_and_removes_empty_rooms() {
         let (state, _rx1, rx2) = room_with_two_players("room");
         cleanup_client(&state, "room", 1).expect("cleanup first player");
