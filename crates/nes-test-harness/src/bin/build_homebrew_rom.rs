@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use nes_test_harness::{default_homebrew_rom_path, write_homebrew_rom};
 
@@ -46,6 +46,7 @@ fn run() -> Result<(), String> {
 
 fn build_success_table(out_path: &std::path::Path) -> Table {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("Metric").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),

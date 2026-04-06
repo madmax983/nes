@@ -14,7 +14,7 @@ pub(crate) mod metrics;
 mod netplay;
 
 use crate::gamepad::*;
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_config::{
@@ -1895,6 +1895,7 @@ fn build_startup_table(
     rta_manager: Option<&RtaManager>,
 ) -> Table {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
