@@ -34,9 +34,10 @@ fn havoc_test_read_client_message_oom() {
     let mut reader = std::io::BufReader::new(server);
     let mut line = String::new();
     let _ = std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
-    // If we reach here without OOMing, the test passed by allocating 500MB
-    // This proves the vulnerability exists
-    assert!(line.len() > 0);
+
+    // We expect the server to drop the connection or return an error well before 500MB.
+    // If it reads a line larger than a reasonable limit (e.g. 1MB), it's a vulnerability.
+    assert!(line.len() < 1024 * 1024, "Server allowed an unreasonably large line read (potential OOM vulnerability)");
 }
 
 #[test]
