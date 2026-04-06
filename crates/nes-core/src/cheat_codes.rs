@@ -272,6 +272,18 @@ mod tests {
 
         let err_9 = CheatCode::from_str("ZEXPYGLAZ").unwrap_err();
         assert_eq!(err_9, CheatCodeError::InvalidLength(9));
+
+        let err_empty = CheatCode::from_str("").unwrap_err();
+        assert_eq!(err_empty, CheatCodeError::InvalidLength(0));
+
+        let err_spaces = CheatCode::from_str("   ").unwrap_err();
+        assert_eq!(err_spaces, CheatCodeError::InvalidLength(0));
+
+        let err_hyphens = CheatCode::from_str("---").unwrap_err();
+        assert_eq!(err_hyphens, CheatCodeError::InvalidLength(0));
+
+        let err_mixed_empty = CheatCode::from_str("- - -").unwrap_err();
+        assert_eq!(err_mixed_empty, CheatCodeError::InvalidLength(0));
     }
 
     #[test]
