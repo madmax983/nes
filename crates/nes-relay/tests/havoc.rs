@@ -16,6 +16,30 @@ fn connected_pair() -> (TcpStream, TcpStream) {
 }
 
 #[test]
+#[ignore = "Havoc OOM Attack"]
+fn havoc_test_read_client_message_oom() {
+    let (mut client, server) = connected_pair();
+
+    thread::spawn(move || {
+        let mut written = 0;
+        let chunk = vec![b'A'; 1024 * 1024];
+        while written < 1024 * 1024 * 500 {
+            if client.write_all(&chunk).is_err() {
+                break;
+            }
+            written += chunk.len();
+        }
+    });
+
+    let mut reader = std::io::BufReader::new(server);
+    let mut line = String::new();
+    let _ = std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
+    // If we reach here without OOMing, the test passed by allocating 500MB
+    // This proves the vulnerability exists
+    assert!(line.len() > 0);
+}
+
+#[test]
 #[ignore = "Havoc DoS Attack"]
 fn havoc_test_read_client_message_dos() {
     let (mut client, _server) = connected_pair();
