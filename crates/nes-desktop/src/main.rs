@@ -1855,19 +1855,19 @@ fn write_frame_ppm(path: &str, rgba: &[u8]) -> Result<(), String> {
     let bytes = if path.to_ascii_lowercase().ends_with(".bmp") {
         nes_core::bmp::encode_bmp(FRAME_WIDTH, FRAME_HEIGHT, rgba)?
     } else {
-        encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba)
+        encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba).map_err(|e| e.to_string())?
     };
     fs::write(path, bytes).map_err(|err| format!("unable to write '{path}': {err}"))
 }
 
-fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
+fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
     use std::io::Write;
     let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    write!(&mut ppm, "P6\n{width} {height}\n255\n").unwrap();
+    write!(&mut ppm, "P6\n{width} {height}\n255\n")?;
     for px in rgba.chunks_exact(4) {
         ppm.extend_from_slice(&px[..3]);
     }
-    ppm
+    Ok(ppm)
 }
 
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
@@ -2770,7 +2770,7 @@ mod tests {
 
     #[test]
     fn encode_ppm_emits_expected_headers_and_pixel_layout() {
-        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
+        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]).unwrap();
         assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
         assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
     }
