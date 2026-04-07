@@ -663,9 +663,9 @@ pub struct RunArtifactPaths {
 
 #[derive(Debug, Serialize)]
 struct RunArtifact<'a> {
-    profile_id: String,
-    rom_hash: String,
-    state: String,
+    profile_id: &'a str,
+    rom_hash: &'a str,
+    state: &'a str,
     valid: bool,
     elapsed_ms: u128,
     invalidation_reasons: Vec<String>,
@@ -1323,14 +1323,14 @@ impl RtaManager {
 
     fn write_run_artifact(&self, base_name: &str) -> Result<PathBuf, String> {
         let run_json_path = self.runs_dir.join(format!("{base_name}.run.json"));
-        // **⚡ Bolt Optimization:** Avoids `.clone()` on `split_events` vector.
+        // **⚡ Bolt Optimization:** Avoids unnecessary heap allocations when creating the `RunArtifact` struct for serialization by borrowing `&str` instead of calling `.clone()` or `.to_owned()`.
         let artifact = RunArtifact {
-            profile_id: self.profile.id.clone(),
-            rom_hash: self.rom_hash.clone(),
+            profile_id: &self.profile.id,
+            rom_hash: &self.rom_hash,
             state: if self.is_valid_run() {
-                "finished_valid".to_owned()
+                "finished_valid"
             } else {
-                "finished_invalid_practice".to_owned()
+                "finished_invalid_practice"
             },
             valid: self.is_valid_run(),
             elapsed_ms: self.elapsed_at_finish.unwrap_or_default().as_millis(),
