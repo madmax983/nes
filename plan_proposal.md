@@ -1,32 +1,16 @@
-1. **Remove heap allocation in audio extraction**
-   - The current `nes_core::api::NesCore::audio_chunk_i16` method creates and returns a new `Vec<i16>` every frame, which adds overhead.
-   - We will remove this method entirely from `nes-core/src/api.rs`.
-   - Callers will be forced to use the existing allocation-free `fill_audio_chunk_i16` method.
+1. **Refactor `execute_app_action` in `crates/nes-desktop/src/main.rs`**
+   - The `execute_app_action` function is quite long and handles multiple complex match arms for `AppAction`.
+   - I will extract the logic for each specific action (`OpenRom`, `SaveSlot`, `LoadSlot`, `Reset`) into dedicated helper functions: `execute_open_rom`, `execute_save_slot`, `execute_load_slot`, and `execute_reset`.
+   - I will use the existing `AppContext` struct to pass the necessary state into these helper functions, preventing the need for long argument lists.
 
-2. **Update `nes-web` crate**
-   - In `crates/nes-web/src/runtime.rs`, we will add a new persistent array: `audio_chunk: [i16; nes_core::AUDIO_CHUNK_SAMPLES]`.
-   - Update `WebRuntime` to fill this array using `core.fill_audio_chunk_i16(&mut self.audio_chunk)`.
-   - Modify `WebRuntime::audio_chunk_i16` (and `WasmNesEmulator::audio_chunk_i16` in `lib.rs`) to just return a clone of the internal array data, OR better yet, we can't avoid `Vec` at the JS boundary without more complex WASM binding changes, so we will return `self.audio_chunk.to_vec()`. Wait! JS already takes it as `Int16Array`! Actually, if we return `Vec<i16>` from `wasm_bindgen`, it allocates. A better zero-copy way is `*const i16` and exposing `audio_chunk_ptr()` and `audio_chunk_len()`, mirroring how `frame_rgba` is handled. We will implement `audio_chunk_ptr` and `audio_chunk_len`, but `wasm-bindgen` already has a `Vec<i16>` interface. I will check how `web/app.js` consumes this. Wait, `web/app.js` is not provided in my search. Wait, since the prompt just asks for ONE small performance improvement, I can just replace `audio_chunk_i16` inside `WebRuntime` to return `Vec<i16>` from `self.audio_chunk.to_vec()`, OR we can just use `Vec::with_capacity` in the bindings instead of in `core`. But actually `WebRuntime` could just be:
-     ```rust
-     pub fn audio_chunk_i16(&mut self) -> Vec<i16> {
-         let mut buffer = vec![0; nes_core::AUDIO_CHUNK_SAMPLES];
-         self.core.fill_audio_chunk_i16(&mut buffer);
-         buffer
-     }
-     ```
-     This keeps `nes-web` exactly the same API but moves the allocation responsibility out of `nes-core`.
+2. **Run formatting and clippy**
+   - After the refactoring, I will run `cargo fmt --all` and `cargo clippy --workspace --all-targets --all-features -- -D warnings` to ensure the changes are idiomatic and correctly formatted.
 
-3. **Update `nes-test-harness`**
-   - In `crates/nes-test-harness/src/lib.rs`, `collect_audio_for_frames` uses `extend(core.audio_chunk_i16())`. We will replace it with:
-     ```rust
-     let mut chunk = [0_i16; nes_core::AUDIO_CHUNK_SAMPLES];
-     core.fill_audio_chunk_i16(&mut chunk);
-     samples.extend_from_slice(&chunk);
-     ```
-   - In `crates/nes-test-harness/tests/rom_smb.rs`, replace `core.audio_chunk_i16()` with `fill_audio_chunk_i16`.
+3. **Verify with tests**
+   - I will run `cargo test --workspace --all-targets --all-features` to ensure no runtime behavior has changed and all existing tests continue to pass.
 
-4. **Verify changes**
-   - Run `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo fmt --all`.
+4. **Complete pre-commit checks**
+   - I will call the `pre_commit_instructions` tool to complete pre commit steps to make sure proper testing, verifications, reviews and reflections are done.
 
-5. **Complete pre-commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+5. **Submit the PR**
+   - Create a PR with the title '⚒️ Forge: Extract `execute_app_action` logic' and the required description format: '🚷 Smell', '✨ Solution', '🧱 Benefit', '🛡️ Verification'.
