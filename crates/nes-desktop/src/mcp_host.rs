@@ -1,3 +1,17 @@
+//! Model Context Protocol (MCP) host server integration.
+//!
+//! This module provides the `McpHost`, a background server that bridges the
+//! emulator core to an external MCP client via JSON-RPC over TCP.
+//!
+//! # Architecture
+//! The MCP host runs its TCP listener and connection handling on a dedicated
+//! background thread. Because the `NesCore` emulator state is thread-local and
+//! must be tightly synchronized with the render loop, the background thread
+//! does not execute emulator commands directly. Instead, it parses incoming
+//! requests and forwards them via an `mpsc` channel to the main thread.
+//! The main thread must regularly call `McpHost::drain` to apply these queued
+//! commands to the emulator state.
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
