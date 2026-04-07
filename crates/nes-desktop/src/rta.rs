@@ -662,14 +662,14 @@ pub struct RunArtifactPaths {
 }
 
 #[derive(Debug, Serialize)]
-struct RunArtifact {
+struct RunArtifact<'a> {
     profile_id: String,
     rom_hash: String,
     state: String,
     valid: bool,
     elapsed_ms: u128,
     invalidation_reasons: Vec<String>,
-    splits: Vec<SplitEvent>,
+    splits: &'a [SplitEvent],
 }
 
 /// The active state machine that tracks a speedrun session.
@@ -1323,6 +1323,7 @@ impl RtaManager {
 
     fn write_run_artifact(&self, base_name: &str) -> Result<PathBuf, String> {
         let run_json_path = self.runs_dir.join(format!("{base_name}.run.json"));
+        // **⚡ Bolt Optimization:** Avoids `.clone()` on `split_events` vector.
         let artifact = RunArtifact {
             profile_id: self.profile.id.clone(),
             rom_hash: self.rom_hash.clone(),
@@ -1334,7 +1335,7 @@ impl RtaManager {
             valid: self.is_valid_run(),
             elapsed_ms: self.elapsed_at_finish.unwrap_or_default().as_millis(),
             invalidation_reasons: self.invalidation_reasons(),
-            splits: self.split_events.clone(),
+            splits: &self.split_events,
         };
 
         let run_json = serde_json::to_string_pretty(&artifact)
