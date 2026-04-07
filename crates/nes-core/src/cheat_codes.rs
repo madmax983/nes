@@ -300,4 +300,94 @@ mod tests {
         assert_eq!(code_8.value(), 0x02);
         assert_eq!(code_8.compare(), Some(0x03));
     }
+
+    #[test]
+    fn cheat_code_decodes_value_bits_correctly() {
+        // "AAAAAA" -> value 0x00
+        let code1 = CheatCode::from_str("AAAAAA").unwrap();
+        assert_eq!(code1.value(), 0x00);
+
+        // "PAAAAA" -> value 0x01 (digits[0] = 1 -> digits[0]&0x7 = 1)
+        let code2 = CheatCode::from_str("PAAAAA").unwrap();
+        assert_eq!(code2.value(), 0x01);
+
+        // "ZAAAAA" -> value 0x02 (digits[0] = 2 -> digits[0]&0x7 = 2)
+        let code3 = CheatCode::from_str("ZAAAAA").unwrap();
+        assert_eq!(code3.value(), 0x02);
+
+        // "EAAAAA" -> value 0x80 (digits[0] = 8 -> digits[0]&0x8 = 8 -> 8 << 4 = 0x80)
+        // Note: A = 0. E = 8.
+        let code4 = CheatCode::from_str("EAAAAA").unwrap();
+        assert_eq!(code4.value(), 0x80);
+
+        // "APAAAA" -> value 0x10 (digits[1] = 1 -> digits[1]&0x7 = 1 -> 1 << 4 = 0x10)
+        let code5 = CheatCode::from_str("APAAAA").unwrap();
+        assert_eq!(code5.value(), 0x10);
+
+        // "AAAAAE" -> value 0x08 (digits[5] = 8 -> digits[5]&0x8 = 8)
+        let code6 = CheatCode::from_str("AAAAAE").unwrap();
+        assert_eq!(code6.value(), 0x08);
+    }
+
+    #[test]
+    fn cheat_code_decodes_address_bits_correctly() {
+        // We want to test the bits of the address specifically to catch mutant replacements of `&` with `|` and `^`.
+        // Base address without any bits set is 0x8000
+        let base = CheatCode::from_str("AAAAAA").unwrap();
+        assert_eq!(base.address(), 0x8000);
+
+        // digits[3] & 0x7 << 12
+        // To test digits[3] & 0x7 we need to set digits[3] to 0x7 and ensure it doesn't leak into bit 3 (which is 0x8).
+        // A=0, P=1, Z=2, L=3, G=4, I=5, T=6, Y=7, E=8, O=9, X=10, U=11, K=12, S=13, V=14, N=15
+
+        // Let's test `digits[3] & 0x8` vs `digits[3] & 0x7`.
+        // If we set digits[3] = 0xF (N), then 0xF & 0x7 = 7. 7 << 12 = 0x7000.
+        // And 0xF & 0x8 = 8.
+        let code_n3 = CheatCode::from_str("AAANAA").unwrap();
+        // digits[3] is N (15 = 0xF).
+        // address = 0x8000
+        // | (0xF & 0x7) << 12 => 0x7 << 12 => 0x7000
+        // | (0xF & 0x8) => 0x8
+        assert_eq!(code_n3.address(), 0x8000 | 0x7000 | 0x0008);
+
+        // digits[5] & 0x7 << 8
+        // Let's test digits[5] = 0xF (N)
+        let code_n5 = CheatCode::from_str("AAAAAN").unwrap();
+        // value also uses digits[5] & 0x8 = 8
+        // address = 0x8000
+        // | (0xF & 0x7) << 8 => 0x0700
+        assert_eq!(code_n5.address(), 0x8000 | 0x0700);
+
+        // digits[4] & 0x8 << 8
+        // digits[4] & 0x7
+        // Let's test digits[4] = 0xF (N)
+        let code_n4 = CheatCode::from_str("AAAANA").unwrap();
+        // address = 0x8000
+        // | (0xF & 0x8) << 8 => 0x0800
+        // | (0xF & 0x7) => 0x0007
+        assert_eq!(code_n4.address(), 0x8000 | 0x0800 | 0x0007);
+
+        // digits[2] & 0x7 << 4
+        // Let's test digits[2] = 0xF (N)
+        let code_n2 = CheatCode::from_str("AANAAA").unwrap();
+        // address = 0x8000
+        // | (0xF & 0x7) << 4 => 0x0070
+        assert_eq!(code_n2.address(), 0x8000 | 0x0070);
+
+        // digits[1] & 0x8 << 4
+        // value uses digits[1] & 0x7 << 4
+        let code_n1 = CheatCode::from_str("ANAAAA").unwrap();
+        // address = 0x8000
+        // | (0xF & 0x8) << 4 => 0x0080
+        assert_eq!(code_n1.address(), 0x8000 | 0x0080);
+
+        // Check `compare` byte for 8 character codes
+        // let compare = Some(((digits[7] & 0x7) << 4) | ((digits[6] & 0x8) << 4) | (digits[6] & 0x7) | (digits[5] & 0x8));
+        let code_n7_n6_n5 = CheatCode::from_str("AAAAANNN").unwrap();
+        // digits[5] = 0xF => address has 0x700, value has 8, compare has 8
+        // digits[6] = 0xF => compare has (0xF & 0x8) << 4 = 0x80, (0xF & 0x7) = 0x07
+        // digits[7] = 0xF => compare has (0xF & 0x7) << 4 = 0x70
+        // compare = 0x70 | 0x80 | 0x07 | 0x08 = 0xFF
+        assert_eq!(code_n7_n6_n5.compare(), Some(0xFF));
+    }
 }
