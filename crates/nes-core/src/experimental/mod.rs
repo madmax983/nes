@@ -1,3 +1,4 @@
+pub mod achievement_engine;
 pub mod audio_exporter;
 pub mod cheat_finder;
 pub mod memory_heatmap;
