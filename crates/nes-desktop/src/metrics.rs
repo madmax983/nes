@@ -323,7 +323,11 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     ]);
 
     // Clear terminal and move to top left so metrics act like a dashboard
-    print!("\x1B[2J\x1B[1;1H");
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
+        crossterm::cursor::MoveTo(0, 0)
+    );
     println!(
         "{}\n{table}",
         " nes-desktop | Performance Dashboard "
