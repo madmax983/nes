@@ -342,4 +342,20 @@ mod tests {
             CheatCodeError::InvalidLength(4).to_string()
         );
     }
+
+    #[test]
+    fn doc_examples_combinations_work_without_panics() {
+        // Combinations of code operations to test unwrap cases
+        let mut cheats = SessionCheats::new();
+        cheats.add("GOSSIP").expect("add gossip");
+        cheats.add("ZEXPYGLA").expect("add zexpygla");
+        cheats.toggle(0).expect("toggle index 0");
+        let removed = cheats.remove(0).expect("remove index 0");
+        assert_eq!(removed.raw_code, "GOSSIP");
+        cheats.clear();
+        assert!(cheats.is_empty());
+        let codes = vec!["GOSSIP".to_owned(), "ZEXPYGLA".to_owned()];
+        let cheats2 = SessionCheats::from_raw_codes(&codes).expect("from codes");
+        assert_eq!(cheats2.len(), 2);
+    }
 }

@@ -614,4 +614,14 @@ mod tests {
         assert_eq!(call_response["result"]["isError"], false);
         assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
     }
+
+    #[test]
+    fn host_start_fails_on_invalid_bind_address() {
+        let result = McpHost::start("256.256.256.256:0");
+        if let Err(err) = result {
+            assert!(err.contains("Failed to bind MCP host"));
+        } else {
+            panic!("Expected an error when binding to invalid address");
+        }
+    }
 }
