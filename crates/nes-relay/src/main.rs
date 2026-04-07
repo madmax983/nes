@@ -135,6 +135,7 @@ fn run() -> Result<(), String> {
     let listener = TcpListener::bind(&args.bind_addr)
         .map_err(|err| format!("failed to bind {}: {err}", args.bind_addr))?;
 
+    print!("\x1B[2J\x1B[1;1H");
     println!("{}", "nes-relay".with(Color::Cyan).bold());
     println!("{}\n", build_startup_table(&args));
 

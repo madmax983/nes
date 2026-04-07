@@ -55,6 +55,7 @@ fn run() -> Result<(), String> {
     let summary = train_smb_control(&profile_cfg, &trainer_cfg, episodes)
         .map_err(|e| format!("Training failed: {e}"))?;
 
+    print!("\x1B[2J\x1B[1;1H");
     println!(
         "\n{}",
         build_summary_table(
