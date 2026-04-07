@@ -63,7 +63,6 @@ fn run() -> Result<(), String> {
     write_snapshot_bundle(&out_path, &rom_hash, "smb-control-v1", &core.save_state())
         .map_err(|e| format!("Failed to write snapshot bundle: {e}"))?;
 
-    print!("\x1B[2J\x1B[1;1H");
     println!(
         "{}",
         "Prepared SMB Control Snapshot".with(Color::Cyan).bold()

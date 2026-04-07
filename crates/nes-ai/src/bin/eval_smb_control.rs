@@ -55,7 +55,6 @@ fn run() -> Result<(), String> {
         evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
             .map_err(|e| format!("Evaluation failed: {e}"))?;
 
-    print!("\x1B[2J\x1B[1;1H");
     println!(
         "\n{}",
         build_summary_table(summary.average_return, summary.artifact_paths.len())

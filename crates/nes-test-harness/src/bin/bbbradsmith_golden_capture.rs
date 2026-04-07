@@ -196,7 +196,6 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     let _ = write!(stdout, "\r\x1B[2K");
     let _ = stdout.flush();
 
-    print!("\x1B[2J\x1B[1;1H");
     let _ = writeln!(stdout, "{}", build_summary_table(&rows));
     let _ = writeln!(
         stdout,

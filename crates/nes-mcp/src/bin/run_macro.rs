@@ -147,7 +147,6 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
         Cell::new(format!("{:08b}", core.controller_bits())).fg(TableColor::Yellow),
     ]);
 
-    print!("\x1B[2J\x1B[1;1H");
     println!("\n{table}");
 
     Ok(())

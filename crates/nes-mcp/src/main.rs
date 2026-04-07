@@ -107,7 +107,6 @@ fn run() -> Result<(), McpError> {
         Cell::new("Listening on stdio").fg(TableColor::Green),
     ]);
 
-    eprint!("\x1B[2J\x1B[1;1H");
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("{table}\n");
 
