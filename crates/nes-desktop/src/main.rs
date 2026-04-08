@@ -12,6 +12,8 @@ pub(crate) mod gamepad;
 mod mcp_host;
 pub(crate) mod metrics;
 mod netplay;
+pub(crate) mod session;
+use crate::session::*;
 
 use crate::gamepad::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
@@ -21,25 +23,20 @@ use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
 };
-use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
+use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_desktop::args::parse_runtime_args;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
-use nes_desktop::manual_state::{
-    SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
-    slot_path_for_rom, slot_paths_for_rom,
-};
+use nes_desktop::manual_state::{load_state_file, save_state_file};
 use nes_desktop::menu::{
     DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
 };
-use nes_desktop::overlay::{
-    OverlayCheatSummary, OverlayCommand, OverlayModel, OverlaySlotSummary, draw_overlay,
-};
+use nes_desktop::overlay::{OverlayCheatSummary, OverlayCommand, OverlayModel, draw_overlay};
 use nes_desktop::rta::{
     CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
-    ProfileStatus, RtaEvent, RtaManager, RtaProfile, RtaRuntimeConfig, compute_rom_hash,
-    load_profiles, select_profile,
+    ProfileStatus, RtaEvent, RtaManager, RtaProfile, RtaRuntimeConfig, load_profiles,
+    select_profile,
 };
 use nes_desktop::session_cheats::SessionCheats;
 use nes_netplay::{RollbackConfig, RollbackEngine};
@@ -65,7 +62,6 @@ const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
-const SAVE_SLOT_COUNT: u8 = 5;
 
 struct RuntimeConfig {
     rom_path: String,
@@ -96,13 +92,6 @@ enum StepMode {
 struct CaptureConfig {
     path_template: String,
     every_n_frames: u64,
-}
-
-struct LoadedRomSession {
-    rom_path: PathBuf,
-    rom_hash: String,
-    info: RomLoadInfo,
-    slot_metadata: Vec<SaveSlotMetadata>,
 }
 
 fn main() {
@@ -229,90 +218,6 @@ fn slot_action_for_hotkey(is_save: bool, selected_slot: u8) -> Option<AppAction>
     } else {
         AppAction::LoadSlot(selected_slot)
     })
-}
-
-fn apply_runtime_cheat_codes(core: &mut NesCore, cheat_codes: &[String]) -> Result<(), String> {
-    core.clear_cheat_codes();
-    for raw_code in cheat_codes {
-        core.add_cheat_code(raw_code)
-            .map_err(|err| format!("Invalid cheat code '{raw_code}': {err}"))?;
-    }
-    Ok(())
-}
-
-fn apply_session_cheats(core: &mut NesCore, cheats: &SessionCheats) -> Result<(), String> {
-    apply_runtime_cheat_codes(core, &cheats.enabled_codes())
-}
-
-fn load_rom_session(
-    core: &mut NesCore,
-    rom_path: &Path,
-    cheats: &SessionCheats,
-) -> Result<LoadedRomSession, String> {
-    let rom_bytes = fs::read(rom_path)
-        .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
-    core.clear_cheat_codes();
-    let info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {err}"))?;
-    apply_session_cheats(core, cheats)?;
-    let rom_hash = compute_rom_hash(&rom_bytes);
-    let slot_metadata = load_slot_metadata_for_rom(rom_path, &rom_hash)?;
-    Ok(LoadedRomSession {
-        rom_path: rom_path.to_path_buf(),
-        rom_hash,
-        info,
-        slot_metadata,
-    })
-}
-
-fn load_slot_metadata_for_rom(
-    rom_path: &Path,
-    rom_hash: &str,
-) -> Result<Vec<SaveSlotMetadata>, String> {
-    slot_paths_for_rom(rom_path, rom_hash, 1..=SAVE_SLOT_COUNT)
-        .into_iter()
-        .map(|path| read_slot_metadata(&path, rom_hash))
-        .collect()
-}
-
-fn refresh_slot_metadata(session: &mut LoadedRomSession) -> Result<(), String> {
-    session.slot_metadata = load_slot_metadata_for_rom(&session.rom_path, &session.rom_hash)?;
-    Ok(())
-}
-
-fn slot_path_for_selection(session: &LoadedRomSession, slot: u8) -> PathBuf {
-    slot_path_for_rom(&session.rom_path, &session.rom_hash, slot)
-}
-
-fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
-    let status_label = match metadata.status {
-        SaveSlotStatus::Empty => "Empty",
-        SaveSlotStatus::Saved => "Saved",
-        SaveSlotStatus::Corrupt => "Corrupt",
-        SaveSlotStatus::IncompatibleRom => "Mismatch",
-    };
-    OverlaySlotSummary {
-        slot: metadata.slot,
-        status_label,
-        modified_unix_secs: metadata.modified_unix_secs,
-    }
-}
-
-fn rom_display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or("ROM")
-        .to_owned()
-}
-
-fn window_title(session: &LoadedRomSession, overlay_open: bool) -> String {
-    let suffix = if overlay_open { " [Paused]" } else { "" };
-    format!(
-        "nes-desktop - {}{suffix}",
-        rom_display_name(&session.rom_path)
-    )
 }
 
 fn apply_overlay_keyboard_input(
@@ -1868,24 +1773,6 @@ fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u
         ppm.extend_from_slice(&px[..3]);
     }
     Ok(ppm)
-}
-
-fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
-    if err.kind() == std::io::ErrorKind::NotFound {
-        format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
-        )
-    } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path,
-            err
-        )
-    }
 }
 
 fn build_startup_table(
