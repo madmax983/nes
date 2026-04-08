@@ -247,58 +247,6 @@ fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<
     Ok(())
 }
 
-fn process_gamepad_assignments(gilrs_state: &Gilrs, active_gamepads: &mut [Option<GamepadId>; 2]) {
-    let connected = connected_gamepad_ids(
-        gilrs_state
-            .gamepads()
-            .map(|(id, gamepad)| (id, gamepad.is_connected())),
-    );
-    let next_active = select_active_gamepad_ids(&connected, *active_gamepads);
-    if gamepad_assignments_changed(next_active, *active_gamepads) {
-        for player in 0..active_gamepads.len() {
-            if gamepad_slot_changed(next_active, *active_gamepads, player) {
-                if let Some(gamepad_id) = next_active[player] {
-                    println!(
-                        "Gamepad P{} active: {}",
-                        player + 1,
-                        gilrs_state.gamepad(gamepad_id).name()
-                    );
-                } else if active_gamepads[player].is_some() {
-                    println!("Gamepad P{} disconnected", player + 1);
-                }
-            }
-        }
-        *active_gamepads = next_active;
-    }
-}
-
-fn poll_gamepad_input(
-    gilrs_state: &Gilrs,
-    active_gamepads: [Option<GamepadId>; 2],
-    player: usize,
-) -> u8 {
-    active_gamepads[player]
-        .map(|gamepad_id| {
-            let gamepad = gilrs_state.gamepad(gamepad_id);
-            gamepad_snapshot_to_bits(GamepadSnapshot {
-                connected: gamepad.is_connected(),
-                south_pressed: gamepad.is_pressed(GamepadButton::South),
-                east_pressed: gamepad.is_pressed(GamepadButton::East),
-                west_pressed: gamepad.is_pressed(GamepadButton::West),
-                north_pressed: gamepad.is_pressed(GamepadButton::North),
-                select_pressed: gamepad.is_pressed(GamepadButton::Select),
-                start_pressed: gamepad.is_pressed(GamepadButton::Start),
-                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
-                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
-                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
-                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
-                left_x: gamepad.value(GamepadAxis::LeftStickX),
-                left_y: gamepad.value(GamepadAxis::LeftStickY),
-            })
-        })
-        .unwrap_or_default()
-}
-
 fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
     pressed
         && (matches!(
@@ -1281,10 +1229,50 @@ fn run() -> Result<(), String> {
 
             if let Some(gilrs_state) = gilrs.as_mut() {
                 while gilrs_state.next_event().is_some() {}
-                process_gamepad_assignments(gilrs_state, &mut active_gamepads);
+                let connected = connected_gamepad_ids(
+                    gilrs_state
+                        .gamepads()
+                        .map(|(id, gamepad)| (id, gamepad.is_connected())),
+                );
+                let next_active = select_active_gamepad_ids(&connected, active_gamepads);
+                if gamepad_assignments_changed(next_active, active_gamepads) {
+                    for (player, active) in active_gamepads.iter().enumerate() {
+                        if gamepad_slot_changed(next_active, active_gamepads, player) {
+                            if let Some(gamepad_id) = next_active[player] {
+                                println!(
+                                    "Gamepad P{} active: {}",
+                                    player + 1,
+                                    gilrs_state.gamepad(gamepad_id).name()
+                                );
+                            } else if active.is_some() {
+                                println!("Gamepad P{} disconnected", player + 1);
+                            }
+                        }
+                    }
+                    active_gamepads = next_active;
+                }
 
                 for (player, gamepad_bit) in gamepad_bits.iter_mut().enumerate() {
-                    let next_gamepad_bits = poll_gamepad_input(gilrs_state, active_gamepads, player);
+                    let next_gamepad_bits = active_gamepads[player]
+                        .map(|gamepad_id| {
+                            let gamepad = gilrs_state.gamepad(gamepad_id);
+                            gamepad_snapshot_to_bits(GamepadSnapshot {
+                                connected: gamepad.is_connected(),
+                                south_pressed: gamepad.is_pressed(GamepadButton::South),
+                                east_pressed: gamepad.is_pressed(GamepadButton::East),
+                                west_pressed: gamepad.is_pressed(GamepadButton::West),
+                                north_pressed: gamepad.is_pressed(GamepadButton::North),
+                                select_pressed: gamepad.is_pressed(GamepadButton::Select),
+                                start_pressed: gamepad.is_pressed(GamepadButton::Start),
+                                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
+                                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
+                                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
+                                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
+                                left_x: gamepad.value(GamepadAxis::LeftStickX),
+                                left_y: gamepad.value(GamepadAxis::LeftStickY),
+                            })
+                        })
+                        .unwrap_or_default();
                     if rollback.is_none()
                         && !overlay.is_open()
                         && let Err(err) = apply_gamepad_delta_commands(
@@ -2371,15 +2359,6 @@ mod tests {
         assert!(!should_capture_frame(0, 120));
         assert!(should_capture_frame(60, 120));
         assert!(!should_capture_frame(60, 121));
-    }
-
-    #[test]
-    fn poll_gamepad_input_returns_default_when_none_assigned() {
-        if let Ok(gilrs) = super::Gilrs::new() {
-            let active_gamepads = [None, None];
-            let bits = super::poll_gamepad_input(&gilrs, active_gamepads, 0);
-            assert_eq!(bits, 0);
-        }
     }
 
     #[test]
