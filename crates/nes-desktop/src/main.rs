@@ -15,7 +15,6 @@ mod netplay;
 pub(crate) mod session;
 use crate::session::*;
 
-
 use crate::gamepad::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};

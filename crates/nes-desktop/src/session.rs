@@ -142,4 +142,104 @@ mod tests {
             .expect("second cheat application should succeed");
         assert_eq!(core.cheat_codes().len(), 1);
     }
+
+    #[test]
+    fn format_rom_read_error_handles_not_found() {
+        let err = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let msg = format_rom_read_error("foo.nes", &err);
+        assert!(msg.contains("Could not find the ROM file"));
+    }
+
+    #[test]
+    fn format_rom_read_error_handles_other_errors() {
+        let err = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = format_rom_read_error("foo.nes", &err);
+        assert!(msg.contains("Failed to read ROM"));
+    }
+
+    #[test]
+    fn apply_session_cheats_applies_enabled_codes() {
+        let mut core = NesCore::new();
+        let mut cheats = SessionCheats::new();
+        cheats.add("GOSSIP").unwrap();
+        apply_session_cheats(&mut core, &cheats).unwrap();
+        assert_eq!(core.cheat_codes().len(), 1);
+    }
+
+    #[test]
+    fn load_rom_session_propagates_read_errors() {
+        let mut core = NesCore::new();
+        let cheats = SessionCheats::new();
+        let result = load_rom_session(&mut core, Path::new("does_not_exist.nes"), &cheats);
+        if let Err(err) = result {
+            assert!(err.contains("Could not find the ROM file"));
+        } else {
+            panic!("Expected an error but got success");
+        }
+    }
+
+    #[test]
+    fn refresh_slot_metadata_updates_session_slots() {
+        let mut session = LoadedRomSession {
+            rom_path: PathBuf::from("game.nes"),
+            rom_hash: String::from("dummyhash"),
+            info: RomLoadInfo { mapper_id: 0, prg_rom_bytes: 0, reset_pc: 0 },
+            slot_metadata: vec![],
+        };
+        // Expect loading metadata to succeed, producing 5 empty metadata objects
+        refresh_slot_metadata(&mut session).unwrap();
+        assert_eq!(session.slot_metadata.len(), 5);
+        assert_eq!(session.slot_metadata[0].status, SaveSlotStatus::Empty);
+    }
+
+    #[test]
+    fn slot_path_for_selection_constructs_expected_path() {
+        let session = LoadedRomSession {
+            rom_path: PathBuf::from("game.nes"),
+            rom_hash: String::from("dummyhash"),
+            info: RomLoadInfo { mapper_id: 0, prg_rom_bytes: 0, reset_pc: 0 },
+            slot_metadata: vec![],
+        };
+        let path = slot_path_for_selection(&session, 3);
+        assert!(path.to_string_lossy().contains("game-dummyhas.slot3.state.json"));
+    }
+
+    #[test]
+    fn format_slot_status_renders_expected_labels() {
+        let mut metadata = SaveSlotMetadata {
+            slot: 1,
+            status: SaveSlotStatus::Empty,
+            modified_unix_secs: None,
+            path: PathBuf::new(),
+        };
+        assert_eq!(format_slot_status(&metadata).status_label, "Empty");
+
+        metadata.status = SaveSlotStatus::Saved;
+        assert_eq!(format_slot_status(&metadata).status_label, "Saved");
+
+        metadata.status = SaveSlotStatus::Corrupt;
+        assert_eq!(format_slot_status(&metadata).status_label, "Corrupt");
+
+        metadata.status = SaveSlotStatus::IncompatibleRom;
+        assert_eq!(format_slot_status(&metadata).status_label, "Mismatch");
+    }
+
+    #[test]
+    fn rom_display_name_extracts_stem() {
+        assert_eq!(rom_display_name(Path::new("some/path/game.nes")), "game.nes");
+        assert_eq!(rom_display_name(Path::new("game.nes")), "game.nes");
+        assert_eq!(rom_display_name(Path::new("")), "ROM");
+    }
+
+    #[test]
+    fn window_title_includes_pause_suffix() {
+        let session = LoadedRomSession {
+            rom_path: PathBuf::from("game.nes"),
+            rom_hash: String::new(),
+            info: RomLoadInfo { mapper_id: 0, prg_rom_bytes: 0, reset_pc: 0 },
+            slot_metadata: vec![],
+        };
+        assert_eq!(window_title(&session, false), "nes-desktop - game.nes");
+        assert_eq!(window_title(&session, true), "nes-desktop - game.nes [Paused]");
+    }
 }
