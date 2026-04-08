@@ -183,7 +183,11 @@ mod tests {
         let mut session = LoadedRomSession {
             rom_path: PathBuf::from("game.nes"),
             rom_hash: String::from("dummyhash"),
-            info: RomLoadInfo { mapper_id: 0, prg_rom_bytes: 0, reset_pc: 0 },
+            info: RomLoadInfo {
+                mapper_id: 0,
+                prg_rom_bytes: 0,
+                reset_pc: 0,
+            },
             slot_metadata: vec![],
         };
         // Expect loading metadata to succeed, producing 5 empty metadata objects
@@ -197,11 +201,18 @@ mod tests {
         let session = LoadedRomSession {
             rom_path: PathBuf::from("game.nes"),
             rom_hash: String::from("dummyhash"),
-            info: RomLoadInfo { mapper_id: 0, prg_rom_bytes: 0, reset_pc: 0 },
+            info: RomLoadInfo {
+                mapper_id: 0,
+                prg_rom_bytes: 0,
+                reset_pc: 0,
+            },
             slot_metadata: vec![],
         };
         let path = slot_path_for_selection(&session, 3);
-        assert!(path.to_string_lossy().contains("game-dummyhas.slot3.state.json"));
+        assert!(
+            path.to_string_lossy()
+                .contains("game-dummyhas.slot3.state.json")
+        );
     }
 
     #[test]
@@ -226,7 +237,10 @@ mod tests {
 
     #[test]
     fn rom_display_name_extracts_stem() {
-        assert_eq!(rom_display_name(Path::new("some/path/game.nes")), "game.nes");
+        assert_eq!(
+            rom_display_name(Path::new("some/path/game.nes")),
+            "game.nes"
+        );
         assert_eq!(rom_display_name(Path::new("game.nes")), "game.nes");
         assert_eq!(rom_display_name(Path::new("")), "ROM");
     }
@@ -236,10 +250,17 @@ mod tests {
         let session = LoadedRomSession {
             rom_path: PathBuf::from("game.nes"),
             rom_hash: String::new(),
-            info: RomLoadInfo { mapper_id: 0, prg_rom_bytes: 0, reset_pc: 0 },
+            info: RomLoadInfo {
+                mapper_id: 0,
+                prg_rom_bytes: 0,
+                reset_pc: 0,
+            },
             slot_metadata: vec![],
         };
         assert_eq!(window_title(&session, false), "nes-desktop - game.nes");
-        assert_eq!(window_title(&session, true), "nes-desktop - game.nes [Paused]");
+        assert_eq!(
+            window_title(&session, true),
+            "nes-desktop - game.nes [Paused]"
+        );
     }
 }
