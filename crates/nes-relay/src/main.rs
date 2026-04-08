@@ -93,7 +93,7 @@ impl RelayNetSim {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("{} {err}", "Fatal Error:".with(Color::Red).bold());
         std::process::exit(1);
     }
 }
@@ -144,7 +144,7 @@ fn run() -> Result<(), String> {
         let stream = match accepted {
             Ok(stream) => stream,
             Err(err) => {
-                eprintln!("accept failed: {err}");
+                eprintln!("{} {err}", "Accept failed:".with(Color::Red).bold());
                 continue;
             }
         };
@@ -154,9 +154,21 @@ fn run() -> Result<(), String> {
             .unwrap_or_else(|_| "<unknown-peer>".to_owned());
         let shared = Arc::clone(&state);
         let net = Arc::clone(&net_sim);
+
+        println!("{} {peer}", "[+] Client connected:".with(Color::Green));
+
+        let peer_clone = peer.clone();
         thread::spawn(move || {
-            if let Err(err) = handle_client(stream, shared, net) {
-                eprintln!("client {peer} disconnected with error: {err}");
+            if let Err(err) = handle_client(stream, shared, net, &peer_clone) {
+                eprintln!(
+                    "{} client {peer_clone} disconnected with error: {err}",
+                    "[-]".with(Color::Red).bold()
+                );
+            } else {
+                println!(
+                    "{} client {peer_clone} disconnected",
+                    "[-]".with(Color::DarkYellow)
+                );
             }
         });
     }
@@ -167,6 +179,7 @@ fn handle_client(
     stream: TcpStream,
     state: Arc<Mutex<RelayState>>,
     net_sim: Arc<RelayNetSim>,
+    peer: &str,
 ) -> Result<(), String> {
     let mut reader = BufReader::new(
         stream
@@ -183,7 +196,10 @@ fn handle_client(
             let encoded = match serde_json::to_string(&message) {
                 Ok(line) => line,
                 Err(err) => {
-                    eprintln!("failed to serialize message: {err}");
+                    eprintln!(
+                        "{} failed to serialize message: {err}",
+                        "Error:".with(Color::Red).bold()
+                    );
                     break;
                 }
             };
@@ -239,6 +255,10 @@ fn handle_client(
             player,
             peer_present,
         });
+        println!(
+            "{} Client {peer} joined room '{room}' as player {player}",
+            "[=]".with(Color::Cyan)
+        );
     }
 
     while let Some(message) = read_client_message(&mut reader)? {
@@ -883,7 +903,7 @@ mod tests {
 
         let state = Arc::new(Mutex::new(RelayState::default()));
         let net_sim = make_net_sim(LinkCondition::default(), 58);
-        let result = handle_client(server, state, net_sim);
+        let result = handle_client(server, state, net_sim, "test-peer");
         writer.join().expect("writer thread joins");
 
         let err = result.expect_err("non-join first message must fail");
@@ -905,7 +925,7 @@ mod tests {
 
         let state = Arc::new(Mutex::new(RelayState::default()));
         let net_sim = make_net_sim(LinkCondition::default(), 58);
-        let result = handle_client(server, state, net_sim);
+        let result = handle_client(server, state, net_sim, "test-peer");
         writer.join().expect("writer thread joins");
 
         let err = result.expect_err("invalid player slot must fail");
@@ -941,7 +961,7 @@ mod tests {
         });
 
         let net_sim = make_net_sim(LinkCondition::default(), 58);
-        let result = handle_client(server, Arc::clone(&state), net_sim);
+        let result = handle_client(server, Arc::clone(&state), net_sim, "test-peer");
         assert!(result.is_ok());
 
         let joined_line = client_thread.join().expect("client thread joins");
