@@ -1236,7 +1236,7 @@ fn run() -> Result<(), String> {
                 );
                 let next_active = select_active_gamepad_ids(&connected, active_gamepads);
                 if gamepad_assignments_changed(next_active, active_gamepads) {
-                    for (player, active) in active_gamepads.iter().enumerate() {
+                    for player in 0..active_gamepads.len() {
                         if gamepad_slot_changed(next_active, active_gamepads, player) {
                             if let Some(gamepad_id) = next_active[player] {
                                 println!(
@@ -1244,7 +1244,7 @@ fn run() -> Result<(), String> {
                                     player + 1,
                                     gilrs_state.gamepad(gamepad_id).name()
                                 );
-                            } else if active.is_some() {
+                            } else if active_gamepads[player].is_some() {
                                 println!("Gamepad P{} disconnected", player + 1);
                             }
                         }
@@ -1252,7 +1252,7 @@ fn run() -> Result<(), String> {
                     active_gamepads = next_active;
                 }
 
-                for (player, gamepad_bit) in gamepad_bits.iter_mut().enumerate() {
+                for player in 0..gamepad_bits.len() {
                     let next_gamepad_bits = active_gamepads[player]
                         .map(|gamepad_id| {
                             let gamepad = gilrs_state.gamepad(gamepad_id);
@@ -1277,7 +1277,7 @@ fn run() -> Result<(), String> {
                         && !overlay.is_open()
                         && let Err(err) = apply_gamepad_delta_commands(
                             &mut core,
-                            *gamepad_bit,
+                            gamepad_bits[player],
                             next_gamepad_bits,
                             if is_player_two_slot(player) {
                                 nes_core::Player::Two
@@ -1290,7 +1290,7 @@ fn run() -> Result<(), String> {
                         *control_flow = ControlFlow::Exit;
                         return;
                     }
-                    *gamepad_bit = next_gamepad_bits;
+                    gamepad_bits[player] = next_gamepad_bits;
                 }
             }
 
