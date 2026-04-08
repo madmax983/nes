@@ -93,7 +93,7 @@ impl RelayNetSim {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{} {err}", "Fatal Error:".with(Color::Red).bold());
+        eprintln!("{err}");
         std::process::exit(1);
     }
 }
@@ -144,7 +144,7 @@ fn run() -> Result<(), String> {
         let stream = match accepted {
             Ok(stream) => stream,
             Err(err) => {
-                eprintln!("{} {err}", "Accept failed:".with(Color::Red).bold());
+                eprintln!("accept failed: {err}");
                 continue;
             }
         };
@@ -154,21 +154,9 @@ fn run() -> Result<(), String> {
             .unwrap_or_else(|_| "<unknown-peer>".to_owned());
         let shared = Arc::clone(&state);
         let net = Arc::clone(&net_sim);
-
-        println!("{} {peer}", "[+] Client connected:".with(Color::Green));
-
-        let peer_clone = peer.clone();
         thread::spawn(move || {
-            if let Err(err) = handle_client(stream, shared, net, &peer_clone) {
-                eprintln!(
-                    "{} client {peer_clone} disconnected with error: {err}",
-                    "[-]".with(Color::Red).bold()
-                );
-            } else {
-                println!(
-                    "{} client {peer_clone} disconnected",
-                    "[-]".with(Color::DarkYellow)
-                );
+            if let Err(err) = handle_client(stream, shared, net, &peer) {
+                eprintln!("client {peer} disconnected with error: {err}");
             }
         });
     }
