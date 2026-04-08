@@ -127,3 +127,19 @@ pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> Str
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::NesCore;
+
+    #[test]
+    fn applying_runtime_cheat_codes_replaces_existing_codes() {
+        let mut core = NesCore::new();
+        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+            .expect("first cheat application should succeed");
+        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+            .expect("second cheat application should succeed");
+        assert_eq!(core.cheat_codes().len(), 1);
+    }
+}

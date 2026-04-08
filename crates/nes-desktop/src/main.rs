@@ -15,6 +15,7 @@ mod netplay;
 pub(crate) mod session;
 use crate::session::*;
 
+
 use crate::gamepad::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
@@ -1922,14 +1923,13 @@ mod tests {
         DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
         GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
         TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
-        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
-        overlay_input_requires_redraw, recommended_input_delay_frames,
+        apply_gamepad_delta_commands, apply_overlay_keyboard_input, audio_queue_dropped,
+        capture_config_from_parts, capture_path_for_frame, classify_keyboard_input,
+        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        netplay_feature_enabled, overlay_input_requires_redraw, recommended_input_delay_frames,
         reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
         scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
         should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
@@ -2277,16 +2277,6 @@ mod tests {
         reconcile_core_pause_with_overlay(&mut core, true)
             .expect("open overlay should force pause");
         assert!(core.is_paused());
-    }
-
-    #[test]
-    fn applying_runtime_cheat_codes_replaces_existing_codes() {
-        let mut core = NesCore::new();
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
-            .expect("first cheat application should succeed");
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
-            .expect("second cheat application should succeed");
-        assert_eq!(core.cheat_codes().len(), 1);
     }
 
     #[test]
