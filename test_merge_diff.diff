@@ -1,0 +1,29 @@
+<<<<<<< SEARCH
+#[cfg(feature = "nova")]
+mod auto_player;
+pub(crate) mod gamepad;
+#[cfg(feature = "mcp-host")]
+mod mcp_host;
+pub(crate) mod metrics;
+mod netplay;
+pub(crate) mod session;
+use crate::session::*;
+
+use crate::gamepad::*;
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+=======
+#[cfg(feature = "nova")]
+mod auto_player;
+pub(crate) mod config;
+pub(crate) mod gamepad;
+#[cfg(feature = "mcp-host")]
+mod mcp_host;
+pub(crate) mod metrics;
+mod netplay;
+pub(crate) mod session;
+use crate::config::*;
+use crate::session::*;
+
+use crate::gamepad::*;
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+>>>>>>> REPLACE
