@@ -96,7 +96,7 @@ struct CaptureConfig {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
     }
 }
 
