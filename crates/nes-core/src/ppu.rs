@@ -3,6 +3,8 @@
 //! The PPU owns CHR/nametable/palette memory, dot/scanline counters, register
 //! semantics, sprite evaluation, and the RGBA framebuffer consumed by hosts.
 
+use std::collections::VecDeque;
+
 use crate::api::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use crate::rom::NametableMirroring;
 use serde::{Deserialize, Serialize};
@@ -143,7 +145,7 @@ pub struct PpuSnapshot {
     /// CHR view used by the live background renderer.
     pub live_chr: Vec<u8>,
     /// Delayed live background CHR swaps waiting on the fetch pipeline.
-    pending_live_chr_updates: Vec<PendingLiveChrWindowUpdate>,
+    pending_live_chr_updates: VecDeque<PendingLiveChrWindowUpdate>,
     /// PPUCTRL shadow used by the live background renderer.
     live_ctrl: u8,
     /// Live X scroll used by the visible-dot background renderer.
@@ -151,7 +153,7 @@ pub struct PpuSnapshot {
     /// Live Y scroll used by the visible-dot background renderer.
     live_scroll_y: u8,
     /// Delayed live background state updates waiting on the fetch pipeline.
-    pending_live_bg_updates: Vec<PendingLiveBgStateUpdate>,
+    pending_live_bg_updates: VecDeque<PendingLiveBgStateUpdate>,
     /// Whether live background state is currently following a mid-frame $2006 split.
     live_bg_tracks_vram_addr: bool,
     /// Internal nametable RAM.
@@ -212,11 +214,11 @@ pub struct Ppu {
     chr: [u8; CHR_BYTES],
     chr_writable: bool,
     live_chr: Box<[u8; CHR_BYTES]>,
-    pending_live_chr_updates: Vec<PendingLiveChrWindowUpdate>,
+    pending_live_chr_updates: VecDeque<PendingLiveChrWindowUpdate>,
     live_ctrl: u8,
     live_scroll_x: u8,
     live_scroll_y: u8,
-    pending_live_bg_updates: Vec<PendingLiveBgStateUpdate>,
+    pending_live_bg_updates: VecDeque<PendingLiveBgStateUpdate>,
     live_bg_tracks_vram_addr: bool,
     nametable_ram: [u8; NAMETABLE_RAM_BYTES],
     palette_ram: [u8; PALETTE_RAM_BYTES],
@@ -322,11 +324,11 @@ impl Ppu {
             chr: [0; CHR_BYTES],
             chr_writable: true,
             live_chr: Box::new([0; CHR_BYTES]),
-            pending_live_chr_updates: Vec::new(),
+            pending_live_chr_updates: VecDeque::new(),
             live_ctrl: 0,
             live_scroll_x: 0,
             live_scroll_y: 0,
-            pending_live_bg_updates: Vec::new(),
+            pending_live_bg_updates: VecDeque::new(),
             live_bg_tracks_vram_addr: false,
             nametable_ram: [0; NAMETABLE_RAM_BYTES],
             palette_ram: [0; PALETTE_RAM_BYTES],
@@ -385,7 +387,7 @@ impl Ppu {
             && self.rendering_enabled()
         {
             self.pending_live_chr_updates
-                .push(PendingLiveChrWindowUpdate {
+                .push_back(PendingLiveChrWindowUpdate {
                     due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
                     chr: self.chr.to_vec(),
                 });
@@ -873,12 +875,13 @@ impl Ppu {
 
     fn queue_live_bg_state_update(&mut self) {
         self.live_bg_tracks_vram_addr = true;
-        self.pending_live_bg_updates.push(PendingLiveBgStateUpdate {
-            due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
-            ctrl: self.ctrl,
-            scroll_x: self.scroll_x,
-            scroll_y: self.scroll_y,
-        });
+        self.pending_live_bg_updates
+            .push_back(PendingLiveBgStateUpdate {
+                due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
+                ctrl: self.ctrl,
+                scroll_x: self.scroll_x,
+                scroll_y: self.scroll_y,
+            });
         self.mark_render_state_dirty();
     }
 
@@ -887,10 +890,10 @@ impl Ppu {
         let mut applied = false;
         while self
             .pending_live_chr_updates
-            .first()
+            .front()
             .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
         {
-            let update = self.pending_live_chr_updates.remove(0);
+            let update = self.pending_live_chr_updates.pop_front().unwrap();
             self.live_chr.fill(0);
             let copy_len = update.chr.len().min(CHR_BYTES);
             self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
@@ -906,10 +909,10 @@ impl Ppu {
         let mut applied = false;
         while self
             .pending_live_bg_updates
-            .first()
+            .front()
             .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
         {
-            let update = self.pending_live_bg_updates.remove(0);
+            let update = self.pending_live_bg_updates.pop_front().unwrap();
             let preserve_split_vertical = self.live_bg_tracks_vram_addr
                 && self.scanline < FRAME_HEIGHT as u16
                 && self.dot > FRAME_WIDTH as u16;

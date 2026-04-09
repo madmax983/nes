@@ -49,3 +49,6 @@
 ## 2025-06-19 - Removed format! and Vec::new() on hot emulator path
 **Learning:** Returning `String` and `Vec<u8>` from inner parsing routines on the CPU emulation hot loop causes multiple allocations per executed opcode, degrading performance.
 **Action:** Replace `format!` and `vec![]` with `format_args!` and array slices (`&[u8]`). Pass `fmt::Arguments` to diagnostic functions that only evaluate and allocate them when tracing is explicitly enabled.
+**[Replace Vec with VecDeque on hot paths]
+**Learning:** Using `Vec::remove(0)` inside a hot loop (like the PPU's update queues) causes an O(N) memory shift on every frame render, wasting CPU cycles on unnecessary memory copies.
+**Action:** Replace `Vec` with `VecDeque` when elements are popped from the front in order to achieve O(1) removals via `pop_front()`. Since `VecDeque` implements `Serialize`/`Deserialize` in `serde`, it can be safely used in game snapshots.
