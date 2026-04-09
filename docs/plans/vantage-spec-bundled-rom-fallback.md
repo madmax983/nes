@@ -9,6 +9,10 @@ First impressions matter. A "File Not Found" error on step 1 of the README cause
 ## 📈 Success Metrics
 - Zero "File Not Found" errors when users copy-paste the `README.md` quickstart commands on a fresh clone.
 
+## 🕵️ Gap Analysis
+- Market View: Many emulators boot into a default splash screen, UI, or bundled ROM when no explicit file is given.
+- Our Gap: The README examples result in immediate crashes due to hardcoded ROM paths that do not exist on the user's machine, violating out-of-the-box functionality.
+
 ## ✅ Acceptance Criteria
 - If the user-provided ROM path does not exist, the desktop and netplay applications must automatically attempt to load `./roms/homebrew/homebrew.nes`.
 - If the fallback is used, a clear CLI warning/message must be printed indicating that the requested file was not found and the fallback ROM is being used.
