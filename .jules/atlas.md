@@ -30,3 +30,6 @@
 **Extract Session State from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` contained the `LoadedRomSession` struct and related helper functions mixed with the main loop and UI logic.
 **Blueprint:** Extracted the `LoadedRomSession` struct and related functions (`load_rom_session`, `apply_session_cheats`, etc.) into a dedicated `crates/nes-desktop/src/session.rs` module, exposing them internally via `pub(crate)`.
+**Extract RuntimeConfig from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` was bloated and contained configuration parsing (`resolve_runtime_config`, `RuntimeConfig`, `CaptureConfig`) mixed directly with the GUI application loop.
+**Blueprint:** Extracted `RuntimeConfig`, `StepMode`, `CaptureConfig` and the `resolve_runtime_config` setup function into a separate internal `config.rs` module and updated `main.rs` imports to pull from it.

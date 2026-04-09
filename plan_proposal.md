@@ -1,16 +1,19 @@
-1. **Refactor `execute_app_action` in `crates/nes-desktop/src/main.rs`**
-   - The `execute_app_action` function is quite long and handles multiple complex match arms for `AppAction`.
-   - I will extract the logic for each specific action (`OpenRom`, `SaveSlot`, `LoadSlot`, `Reset`) into dedicated helper functions: `execute_open_rom`, `execute_save_slot`, `execute_load_slot`, and `execute_reset`.
-   - I will use the existing `AppContext` struct to pass the necessary state into these helper functions, preventing the need for long argument lists.
+1. **Remove Duplicate Config Logic in `main.rs`**
+   - The functions `resolve_runtime_config`, `capture_config_from_parts`, and `netplay_feature_enabled` are still present in `crates/nes-desktop/src/main.rs`.
+   - Remove these duplicate functions and structurally ensure `main.rs` is using the ones from `config.rs`.
+   - Use `replace_with_git_merge_diff` to delete these segments from `crates/nes-desktop/src/main.rs`.
 
-2. **Run formatting and clippy**
-   - After the refactoring, I will run `cargo fmt --all` and `cargo clippy --workspace --all-targets --all-features -- -D warnings` to ensure the changes are idiomatic and correctly formatted.
+2. **Verify changes and test**
+   - Run the full verification suite: `cargo test --workspace --all-targets --all-features && cargo clippy --all-targets --all-features -- -D warnings && cargo fmt --all`.
 
-3. **Verify with tests**
-   - I will run `cargo test --workspace --all-targets --all-features` to ensure no runtime behavior has changed and all existing tests continue to pass.
+3. **Complete pre commit steps**
+   - Complete pre commit steps to ensure proper testing, verification, review, and reflection are done.
 
-4. **Complete pre-commit checks**
-   - I will call the `pre_commit_instructions` tool to complete pre commit steps to make sure proper testing, verifications, reviews and reflections are done.
-
-5. **Submit the PR**
-   - Create a PR with the title '⚒️ Forge: Extract `execute_app_action` logic' and the required description format: '🚷 Smell', '✨ Solution', '🧱 Benefit', '🛡️ Verification'.
+4. **Submit the PR**
+   - Use `submit` to submit the PR with the branch name `atlas/extract-config`. The PR details will be:
+     - Title: 🗺️ Atlas: Extract RuntimeConfig from main.rs
+     - Description:
+       🕸️ Tangle: The `main.rs` file was extremely bloated, containing configuration parsing and setup mixed directly with the GUI application loop.
+       📏 Blueprint: Extracted `RuntimeConfig`, `StepMode`, `CaptureConfig` and the `resolve_runtime_config` setup function into a separate internal `config.rs` module.
+       🧱 Stability: Reduced coupling in the `main.rs` module, cleanly separating the system's runtime setup boundary from its core execution boundaries.
+       🔬 Verification: Builds successfully, all tests pass, strict separation enforced via `pub(crate)`.

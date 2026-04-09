@@ -1,3 +1,9 @@
+//! The `nes-relay` server application.
+//!
+//! This binary runs a TCP relay server that facilitates peer-to-peer multiplayer matching
+//! for the NES emulator. It handles joining rooms, forwarding deterministic inputs, and optionally
+//! simulating poor network conditions.
+
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
@@ -93,7 +99,7 @@ impl RelayNetSim {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
         std::process::exit(1);
     }
 }

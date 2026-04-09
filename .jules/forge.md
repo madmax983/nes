@@ -16,3 +16,6 @@
 **Refactoring God Functions in nes-desktop/src/main.rs**
 **Learning:** Found a massive `match` statement in the `execute_app_action` function, causing the function to grow over 160 lines ("God Function"). Some branches contained 20-30 lines of complex UI state manipulation, I/O handling, and emulator commands.
 **Action:** Extracted the large match arms (`AppAction::OpenRom`, `SaveSlot`, `LoadSlot`, `Reset`) into named helper functions (`execute_open_rom`, etc.) that each take a single `AppContext` mutable reference context struct. This flattens the match block and makes the primary action dispatcher much easier to read.
+**[Extract profile name formatting]
+**Learning:** In `crates/nes-desktop/src/rta.rs`, `select_profile` had duplicate manual `for` loops to concatenate a comma-separated list of profile IDs without allocating a standard vector buffer. This bloated the error handling blocks.
+**Action:** Extracted the manual join loop into a pure generic `format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String` helper function, preserving the zero-allocation characteristics while drastically improving readability and DRY-ness across both matched error conditions.
