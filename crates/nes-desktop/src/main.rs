@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 mod auto_player;
 pub(crate) mod config;
 pub(crate) mod gamepad;
+pub(crate) mod input;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 pub(crate) mod metrics;
@@ -17,12 +18,13 @@ use crate::config::*;
 use crate::session::*;
 
 use crate::gamepad::*;
+use crate::input::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
-use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use nes_desktop::app::map_key_event_to_button_bit;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{load_state_file, save_state_file};
 use nes_desktop::menu::{
@@ -38,7 +40,7 @@ use nes_netplay::{RollbackConfig, RollbackEngine};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, Event, VirtualKeyCode, WindowEvent};
+use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoopBuilder};
 use winit::window::{Window, WindowBuilder};
 
@@ -57,115 +59,6 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 fn main() {
     if let Err(err) = run() {
         eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KeyboardDecision {
-    ToggleOverlay,
-    ManualSaveState,
-    ManualLoadState,
-    SetRewindHeld(bool),
-    RtaManualSplit,
-    RtaFinish,
-    UpdateKeyboardBits { mask: u8, pressed: bool },
-    ExecuteCore(Command),
-    Noop,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum FrameDecision {
-    WaitUntil(Instant),
-    Step {
-        missed_deadline: bool,
-        next_deadline: Instant,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WindowEventDecision {
-    CloseRequested,
-    KeyboardInput {
-        key: Option<VirtualKeyCode>,
-        pressed: bool,
-    },
-    Resized {
-        width: u32,
-        height: u32,
-    },
-    ScaleFactorChanged {
-        width: u32,
-        height: u32,
-    },
-    Ignore,
-}
-
-fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
-    match event {
-        WindowEvent::CloseRequested => WindowEventDecision::CloseRequested,
-        WindowEvent::KeyboardInput { input, .. } => WindowEventDecision::KeyboardInput {
-            key: input.virtual_keycode,
-            pressed: element_state_pressed(input.state),
-        },
-        WindowEvent::Resized(size) => WindowEventDecision::Resized {
-            width: size.width,
-            height: size.height,
-        },
-        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-            WindowEventDecision::ScaleFactorChanged {
-                width: new_inner_size.width,
-                height: new_inner_size.height,
-            }
-        }
-        _ => WindowEventDecision::Ignore,
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct KeyboardInputMode {
-    pub rollback_enabled: bool,
-    pub rta_enabled: bool,
-    pub rta_calibrate: bool,
-}
-
-fn classify_keyboard_input(
-    key: VirtualKeyCode,
-    pressed: bool,
-    mode: KeyboardInputMode,
-) -> KeyboardDecision {
-    if key == VirtualKeyCode::Escape && pressed {
-        return KeyboardDecision::ToggleOverlay;
-    }
-    if pressed && key == VirtualKeyCode::F5 {
-        return KeyboardDecision::ManualSaveState;
-    }
-    if pressed && key == VirtualKeyCode::F8 {
-        return KeyboardDecision::ManualLoadState;
-    }
-    if key == VirtualKeyCode::R {
-        return KeyboardDecision::SetRewindHeld(pressed);
-    }
-    if mode.rta_enabled && pressed && key == VirtualKeyCode::F9 {
-        return KeyboardDecision::RtaManualSplit;
-    }
-    if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
-        return KeyboardDecision::RtaFinish;
-    }
-
-    let Some(key_code) = map_virtual_keycode(key) else {
-        return KeyboardDecision::Noop;
-    };
-
-    if mode.rollback_enabled {
-        if let Some(mask) = map_key_event_to_button_bit(key_code) {
-            KeyboardDecision::UpdateKeyboardBits { mask, pressed }
-        } else {
-            KeyboardDecision::Noop
-        }
-    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed) {
-        KeyboardDecision::ExecuteCore(mapped.core)
-    } else {
-        KeyboardDecision::Noop
     }
 }
 
@@ -617,17 +510,6 @@ fn command_marks_rta_invalidation(command: Command) -> Option<ForbiddenAction> {
     }
 }
 
-fn evaluate_frame_deadline(now: Instant, next_frame_deadline: Instant) -> FrameDecision {
-    if now < next_frame_deadline {
-        FrameDecision::WaitUntil(next_frame_deadline)
-    } else {
-        FrameDecision::Step {
-            missed_deadline: now > next_frame_deadline,
-            next_deadline: now + TARGET_FRAME_TIME,
-        }
-    }
-}
-
 fn scaled_window_dimensions(window_scale: u32) -> (f64, f64) {
     (
         f64::from(FRAME_WIDTH as u32 * window_scale),
@@ -648,10 +530,6 @@ fn gamepad_slot_changed(
     player: usize,
 ) -> bool {
     next[player] != current[player]
-}
-
-fn element_state_pressed(state: ElementState) -> bool {
-    state == ElementState::Pressed
 }
 
 fn should_resume_after_rewind_hold(held: bool) -> bool {
@@ -1256,7 +1134,7 @@ fn run() -> Result<(), String> {
             }
 
             let now = Instant::now();
-            let missed_deadline = match evaluate_frame_deadline(now, next_frame_deadline) {
+            let missed_deadline = match evaluate_frame_deadline(now, next_frame_deadline, TARGET_FRAME_TIME) {
                 FrameDecision::WaitUntil(deadline) => {
                     *control_flow = ControlFlow::WaitUntil(deadline);
                     return;
@@ -1733,12 +1611,12 @@ mod tests {
     }
 
     use super::{
-        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
-        KeyboardDecision, NetplayRuntimeStats, StepMode, TARGET_FRAME_TIME, WindowEventDecision,
+        FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        KeyboardDecision, NetplayRuntimeStats, StepMode, WindowEventDecision,
         advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
         audio_queue_dropped, capture_path_for_frame, classify_keyboard_input,
         classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        element_state_pressed, encode_ppm, format_rom_read_error,
         gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
         is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
         overlay_input_requires_redraw, recommended_input_delay_frames,
@@ -1753,7 +1631,7 @@ mod tests {
     use nes_desktop::actions::AppAction;
     use nes_desktop::overlay::OverlayModel;
     use std::fs;
-    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    use std::time::{SystemTime, UNIX_EPOCH};
     use winit::dpi::PhysicalSize;
     use winit::event::{
         DeviceId, ElementState, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
@@ -1898,92 +1776,6 @@ mod tests {
     }
 
     #[test]
-    fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
-        let base_mode = KeyboardInputMode {
-            rollback_enabled: false,
-            rta_enabled: false,
-            rta_calibrate: false,
-        };
-
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, true, base_mode),
-            KeyboardDecision::ToggleOverlay
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, true, base_mode),
-            KeyboardDecision::ManualSaveState
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F8, true, base_mode),
-            KeyboardDecision::ManualLoadState
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, true, base_mode),
-            KeyboardDecision::SetRewindHeld(true)
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::R,
-                false,
-                KeyboardInputMode {
-                    rollback_enabled: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::SetRewindHeld(false)
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::Z,
-                true,
-                KeyboardInputMode {
-                    rollback_enabled: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::UpdateKeyboardBits {
-                mask: Button::A.bit_mask(),
-                pressed: true
-            }
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::X, false, base_mode),
-            KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, false, base_mode),
-            KeyboardDecision::Noop
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::F9,
-                true,
-                KeyboardInputMode {
-                    rta_enabled: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::RtaManualSplit
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::F10,
-                true,
-                KeyboardInputMode {
-                    rta_enabled: true,
-                    rta_calibrate: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::RtaFinish
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, false, base_mode),
-            KeyboardDecision::Noop
-        );
-    }
-
-    #[test]
     fn selected_slot_hotkeys_target_current_slot() {
         assert_eq!(
             slot_action_for_hotkey(true, 3),
@@ -2089,41 +1881,6 @@ mod tests {
         reconcile_core_pause_with_overlay(&mut core, true)
             .expect("open overlay should force pause");
         assert!(core.is_paused());
-    }
-
-    #[test]
-    fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
-        let now = Instant::now();
-        let future = now + Duration::from_millis(2);
-        match evaluate_frame_deadline(now, future) {
-            FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
-            FrameDecision::Step { .. } => panic!("expected wait branch"),
-        }
-
-        match evaluate_frame_deadline(now, now) {
-            FrameDecision::Step {
-                missed_deadline,
-                next_deadline,
-            } => {
-                assert!(!missed_deadline);
-                assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
-            }
-            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
-        }
-
-        match evaluate_frame_deadline(now + Duration::from_millis(1), now) {
-            FrameDecision::Step {
-                missed_deadline,
-                next_deadline,
-            } => {
-                assert!(missed_deadline);
-                assert_eq!(
-                    next_deadline,
-                    (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
-                );
-            }
-            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
-        }
     }
 
     #[test]
