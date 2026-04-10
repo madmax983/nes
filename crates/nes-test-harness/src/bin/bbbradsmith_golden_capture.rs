@@ -70,12 +70,16 @@ fn format_written_row(
     }
 }
 
-fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Color) {
+fn clear_current_line(stdout: &mut impl Write) {
     let _ = crossterm::execute!(
         stdout,
         crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
         crossterm::cursor::MoveToColumn(0)
     );
+}
+
+fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Color) {
+    clear_current_line(stdout);
     let _ = write!(
         stdout,
         "{}",
@@ -198,11 +202,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
         written = written.saturating_add(1);
     }
-    let _ = crossterm::execute!(
-        stdout,
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
-        crossterm::cursor::MoveToColumn(0)
-    );
+    clear_current_line(stdout);
     let _ = stdout.flush();
 
     let _ = writeln!(stdout, "{}", build_summary_table(&rows));
@@ -290,6 +290,14 @@ mod tests {
     use comfy_table::Color as TableColor;
     use crossterm::style::Color;
     use nes_test_harness::AudioStats;
+
+    #[test]
+    fn clear_current_line_writes_to_stdout_with_ansi() {
+        let mut buf = Vec::new();
+        super::clear_current_line(&mut buf);
+        let output = String::from_utf8(buf).expect("should output valid utf8");
+        assert!(output.contains("\x1b[2K\x1b[1G"));
+    }
 
     #[test]
     fn print_processing_progress_writes_to_stdout_with_ansi() {

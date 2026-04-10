@@ -69,6 +69,15 @@ fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
     }
 }
 
+#[allow(dead_code)]
+fn clear_current_line(stdout: &mut impl std::io::Write) {
+    let _ = crossterm::execute!(
+        stdout,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
+        crossterm::cursor::MoveToColumn(0)
+    );
+}
+
 fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
     let rom_bytes = fs::read(rom_path).map_err(|err| format_rom_read_error(rom_path, &err))?;
     let script_content = fs::read_to_string(script_path)
@@ -155,6 +164,15 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::run;
+
+
+    #[test]
+    fn clear_current_line_writes_to_stdout_with_ansi() {
+        let mut buf = Vec::new();
+        super::clear_current_line(&mut buf);
+        let output = String::from_utf8(buf).expect("should output valid utf8");
+        assert!(output.contains("\x1b[2K\x1b[1G"));
+    }
 
     #[test]
     fn run_reports_missing_rom_file_errors() {
