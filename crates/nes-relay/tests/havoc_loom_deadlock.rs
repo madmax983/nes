@@ -28,7 +28,12 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
     // In real scenarios, this often happens during event dispatch where the caller isn't aware they're holding a lock.
     if !should_remove_room {
         // Assume sending to a peer required some locking or other behavior
-        let _another = state.lock().unwrap();
+        match state.try_lock() {
+            Ok(_) => {}
+            Err(_) => {
+                std::panic::panic_any("deadlock");
+            }
+        };
     }
 
     if should_remove_room {
@@ -38,7 +43,6 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
 }
 
 #[test]
-#[should_panic]
 fn havoc_test_loom_cleanup_client_deadlock() {
     let result = std::panic::catch_unwind(|| {
         loom::model(|| {
@@ -73,6 +77,8 @@ fn havoc_test_loom_cleanup_client_deadlock() {
 
     // We should expect this test to panic
     if result.is_err() {
-        panic!("deadlock panic");
+        // Expected panic!
+    } else {
+        panic!("deadlock panic expected");
     }
 }

@@ -13,15 +13,24 @@ struct MockRoomState {
 }
 
 fn mock_cleanup_client(state: &Arc<Mutex<MockRelayState>>, room: &str, player: u8) {
-    let mut guard = state.lock().unwrap();
+    let mut guard = match state.try_lock() {
+        Ok(g) => g,
+        Err(_) => {
+            std::panic::panic_any("deadlock");
+        }
+    };
     if let Some(room_state) = guard.rooms.get_mut(room) {
         room_state.players.retain(|&p| p != player);
-        let _ = state.lock().unwrap(); // Emulate sending to peer where a send could theoretically lock state again
+        let _ = match state.try_lock() {
+            Ok(g) => g,
+            Err(_) => {
+                std::panic::panic_any("deadlock");
+            }
+        }; // Emulate sending to peer where a send could theoretically lock state again
     }
 }
 
 #[test]
-#[should_panic]
 fn havoc_test_loom_cleanup_client_deadlock() {
     let result = std::panic::catch_unwind(|| {
         loom::model(|| {
@@ -54,6 +63,8 @@ fn havoc_test_loom_cleanup_client_deadlock() {
 
     // We should expect this test to panic
     if result.is_err() {
-        panic!("deadlock panic");
+        // expected!
+    } else {
+        panic!("deadlock panic expected");
     }
 }
