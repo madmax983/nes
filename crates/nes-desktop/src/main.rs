@@ -282,10 +282,7 @@ fn sync_native_menu_state(
     set_enabled(AppAction::Quit);
 }
 
-fn set_overlay_open(
-    ctx: &mut AppContext<'_>,
-    open: bool,
-) -> Result<(), String> {
+fn set_overlay_open(ctx: &mut AppContext<'_>, open: bool) -> Result<(), String> {
     if open {
         ctx.overlay.open();
         reconcile_core_pause_with_overlay(ctx.core, true)?;
@@ -296,7 +293,8 @@ fn set_overlay_open(
         ctx.overlay.close();
         reconcile_core_pause_with_overlay(ctx.core, false)?;
     }
-    ctx.window.set_title(&window_title(ctx.session, ctx.overlay.is_open()));
+    ctx.window
+        .set_title(&window_title(ctx.session, ctx.overlay.is_open()));
     Ok(())
 }
 
