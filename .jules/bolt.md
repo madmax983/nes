@@ -53,3 +53,10 @@
 ## 2026-04-08 - [Iterator Clone Performance Pitfall in Overlay]
 **Learning:** The UI rendering loop repeatedly called `.clone()` on an iterator mapping states. Even if mapping is cheap, cloning and traversing $O(N^2)$ times inside the frame renderer generates unnecessary overhead.
 **Action:** Pre-collect small UI list states (like slot summaries) into fixed-size stack arrays `[Option<T>; 5]` outside the rendering loop, eliminating iterator clones and reducing lookups to $O(1)$ without heap allocations.
+**[Avoiding allocations on Hot Paths]
+**Learning:** Checking for string existence in a set on hot paths using  with a borrowed  before allocating and inserting avoids unnecessary heap allocations for recurrent values. Likewise, borrowing strings instead of allocating  when purely doing data serialization significantly reduces allocations.
+**Action:** Use  with  instead of calling  directly on sets. Use lifetimes (e.g. ) on structures only intended for data serialization.
+
+**[Avoiding Allocations on Hot Paths]**
+**Learning:** Checking for string existence in a set on hot paths using `.contains()` with a borrowed `&str` before allocating and inserting avoids unnecessary heap allocations for recurrent values. Likewise, borrowing strings instead of allocating `Vec<String>` when purely doing data serialization significantly reduces allocations.
+**Action:** Use `.contains()` with `&str` instead of calling `.insert(value.to_owned())` directly on sets. Use lifetimes (e.g. `Vec<&'a str>`) on structures only intended for data serialization.
