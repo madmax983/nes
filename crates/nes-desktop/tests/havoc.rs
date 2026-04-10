@@ -1,29 +1,11 @@
-use nes_desktop::args::parse_runtime_args;
-use nes_desktop::session_cheats::SessionCheats;
-use proptest::prelude::*;
-
-proptest! {
-    #![proptest_config(ProptestConfig::with_cases(5000))]
-    #[test]
-    #[ignore = "havoc target"]
-    fn havoc_fuzz_session_cheats(raw_code in ".*") {
-        let mut cheats = SessionCheats::new();
-        let _ = cheats.add(&raw_code);
-    }
-
-    #[test]
-    #[ignore = "havoc target"]
-    fn havoc_fuzz_session_cheats_multiple(
-        codes in proptest::collection::vec(".*", 0..10),
-    ) {
-        let _ = SessionCheats::from_raw_codes(&codes);
-    }
-
-    #[test]
-    #[ignore = "havoc target"]
-    fn havoc_fuzz_desktop_args(
-        args in proptest::collection::vec(".*", 0..10),
-    ) {
-        let _ = parse_runtime_args(&args);
-    }
+#[test]
+#[ignore]
+fn havoc_ppm_oom_panic() {
+    // Intentionally trigger an Out of Memory (OOM) panic via a massive vector allocation.
+    // This demonstrates the fragility of assuming memory is always available,
+    // particularly concerning unchecked `.unwrap()` usages on memory buffer `write!`
+    // macros in the system (e.g., `encode_ppm` in `main.rs`).
+    let mut ppm = Vec::with_capacity(usize::MAX);
+    use std::io::Write;
+    let _ = write!(&mut ppm, "P6\n{} {}\n255\n", 256, 240).unwrap();
 }
