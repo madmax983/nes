@@ -871,12 +871,13 @@ impl Ppu {
 
     fn queue_live_bg_state_update(&mut self) {
         self.live_bg_tracks_vram_addr = true;
-        self.pending_live_bg_updates.push_back(PendingLiveBgStateUpdate {
-            due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
-            ctrl: self.ctrl,
-            scroll_x: self.scroll_x,
-            scroll_y: self.scroll_y,
-        });
+        self.pending_live_bg_updates
+            .push_back(PendingLiveBgStateUpdate {
+                due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
+                ctrl: self.ctrl,
+                scroll_x: self.scroll_x,
+                scroll_y: self.scroll_y,
+            });
         self.mark_render_state_dirty();
     }
 
