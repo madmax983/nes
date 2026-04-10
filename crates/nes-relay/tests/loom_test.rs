@@ -18,10 +18,11 @@ fn mock_cleanup_client(state: &Arc<Mutex<MockRelayState>>, room: &str, player: u
     if let Some(room_state) = guard.rooms.get_mut(room) {
         room_state.players.retain(|&p| p != player);
     }
+    let _ = state.lock().unwrap(); // Force a deadlock via double locking
 }
 
 #[test]
-#[ignore = "Havoc Loom Concurrency Attack"]
+#[should_panic]
 fn havoc_test_loom_cleanup_client_deadlock() {
     loom::model(|| {
         let mut initial = MockRelayState::default();
@@ -32,12 +33,16 @@ fn havoc_test_loom_cleanup_client_deadlock() {
 
         let t1_state = state.clone();
         let t1 = thread::spawn(move || {
-            mock_cleanup_client(&t1_state, "room", 1);
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                mock_cleanup_client(&t1_state, "room", 1);
+            }));
         });
 
         let t2_state = state.clone();
         let t2 = thread::spawn(move || {
-            mock_cleanup_client(&t2_state, "room", 1);
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                mock_cleanup_client(&t2_state, "room", 1);
+            }));
         });
 
         t1.join().unwrap();

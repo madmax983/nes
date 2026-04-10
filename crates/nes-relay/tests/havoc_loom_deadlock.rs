@@ -18,27 +18,23 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
         .lock()
         .map_err(|_| "relay state mutex poisoned".to_owned())?;
 
-    let mut _should_remove_room = false;
+    let mut should_remove_room = false;
     if let Some(room_state) = guard.rooms.get_mut(room) {
         room_state.players.remove(&player);
-        _should_remove_room = room_state.players.is_empty();
+        should_remove_room = room_state.players.is_empty();
     }
 
-    // Simulate a deadlock/poison that could occur if logic was nested incorrectly
-    // or if a panic occurred while holding the lock.
-    panic!("Havoc deadlock trigger");
+    // Attempting to deadlock without panicking in thread destructors
+    let _ = state.lock().unwrap();
 
-    #[allow(unreachable_code)]
-    if _should_remove_room {
+    if should_remove_room {
         guard.rooms.remove(room);
     }
-    #[allow(unreachable_code)]
     Ok(())
 }
 
 #[test]
 #[should_panic]
-#[ignore = "Havoc Loom Concurrency Attack"]
 fn havoc_test_loom_cleanup_client_deadlock() {
     loom::model(|| {
         let mut initial = RelayState::default();
@@ -51,15 +47,11 @@ fn havoc_test_loom_cleanup_client_deadlock() {
 
         let t1_state = state.clone();
         let t1 = thread::spawn(move || {
-            let _ = cleanup_client(&t1_state, "room", 1);
-        });
-
-        let t2_state = state.clone();
-        let t2 = thread::spawn(move || {
-            let _ = cleanup_client(&t2_state, "room", 2);
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _ = cleanup_client(&t1_state, "room", 1);
+            }));
         });
 
         t1.join().unwrap();
-        t2.join().unwrap();
     });
 }
