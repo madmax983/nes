@@ -396,6 +396,8 @@ mod tests {
             || lowered.contains("would block")
             || lowered.contains("timed out")
             || lowered.contains("non-blocking socket operation")
+            || lowered.contains("10060")
+            || lowered.contains("failed to respond")
     }
 
     fn read_response_with_host_drain(
