@@ -198,3 +198,32 @@ pub fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         auto_player_enabled: runtime_args.auto_player_enabled,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_config_helpers_handle_placeholders_and_defaults() {
+        assert!(capture_config_from_parts(None, 10).is_none());
+        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
+
+        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
+            .expect("valid template should produce config");
+        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
+        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
+
+        assert_eq!(
+            capture_path_for_frame("snap-{frame}.ppm", 42),
+            "snap-000042.ppm"
+        );
+        assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
+    }
+
+    #[test]
+    fn test_netplay_feature_enabled() {
+        assert!(netplay_feature_enabled(true, false));
+        assert!(netplay_feature_enabled(false, true));
+        assert!(!netplay_feature_enabled(false, false));
+    }
+}
