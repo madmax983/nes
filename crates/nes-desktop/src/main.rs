@@ -23,7 +23,10 @@ use nes_config::{
 };
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
 use nes_desktop::actions::AppAction;
-use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use nes_desktop::app::{
+    classify_keyboard_input, map_key_event_to_button_bit, map_virtual_keycode, KeyboardDecision,
+    KeyboardInputMode,
+};
 use nes_desktop::args::parse_runtime_args;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{
@@ -111,19 +114,6 @@ fn main() {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KeyboardDecision {
-    ToggleOverlay,
-    ManualSaveState,
-    ManualLoadState,
-    SetRewindHeld(bool),
-    RtaManualSplit,
-    RtaFinish,
-    UpdateKeyboardBits { mask: u8, pressed: bool },
-    ExecuteCore(Command),
-    Noop,
-}
-
 #[derive(Debug, Clone, Copy)]
 enum FrameDecision {
     WaitUntil(Instant),
@@ -169,54 +159,6 @@ fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
             }
         }
         _ => WindowEventDecision::Ignore,
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct KeyboardInputMode {
-    pub rollback_enabled: bool,
-    pub rta_enabled: bool,
-    pub rta_calibrate: bool,
-}
-
-fn classify_keyboard_input(
-    key: VirtualKeyCode,
-    pressed: bool,
-    mode: KeyboardInputMode,
-) -> KeyboardDecision {
-    if key == VirtualKeyCode::Escape && pressed {
-        return KeyboardDecision::ToggleOverlay;
-    }
-    if pressed && key == VirtualKeyCode::F5 {
-        return KeyboardDecision::ManualSaveState;
-    }
-    if pressed && key == VirtualKeyCode::F8 {
-        return KeyboardDecision::ManualLoadState;
-    }
-    if key == VirtualKeyCode::R {
-        return KeyboardDecision::SetRewindHeld(pressed);
-    }
-    if mode.rta_enabled && pressed && key == VirtualKeyCode::F9 {
-        return KeyboardDecision::RtaManualSplit;
-    }
-    if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
-        return KeyboardDecision::RtaFinish;
-    }
-
-    let Some(key_code) = map_virtual_keycode(key) else {
-        return KeyboardDecision::Noop;
-    };
-
-    if mode.rollback_enabled {
-        if let Some(mask) = map_key_event_to_button_bit(key_code) {
-            KeyboardDecision::UpdateKeyboardBits { mask, pressed }
-        } else {
-            KeyboardDecision::Noop
-        }
-    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed) {
-        KeyboardDecision::ExecuteCore(mapped.core)
-    } else {
-        KeyboardDecision::Noop
     }
 }
 
@@ -1797,20 +1739,6 @@ fn recommended_input_delay_frames(
     }
 }
 
-fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
-    match key {
-        VirtualKeyCode::Z => Some("KeyZ"),
-        VirtualKeyCode::X => Some("KeyX"),
-        VirtualKeyCode::Return => Some("Enter"),
-        VirtualKeyCode::RShift => Some("ShiftRight"),
-        VirtualKeyCode::Up => Some("ArrowUp"),
-        VirtualKeyCode::Down => Some("ArrowDown"),
-        VirtualKeyCode::Left => Some("ArrowLeft"),
-        VirtualKeyCode::Right => Some("ArrowRight"),
-        _ => None,
-    }
-}
-
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {
     match step_mode {
         StepMode::Frame => core
@@ -1986,8 +1914,6 @@ fn build_startup_table(
 
 #[cfg(test)]
 mod tests {
-    use super::KeyboardInputMode;
-
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
@@ -2033,14 +1959,14 @@ mod tests {
 
     use super::{
         DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
+        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats, StepMode,
         TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
         apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
         audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
+        classify_window_event, connected_gamepad_ids,
         controller_state_delta_for_player, element_state_pressed, encode_ppm,
         evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot,
         menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
         overlay_input_requires_redraw, recommended_input_delay_frames,
         reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
@@ -2127,25 +2053,6 @@ mod tests {
     }
 
     #[test]
-    fn map_virtual_keycode_maps_all_supported_keys() {
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::RShift),
-            Some("ShiftRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::Right),
-            Some("ArrowRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
-    }
-
-    #[test]
     #[allow(deprecated)]
     fn classify_window_event_maps_window_variants_to_decisions() {
         assert_eq!(
@@ -2196,92 +2103,6 @@ mod tests {
 
         let ignored = WindowEvent::Focused(true);
         assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
-    }
-
-    #[test]
-    fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
-        let base_mode = KeyboardInputMode {
-            rollback_enabled: false,
-            rta_enabled: false,
-            rta_calibrate: false,
-        };
-
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, true, base_mode),
-            KeyboardDecision::ToggleOverlay
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, true, base_mode),
-            KeyboardDecision::ManualSaveState
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F8, true, base_mode),
-            KeyboardDecision::ManualLoadState
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, true, base_mode),
-            KeyboardDecision::SetRewindHeld(true)
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::R,
-                false,
-                KeyboardInputMode {
-                    rollback_enabled: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::SetRewindHeld(false)
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::Z,
-                true,
-                KeyboardInputMode {
-                    rollback_enabled: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::UpdateKeyboardBits {
-                mask: Button::A.bit_mask(),
-                pressed: true
-            }
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::X, false, base_mode),
-            KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, false, base_mode),
-            KeyboardDecision::Noop
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::F9,
-                true,
-                KeyboardInputMode {
-                    rta_enabled: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::RtaManualSplit
-        );
-        assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::F10,
-                true,
-                KeyboardInputMode {
-                    rta_enabled: true,
-                    rta_calibrate: true,
-                    ..base_mode
-                }
-            ),
-            KeyboardDecision::RtaFinish
-        );
-        assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, false, base_mode),
-            KeyboardDecision::Noop
-        );
     }
 
     #[test]

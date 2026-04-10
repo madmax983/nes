@@ -26,3 +26,7 @@
 **Extract Gamepad Logic from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` contained several gamepad-specific structs (`GamepadSnapshot`), constants (`CONTROLLER_BUTTONS`, `GAMEPAD_AXIS_THRESHOLD`), and helper methods mapping external inputs to internal NES core bits mixed in with generic UI state logic.
 **Blueprint:** Extracted all gamepad translation logic and related structs/constants into a new internal module `crates/nes-desktop/src/gamepad.rs`. Registered the module in `main.rs` as `pub(crate) mod gamepad;` to maintain strict boundary isolation from the public API while reducing `main.rs` bloat.
+
+**Extract Keyboard Input Classification from main.rs**
+**Tangle:** The `main.rs` file contained low-level keyboard input mapping and decision classification logic (`KeyboardDecision`, `KeyboardInputMode`, `classify_keyboard_input`, `map_virtual_keycode`) mixed with the core desktop UI event loop.
+**Blueprint:** Extracted the keyboard input classification logic and its unit tests into `crates/nes-desktop/src/app.rs` and exposed them via `pub`.
