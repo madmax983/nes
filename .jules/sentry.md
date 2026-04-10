@@ -19,3 +19,6 @@
 
 **Learning:** When using `cargo mutants`, testing `||` conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the `||` independently to kill mutations that replace `||` with `&&`.
 **Action:** Always create separate test cases for each independent condition within an `||` statement instead of grouping them together.
+## 2024-04-10 - Avoiding test suite explosions with append operations
+**Learning:** Using `cat << 'EOF' >>` to append test modules without inspecting the existing file structure can lead to multiple unclosed delimiters, duplicate function names, and catastrophic compilation failures, particularly in large modules like `api.rs`.
+**Action:** Use programmatic tools or python scripts to inspect where to inject tests precisely. Always check the test file boundary (e.g., `tail -n 20`) to confirm the append destination before writing directly.
