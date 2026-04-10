@@ -35,6 +35,11 @@ pub fn downsample_grayscale(rgba: &[u8], width: usize, height: usize) -> Vec<f32
     out
 }
 
+/// A sliding window of historical emulator frames.
+///
+/// In Reinforcement Learning, a single static frame of gameplay is often insufficient
+/// to determine velocity or direction (e.g., is Mario moving left or right?).
+/// By stacking multiple consecutive frames together, the network can implicitly learn motion.
 #[derive(Debug, Clone)]
 pub struct FrameStack {
     max_frames: usize,
@@ -72,11 +77,14 @@ impl FrameStack {
         self.frames.push_back(frame);
     }
 
+    /// Returns references to the underlying frames in the stack.
     #[must_use]
     pub fn as_slices(&self) -> Vec<&[f32]> {
         self.frames.iter().map(Vec::as_slice).collect()
     }
 
+    /// Copies and flattens all frames in the stack into a single contiguous vector.
+    /// This is typically used to prepare the visual data for tensor creation.
     #[must_use]
     pub fn flattened(&self) -> Vec<f32> {
         let mut out = Vec::with_capacity(self.frames.len() * self.frame_len);
