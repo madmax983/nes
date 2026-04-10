@@ -1831,22 +1831,22 @@ mod tests {
     }
 
     use super::{
-        DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
-        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        KeyboardDecision, NetplayRuntimeStats, TARGET_FRAME_TIME, WindowEventDecision,
+        advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
+        apply_runtime_cheat_codes, audio_queue_dropped, classify_keyboard_input,
+        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        overlay_input_requires_redraw, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+        update_button_bits, validate_action_allowed, write_frame_ppm,
     };
+    use crate::config::StepMode;
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
     use nes_desktop::actions::AppAction;
@@ -2509,23 +2509,6 @@ mod tests {
             .expect("cpu budget stepping should succeed");
         assert_eq!(core.cpu_a(), 0x42);
         assert_eq!(core.cpu_pc(), 0x8002);
-    }
-
-    #[test]
-    fn capture_config_helpers_handle_placeholders_and_defaults() {
-        assert!(capture_config_from_parts(None, 10).is_none());
-        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
-
-        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
-            .expect("valid template should produce config");
-        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
-        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
-
-        assert_eq!(
-            capture_path_for_frame("snap-{frame}.ppm", 42),
-            "snap-000042.ppm"
-        );
-        assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
     }
 
     #[test]
