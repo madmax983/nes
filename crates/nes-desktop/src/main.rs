@@ -446,14 +446,20 @@ fn dispatch_overlay_command(
     }
 }
 
-fn reset_session_time_state(ctx: &mut AppContext<'_>) {
-    *ctx.rewind_held = false;
-    *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
-    ctx.time_machine.record_frame(ctx.core);
-    *ctx.metrics = PerfMetrics::new(
-        ctx.runtime.metrics_enabled,
-        ctx.runtime.metrics_every_frames,
-        ctx.core.ppu_frame_counter(),
+fn reset_session_time_state(
+    rewind_held: &mut bool,
+    time_machine: &mut TimeMachine,
+    metrics: &mut PerfMetrics,
+    core: &NesCore,
+    runtime: &RuntimeConfig,
+) {
+    *rewind_held = false;
+    *time_machine = TimeMachine::new(TimeMachineConfig::default());
+    time_machine.record_frame(core);
+    *metrics = PerfMetrics::new(
+        runtime.metrics_enabled,
+        runtime.metrics_every_frames,
+        core.ppu_frame_counter(),
     );
 }
 
@@ -524,7 +530,13 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             if let Some(output) = ctx.audio_output {
                 output.clear();
             }
-            reset_session_time_state(ctx);
+            reset_session_time_state(
+                ctx.rewind_held,
+                ctx.time_machine,
+                ctx.metrics,
+                ctx.core,
+                ctx.runtime,
+            );
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
             set_overlay_open(
@@ -571,7 +583,13 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             if let Some(output) = ctx.audio_output {
                 output.clear();
             }
-            reset_session_time_state(ctx);
+            reset_session_time_state(
+                ctx.rewind_held,
+                ctx.time_machine,
+                ctx.metrics,
+                ctx.core,
+                ctx.runtime,
+            );
             refresh_slot_metadata(ctx.session)?;
             ctx.overlay.focus_slot(slot, false);
             ctx.overlay
@@ -582,7 +600,13 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             ctx.core
                 .execute(Command::Reset)
                 .map_err(|err| format!("Reset failed: {err}"))?;
-            reset_session_time_state(ctx);
+            reset_session_time_state(
+                ctx.rewind_held,
+                ctx.time_machine,
+                ctx.metrics,
+                ctx.core,
+                ctx.runtime,
+            );
             ctx.overlay.set_status_message("System reset");
             set_overlay_open(
                 ctx.overlay,
@@ -2481,5 +2505,43 @@ mod tests {
 
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
+    }
+
+    #[test]
+    fn reset_session_time_state_clears_time_and_metrics() {
+        use super::*;
+
+        let mut rewind_held = true;
+        let mut time_machine = TimeMachine::new(TimeMachineConfig::default());
+        let mut metrics = PerfMetrics::new(true, 60, 100);
+        let core = NesCore::new();
+        let runtime = RuntimeConfig {
+            rom_path: String::new(),
+            loaded_config_path: None,
+            step_mode: StepMode::Frame,
+            audio_enabled: false,
+            cheat_codes: vec![],
+            rta: None,
+            netplay: None,
+            window_scale: 1,
+            trace_every_frames: 0,
+            metrics_enabled: false,
+            metrics_every_frames: 60,
+            capture: None,
+            mcp_enabled: false,
+            mcp_bind_addr: String::new(),
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
+        };
+
+        reset_session_time_state(
+            &mut rewind_held,
+            &mut time_machine,
+            &mut metrics,
+            &core,
+            &runtime,
+        );
+
+        assert!(!rewind_held);
     }
 }
