@@ -71,9 +71,14 @@ fn format_written_row(
 }
 
 fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Color) {
+    let _ = crossterm::execute!(
+        stdout,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
+        crossterm::cursor::MoveToColumn(0)
+    );
     let _ = write!(
         stdout,
-        "\r\x1B[2K{}",
+        "{}",
         format!("Processing {}...", rom_name).with(color)
     );
     let _ = stdout.flush();
@@ -193,7 +198,11 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
         written = written.saturating_add(1);
     }
-    let _ = write!(stdout, "\r\x1B[2K");
+    let _ = crossterm::execute!(
+        stdout,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::CurrentLine),
+        crossterm::cursor::MoveToColumn(0)
+    );
     let _ = stdout.flush();
 
     let _ = writeln!(stdout, "{}", build_summary_table(&rows));
@@ -287,7 +296,7 @@ mod tests {
         let mut buf = Vec::new();
         print_processing_progress(&mut buf, "test_rom.nes", Color::Green);
         let output = String::from_utf8(buf).expect("should output valid utf8");
-        assert!(output.contains("\r\x1B[2K"));
+        assert!(output.contains("\x1b[2K\x1b[1G"));
         assert!(output.contains("test_rom.nes"));
     }
 
