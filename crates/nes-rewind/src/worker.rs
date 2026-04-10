@@ -315,20 +315,23 @@ mod tests {
         false
     }
 
+    fn record_and_sync(tm: &mut TimeMachine, core: &mut NesCore, count: u64) {
+        for _ in 0..count {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(core);
+            assert!(wait_for_sync(tm), "Worker thread failed to sync on record");
+        }
+    }
+
     #[test]
     fn record_and_rewind_restores_earlier_frame() {
         let mut core = make_core();
         let mut tm = TimeMachine::new(config());
 
         // Record 60 frames.
-        for _ in 0..60 {
-            core.execute(Command::StepFrame).unwrap();
-            tm.record_frame(&core);
-        }
-        let frame_before_rewind = core.ppu_frame_counter();
+        record_and_sync(&mut tm, &mut core, 60);
 
-        // Flush the worker channel.
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        let frame_before_rewind = core.ppu_frame_counter();
 
         // Rewind 30 frames.
         for _ in 0..30 {
@@ -359,11 +362,7 @@ mod tests {
         let mut core = make_core();
         let mut tm = TimeMachine::new(TimeMachineConfig::default());
 
-        for _ in 0..10 {
-            core.execute(Command::StepFrame).unwrap();
-            tm.record_frame(&core);
-        }
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        record_and_sync(&mut tm, &mut core, 10);
 
         tm.rewind_step(&mut core);
         tm.resume();
@@ -432,10 +431,7 @@ mod tests {
         let mut core = make_core();
         let mut tm = TimeMachine::new(TimeMachineConfig::default());
 
-        for _ in 0..60 {
-            core.execute(Command::StepFrame).unwrap();
-            tm.record_frame(&core);
-        }
+        record_and_sync(&mut tm, &mut core, 60);
 
         let expected = tm.last_recorded_frame as f32 / 60.0;
         assert_eq!(tm.history_seconds(), expected);
@@ -447,11 +443,7 @@ mod tests {
         let mut tm = TimeMachine::new(TimeMachineConfig::default());
 
         // Record a few frames so that we have a target frame > 0
-        for _ in 0..5 {
-            core.execute(Command::StepFrame).unwrap();
-            tm.record_frame(&core);
-        }
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        record_and_sync(&mut tm, &mut core, 5);
 
         // Let's actually give the worker a moment to process the queue
         // to avoid race conditions.
