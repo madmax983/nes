@@ -1,23 +1,38 @@
+//! Profile for Super Mario Bros. (NES).
+//!
+//! This module teaches the AI how to interpret the memory structure of
+//! Super Mario Bros. It maps raw hexadecimal RAM addresses into meaningful
+//! state vectors (like Mario's speed, lives, and level progress).
+
 use nes_core::NesCore;
 
 use crate::{config::AiProfileConfig, profile::TaskProfile};
 
+/// Game-specific features extracted from Super Mario Bros RAM.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SmbFeatures {
+    /// Mario's total horizontal progress through the level (pixels + page offsets).
     pub level_progress: f32,
+    /// Mario's current horizontal velocity.
     pub horizontal_speed: f32,
+    /// Mario's current vertical velocity.
     pub vertical_speed: f32,
+    /// Indicates whether Mario is jumping or falling.
     pub airborne: bool,
+    /// Mario's current state (e.g. normal, dying, power-up animation).
     pub player_state: u8,
+    /// Total remaining lives.
     pub lives: u8,
 }
 
+/// The implementation of [`TaskProfile`] specific to Super Mario Bros.
 #[derive(Debug, Clone)]
 pub struct SmbProfile {
     config: AiProfileConfig,
 }
 
 impl SmbProfile {
+    /// Creates a new profile using the provided configuration.
     #[must_use]
     pub fn new(config: AiProfileConfig) -> Self {
         Self { config }

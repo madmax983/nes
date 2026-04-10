@@ -1,3 +1,5 @@
+//! CLI tool for evaluating a trained model on the SMB environment.
+
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table};

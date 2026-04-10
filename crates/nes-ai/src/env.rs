@@ -1,3 +1,10 @@
+//! Reinforcement Learning Environment Wrappers.
+//!
+//! This module provides the `gym`-like interface for reinforcement learning
+//! agents to interact with the NES emulator. It handles stepping the emulator,
+//! calculating rewards, tracking episode boundaries, and capturing observation
+//! frames.
+
 use std::fs;
 
 use nes_core::{
@@ -17,25 +24,40 @@ use crate::{
     snapshot::{SnapshotBundle, load_snapshot_bundle, sha256_hex},
 };
 
+/// The result of executing a single action step in the environment.
 #[derive(Debug, Clone)]
 pub struct StepOutput<F> {
+    /// The game-specific features extracted from RAM after the step.
     pub features: F,
+    /// The reward breakdown calculated for this step.
     pub reward: RewardBreakdown,
+    /// Indicates whether the episode has terminated (e.g. death, timeout, win).
     pub done: bool,
 }
 
+/// A fully encoded observation ready for consumption by an ML model.
+///
+/// Contains both the visual frame stack and scalar numeric features.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObservationSnapshot {
+    /// Number of stacked grayscale frames.
     pub frame_stack: usize,
+    /// Width of downsampled observation frames.
     pub width: usize,
+    /// Height of downsampled observation frames.
     pub height: usize,
+    /// Flattened array of normalized pixel data.
     pub frames: Vec<f32>,
+    /// Encoded numeric features (e.g. speed, timer).
     pub features: Vec<f32>,
 }
 
+/// A type-erased step output omitting the generic features, used for polymorphic environments.
 #[derive(Debug, Clone)]
 pub struct ControlStepOutput {
+    /// The reward breakdown calculated for this step.
     pub reward: RewardBreakdown,
+    /// Indicates whether the episode has terminated.
     pub done: bool,
 }
 
@@ -68,6 +90,7 @@ where
     P: TaskProfile,
     P::Features: RewardFeatures,
 {
+    /// Constructs a new environment wrapper from a parsed profile and snapshot bundle.
     #[must_use]
     pub fn new(profile: P, snapshot: SnapshotBundle) -> Self {
         let cfg = profile.config().clone();
@@ -245,11 +268,19 @@ where
         })
     }
 
+    /// Returns a reference to the recorded TAS movie for this episode.
+    ///
+    /// This movie contains all controller inputs executed since the last reset,
+    /// and can be replayed to visually verify the agent's behavior.
     #[must_use]
     pub fn recorded_movie(&self) -> &nes_core::tas::TasMovie {
         self.recorder.movie()
     }
 
+    /// Compiles metadata describing the completed episode.
+    ///
+    /// Includes the final reward, frame count, state hash, and profile
+    /// information used for tracking training performance.
     #[must_use]
     pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         EpisodeMetadata {
@@ -280,6 +311,7 @@ impl ProfileEnv<SmbProfile> {
     }
 }
 
+/// A type alias for the Super Mario Bros. specialized environment.
 pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 
 /// Type-erased wrapper for concrete environment specializations like SMB.
@@ -289,6 +321,7 @@ pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 /// "some control environment" across thread bounds without dealing with `Box<dyn Any>`
 /// trait object headaches.
 pub enum AnyControlEnv {
+    /// The variant wrapping a Super Mario Bros. environment.
     Smb(Box<SmbControlEnv>),
 }
 
@@ -346,6 +379,7 @@ impl AnyControlEnv {
         }
     }
 
+    /// Returns a reference to the recorded TAS movie for the active environment.
     #[must_use]
     pub fn recorded_movie(&self) -> &TasMovie {
         match self {
@@ -353,6 +387,7 @@ impl AnyControlEnv {
         }
     }
 
+    /// Compiles metadata describing the completed episode for the active environment.
     #[must_use]
     pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         match self {

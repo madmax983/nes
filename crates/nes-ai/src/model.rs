@@ -1,3 +1,8 @@
+//! ML Model Architectures.
+//!
+//! This module defines the neural network architecture used by our reinforcement
+//! learning agents. It leverages the `burn` deep learning framework.
+
 use burn_core as burn;
 use burn_core::prelude::{Backend, Config, Module, Tensor};
 use burn_nn::{
@@ -8,18 +13,25 @@ use burn_nn::{
 
 use crate::{config::MIN_OBSERVATION_DIM, env::ObservationSnapshot};
 
+/// Configuration for initializing the [`HybridPolicyValueNet`].
 #[derive(Config, Debug)]
 pub struct HybridPolicyValueConfig {
+    /// Number of consecutive frames stacked into the visual input channel.
     pub frame_stack: usize,
+    /// Number of distinct scalar features extracted from the emulator state.
     pub feature_count: usize,
+    /// The size of the discrete action space.
     pub action_count: usize,
+    /// Expected width of the visual observation tensor.
     #[config(default = "84")]
     pub observation_width: usize,
+    /// Expected height of the visual observation tensor.
     #[config(default = "84")]
     pub observation_height: usize,
 }
 
 impl HybridPolicyValueConfig {
+    /// Creates a configuration dynamically matched to an observation's dimensions.
     #[must_use]
     pub fn from_observation(observation: &ObservationSnapshot, action_count: usize) -> Self {
         Self::new(
@@ -31,6 +43,11 @@ impl HybridPolicyValueConfig {
         .with_observation_height(observation.height)
     }
 
+    /// Initializes a new instance of the model on the specified device.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the configuration specifies a dimension size of zero.
     #[must_use]
     pub fn init<B: Backend>(&self, device: &B::Device) -> HybridPolicyValueNet<B> {
         self.validate();
@@ -61,18 +78,30 @@ impl HybridPolicyValueConfig {
     }
 }
 
+/// A batch of observations prepared for the forward pass.
 #[derive(Debug)]
 pub struct HybridObservationBatch<B: Backend> {
+    /// Visual frames tensor of shape `[batch_size, frame_stack, height, width]`.
     pub frames: Tensor<B, 4>,
+    /// Scalar features tensor of shape `[batch_size, feature_count]`.
     pub features: Tensor<B, 2>,
 }
 
+/// The output of a forward pass through the model.
 #[derive(Debug)]
 pub struct HybridPolicyValueOutput<B: Backend> {
+    /// Unnormalized action probabilities.
     pub policy_logits: Tensor<B, 2>,
+    /// Estimated state value for calculating advantage.
     pub value: Tensor<B, 2>,
 }
 
+/// A neural network architecture that combines visual and scalar inputs.
+///
+/// This network uses convolutional layers to process the frame stack and linear
+/// layers to process the game-specific scalar features (like speed, position).
+/// The two streams are concatenated and fed into a common trunk, which then splits
+/// into an actor (policy) head and a critic (value) head.
 #[derive(Module, Debug)]
 pub struct HybridPolicyValueNet<B: Backend> {
     conv1: Conv2d<B>,
@@ -86,6 +115,7 @@ pub struct HybridPolicyValueNet<B: Backend> {
 }
 
 impl<B: Backend> HybridPolicyValueNet<B> {
+    /// Instantiates the network modules using the provided configuration.
     #[must_use]
     pub fn new(device: &B::Device, cfg: &HybridPolicyValueConfig) -> Self {
         let conv1 = Conv2dConfig::new([cfg.frame_stack, 16], [8, 8])
@@ -112,6 +142,7 @@ impl<B: Backend> HybridPolicyValueNet<B> {
         }
     }
 
+    /// Executes the forward pass of the model, mapping observations to logits and values.
     #[must_use]
     pub fn forward(&self, batch: HybridObservationBatch<B>) -> HybridPolicyValueOutput<B> {
         let vision = self.activation.forward(self.conv1.forward(batch.frames));

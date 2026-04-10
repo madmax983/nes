@@ -7,14 +7,24 @@ use sha2::{Digest, Sha256};
 
 use crate::error::AiError;
 
+/// The expected schema version for snapshot bundle JSON files.
 pub const SNAPSHOT_BUNDLE_VERSION: u32 = 1;
 
+/// A self-contained JSON artifact representing a frozen moment in an NES game.
+///
+/// Because RL agents need to train on specific levels without playing the whole
+/// game to get there, we use these bundles to instantly teleport the emulator
+/// to the start of a training scenario.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SnapshotBundle {
+    /// The schema version of this bundle.
     pub version: u32,
+    /// The SHA-256 hash of the ROM required to safely load this snapshot.
     pub rom_hash: String,
+    /// A human-readable identifier (e.g. "smb-world-1-1").
     pub snapshot_id: String,
+    /// The raw serialized memory state of the `NesCore`.
     pub snapshot: CoreSnapshot,
 }
 
@@ -80,6 +90,10 @@ pub fn load_snapshot_bundle(path: &Path) -> Result<SnapshotBundle, AiError> {
     Ok(bundle)
 }
 
+/// Computes the SHA-256 hash of a byte slice and returns it as a lowercase hex string.
+///
+/// This is primarily used to fingerprint `.nes` ROM files to ensure that
+/// loaded snapshots are not applied to the wrong game.
 #[must_use]
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);

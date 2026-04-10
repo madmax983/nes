@@ -1,3 +1,5 @@
+//! CLI tool for training an RL agent on the SMB environment.
+
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table};

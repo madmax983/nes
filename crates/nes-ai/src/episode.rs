@@ -1,3 +1,10 @@
+//! Tracking and serialization of completed training episodes.
+//!
+//! This module provides the tools to take an agent's finished "run"
+//! and serialize its actions, score, and environment metadata to disk.
+//! These artifacts allow us to visually review the agent's progress
+//! using the NES macro playback tools.
+
 use std::{fs, path::PathBuf};
 
 use nes_core::tas::{TasError, TasMovie};
@@ -5,29 +12,45 @@ use serde::Serialize;
 
 use crate::error::AiError;
 
+/// High-level summary of a completed training episode.
+///
+/// This metadata is recorded alongside the actual controller input movie,
+/// allowing us to analyze the performance of a run without re-simulating it.
 #[derive(Debug, Clone, Serialize)]
 pub struct EpisodeMetadata {
+    /// The ID of the environment profile used (e.g., "smb-level-1").
     pub profile_id: String,
+    /// The ID of the snapshot bundle from which the episode started.
     pub snapshot_id: String,
+    /// The SHA-256 hash of the ROM used during the run.
     pub rom_hash: String,
+    /// The final cumulative reward achieved by the agent.
     pub total_reward: f32,
+    /// The total number of frames the episode lasted before termination.
     pub episode_frames: u64,
+    /// A hash of the emulator's final state to verify replay determinism.
     pub final_state_hash: u64,
 }
 
+/// The set of output files generated for a completed episode.
 #[derive(Debug, Clone)]
 pub struct EpisodeArtifactPaths {
+    /// Path to the JSON file containing the raw `TasMovie` data.
     pub tas_json_path: PathBuf,
+    /// Path to the JSON file containing the `EpisodeMetadata`.
     pub run_json_path: PathBuf,
+    /// Path to the human-readable macro text file (if applicable).
     pub macro_txt_path: Option<PathBuf>,
 }
 
+/// A utility for writing episode artifacts to a specified output directory.
 #[derive(Debug, Clone)]
 pub struct EpisodeArtifactWriter {
     output_dir: PathBuf,
 }
 
 impl EpisodeArtifactWriter {
+    /// Creates a new writer configured to output files to the given directory.
     #[must_use]
     pub fn new(output_dir: PathBuf) -> Self {
         Self { output_dir }

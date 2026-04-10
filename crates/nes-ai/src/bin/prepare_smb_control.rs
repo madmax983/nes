@@ -1,3 +1,5 @@
+//! CLI tool for preparing SMB snapshot bundles for training.
+
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table};

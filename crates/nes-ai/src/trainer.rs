@@ -26,6 +26,7 @@ use crate::{
     reward::RewardFeatures,
 };
 
+/// The Burn backend type used during training (NdArray with Autodiff).
 pub type TrainBackend = Autodiff<NdArray<f32>>;
 type InferBackend = NdArray<f32>;
 
@@ -35,25 +36,50 @@ const SMOKE_OBSERVATION_HEIGHT: usize = 20;
 const SMOKE_MAX_EPISODE_FRAMES: u32 = 60;
 const SMOKE_ACTION_GAINS: [f32; ControlAction::action_count()] = [0.0, 0.05, 0.10, 0.0, 0.25, 1.25];
 
+/// Configuration hyperparameters for the PPO Trainer.
+///
+/// # Examples
+///
+/// ```
+/// use nes_ai::trainer::TrainerConfig;
+///
+/// let config = TrainerConfig::smoke();
+/// assert_eq!(config.rollout_steps, 16);
+/// ```
 #[derive(Debug, Clone)]
 pub struct TrainerConfig {
+    /// Initial random seed for reproducibility.
     pub seed: u64,
+    /// Number of steps to collect per rollout phase.
     pub rollout_steps: usize,
+    /// Batch size used during the PPO update epoch.
     pub minibatch_size: usize,
+    /// Number of PPO update epochs per rollout.
     pub epochs: usize,
+    /// Total number of rollout/update cycles to run.
     pub training_updates: usize,
+    /// Step size for gradient descent.
     pub learning_rate: f32,
+    /// Discount factor (gamma) for future rewards.
     pub discount_gamma: f32,
+    /// GAE lambda parameter for advantage smoothing.
     pub gae_lambda: f32,
+    /// PPO clipping threshold.
     pub clip_epsilon: f32,
+    /// Weight of the entropy bonus to encourage exploration.
     pub entropy_coefficient: f32,
+    /// Weight of the value function loss.
     pub value_loss_coefficient: f32,
+    /// How often (in updates) to save model checkpoints.
     pub checkpoint_interval: usize,
+    /// Optional directory to save `.json.gz` checkpoint files.
     pub checkpoint_dir: Option<PathBuf>,
+    /// Optional directory to save `.tas.json` and `.run.json` artifacts.
     pub artifact_dir: Option<PathBuf>,
 }
 
 impl TrainerConfig {
+    /// Returns a highly constrained configuration suitable for fast unit testing.
     #[must_use]
     pub fn smoke() -> Self {
         Self {
@@ -75,16 +101,23 @@ impl TrainerConfig {
     }
 }
 
+/// Summary metrics emitted after an evaluation phase.
 #[derive(Debug, Clone)]
 pub struct EvalSummary {
+    /// The mean total reward accumulated across all evaluated episodes.
     pub average_return: f32,
+    /// The file paths of any artifacts (movies, JSON) generated during evaluation.
     pub artifact_paths: Vec<EpisodeArtifactPaths>,
 }
 
+/// Summary metrics emitted after a complete training run.
 #[derive(Debug, Clone)]
 pub struct TrainSummary {
+    /// The mean total reward accumulated during the final rollout phase.
     pub average_return: f32,
+    /// The file paths of all ML checkpoints saved during the run.
     pub checkpoint_paths: Vec<PathBuf>,
+    /// The file paths of any artifacts (movies, JSON) generated during training.
     pub artifact_paths: Vec<EpisodeArtifactPaths>,
 }
 

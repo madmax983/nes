@@ -35,6 +35,12 @@ pub fn downsample_grayscale(rgba: &[u8], width: usize, height: usize) -> Vec<f32
     out
 }
 
+/// A ring buffer for stacking consecutive visual frames.
+///
+/// In order for a reinforcement learning agent to infer velocity and direction,
+/// it needs to see motion across time. A single frame is insufficient. The
+/// `FrameStack` accumulates the last $N$ downsampled frames into a unified
+/// observation.
 #[derive(Debug, Clone)]
 pub struct FrameStack {
     max_frames: usize,
@@ -72,11 +78,15 @@ impl FrameStack {
         self.frames.push_back(frame);
     }
 
+    /// Returns the frames currently in the stack as an array of slice references.
     #[must_use]
     pub fn as_slices(&self) -> Vec<&[f32]> {
         self.frames.iter().map(Vec::as_slice).collect()
     }
 
+    /// Returns a single contiguous vector containing all frames concatenated together.
+    ///
+    /// This flattened representation is the format required by the Burn tensor API.
     #[must_use]
     pub fn flattened(&self) -> Vec<f32> {
         let mut out = Vec::with_capacity(self.frames.len() * self.frame_len);
