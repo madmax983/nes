@@ -26,7 +26,7 @@ use crate::{
     reward::RewardFeatures,
 };
 
-/// The Burn backend type used during training (NdArray with Autodiff).
+/// The Burn backend type used during training (`NdArray` with Autodiff).
 pub type TrainBackend = Autodiff<NdArray<f32>>;
 type InferBackend = NdArray<f32>;
 
