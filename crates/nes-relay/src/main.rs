@@ -317,17 +317,13 @@ fn forward_to_room_peers(
         let Some(room_state) = guard.rooms.get(room) else {
             return Ok(());
         };
-        room_state
-            .players
-            .iter()
-            .filter_map(|(slot, tx)| {
-                if *slot == from_player {
-                    None
-                } else {
-                    Some(tx.clone())
-                }
-            })
-            .collect::<Vec<_>>()
+        let mut recipients = Vec::with_capacity(room_state.players.len());
+        for (slot, tx) in &room_state.players {
+            if *slot != from_player {
+                recipients.push(tx.clone());
+            }
+        }
+        recipients
     };
 
     for tx in recipients {
