@@ -545,6 +545,42 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Havoc tests are ignored in CI since they purposefully crash the process.
+    #[should_panic(expected = "capacity overflow")]
+    fn havoc_mcp_host_oom_vulnerability() {
+        // 🧨 Trigger: A malformed MCP payload with a massive Content-Length.
+        let payload = b"Content-Length: 18446744073709551615\r\n\r\n";
+
+        let bind_addr = "127.0.0.1:0";
+        let host = McpHost::start(bind_addr).unwrap();
+        let local_addr = host.bind_addr();
+
+        let mut stream = TcpStream::connect(local_addr).unwrap();
+        stream.set_write_timeout(Some(Duration::from_secs(1))).unwrap();
+
+        use std::io::Write;
+        stream.write_all(payload).unwrap();
+        stream.flush().unwrap();
+
+        let mut core = NesCore::new();
+
+        // 💥 DETONATE: This will cause an OOM panic in the background thread reading from the stream
+        // because it attempts to allocate a vec of size 18446744073709551615 bytes!
+        // We wait for the thread to process the payload and panic, and then we explicitly
+        // join on the host thread so the test runner properly catches the panic and fails.
+        for _ in 0..100 {
+            host.drain(&mut core);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        // Joining the background thread forces the panic to propagate to the main test thread
+        // so `#[should_panic]` can catch it.
+        if let Err(e) = host._thread.join() {
+            std::panic::resume_unwind(e);
+        }
+    }
+
+    #[test]
     fn host_start_and_client_round_trip_cover_bind_addr_drain_and_dispatch() {
         let host = McpHost::start("127.0.0.1:0").expect("host should start");
         let bind_addr = host.bind_addr().to_owned();
