@@ -1565,8 +1565,6 @@ fn build_startup_table(
 
 #[cfg(test)]
 mod tests {
-    use super::KeyboardInputMode;
-
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
@@ -1611,20 +1609,18 @@ mod tests {
     }
 
     use super::{
-        FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
-        KeyboardDecision, NetplayRuntimeStats, StepMode, WindowEventDecision,
-        advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
-        audio_queue_dropped, capture_path_for_frame, classify_keyboard_input,
+        FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats,
+        StepMode, WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
+        apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
         classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, encode_ppm, format_rom_read_error,
-        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
-        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
-        overlay_input_requires_redraw, recommended_input_delay_frames,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
-        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
-        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
-        update_button_bits, validate_action_allowed, write_frame_ppm,
+        element_state_pressed, encode_ppm, format_rom_read_error, gamepad_assignments_changed,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
+        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
+        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
+        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
+        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};

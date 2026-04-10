@@ -1,7 +1,7 @@
-use std::time::{Duration, Instant};
-use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 use nes_core::Command;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use std::time::{Duration, Instant};
+use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WindowEventDecision {
@@ -154,9 +154,9 @@ pub(crate) fn element_state_pressed(state: ElementState) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nes_core::Button;
     use winit::dpi::PhysicalSize;
     use winit::event::{ElementState, KeyboardInput, WindowEvent};
-    use nes_core::Button;
 
     #[test]
     fn classify_window_event_maps_window_variants_to_decisions() {
@@ -172,6 +172,7 @@ mod tests {
                 scancode: 0,
                 state: ElementState::Pressed,
                 virtual_keycode: Some(VirtualKeyCode::Z),
+                modifiers: Default::default(),
             },
             is_synthetic: false,
         };
@@ -323,10 +324,7 @@ mod tests {
                 next_deadline,
             } => {
                 assert!(missed_deadline);
-                assert_eq!(
-                    next_deadline,
-                    now + target_frame_time
-                );
+                assert_eq!(next_deadline, now + target_frame_time);
             }
             FrameDecision::WaitUntil(_) => panic!("expected step branch"),
         }
