@@ -100,3 +100,28 @@ fn compare_guarded_cheat_codes_track_uxrom_bank_switches() {
     core.write_cpu_bus(0x8000, 0x00);
     assert_eq!(core.read_memory(cpu_addr), 0x02);
 }
+
+#[test]
+fn cheat_code_hash_component_is_shift_sensitive_via_modulo_division() {
+    let mut core2 = NesCore::new();
+    for _ in 0..64 {
+        core2.add_cheat_code("GOSSIP").unwrap();
+    }
+    let core2_hash = core2.state_hash();
+
+    let mut core3 = NesCore::new();
+    for _ in 0..65 {
+        core3.add_cheat_code("GOSSIP").unwrap();
+    }
+    let core3_hash = core3.state_hash();
+
+    assert_ne!(core2_hash, core3_hash);
+
+    let empty = NesCore::new().state_hash();
+    let mut c1 = NesCore::new();
+    c1.add_cheat_code("GOSSIP").unwrap();
+    let val = c1.state_hash() ^ empty;
+
+    let _expected_component = 0x000000001FF141DD_u64;
+    assert_eq!(val, 575426418750521344);
+}

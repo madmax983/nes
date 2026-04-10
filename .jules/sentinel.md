@@ -57,3 +57,7 @@
 **Mutant:** `replace > with ==`, `<` and `>=` in `next.level_progress() > prev.level_progress()` at `crates/nes-ai/src/env.rs:163`
 **Diagnosis:** `MISSING_COVERAGE` - Tests using the mock profile never advanced `level_progress` and never triggered the `stalled_frames >= stall_frames` penalty. Thus, mutants that inverted or changed the reset condition survived because `stalled_frames` never hit the penalty threshold or never reset correctly on a simulated positive progression.
 **Kill Shot:** Exposed `core_mut()` in `ProfileEnv` to allow tests to manually write to the mock ROM memory location `0x006D` (the `level_progress` counter). Added `profile_env_applies_stall_penalty_when_no_progress_made` to test hitting the stall boundary and `profile_env_resets_stall_penalty_when_progress_increases` to test that the threshold resets to 0 when `level_progress` advances.
+**Strengthened cheat_code and mapper state hashing**
+**Mutant:** Replaced arithmetic and bitwise operators in `cheat_code_hash_component` and `mapper_hash_component`.
+**Diagnosis:** Weak assertion. No tests existed to verify that adding different cheat codes produced distinctly perturbed state hashes.
+**Kill Shot:** Wrote `cheat_code_hash_component_detects_shift_differences` and other rigorous tests. Wrote extensive mapper specific hash tests in `mapper_hash.rs`.
