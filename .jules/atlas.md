@@ -26,3 +26,7 @@
 **Extract Gamepad Logic from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` contained several gamepad-specific structs (`GamepadSnapshot`), constants (`CONTROLLER_BUTTONS`, `GAMEPAD_AXIS_THRESHOLD`), and helper methods mapping external inputs to internal NES core bits mixed in with generic UI state logic.
 **Blueprint:** Extracted all gamepad translation logic and related structs/constants into a new internal module `crates/nes-desktop/src/gamepad.rs`. Registered the module in `main.rs` as `pub(crate) mod gamepad;` to maintain strict boundary isolation from the public API while reducing `main.rs` bloat.
+
+**Extract RuntimeConfig from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` was bloated with over 150 lines dedicated strictly to parsing CLI arguments and configuration file settings into a structured `RuntimeConfig`. This mixed configuration logic with the main event loop.
+**Blueprint:** Extracted `RuntimeConfig`, `StepMode`, `CaptureConfig`, and their associated builder functions (`resolve_runtime_config`, `capture_config_from_parts`, `capture_path_for_frame`) into a dedicated `config.rs` module. Because these types depend on internal `netplay` logic also defined in `main.rs`, the new module is registered directly in `main.rs` (via `pub mod config;`) rather than the library root. Relocated unit tests for these functions into the new `config.rs` file to restore code coverage limits.
