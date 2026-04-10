@@ -1,30 +1,26 @@
+use crate::config::*;
 use crate::metrics::PerfMetrics;
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
+pub mod config;
 pub(crate) mod gamepad;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 pub(crate) mod metrics;
-mod netplay;
+pub(crate) mod netplay;
 
 use crate::gamepad::*;
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
-use nes_config::{
-    DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
-    parse_config_path_arg,
-};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
-use nes_desktop::args::parse_runtime_args;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{
     SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
@@ -37,9 +33,8 @@ use nes_desktop::overlay::{
     OverlayCheatSummary, OverlayCommand, OverlayModel, OverlaySlotSummary, draw_overlay,
 };
 use nes_desktop::rta::{
-    CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
-    ProfileStatus, RtaEvent, RtaManager, RtaProfile, RtaRuntimeConfig, compute_rom_hash,
-    load_profiles, select_profile,
+    CalibrationRecorder, ForbiddenAction, ProfileStatus, RtaEvent, RtaManager, RtaProfile,
+    compute_rom_hash, load_profiles, select_profile,
 };
 use nes_desktop::session_cheats::SessionCheats;
 use nes_netplay::{RollbackConfig, RollbackEngine};
@@ -55,48 +50,13 @@ use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
-use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
+use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
-const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
-const DEFAULT_WINDOW_SCALE: u32 = 3;
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
-const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
-const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 const SAVE_SLOT_COUNT: u8 = 5;
-
-struct RuntimeConfig {
-    rom_path: String,
-    cheat_codes: Vec<String>,
-    window_scale: u32,
-    step_mode: StepMode,
-    audio_enabled: bool,
-    trace_every_frames: u64,
-    metrics_enabled: bool,
-    metrics_every_frames: u64,
-    capture: Option<CaptureConfig>,
-    loaded_config_path: Option<PathBuf>,
-    mcp_enabled: bool,
-    mcp_bind_addr: String,
-    netplay: Option<NetplayRuntimeConfig>,
-    rta: Option<RtaRuntimeConfig>,
-    #[cfg(feature = "nova")]
-    auto_player_enabled: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StepMode {
-    CpuBudget(u32),
-    Frame,
-}
-
-#[derive(Debug, Clone)]
-struct CaptureConfig {
-    path_template: String,
-    every_n_frames: u64,
-}
 
 struct LoadedRomSession {
     rom_path: PathBuf,
@@ -819,10 +779,6 @@ fn is_player_two_slot(player_index: usize) -> bool {
 
 fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
     keyboard_bits | local_gamepad_bits
-}
-
-fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
-    runtime_flag || config_flag
 }
 
 fn should_log_rollback(distance: u64) -> bool {
@@ -1636,134 +1592,6 @@ fn run() -> Result<(), String> {
     });
 }
 
-fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
-    let raw_args: Vec<String> = env::args().skip(1).collect();
-    let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
-    let runtime_args = parse_runtime_args(&pass_through)?;
-
-    let loaded_config_path = config_path.clone().or_else(|| {
-        let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
-        if default_path.exists() {
-            Some(default_path)
-        } else {
-            None
-        }
-    });
-    let config = NesConfig::load_or_default(config_path.as_deref())?;
-
-    let rom_path = runtime_args
-        .rom_path
-        .or_else(|| config.desktop.rom_path.clone())
-        .or_else(|| config.roms.smb.clone())
-        .ok_or_else(|| {
-            format!(
-                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
-            )
-        })?;
-    let window_scale = normalize_nonzero_u32(config.desktop.window_scale, DEFAULT_WINDOW_SCALE);
-    let cpu_steps_per_frame = normalize_nonzero_u32(
-        config.desktop.cpu_steps_per_frame,
-        DEFAULT_CPU_STEPS_PER_FRAME,
-    );
-    let trace_every_frames = normalize_nonzero_u64(
-        config.desktop.trace_every_frames,
-        DEFAULT_TRACE_EVERY_FRAMES,
-    );
-    let metrics_every_frames = normalize_nonzero_u64(config.desktop.metrics_every_frames, 60);
-    let capture = capture_config_from_parts(
-        config.desktop.capture_path_template,
-        config.desktop.capture_every_frames,
-    );
-    let netplay_enabled =
-        netplay_feature_enabled(runtime_args.netplay_enabled, config.netplay.enabled);
-    let step_mode = if netplay_enabled {
-        StepMode::Frame
-    } else {
-        match config.desktop.step_mode {
-            StepModeConfig::Frame => StepMode::Frame,
-            StepModeConfig::Cpu => StepMode::CpuBudget(cpu_steps_per_frame),
-        }
-    };
-
-    let netplay = if netplay_enabled {
-        let relay_addr = runtime_args
-            .netplay_relay_addr
-            .or_else(|| Some(config.netplay.relay_addr.clone()))
-            .unwrap_or_default();
-        let room = runtime_args
-            .netplay_room
-            .or_else(|| Some(config.netplay.room.clone()))
-            .unwrap_or_default();
-        let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
-        let input_delay_frames = runtime_args
-            .netplay_input_delay_frames
-            .unwrap_or(config.netplay.input_delay_frames);
-        let max_rollback_frames = runtime_args
-            .netplay_max_rollback_frames
-            .unwrap_or(config.netplay.max_rollback_frames);
-        let hash_check_every_frames = runtime_args
-            .netplay_hash_check_every_frames
-            .unwrap_or(config.netplay.hash_check_every_frames);
-        if room.trim().is_empty() {
-            return Err("netplay room cannot be empty".to_owned());
-        }
-        Some(NetplayRuntimeConfig {
-            relay_addr,
-            room,
-            player,
-            input_delay_frames,
-            max_rollback_frames,
-            hash_check_every_frames,
-        })
-    } else {
-        None
-    };
-    let rta_enabled = runtime_args.rta_enabled
-        || runtime_args.rta_profile_id.is_some()
-        || runtime_args.rta_profiles_dir.is_some()
-        || runtime_args.rta_runs_dir.is_some()
-        || runtime_args.rta_calibrate;
-    let rta = if rta_enabled {
-        Some(RtaRuntimeConfig {
-            profile_id_override: runtime_args.rta_profile_id.clone(),
-            profiles_dir: PathBuf::from(
-                runtime_args
-                    .rta_profiles_dir
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
-            ),
-            runs_dir: PathBuf::from(
-                runtime_args
-                    .rta_runs_dir
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
-            ),
-            calibrate: runtime_args.rta_calibrate,
-        })
-    } else {
-        None
-    };
-
-    Ok(RuntimeConfig {
-        rom_path,
-        cheat_codes: runtime_args.cheat_codes,
-        window_scale,
-        step_mode,
-        audio_enabled: config.desktop.audio_enabled,
-        trace_every_frames,
-        metrics_enabled: config.desktop.metrics_enabled,
-        metrics_every_frames,
-        capture,
-        loaded_config_path,
-        mcp_enabled: runtime_args.mcp_enabled,
-        mcp_bind_addr: runtime_args.mcp_bind_addr,
-        netplay,
-        rta,
-        #[cfg(feature = "nova")]
-        auto_player_enabled: runtime_args.auto_player_enabled,
-    })
-}
-
 fn recommended_input_delay_frames(
     rtt_ms: Option<f64>,
     jitter_ms: f64,
@@ -1818,28 +1646,6 @@ fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Resul
             }
             Ok(())
         }
-    }
-}
-
-fn capture_config_from_parts(
-    path_template: Option<String>,
-    every_n_frames: u64,
-) -> Option<CaptureConfig> {
-    let template = path_template?;
-    if template.trim().is_empty() {
-        return None;
-    }
-    Some(CaptureConfig {
-        path_template: template,
-        every_n_frames: normalize_nonzero_u64(every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES),
-    })
-}
-
-fn capture_path_for_frame(template: &str, frame: u64) -> String {
-    if template.contains("{frame}") {
-        template.replace("{frame}", &format!("{frame:06}"))
-    } else {
-        template.to_owned()
     }
 }
 
@@ -2034,13 +1840,12 @@ mod tests {
         controller_state_delta_for_player, element_state_pressed, encode_ppm,
         evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
-        overlay_input_requires_redraw, recommended_input_delay_frames,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
-        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
-        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
-        update_button_bits, validate_action_allowed, write_frame_ppm,
+        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
+        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
+        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
+        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -2420,10 +2225,6 @@ mod tests {
             merge_local_input_bits(0b0000_0011, 0b0000_0101),
             0b0000_0111
         );
-
-        assert!(netplay_feature_enabled(true, false));
-        assert!(netplay_feature_enabled(false, true));
-        assert!(!netplay_feature_enabled(false, false));
 
         assert!(!should_log_rollback(0));
         assert!(should_log_rollback(1));
