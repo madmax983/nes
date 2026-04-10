@@ -1709,22 +1709,20 @@ mod tests {
     }
 
     use super::{
-        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
-        audio_queue_dropped,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
-        overlay_input_requires_redraw,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
-        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
-        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
-        update_button_bits, validate_action_allowed, write_frame_ppm,
+        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        KeyboardDecision, NetplayRuntimeStats, StepMode, TARGET_FRAME_TIME, WindowEventDecision,
+        advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
+        apply_runtime_cheat_codes, audio_queue_dropped, classify_keyboard_input,
+        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        netplay_feature_enabled, overlay_input_requires_redraw, reconcile_core_pause_with_overlay,
+        resync_restored_inputs, rom_picker_supported, scaled_window_dimensions,
+        select_active_gamepad_ids, should_capture_frame, should_log_rollback,
+        should_resume_after_rewind_hold, should_trace_frame, should_update_input_delay,
+        slot_action_for_hotkey, track_keyboard_bits_for_key, update_button_bits,
+        validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1754,14 +1752,6 @@ mod tests {
         // SAFETY: Test-only helper to synthesize opaque identifiers for equality checks.
         unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
     }
-
-
-
-
-
-
-
-
 
     #[test]
     fn map_virtual_keycode_maps_all_supported_keys() {
@@ -2353,8 +2343,6 @@ mod tests {
         assert_eq!(core.cpu_a(), 0x42);
         assert_eq!(core.cpu_pc(), 0x8002);
     }
-
-
 
     #[test]
     fn encode_ppm_emits_expected_headers_and_pixel_layout() {
