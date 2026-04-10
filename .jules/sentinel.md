@@ -62,3 +62,8 @@
 **Mutant:** replace `|` with `^` in bitwise assembly of address, value, compare in `<impl FromStr for CheatCode>::from_str`
 **Diagnosis:** EQUIVALENT_MUTANT. The various components being ORed together are mutually exclusive sets of bits. Therefore `|` and `^` do the exact same thing here.
 **Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+
+**Test Gap in CheatCode**
+**Mutant:** Replaced `|` with `^` and `&` in bitwise operations in `from_str` for `address`, `value`, and `compare`.
+**Diagnosis:** `WEAK_ASSERTION` / `MISSING_COVERAGE` - The existing tests only checked a handful of valid NES Game Genie codes, which left many individual bits untested. This allowed mutants to flip bitwise ORs to XORs, or bit shifts to different directions, without failing the tests.
+**Kill Shot:** Added exhaustive, bit-level property checks in `cheat_code_decodes_address_bits_correctly`, `cheat_code_decodes_value_bits_correctly`, and `cheat_code_applies_to_logic` to ensure every single 4-bit nybble contributed exactly the correct bits to the final decoded address, value, and compare bytes. Also added tests to ensure `raw()` returns the exact string and not empty or hardcoded values, and tested `alphabet_digit` directly.
