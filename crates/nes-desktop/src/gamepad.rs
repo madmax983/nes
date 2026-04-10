@@ -194,3 +194,132 @@ pub fn controller_state_delta_for_player(
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gilrs::GamepadId;
+    use nes_core::{Button, Command, Player};
+
+    fn fake_gamepad_id(raw: usize) -> GamepadId {
+        unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
+    }
+
+    #[test]
+    fn should_return_only_connected_gamepad_ids() {
+        let id0 = fake_gamepad_id(0);
+        let id1 = fake_gamepad_id(1);
+        let id2 = fake_gamepad_id(2);
+
+        let gamepads = vec![(id0, true), (id1, false), (id2, true)];
+        let connected = connected_gamepad_ids(gamepads);
+
+        assert_eq!(connected.len(), 2, "Expected exactly two connected gamepads");
+        assert!(connected.contains(&id0), "Expected connected gamepad 0 to be present");
+        assert!(connected.contains(&id2), "Expected connected gamepad 2 to be present");
+    }
+
+    #[test]
+    fn should_select_active_gamepad_ids_and_fill_slots() {
+        let id0 = fake_gamepad_id(0);
+        let id1 = fake_gamepad_id(1);
+        let id2 = fake_gamepad_id(2);
+
+        let connected = vec![id0, id1];
+        let current = [None, None];
+
+        let next = select_active_gamepad_ids(&connected, current);
+        assert_eq!(next[0], Some(id0), "Expected slot 0 to be filled by first gamepad");
+        assert_eq!(next[1], Some(id1), "Expected slot 1 to be filled by second gamepad");
+
+        let connected2 = vec![id0, id2];
+        let current2 = [Some(id0), Some(id1)];
+
+        let next2 = select_active_gamepad_ids(&connected2, current2);
+        assert_eq!(next2[0], Some(id0), "Expected slot 0 to retain previously assigned active gamepad");
+        assert_eq!(next2[1], Some(id2), "Expected slot 1 to replace disconnected gamepad with newly active one");
+    }
+
+    #[test]
+    fn should_map_gamepad_snapshot_to_correct_nes_bits() {
+        let mut snapshot = GamepadSnapshot::default();
+        assert_eq!(gamepad_snapshot_to_bits(snapshot), 0, "Expected empty snapshot to return 0 mask");
+
+        snapshot.connected = true;
+        snapshot.south_pressed = true;
+        snapshot.start_pressed = true;
+
+        let bits = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits & Button::A.bit_mask(), 0, "Expected A button to be set");
+        assert_ne!(bits & Button::Start.bit_mask(), 0, "Expected Start button to be set");
+        assert_eq!(bits & Button::B.bit_mask(), 0, "Expected B button to not be set");
+
+        snapshot.south_pressed = false;
+        snapshot.east_pressed = true;
+        let bits2 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits2 & Button::A.bit_mask(), 0, "Expected East face button to map to A");
+
+        snapshot.west_pressed = true;
+        let bits3 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits3 & Button::B.bit_mask(), 0, "Expected West face button to map to B");
+
+        snapshot.north_pressed = true;
+        let bits4 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits4 & Button::B.bit_mask(), 0, "Expected North face button to map to B");
+
+        snapshot.select_pressed = true;
+        let bits5 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits5 & Button::Select.bit_mask(), 0, "Expected Select button to be set");
+
+        snapshot.dpad_up_pressed = true;
+        snapshot.dpad_down_pressed = true;
+        snapshot.dpad_left_pressed = true;
+        snapshot.dpad_right_pressed = true;
+        let bits6 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits6 & Button::Up.bit_mask(), 0, "Expected Up button to be set via dpad");
+        assert_ne!(bits6 & Button::Down.bit_mask(), 0, "Expected Down button to be set via dpad");
+        assert_ne!(bits6 & Button::Left.bit_mask(), 0, "Expected Left button to be set via dpad");
+        assert_ne!(bits6 & Button::Right.bit_mask(), 0, "Expected Right button to be set via dpad");
+
+        snapshot.dpad_up_pressed = false;
+        snapshot.dpad_down_pressed = false;
+        snapshot.dpad_left_pressed = false;
+        snapshot.dpad_right_pressed = false;
+
+        snapshot.left_y = -0.6;
+        let bits7 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits7 & Button::Up.bit_mask(), 0, "Expected Up button to be set via stick threshold");
+
+        snapshot.left_y = 0.6;
+        let bits8 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits8 & Button::Down.bit_mask(), 0, "Expected Down button to be set via stick threshold");
+
+        snapshot.left_y = 0.0;
+        snapshot.left_x = -0.6;
+        let bits9 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits9 & Button::Left.bit_mask(), 0, "Expected Left button to be set via stick threshold");
+
+        snapshot.left_x = 0.6;
+        let bits10 = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits10 & Button::Right.bit_mask(), 0, "Expected Right button to be set via stick threshold");
+    }
+
+    #[test]
+    fn should_emit_press_and_release_commands_for_state_deltas() {
+        let mut cmds = controller_state_delta_for_player(0, Button::A.bit_mask(), Player::One);
+        assert_eq!(cmds.next(), Some(Command::PressButton(Button::A)), "Expected Player One A button press command");
+        assert_eq!(cmds.next(), None, "Expected no additional commands");
+
+        let mut cmds2 = controller_state_delta_for_player(Button::A.bit_mask(), 0, Player::One);
+        assert_eq!(cmds2.next(), Some(Command::ReleaseButton(Button::A)), "Expected Player One A button release command");
+        assert_eq!(cmds2.next(), None, "Expected no additional commands");
+
+        let mut cmds3 = controller_state_delta_for_player(0, Button::B.bit_mask(), Player::Two);
+        assert_eq!(cmds3.next(), Some(Command::PressButton2(Button::B)), "Expected Player Two B button press command");
+        assert_eq!(cmds3.next(), None, "Expected no additional commands");
+
+        let mut cmds4 = controller_state_delta_for_player(Button::B.bit_mask(), 0, Player::Two);
+        assert_eq!(cmds4.next(), Some(Command::ReleaseButton2(Button::B)), "Expected Player Two B button release command");
+        assert_eq!(cmds4.next(), None, "Expected no additional commands");
+    }
+}

@@ -23,3 +23,6 @@
 
 **Learning:** When using cargo mutants, testing && and || conditions by asserting true/false isn't enough; you need to write specific tests that hit each side of the logic operators independently to kill mutations that replace || with && or && with ||.
 **Action:** Always create separate test cases for each independent condition within an || or && statement instead of grouping them together.
+## 2024-06-25 - [Desktop Gamepad Coverage Improvement]
+**Learning:** `gamepad.rs` inside `nes-desktop` was missing test coverage for `connected_gamepad_ids`, `select_active_gamepad_ids`, `gamepad_snapshot_to_bits`, and `controller_state_delta_for_player`.
+**Action:** Created tests for these features inside `gamepad.rs` within `#[cfg(test)] mod tests { ... }`.
