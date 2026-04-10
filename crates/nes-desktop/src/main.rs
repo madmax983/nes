@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
-pub mod config;
+mod config;
 pub(crate) mod gamepad;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;

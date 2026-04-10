@@ -73,7 +73,11 @@ pub fn capture_path_for_frame(template: &str, frame: u64) -> String {
 
 pub fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     let raw_args: Vec<String> = env::args().skip(1).collect();
-    let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
+    build_runtime_config(&raw_args)
+}
+
+pub fn build_runtime_config(raw_args: &[String]) -> Result<RuntimeConfig, String> {
+    let (config_path, pass_through) = parse_config_path_arg(raw_args)?;
     let runtime_args = parse_runtime_args(&pass_through)?;
 
     let loaded_config_path = config_path.clone().or_else(|| {
@@ -202,6 +206,75 @@ pub fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_runtime_config_handles_empty_args_by_falling_back_to_defaults() {
+        let args = vec!["path/to/my_rom.nes".to_string()];
+        let config = build_runtime_config(&args).expect("valid minimal args");
+        assert_eq!(config.rom_path, "path/to/my_rom.nes");
+        assert!(!config.mcp_enabled);
+        assert!(config.netplay.is_none());
+        assert!(config.rta.is_none());
+    }
+
+    #[test]
+    fn build_runtime_config_enables_netplay_and_forces_frame_step_mode() {
+        let args = vec![
+            "path/to/my_rom.nes".to_string(),
+            "--netplay".to_string(),
+            "--netplay-player=2".to_string(),
+            "--netplay-room=lobby".to_string(),
+            "--netplay-delay=4".to_string(),
+        ];
+        let config = build_runtime_config(&args).expect("valid netplay args");
+
+        assert_eq!(
+            config.step_mode,
+            StepMode::Frame,
+            "netplay forces frame step mode"
+        );
+
+        let netplay = config.netplay.expect("netplay should be enabled");
+        assert_eq!(netplay.player, 2);
+        assert_eq!(netplay.room, "lobby");
+        assert_eq!(netplay.input_delay_frames, 4);
+    }
+
+    #[test]
+    fn build_runtime_config_rejects_empty_netplay_room() {
+        let args = vec![
+            "path/to/my_rom.nes".to_string(),
+            "--netplay".to_string(),
+            "--netplay-room=".to_string(),
+        ];
+        if let Err(err) = build_runtime_config(&args) {
+            assert!(err.contains("netplay room cannot be empty"));
+        } else {
+            panic!("Expected an error due to empty room");
+        }
+    }
+
+    #[test]
+    fn build_runtime_config_enables_rta_when_flags_present() {
+        let args = vec![
+            "path/to/my_rom.nes".to_string(),
+            "--rta".to_string(),
+            "--rta-calibrate".to_string(),
+        ];
+        let config = build_runtime_config(&args).expect("valid rta args");
+        let rta = config.rta.expect("rta should be enabled");
+        assert!(rta.calibrate);
+    }
+
+    #[test]
+    fn build_runtime_config_fails_if_no_rom_provided_and_no_default_exists() {
+        let args = vec!["--help".to_string()];
+        if let Err(err) = build_runtime_config(&args) {
+            assert!(err.contains("Usage:"));
+        } else {
+            panic!("Expected an error for missing rom/help flag");
+        }
+    }
 
     #[test]
     fn capture_config_helpers_handle_placeholders_and_defaults() {
