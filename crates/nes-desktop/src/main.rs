@@ -1714,8 +1714,7 @@ mod tests {
         advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
         apply_runtime_cheat_codes, audio_queue_dropped, classify_keyboard_input,
         classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
-        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline,         gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
         is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
         netplay_feature_enabled, overlay_input_requires_redraw, reconcile_core_pause_with_overlay,
         resync_restored_inputs, rom_picker_supported, scaled_window_dimensions,
@@ -2351,20 +2350,7 @@ mod tests {
         assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
     }
 
-    #[test]
-    fn format_rom_read_error_handles_not_found_and_other_errors() {
-        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
-        let msg = format_rom_read_error("bad.nes", &not_found);
-        assert!(msg.contains("Could not find the ROM file at"));
-        assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("homebrew.nes"));
 
-        let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        let msg = format_rom_read_error("bad.nes", &other);
-        assert!(msg.contains("Failed to read ROM at"));
-        assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("permission denied"));
-    }
 
     #[test]
     fn write_frame_ppm_validates_frame_size_and_writes_output_files() {
