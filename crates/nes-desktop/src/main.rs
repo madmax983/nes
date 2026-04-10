@@ -226,7 +226,10 @@ fn slot_action_for_hotkey(is_save: bool, selected_slot: u8) -> Option<AppAction>
     })
 }
 
-fn apply_runtime_cheat_codes(core: &mut NesCore, cheat_codes: &[String]) -> Result<(), String> {
+fn apply_runtime_cheat_codes<'a>(
+    core: &mut NesCore,
+    cheat_codes: impl Iterator<Item = &'a str>,
+) -> Result<(), String> {
     core.clear_cheat_codes();
     for raw_code in cheat_codes {
         core.add_cheat_code(raw_code)
@@ -236,7 +239,7 @@ fn apply_runtime_cheat_codes(core: &mut NesCore, cheat_codes: &[String]) -> Resu
 }
 
 fn apply_session_cheats(core: &mut NesCore, cheats: &SessionCheats) -> Result<(), String> {
-    apply_runtime_cheat_codes(core, &cheats.enabled_codes())
+    apply_runtime_cheat_codes(core, cheats.enabled_codes())
 }
 
 fn load_rom_session(
@@ -2353,9 +2356,9 @@ mod tests {
     #[test]
     fn applying_runtime_cheat_codes_replaces_existing_codes() {
         let mut core = NesCore::new();
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+        apply_runtime_cheat_codes(&mut core, ["GOSSIP"].into_iter())
             .expect("first cheat application should succeed");
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+        apply_runtime_cheat_codes(&mut core, ["GOSSIP"].into_iter())
             .expect("second cheat application should succeed");
         assert_eq!(core.cheat_codes().len(), 1);
     }

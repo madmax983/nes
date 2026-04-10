@@ -201,15 +201,17 @@ impl SessionCheats {
     /// cheats.add("GOSSIP").unwrap();
     /// cheats.add("ZEXPYGLA").unwrap();
     /// cheats.toggle(1).unwrap(); // disable the second code
-    /// assert_eq!(cheats.enabled_codes(), vec!["GOSSIP"]);
+    /// assert_eq!(cheats.enabled_codes().collect::<Vec<_>>(), vec!["GOSSIP"]);
     /// ```
-    #[must_use]
-    pub fn enabled_codes(&self) -> Vec<String> {
+    ///
+    /// **⚡ Bolt Optimization:** Returns an iterator instead of allocating a new `Vec<String>`.
+    /// This removes unnecessary heap allocations and string cloning on the hot path
+    /// when the emulator polls for active cheat codes during rendering/stepping.
+    pub fn enabled_codes(&self) -> impl Iterator<Item = &str> {
         self.entries
             .iter()
             .filter(|entry| entry.enabled)
-            .map(|entry| entry.raw_code.clone())
-            .collect()
+            .map(|entry| entry.raw_code.as_str())
     }
 
     /// Counts how many distinct cheat codes are being tracked, regardless of active status.
@@ -272,7 +274,10 @@ mod tests {
         .expect("seeded codes should validate");
 
         assert_eq!(cheats.len(), 3);
-        assert_eq!(cheats.enabled_codes(), vec!["GOSSIP", "ZEXPYGLA", "GOSSIP"]);
+        assert_eq!(
+            cheats.enabled_codes().collect::<Vec<_>>(),
+            vec!["GOSSIP", "ZEXPYGLA", "GOSSIP"]
+        );
     }
 
     #[test]
@@ -283,7 +288,7 @@ mod tests {
 
         cheats.toggle(0).expect("toggle should succeed");
         assert!(!cheats.entries()[0].enabled);
-        assert_eq!(cheats.enabled_codes(), vec!["ZEXPYGLA"]);
+        assert_eq!(cheats.enabled_codes().collect::<Vec<_>>(), vec!["ZEXPYGLA"]);
 
         let removed = cheats.remove(1).expect("remove should succeed");
         assert_eq!(removed.raw_code, "ZEXPYGLA");
