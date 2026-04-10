@@ -24,7 +24,7 @@ use nes_config::{
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
-use nes_desktop::args::parse_runtime_args;
+use nes_desktop::args::{parse_runtime_args, RuntimeArgs};
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{
     SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
@@ -1658,6 +1658,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 
     let rom_path = runtime_args
         .rom_path
+        .clone()
         .or_else(|| config.desktop.rom_path.clone())
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
@@ -1676,7 +1677,7 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     );
     let metrics_every_frames = normalize_nonzero_u64(config.desktop.metrics_every_frames, 60);
     let capture = capture_config_from_parts(
-        config.desktop.capture_path_template,
+        config.desktop.capture_path_template.clone(),
         config.desktop.capture_every_frames,
     );
     let netplay_enabled =
@@ -1690,64 +1691,8 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         }
     };
 
-    let netplay = if netplay_enabled {
-        let relay_addr = runtime_args
-            .netplay_relay_addr
-            .or_else(|| Some(config.netplay.relay_addr.clone()))
-            .unwrap_or_default();
-        let room = runtime_args
-            .netplay_room
-            .or_else(|| Some(config.netplay.room.clone()))
-            .unwrap_or_default();
-        let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
-        let input_delay_frames = runtime_args
-            .netplay_input_delay_frames
-            .unwrap_or(config.netplay.input_delay_frames);
-        let max_rollback_frames = runtime_args
-            .netplay_max_rollback_frames
-            .unwrap_or(config.netplay.max_rollback_frames);
-        let hash_check_every_frames = runtime_args
-            .netplay_hash_check_every_frames
-            .unwrap_or(config.netplay.hash_check_every_frames);
-        if room.trim().is_empty() {
-            return Err("netplay room cannot be empty".to_owned());
-        }
-        Some(NetplayRuntimeConfig {
-            relay_addr,
-            room,
-            player,
-            input_delay_frames,
-            max_rollback_frames,
-            hash_check_every_frames,
-        })
-    } else {
-        None
-    };
-    let rta_enabled = runtime_args.rta_enabled
-        || runtime_args.rta_profile_id.is_some()
-        || runtime_args.rta_profiles_dir.is_some()
-        || runtime_args.rta_runs_dir.is_some()
-        || runtime_args.rta_calibrate;
-    let rta = if rta_enabled {
-        Some(RtaRuntimeConfig {
-            profile_id_override: runtime_args.rta_profile_id.clone(),
-            profiles_dir: PathBuf::from(
-                runtime_args
-                    .rta_profiles_dir
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
-            ),
-            runs_dir: PathBuf::from(
-                runtime_args
-                    .rta_runs_dir
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
-            ),
-            calibrate: runtime_args.rta_calibrate,
-        })
-    } else {
-        None
-    };
+    let netplay = resolve_netplay_config(netplay_enabled, &runtime_args, &config)?;
+    let rta = resolve_rta_config(&runtime_args);
 
     Ok(RuntimeConfig {
         rom_path,
@@ -1766,6 +1711,74 @@ fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         rta,
         #[cfg(feature = "nova")]
         auto_player_enabled: runtime_args.auto_player_enabled,
+    })
+}
+
+fn resolve_netplay_config(
+    netplay_enabled: bool,
+    runtime_args: &RuntimeArgs,
+    config: &NesConfig,
+) -> Result<Option<NetplayRuntimeConfig>, String> {
+    if !netplay_enabled {
+        return Ok(None);
+    }
+    let relay_addr = runtime_args
+        .netplay_relay_addr
+        .clone()
+        .or_else(|| Some(config.netplay.relay_addr.clone()))
+        .unwrap_or_default();
+    let room = runtime_args
+        .netplay_room
+        .clone()
+        .or_else(|| Some(config.netplay.room.clone()))
+        .unwrap_or_default();
+    let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
+    let input_delay_frames = runtime_args
+        .netplay_input_delay_frames
+        .unwrap_or(config.netplay.input_delay_frames);
+    let max_rollback_frames = runtime_args
+        .netplay_max_rollback_frames
+        .unwrap_or(config.netplay.max_rollback_frames);
+    let hash_check_every_frames = runtime_args
+        .netplay_hash_check_every_frames
+        .unwrap_or(config.netplay.hash_check_every_frames);
+    if room.trim().is_empty() {
+        return Err("netplay room cannot be empty".to_owned());
+    }
+    Ok(Some(NetplayRuntimeConfig {
+        relay_addr,
+        room,
+        player,
+        input_delay_frames,
+        max_rollback_frames,
+        hash_check_every_frames,
+    }))
+}
+
+fn resolve_rta_config(runtime_args: &RuntimeArgs) -> Option<RtaRuntimeConfig> {
+    let rta_enabled = runtime_args.rta_enabled
+        || runtime_args.rta_profile_id.is_some()
+        || runtime_args.rta_profiles_dir.is_some()
+        || runtime_args.rta_runs_dir.is_some()
+        || runtime_args.rta_calibrate;
+    if !rta_enabled {
+        return None;
+    }
+    Some(RtaRuntimeConfig {
+        profile_id_override: runtime_args.rta_profile_id.clone(),
+        profiles_dir: PathBuf::from(
+            runtime_args
+                .rta_profiles_dir
+                .clone()
+                .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
+        ),
+        runs_dir: PathBuf::from(
+            runtime_args
+                .rta_runs_dir
+                .clone()
+                .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
+        ),
+        calibrate: runtime_args.rta_calibrate,
     })
 }
 
