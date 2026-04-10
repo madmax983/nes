@@ -1,0 +1,811 @@
+  1650	        ]);
+  1651	    }
+  1652	    #[cfg(feature = "nova")]
+  1653	    {
+  1654	        if runtime.auto_player_enabled {
+  1655	            table.add_row(vec![
+  1656	                Cell::new("Nova"),
+  1657	                Cell::new("Auto Player Chaos Fuzzing Enabled"),
+  1658	            ]);
+  1659	        }
+  1660	    }
+  1661
+  1662	    table
+  1663	}
+  1664
+  1665	#[cfg(test)]
+  1666	mod tests {
+  1667
+  1668	    #[test]
+  1669	    fn build_startup_table_creates_expected_table_with_all_options() {
+  1670	        use super::*;
+  1671	        use std::path::PathBuf;
+  1672
+  1673	        let runtime = RuntimeConfig {
+  1674	            rom_path: "test.nes".to_string(),
+  1675	            loaded_config_path: Some(PathBuf::from("config.toml")),
+  1676	            step_mode: StepMode::Frame,
+  1677	            audio_enabled: true,
+  1678	            cheat_codes: vec![],
+  1679	            rta: None,
+  1680	            netplay: None,
+  1681	            window_scale: 2,
+  1682	            trace_every_frames: 0,
+  1683	            metrics_enabled: false,
+  1684	            metrics_every_frames: 0,
+  1685	            capture: None,
+  1686	            mcp_enabled: false,
+  1687	            mcp_bind_addr: "".to_string(),
+  1688	            #[cfg(feature = "nova")]
+  1689	            auto_player_enabled: true,
+  1690	        };
+  1691
+  1692	        let session = LoadedRomSession {
+  1693	            rom_path: PathBuf::from("test.nes"),
+  1694	            rom_hash: "hash".to_string(),
+  1695	            info: nes_core::RomLoadInfo {
+  1696	                mapper_id: 0,
+  1697	                prg_rom_bytes: 16384,
+  1698	                reset_pc: 0x8000,
+  1699	            },
+  1700	            slot_metadata: vec![],
+  1701	        };
+  1702
+  1703	        let rta_manager = None;
+  1704	        let table = build_startup_table(&runtime, &session, &runtime.step_mode, rta_manager);
+  1705
+  1706	        assert!(table.to_string().contains("ROM Path"));
+  1707	        assert!(table.to_string().contains("test.nes"));
+  1708	        assert!(table.to_string().contains("config.toml"));
+  1709	    }
+  1710
+  1711	    use super::{
+  1712	        DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
+  1713	        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
+  1714	        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
+  1715	        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
+  1716	        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
+  1717	        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
+  1718	        controller_state_delta_for_player, element_state_pressed, encode_ppm,
+  1719	        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
+  1720	        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
+  1721	        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
+  1722	        overlay_input_requires_redraw, recommended_input_delay_frames,
+  1723	        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+  1724	        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+  1725	        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+  1726	        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+  1727	        update_button_bits, validate_action_allowed, write_frame_ppm,
+  1728	    };
+  1729	    use gilrs::GamepadId;
+  1730	    use nes_core::{Button, Command, NesCore};
+  1731	    use nes_desktop::actions::AppAction;
+  1732	    use nes_desktop::overlay::OverlayModel;
+  1733	    use std::fs;
+  1734	    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+  1735	    use winit::dpi::PhysicalSize;
+  1736	    use winit::event::{
+  1737	        DeviceId, ElementState, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
+  1738	    };
+  1739
+  1740	    fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
+  1741	        let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
+  1742	        rom[0] = 0x4E; // N
+  1743	        rom[1] = 0x45; // E
+  1744	        rom[2] = 0x53; // S
+  1745	        rom[3] = 0x1A;
+  1746	        rom[4] = prg_banks;
+  1747	        rom[5] = 0; // CHR RAM
+  1748	        rom[6] = (mapper_id & 0x0F) << 4;
+  1749	        rom[7] = mapper_id & 0xF0;
+  1750	        rom
+  1751	    }
+  1752
+  1753	    fn fake_gamepad_id(raw: usize) -> GamepadId {
+  1754	        // SAFETY: Test-only helper to synthesize opaque identifiers for equality checks.
+  1755	        unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
+  1756	    }
+  1757
+  1758	    #[test]
+  1759	    fn adaptive_delay_reacts_to_rtt_and_jitter() {
+  1760	        let increased = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+  1761	        assert!(
+  1762	            increased >= 4,
+  1763	            "expected higher delay for higher RTT+jitter"
+  1764	        );
+  1765
+  1766	        let unchanged = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, increased);
+  1767	        assert!(
+  1768	            unchanged == increased || unchanged + 1 == increased,
+  1769	            "hysteresis should avoid abrupt downshifts"
+  1770	        );
+  1771	    }
+  1772
+  1773	    #[test]
+  1774	    fn adaptive_delay_uses_current_when_no_rtt_sample() {
+  1775	        let delay = recommended_input_delay_frames(None, 0.0, 1, 12, 3);
+  1776	        assert_eq!(delay, 3);
+  1777	    }
+  1778
+  1779	    #[test]
+  1780	    fn adaptive_delay_exact_targets_and_hysteresis_behave_as_expected() {
+  1781	        let raised = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+  1782	        assert_eq!(raised, 5);
+  1783
+  1784	        let clamped = recommended_input_delay_frames(Some(400.0), 100.0, 1, 6, 2);
+  1785	        assert_eq!(clamped, 6);
+  1786
+  1787	        let drops_by_one = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 6);
+  1788	        assert_eq!(drops_by_one, 5);
+  1789
+  1790	        let holds_within_hysteresis = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 4);
+  1791	        assert_eq!(holds_within_hysteresis, 4);
+  1792
+  1793	        let jitter_weighted = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 1);
+  1794	        assert_eq!(jitter_weighted, 3);
+  1795
+  1796	        let equal_target_holds_current = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 3);
+  1797	        assert_eq!(equal_target_holds_current, 3);
+  1798	    }
+  1799
+  1800	    #[test]
+  1801	    fn adaptive_delay_returns_min_when_bounds_are_invalid() {
+  1802	        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
+  1803	        assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
+  1804	    }
+  1805
+  1806	    #[test]
+  1807	    fn map_virtual_keycode_maps_all_supported_keys() {
+  1808	        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
+  1809	        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
+  1810	        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
+  1811	        assert_eq!(
+  1812	            map_virtual_keycode(VirtualKeyCode::RShift),
+  1813	            Some("ShiftRight")
+  1814	        );
+  1815	        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
+  1816	        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
+  1817	        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
+  1818	        assert_eq!(
+  1819	            map_virtual_keycode(VirtualKeyCode::Right),
+  1820	            Some("ArrowRight")
+  1821	        );
+  1822	        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+  1823	    }
+  1824
+  1825	    #[test]
+  1826	    #[allow(deprecated)]
+  1827	    fn classify_window_event_maps_window_variants_to_decisions() {
+  1828	        assert_eq!(
+  1829	            classify_window_event(&WindowEvent::CloseRequested),
+  1830	            WindowEventDecision::CloseRequested
+  1831	        );
+  1832
+  1833	        let key_event = WindowEvent::KeyboardInput {
+  1834	            // SAFETY: winit explicitly exposes dummy IDs for unit testing.
+  1835	            device_id: unsafe { DeviceId::dummy() },
+  1836	            input: KeyboardInput {
+  1837	                scancode: 0,
+  1838	                state: ElementState::Pressed,
+  1839	                virtual_keycode: Some(VirtualKeyCode::Z),
+  1840	                modifiers: ModifiersState::empty(),
+  1841	            },
+  1842	            is_synthetic: false,
+  1843	        };
+  1844	        assert_eq!(
+  1845	            classify_window_event(&key_event),
+  1846	            WindowEventDecision::KeyboardInput {
+  1847	                key: Some(VirtualKeyCode::Z),
+  1848	                pressed: true
+  1849	            }
+  1850	        );
+  1851
+  1852	        let resized = WindowEvent::Resized(PhysicalSize::new(640, 480));
+  1853	        assert_eq!(
+  1854	            classify_window_event(&resized),
+  1855	            WindowEventDecision::Resized {
+  1856	                width: 640,
+  1857	                height: 480
+  1858	            }
+  1859	        );
+  1860
+  1861	        let mut scale_size = PhysicalSize::new(800, 600);
+  1862	        let scale_changed = WindowEvent::ScaleFactorChanged {
+  1863	            scale_factor: 1.25,
+  1864	            new_inner_size: &mut scale_size,
+  1865	        };
+  1866	        assert_eq!(
+  1867	            classify_window_event(&scale_changed),
+  1868	            WindowEventDecision::ScaleFactorChanged {
+  1869	                width: 800,
+  1870	                height: 600
+  1871	            }
+  1872	        );
+  1873
+  1874	        let ignored = WindowEvent::Focused(true);
+  1875	        assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
+  1876	    }
+  1877
+  1878	    #[test]
+  1879	    fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
+  1880	        assert_eq!(
+  1881	            classify_keyboard_input(VirtualKeyCode::Escape, true, false, false, false),
+  1882	            KeyboardDecision::ToggleOverlay
+  1883	        );
+  1884	        assert_eq!(
+  1885	            classify_keyboard_input(VirtualKeyCode::F5, true, false, false, false),
+  1886	            KeyboardDecision::ManualSaveState
+  1887	        );
+  1888	        assert_eq!(
+  1889	            classify_keyboard_input(VirtualKeyCode::F8, true, false, false, false),
+  1890	            KeyboardDecision::ManualLoadState
+  1891	        );
+  1892	        assert_eq!(
+  1893	            classify_keyboard_input(VirtualKeyCode::R, true, false, false, false),
+  1894	            KeyboardDecision::SetRewindHeld(true)
+  1895	        );
+  1896	        assert_eq!(
+  1897	            classify_keyboard_input(VirtualKeyCode::R, false, true, false, false),
+  1898	            KeyboardDecision::SetRewindHeld(false)
+  1899	        );
+  1900	        assert_eq!(
+  1901	            classify_keyboard_input(VirtualKeyCode::Z, true, true, false, false),
+  1902	            KeyboardDecision::UpdateKeyboardBits {
+  1903	                mask: Button::A.bit_mask(),
+  1904	                pressed: true
+  1905	            }
+  1906	        );
+  1907	        assert_eq!(
+  1908	            classify_keyboard_input(VirtualKeyCode::X, false, false, false, false),
+  1909	            KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
+  1910	        );
+  1911	        assert_eq!(
+  1912	            classify_keyboard_input(VirtualKeyCode::Escape, false, false, false, false),
+  1913	            KeyboardDecision::Noop
+  1914	        );
+  1915	        assert_eq!(
+  1916	            classify_keyboard_input(VirtualKeyCode::F9, true, false, true, false),
+  1917	            KeyboardDecision::RtaManualSplit
+  1918	        );
+  1919	        assert_eq!(
+  1920	            classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
+  1921	            KeyboardDecision::RtaFinish
+  1922	        );
+  1923	        assert_eq!(
+  1924	            classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
+  1925	            KeyboardDecision::Noop
+  1926	        );
+  1927	    }
+  1928
+  1929	    #[test]
+  1930	    fn selected_slot_hotkeys_target_current_slot() {
+  1931	        assert_eq!(
+  1932	            slot_action_for_hotkey(true, 3),
+  1933	            Some(AppAction::SaveSlot(3))
+  1934	        );
+  1935	        assert_eq!(
+  1936	            slot_action_for_hotkey(false, 3),
+  1937	            Some(AppAction::LoadSlot(3))
+  1938	        );
+  1939	    }
+  1940
+  1941	    #[test]
+  1942	    fn overlay_blocks_gameplay_button_commands_while_open() {
+  1943	        let mut overlay = OverlayModel::new(5);
+  1944	        overlay.open();
+  1945	        let mut keyboard_bits = 0_u8;
+  1946
+  1947	        let action = apply_overlay_keyboard_input(
+  1948	            &mut overlay,
+  1949	            VirtualKeyCode::Z,
+  1950	            true,
+  1951	            0,
+  1952	            &mut keyboard_bits,
+  1953	        );
+  1954
+  1955	        assert_eq!(action, None);
+  1956	        assert_eq!(keyboard_bits, 0);
+  1957	    }
+  1958
+  1959	    #[test]
+  1960	    fn overlay_input_requires_redraw_for_navigation_action_and_text_entry_keys() {
+  1961	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Up, true));
+  1962	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Down, true));
+  1963	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Escape, true));
+  1964	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Return, true));
+  1965	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Space, true));
+  1966	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Delete, true));
+  1967	        assert!(overlay_input_requires_redraw(VirtualKeyCode::F5, true));
+  1968	        assert!(overlay_input_requires_redraw(VirtualKeyCode::F8, true));
+  1969	        assert!(overlay_input_requires_redraw(VirtualKeyCode::Z, true));
+  1970	        assert!(!overlay_input_requires_redraw(VirtualKeyCode::Up, false));
+  1971	    }
+  1972
+  1973	    #[test]
+  1974	    fn rollback_disables_stateful_menu_actions() {
+  1975	        let err = validate_action_allowed(AppAction::OpenRom, true)
+  1976	            .expect_err("open rom should be blocked during rollback");
+  1977	        assert!(err.contains("unavailable while netplay/rollback is active"));
+  1978
+  1979	        let err = validate_action_allowed(AppAction::OpenCheats, true)
+  1980	            .expect_err("open cheats should be blocked during rollback");
+  1981	        assert!(err.contains("unavailable while netplay/rollback is active"));
+  1982
+  1983	        let err = validate_action_allowed(AppAction::SaveSlot(2), true)
+  1984	            .expect_err("save slot should be blocked during rollback");
+  1985	        assert!(err.contains("unavailable while netplay/rollback is active"));
+  1986	    }
+  1987
+  1988	    #[test]
+  1989	    fn open_rom_menu_action_requires_platform_picker_support() {
+  1990	        assert_eq!(
+  1991	            menu_action_enabled(AppAction::OpenRom, false, false, false),
+  1992	            rom_picker_supported()
+  1993	        );
+  1994	        assert!(menu_action_enabled(
+  1995	            AppAction::OpenCheats,
+  1996	            false,
+  1997	            false,
+  1998	            false
+  1999	        ));
+  2000	        assert!(!menu_action_enabled(
+  2001	            AppAction::OpenCheats,
+  2002	            false,
+  2003	            true,
+  2004	            false
+  2005	        ));
+  2006	        assert!(!menu_action_enabled(
+  2007	            AppAction::OpenCheats,
+  2008	            false,
+  2009	            false,
+  2010	            true
+  2011	        ));
+  2012	    }
+  2013
+  2014	    #[test]
+  2015	    fn sync_native_menu_state_executes_without_panic_in_test_mode() {
+  2016	        use crate::sync_native_menu_state;
+  2017	        use nes_desktop::menu::build_native_menu;
+  2018	        let menu = build_native_menu(3);
+  2019	        sync_native_menu_state(&menu, false, false, false);
+  2020	    }
+  2021
+  2022	    #[test]
+  2023	    fn reconcile_core_pause_with_overlay_matches_overlay_visibility() {
+  2024	        let mut core = NesCore::new();
+  2025	        core.execute(Command::Pause)
+  2026	            .expect("pause command should succeed");
+  2027
+  2028	        reconcile_core_pause_with_overlay(&mut core, false)
+  2029	            .expect("closed overlay should force resume");
+  2030	        assert!(!core.is_paused());
+  2031
+  2032	        reconcile_core_pause_with_overlay(&mut core, true)
+  2033	            .expect("open overlay should force pause");
+  2034	        assert!(core.is_paused());
+  2035	    }
+  2036
+  2037	    #[test]
+  2038	    fn applying_runtime_cheat_codes_replaces_existing_codes() {
+  2039	        let mut core = NesCore::new();
+  2040	        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+  2041	            .expect("first cheat application should succeed");
+  2042	        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+  2043	            .expect("second cheat application should succeed");
+  2044	        assert_eq!(core.cheat_codes().len(), 1);
+  2045	    }
+  2046
+  2047	    #[test]
+  2048	    fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
+  2049	        let now = Instant::now();
+  2050	        let future = now + Duration::from_millis(2);
+  2051	        match evaluate_frame_deadline(now, future) {
+  2052	            FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
+  2053	            FrameDecision::Step { .. } => panic!("expected wait branch"),
+  2054	        }
+  2055
+  2056	        match evaluate_frame_deadline(now, now) {
+  2057	            FrameDecision::Step {
+  2058	                missed_deadline,
+  2059	                next_deadline,
+  2060	            } => {
+  2061	                assert!(!missed_deadline);
+  2062	                assert_eq!(next_deadline, now + TARGET_FRAME_TIME);
+  2063	            }
+  2064	            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+  2065	        }
+  2066
+  2067	        match evaluate_frame_deadline(now + Duration::from_millis(1), now) {
+  2068	            FrameDecision::Step {
+  2069	                missed_deadline,
+  2070	                next_deadline,
+  2071	            } => {
+  2072	                assert!(missed_deadline);
+  2073	                assert_eq!(
+  2074	                    next_deadline,
+  2075	                    (now + Duration::from_millis(1)) + TARGET_FRAME_TIME
+  2076	                );
+  2077	            }
+  2078	            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+  2079	        }
+  2080	    }
+  2081
+  2082	    #[test]
+  2083	    fn desktop_loop_helper_primitives_cover_window_scale_and_player_flags() {
+  2084	        assert_eq!(
+  2085	            scaled_window_dimensions(1),
+  2086	            (FRAME_WIDTH as f64, FRAME_HEIGHT as f64)
+  2087	        );
+  2088	        assert_eq!(
+  2089	            scaled_window_dimensions(3),
+  2090	            (
+  2091	                f64::from(FRAME_WIDTH as u32 * 3),
+  2092	                f64::from(FRAME_HEIGHT as u32 * 3)
+  2093	            )
+  2094	        );
+  2095
+  2096	        assert!(element_state_pressed(ElementState::Pressed));
+  2097	        assert!(!element_state_pressed(ElementState::Released));
+  2098	        assert!(should_resume_after_rewind_hold(false));
+  2099	        assert!(!should_resume_after_rewind_hold(true));
+  2100
+  2101	        assert!(!is_player_two_slot(0));
+  2102	        assert!(is_player_two_slot(1));
+  2103	        assert_eq!(
+  2104	            merge_local_input_bits(0b0000_0011, 0b0000_0101),
+  2105	            0b0000_0111
+  2106	        );
+  2107
+  2108	        assert!(netplay_feature_enabled(true, false));
+  2109	        assert!(netplay_feature_enabled(false, true));
+  2110	        assert!(!netplay_feature_enabled(false, false));
+  2111
+  2112	        assert!(!should_log_rollback(0));
+  2113	        assert!(should_log_rollback(1));
+  2114	        assert!(!should_update_input_delay(2, 2));
+  2115	        assert!(should_update_input_delay(3, 2));
+  2116
+  2117	        assert!(!should_trace_frame(0, 120));
+  2118	        assert!(!should_trace_frame(60, 0));
+  2119	        assert!(should_trace_frame(60, 120));
+  2120	        assert!(!should_trace_frame(60, 121));
+  2121
+  2122	        assert!(!audio_queue_dropped(true));
+  2123	        assert!(audio_queue_dropped(false));
+  2124
+  2125	        assert!(!should_capture_frame(0, 120));
+  2126	        assert!(should_capture_frame(60, 120));
+  2127	        assert!(!should_capture_frame(60, 121));
+  2128	    }
+  2129
+  2130	    #[test]
+  2131	    fn gamepad_assignment_helpers_detect_global_and_slot_level_changes() {
+  2132	        let none = [None, None];
+  2133	        assert!(!gamepad_assignments_changed(none, none));
+  2134	        assert!(!gamepad_slot_changed(none, none, 0));
+  2135	        assert!(!gamepad_slot_changed(none, none, 1));
+  2136
+  2137	        let next = [Some(fake_gamepad_id(1)), None];
+  2138	        let current = [None, Some(fake_gamepad_id(2))];
+  2139	        assert!(gamepad_assignments_changed(next, current));
+  2140	        assert!(gamepad_slot_changed(next, current, 0));
+  2141	        assert!(gamepad_slot_changed(next, current, 1));
+  2142	    }
+  2143
+  2144	    #[test]
+  2145	    fn gamepad_source_helpers_select_connected_ids_without_duplicates() {
+  2146	        let id1 = fake_gamepad_id(1);
+  2147	        let id2 = fake_gamepad_id(2);
+  2148	        let id3 = fake_gamepad_id(3);
+  2149	        let connected = connected_gamepad_ids(vec![(id1, true), (id2, false), (id3, true)]);
+  2150	        assert_eq!(connected, vec![id1, id3]);
+  2151
+  2152	        let next = select_active_gamepad_ids(&connected, [Some(id1), Some(id2)]);
+  2153	        assert_eq!(next, [Some(id1), Some(id3)]);
+  2154
+  2155	        let deduped = select_active_gamepad_ids(&connected, [Some(id3), Some(id3)]);
+  2156	        assert_eq!(deduped, [Some(id3), Some(id1)]);
+  2157	    }
+  2158
+  2159	    #[test]
+  2160	    fn gamepad_sampling_helpers_map_buttons_and_axis_thresholds() {
+  2161	        let bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+  2162	            connected: true,
+  2163	            east_pressed: true,
+  2164	            north_pressed: true,
+  2165	            select_pressed: true,
+  2166	            start_pressed: true,
+  2167	            dpad_down_pressed: true,
+  2168	            dpad_right_pressed: true,
+  2169	            left_x: -0.75,
+  2170	            left_y: -0.75,
+  2171	            ..GamepadSnapshot::default()
+  2172	        });
+  2173	        let expected = Button::A.bit_mask()
+  2174	            | Button::B.bit_mask()
+  2175	            | Button::Select.bit_mask()
+  2176	            | Button::Start.bit_mask()
+  2177	            | Button::Up.bit_mask()
+  2178	            | Button::Down.bit_mask()
+  2179	            | Button::Left.bit_mask()
+  2180	            | Button::Right.bit_mask();
+  2181	        assert_eq!(bits, expected);
+  2182
+  2183	        let boundary_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+  2184	            connected: true,
+  2185	            left_x: GAMEPAD_AXIS_THRESHOLD,
+  2186	            left_y: -GAMEPAD_AXIS_THRESHOLD,
+  2187	            ..GamepadSnapshot::default()
+  2188	        });
+  2189	        assert_eq!(
+  2190	            boundary_bits,
+  2191	            Button::Up.bit_mask() | Button::Right.bit_mask()
+  2192	        );
+  2193
+  2194	        let neutral_axis_bits = gamepad_snapshot_to_bits(GamepadSnapshot {
+  2195	            connected: true,
+  2196	            left_x: 0.0,
+  2197	            left_y: GAMEPAD_AXIS_THRESHOLD * 0.5,
+  2198	            ..GamepadSnapshot::default()
+  2199	        });
+  2200	        assert_eq!(neutral_axis_bits, 0);
+  2201
+  2202	        assert_eq!(
+  2203	            gamepad_snapshot_to_bits(GamepadSnapshot {
+  2204	                connected: false,
+  2205	                east_pressed: true,
+  2206	                left_x: 1.0,
+  2207	                left_y: -1.0,
+  2208	                ..GamepadSnapshot::default()
+  2209	            }),
+  2210	            0
+  2211	        );
+  2212	    }
+  2213
+  2214	    #[test]
+  2215	    fn update_button_bits_sets_and_clears_masks() {
+  2216	        let with_a = update_button_bits(0, Button::A.bit_mask(), true);
+  2217	        assert_eq!(with_a, Button::A.bit_mask());
+  2218	        // Pressing an already-set bit should be idempotent.
+  2219	        assert_eq!(
+  2220	            update_button_bits(with_a, Button::A.bit_mask(), true),
+  2221	            Button::A.bit_mask()
+  2222	        );
+  2223	        let with_ab = update_button_bits(with_a, Button::B.bit_mask(), true);
+  2224	        assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
+  2225	        let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
+  2226	        assert_eq!(cleared_a, Button::B.bit_mask());
+  2227	    }
+  2228
+  2229	    #[test]
+  2230	    fn track_keyboard_bits_for_key_updates_controller_bits_and_ignores_hotkeys() {
+  2231	        let mut keyboard_bits = 0_u8;
+  2232
+  2233	        track_keyboard_bits_for_key(VirtualKeyCode::Z, true, &mut keyboard_bits);
+  2234	        assert_eq!(keyboard_bits, Button::A.bit_mask());
+  2235
+  2236	        track_keyboard_bits_for_key(VirtualKeyCode::F5, true, &mut keyboard_bits);
+  2237	        assert_eq!(
+  2238	            keyboard_bits,
+  2239	            Button::A.bit_mask(),
+  2240	            "manual save hotkey must not alter controller state"
+  2241	        );
+  2242
+  2243	        track_keyboard_bits_for_key(VirtualKeyCode::Z, false, &mut keyboard_bits);
+  2244	        assert_eq!(keyboard_bits, 0);
+  2245	    }
+  2246
+  2247	    #[test]
+  2248	    fn resync_restored_inputs_reapplies_keyboard_and_resets_gamepad_cache() {
+  2249	        let mut core = NesCore::new();
+  2250	        let mut gamepad_bits = [Button::Right.bit_mask(), Button::Start.bit_mask()];
+  2251
+  2252	        resync_restored_inputs(&mut core, Button::A.bit_mask(), &mut gamepad_bits)
+  2253	            .expect("restored inputs should resync");
+  2254
+  2255	        assert_eq!(
+  2256	            core.controller_bits(),
+  2257	            Button::A.bit_mask(),
+  2258	            "held keyboard input should be re-applied immediately"
+  2259	        );
+  2260	        assert_eq!(
+  2261	            core.controller2_bits(),
+  2262	            0,
+  2263	            "player-2 gamepad state should be cleared until the next poll replays it"
+  2264	        );
+  2265	        assert_eq!(
+  2266	            gamepad_bits,
+  2267	            [0, 0],
+  2268	            "gamepad cache must reset so held pads generate deltas on the next poll"
+  2269	        );
+  2270	    }
+  2271
+  2272	    #[test]
+  2273	    fn apply_gamepad_delta_commands_updates_controller_bits() {
+  2274	        let mut core = NesCore::new();
+  2275	        apply_gamepad_delta_commands(
+  2276	            &mut core,
+  2277	            0,
+  2278	            Button::A.bit_mask() | Button::Right.bit_mask(),
+  2279	            nes_core::Player::One,
+  2280	        )
+  2281	        .expect("applying player-1 gamepad delta should succeed");
+  2282	        assert_eq!(
+  2283	            core.controller_bits(),
+  2284	            Button::A.bit_mask() | Button::Right.bit_mask()
+  2285	        );
+  2286
+  2287	        apply_gamepad_delta_commands(
+  2288	            &mut core,
+  2289	            Button::A.bit_mask() | Button::Right.bit_mask(),
+  2290	            Button::Right.bit_mask(),
+  2291	            nes_core::Player::One,
+  2292	        )
+  2293	        .expect("releasing one player-1 button should succeed");
+  2294	        assert_eq!(core.controller_bits(), Button::Right.bit_mask());
+  2295
+  2296	        apply_gamepad_delta_commands(
+  2297	            &mut core,
+  2298	            0,
+  2299	            Button::Start.bit_mask(),
+  2300	            nes_core::Player::Two,
+  2301	        )
+  2302	        .expect("applying player-2 gamepad delta should succeed");
+  2303	        assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
+  2304	    }
+  2305
+  2306	    #[test]
+  2307	    fn controller_state_delta_emits_press_and_release() {
+  2308	        let press: Vec<_> = controller_state_delta_for_player(
+  2309	            0,
+  2310	            Button::A.bit_mask() | Button::Right.bit_mask(),
+  2311	            nes_core::Player::One,
+  2312	        )
+  2313	        .collect();
+  2314	        assert_eq!(
+  2315	            press,
+  2316	            vec![
+  2317	                Command::PressButton(Button::A),
+  2318	                Command::PressButton(Button::Right)
+  2319	            ]
+  2320	        );
+  2321
+  2322	        let release: Vec<_> = controller_state_delta_for_player(
+  2323	            Button::A.bit_mask() | Button::B.bit_mask(),
+  2324	            Button::B.bit_mask(),
+  2325	            nes_core::Player::One,
+  2326	        )
+  2327	        .collect();
+  2328	        assert_eq!(release, vec![Command::ReleaseButton(Button::A)]);
+  2329	    }
+  2330
+  2331	    #[test]
+  2332	    fn controller_state_delta_for_player2_uses_player2_commands() {
+  2333	        let press: Vec<_> =
+  2334	            controller_state_delta_for_player(0, Button::A.bit_mask(), nes_core::Player::Two)
+  2335	                .collect();
+  2336	        assert_eq!(press, vec![Command::PressButton2(Button::A)]);
+  2337
+  2338	        let release: Vec<_> =
+  2339	            controller_state_delta_for_player(Button::Start.bit_mask(), 0, nes_core::Player::Two)
+  2340	                .collect();
+  2341	        assert_eq!(release, vec![Command::ReleaseButton2(Button::Start)]);
+  2342	    }
+  2343
+  2344	    #[test]
+  2345	    fn netplay_runtime_stats_tracks_rtt_jitter_rollbacks_and_desyncs() {
+  2346	        let mut stats = NetplayRuntimeStats::new(2);
+  2347	        assert_eq!(stats.latest_rtt_ms_or_zero(), 0.0);
+  2348	        assert_eq!(stats.input_delay_frames, 2);
+  2349	        assert_eq!(stats.rollback_count, 0);
+  2350	        assert_eq!(stats.max_rollback_distance, 0);
+  2351	        assert_eq!(stats.desync_count, 0);
+  2352	        assert_eq!(stats.jitter_ms, 0.0);
+  2353
+  2354	        stats.observe_rtt_ms(20.0);
+  2355	        assert_eq!(stats.latest_rtt_ms_or_zero(), 20.0);
+  2356	        assert_eq!(stats.jitter_ms, 0.0);
+  2357
+  2358	        stats.observe_rtt_ms(28.0);
+  2359	        assert_eq!(stats.latest_rtt_ms_or_zero(), 28.0);
+  2360	        assert_eq!(stats.jitter_ms, 8.0);
+  2361
+  2362	        stats.observe_rtt_ms(40.0);
+  2363	        assert!((stats.jitter_ms - 8.5).abs() < 1e-9);
+  2364
+  2365	        stats.observe_rollback(0);
+  2366	        assert_eq!(stats.rollback_count, 0);
+  2367	        stats.observe_rollback(2);
+  2368	        stats.observe_rollback(5);
+  2369	        assert_eq!(stats.rollback_count, 2);
+  2370	        assert_eq!(stats.max_rollback_distance, 5);
+  2371
+  2372	        stats.observe_desync();
+  2373	        stats.observe_desync();
+  2374	        assert_eq!(stats.desync_count, 2);
+  2375	    }
+  2376
+  2377	    #[test]
+  2378	    fn advance_core_for_host_frame_steps_cpu_budget() {
+  2379	        let mut rom = sample_ines(0, 1);
+  2380	        let prg_start = 16;
+  2381	        rom[prg_start] = 0xA9; // LDA #$42
+  2382	        rom[prg_start + 1] = 0x42;
+  2383	        rom[prg_start + 0x3FFC] = 0x00; // reset vector low
+  2384	        rom[prg_start + 0x3FFD] = 0x80; // reset vector high
+  2385
+  2386	        let mut core = NesCore::new();
+  2387	        core.load_ines_rom(&rom).expect("sample rom should load");
+  2388	        assert_eq!(core.cpu_a(), 0x00);
+  2389	        assert_eq!(core.cpu_pc(), 0x8000);
+  2390
+  2391	        advance_core_for_host_frame(&mut core, StepMode::CpuBudget(1))
+  2392	            .expect("cpu budget stepping should succeed");
+  2393	        assert_eq!(core.cpu_a(), 0x42);
+  2394	        assert_eq!(core.cpu_pc(), 0x8002);
+  2395	    }
+  2396
+  2397	    #[test]
+  2398	    fn capture_config_helpers_handle_placeholders_and_defaults() {
+  2399	        assert!(capture_config_from_parts(None, 10).is_none());
+  2400	        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
+  2401
+  2402	        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
+  2403	            .expect("valid template should produce config");
+  2404	        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
+  2405	        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
+  2406
+  2407	        assert_eq!(
+  2408	            capture_path_for_frame("snap-{frame}.ppm", 42),
+  2409	            "snap-000042.ppm"
+  2410	        );
+  2411	        assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
+  2412	    }
+  2413
+  2414	    #[test]
+  2415	    fn encode_ppm_emits_expected_headers_and_pixel_layout() {
+  2416	        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
+  2417	        assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
+  2418	        assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
+  2419	    }
+  2420
+  2421	    #[test]
+  2422	    fn format_rom_read_error_handles_not_found_and_other_errors() {
+  2423	        let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
+  2424	        let msg = format_rom_read_error("bad.nes", &not_found);
+  2425	        assert!(msg.contains("Could not find the ROM file at"));
+  2426	        assert!(msg.contains("bad.nes"));
+  2427	        assert!(msg.contains("homebrew.nes"));
+  2428
+  2429	        let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+  2430	        let msg = format_rom_read_error("bad.nes", &other);
+  2431	        assert!(msg.contains("Failed to read ROM at"));
+  2432	        assert!(msg.contains("bad.nes"));
+  2433	        assert!(msg.contains("permission denied"));
+  2434	    }
+  2435
+  2436	    #[test]
+  2437	    fn write_frame_ppm_validates_frame_size_and_writes_output_files() {
+  2438	        let bad = write_frame_ppm("ignored.ppm", &[0_u8; 3]).expect_err("invalid size should fail");
+  2439	        assert!(bad.contains("frame length mismatch"));
+  2440
+  2441	        let frame = vec![0_u8; 256 * 240 * 4];
+  2442	        let nonce = SystemTime::now()
+  2443	            .duration_since(UNIX_EPOCH)
+  2444	            .expect("time should be monotonic")
+  2445	            .as_nanos();
+  2446	        let ppm_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.ppm"));
+  2447	        let bmp_path = std::env::temp_dir().join(format!("nes-desktop-{nonce}.bmp"));
+  2448
+  2449	        write_frame_ppm(&ppm_path.to_string_lossy(), &frame).expect("ppm write should succeed");
+  2450	        write_frame_ppm(&bmp_path.to_string_lossy(), &frame).expect("bmp write should succeed");
+  2451
+  2452	        let ppm_bytes = fs::read(&ppm_path).expect("ppm bytes should be readable");
+  2453	        let bmp_bytes = fs::read(&bmp_path).expect("bmp bytes should be readable");
+  2454	        assert!(ppm_bytes.starts_with(b"P6\n256 240\n255\n"));
+  2455	        assert_eq!(&bmp_bytes[0..2], b"BM");
+  2456
+  2457	        let _ = fs::remove_file(ppm_path);
+  2458	        let _ = fs::remove_file(bmp_path);
+  2459	    }
+  2460	}

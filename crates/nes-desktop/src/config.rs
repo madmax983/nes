@@ -225,3 +225,69 @@ pub(crate) fn capture_path_for_frame(template: &str, frame: u64) -> String {
         template.to_owned()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+#[test]
+fn adaptive_delay_reacts_to_rtt_and_jitter() {
+    let increased = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+    assert!(
+        increased >= 4,
+        "expected higher delay for higher RTT+jitter"
+    );
+
+    let unchanged = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, increased);
+    assert!(
+        unchanged == increased || unchanged + 1 == increased,
+        "hysteresis should avoid abrupt downshifts"
+    );
+}
+#[test]
+fn adaptive_delay_uses_current_when_no_rtt_sample() {
+    let delay = recommended_input_delay_frames(None, 0.0, 1, 12, 3);
+    assert_eq!(delay, 3);
+}
+#[test]
+fn adaptive_delay_exact_targets_and_hysteresis_behave_as_expected() {
+    let raised = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
+    assert_eq!(raised, 5);
+
+    let clamped = recommended_input_delay_frames(Some(400.0), 100.0, 1, 6, 2);
+    assert_eq!(clamped, 6);
+
+    let drops_by_one = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 6);
+    assert_eq!(drops_by_one, 5);
+
+    let holds_within_hysteresis = recommended_input_delay_frames(Some(40.0), 0.0, 1, 12, 4);
+    assert_eq!(holds_within_hysteresis, 4);
+
+    let jitter_weighted = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 1);
+    assert_eq!(jitter_weighted, 3);
+
+    let equal_target_holds_current = recommended_input_delay_frames(Some(1.0), 12.0, 1, 12, 3);
+    assert_eq!(equal_target_holds_current, 3);
+}
+#[test]
+fn adaptive_delay_returns_min_when_bounds_are_invalid() {
+    assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
+    assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
+}
+#[test]
+fn capture_config_helpers_handle_placeholders_and_defaults() {
+    assert!(capture_config_from_parts(None, 10).is_none());
+    assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
+
+    let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
+        .expect("valid template should produce config");
+    assert_eq!(cfg.path_template, "snap-{frame}.ppm");
+    assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
+
+    assert_eq!(
+        capture_path_for_frame("snap-{frame}.ppm", 42),
+        "snap-000042.ppm"
+    );
+    assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
+}
+}
