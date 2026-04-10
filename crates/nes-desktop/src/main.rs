@@ -282,19 +282,25 @@ fn sync_native_menu_state(
     set_enabled(AppAction::Quit);
 }
 
-fn set_overlay_open(ctx: &mut AppContext<'_>, open: bool) -> Result<(), String> {
+fn set_overlay_open(
+    overlay: &mut OverlayModel,
+    open: bool,
+    core: &mut NesCore,
+    audio_output: Option<&AudioOutput>,
+    window: &Window,
+    session: &LoadedRomSession,
+) -> Result<(), String> {
     if open {
-        ctx.overlay.open();
-        reconcile_core_pause_with_overlay(ctx.core, true)?;
-        if let Some(output) = ctx.audio_output {
+        overlay.open();
+        reconcile_core_pause_with_overlay(core, true)?;
+        if let Some(output) = audio_output {
             output.clear();
         }
     } else {
-        ctx.overlay.close();
-        reconcile_core_pause_with_overlay(ctx.core, false)?;
+        overlay.close();
+        reconcile_core_pause_with_overlay(core, false)?;
     }
-    ctx.window
-        .set_title(&window_title(ctx.session, ctx.overlay.is_open()));
+    window.set_title(&window_title(session, overlay.is_open()));
     Ok(())
 }
 
@@ -346,7 +352,14 @@ fn dispatch_app_action(
         }
         Err(err) => {
             ctx.overlay.set_status_message(err);
-            let _ = set_overlay_open(ctx, true);
+            let _ = set_overlay_open(
+                ctx.overlay,
+                true,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            );
             ctx.window.request_redraw();
             false
         }
@@ -438,11 +451,25 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
 
     match action {
         AppAction::ToggleOverlay => {
-            set_overlay_open(ctx, !ctx.overlay.is_open())?;
+            set_overlay_open(
+                ctx.overlay,
+                !ctx.overlay.is_open(),
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::Resume => {
-            set_overlay_open(ctx, false)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::OpenCheats => {
@@ -452,7 +479,14 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
                 return Ok(false);
             }
             if !ctx.overlay.is_open() {
-                set_overlay_open(ctx, true)?;
+                set_overlay_open(
+                    ctx.overlay,
+                    true,
+                    ctx.core,
+                    ctx.audio_output,
+                    ctx.window,
+                    ctx.session,
+                )?;
             }
             ctx.overlay.open_cheats_panel();
             ctx.window.set_title(&window_title(ctx.session, true));
@@ -489,7 +523,14 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             );
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
-            set_overlay_open(ctx, false)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::SaveSlot(slot) => {
@@ -553,7 +594,14 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
                 ctx.core.ppu_frame_counter(),
             );
             ctx.overlay.set_status_message("System reset");
-            set_overlay_open(ctx, false)?;
+            set_overlay_open(
+                ctx.overlay,
+                false,
+                ctx.core,
+                ctx.audio_output,
+                ctx.window,
+                ctx.session,
+            )?;
             Ok(false)
         }
         AppAction::Quit => Ok(true),
