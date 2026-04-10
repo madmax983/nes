@@ -24,8 +24,8 @@ use nes_config::{
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{
-    classify_keyboard_input, map_key_event_to_button_bit, map_virtual_keycode, KeyboardDecision,
-    KeyboardInputMode,
+    KeyboardDecision, KeyboardInputMode, classify_keyboard_input, map_key_event_to_button_bit,
+    map_virtual_keycode,
 };
 use nes_desktop::args::parse_runtime_args;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
@@ -1959,21 +1959,19 @@ mod tests {
 
     use super::{
         DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
-        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
-        overlay_input_requires_redraw, recommended_input_delay_frames,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
-        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
-        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
-        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
-        update_button_bits, validate_action_allowed, write_frame_ppm,
+        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats, StepMode, TARGET_FRAME_TIME,
+        WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
+        apply_overlay_keyboard_input, apply_runtime_cheat_codes, audio_queue_dropped,
+        capture_config_from_parts, capture_path_for_frame, classify_window_event,
+        connected_gamepad_ids, controller_state_delta_for_player, element_state_pressed,
+        encode_ppm, evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, menu_action_enabled,
+        merge_local_input_bits, netplay_feature_enabled, overlay_input_requires_redraw,
+        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
+        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
+        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
+        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
+        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};

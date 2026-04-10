@@ -89,7 +89,8 @@ pub fn classify_keyboard_input(
     if mode.rta_enabled && pressed && key == winit::event::VirtualKeyCode::F9 {
         return KeyboardDecision::RtaManualSplit;
     }
-    if mode.rta_enabled && mode.rta_calibrate && pressed && key == winit::event::VirtualKeyCode::F10 {
+    if mode.rta_enabled && mode.rta_calibrate && pressed && key == winit::event::VirtualKeyCode::F10
+    {
         return KeyboardDecision::RtaFinish;
     }
 
@@ -127,11 +128,11 @@ pub fn map_virtual_keycode(key: winit::event::VirtualKeyCode) -> Option<&'static
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_keyboard_input, map_key_event_to_button, map_key_event_to_button_bit,
-        map_virtual_keycode, KeyboardDecision, KeyboardInputMode,
+        KeyboardDecision, KeyboardInputMode, classify_keyboard_input, map_key_event_to_button,
+        map_key_event_to_button_bit, map_virtual_keycode,
     };
-    use winit::event::VirtualKeyCode;
     use nes_core::Button;
+    use winit::event::VirtualKeyCode;
 
     #[test]
     fn key_mapping_supports_both_shift_keys_for_select() {
