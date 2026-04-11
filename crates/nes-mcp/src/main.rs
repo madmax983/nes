@@ -458,10 +458,10 @@ mod tests {
         assert_eq!(missing.code, -32_601);
         assert_eq!(params.code, -32_602);
 
-        assert_eq!(parse.to_json()["message"], json!("bad json"));
-        assert_eq!(invalid.to_json()["message"], json!("bad request"));
-        assert_eq!(missing.to_json()["message"], json!("missing"));
-        assert_eq!(params.to_json()["message"], json!("bad params"));
+        assert_eq!(parse.into_json()["message"], json!("bad json"));
+        assert_eq!(invalid.into_json()["message"], json!("bad request"));
+        assert_eq!(missing.into_json()["message"], json!("missing"));
+        assert_eq!(params.into_json()["message"], json!("bad params"));
     }
 
     #[test]
