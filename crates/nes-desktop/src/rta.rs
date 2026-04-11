@@ -667,7 +667,7 @@ struct RunArtifact<'a> {
     state: &'a str,
     valid: bool,
     elapsed_ms: u128,
-    invalidation_reasons: Vec<String>,
+    invalidation_reasons: Vec<&'a str>,
     splits: &'a [SplitEvent],
 }
 
@@ -1151,16 +1151,18 @@ impl RtaManager {
             return None;
         }
 
-        let reason = action.as_reason().to_owned();
-        if !self.invalidation_reasons.insert(reason.clone()) {
+        let reason_str = action.as_reason();
+        if self.invalidation_reasons.contains(reason_str) {
             return None;
         }
+
+        self.invalidation_reasons.insert(reason_str.to_owned());
 
         if self.state == RtaSessionState::Running {
             self.state = RtaSessionState::InvalidPractice;
         }
 
-        Some(RtaEvent::Invalidated(reason))
+        Some(RtaEvent::Invalidated(reason_str.to_owned()))
     }
 
     fn push_split(
@@ -1333,7 +1335,11 @@ impl RtaManager {
             },
             valid: self.is_valid_run(),
             elapsed_ms: self.elapsed_at_finish.unwrap_or_default().as_millis(),
-            invalidation_reasons: self.invalidation_reasons(),
+            invalidation_reasons: self
+                .invalidation_reasons
+                .iter()
+                .map(String::as_str)
+                .collect(),
             splits: &self.split_events,
         };
 
