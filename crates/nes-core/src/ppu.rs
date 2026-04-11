@@ -1193,23 +1193,7 @@ impl Ppu {
         };
 
         if self.bg_tile_cache.key != Some(key) {
-            let tile_index = self.read_ppu_data(nametable_addr);
-            let pattern_addr = pattern_base + (u16::from(tile_index) * 16) + u16::from(fine_y);
-            let plane0 = self.live_chr[pattern_addr as usize];
-            let plane1 = self.live_chr[(pattern_addr + 8) as usize];
-            let attr = self.read_ppu_data(attr_addr);
-            let palette = (attr >> attr_shift) & 0x03;
-            let palette_base = 0x3F00 + (u16::from(palette) * 4);
-
-            self.bg_tile_cache.key = Some(key);
-            self.bg_tile_cache.plane0 = plane0;
-            self.bg_tile_cache.plane1 = plane1;
-            self.bg_tile_cache.palette_colors = [
-                self.read_palette(0x3F00),
-                self.read_palette(palette_base + 1),
-                self.read_palette(palette_base + 2),
-                self.read_palette(palette_base + 3),
-            ];
+            self.populate_bg_tile_cache(key);
         }
 
         let bit = 7 - (local_x % 8) as u8;
@@ -1221,6 +1205,26 @@ impl Ppu {
         }
 
         (self.bg_tile_cache.palette_colors[color as usize], true)
+    }
+
+    fn populate_bg_tile_cache(&mut self, key: BgTileCacheKey) {
+        let tile_index = self.read_ppu_data(key.nametable_addr);
+        let pattern_addr = key.pattern_base + (u16::from(tile_index) * 16) + u16::from(key.fine_y);
+        let plane0 = self.live_chr[pattern_addr as usize];
+        let plane1 = self.live_chr[(pattern_addr + 8) as usize];
+        let attr = self.read_ppu_data(key.attr_addr);
+        let palette = (attr >> key.attr_shift) & 0x03;
+        let palette_base = 0x3F00 + (u16::from(palette) * 4);
+
+        self.bg_tile_cache.key = Some(key);
+        self.bg_tile_cache.plane0 = plane0;
+        self.bg_tile_cache.plane1 = plane1;
+        self.bg_tile_cache.palette_colors = [
+            self.read_palette(0x3F00),
+            self.read_palette(palette_base + 1),
+            self.read_palette(palette_base + 2),
+            self.read_palette(palette_base + 3),
+        ];
     }
 
     fn sprite_palette_index_cached(&mut self, x: usize, y: usize, bg_opaque: bool) -> Option<u8> {
