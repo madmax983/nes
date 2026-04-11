@@ -15,6 +15,7 @@ mod netplay;
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
+use crate::gamepad::*;
 use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
@@ -54,6 +55,7 @@ use winit::window::{Window, WindowBuilder};
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 pub(crate) mod gamepad;
+pub(crate) use gamepad::*;
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
 use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
@@ -2185,23 +2187,22 @@ mod tests {
 
     use super::{
         DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
+        KeyboardDecision, NetplayRuntimeStats, StepMode,
         TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
+        apply_overlay_keyboard_input, apply_runtime_cheat_codes,
         audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
+        classify_keyboard_input, classify_window_event,
+        element_state_pressed, encode_ppm,
+        evaluate_frame_deadline, format_rom_read_error,
+        is_player_two_slot, map_virtual_keycode,
+        menu_action_enabled, netplay_feature_enabled,
         overlay_input_requires_redraw, recommended_input_delay_frames,
-        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
-        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        reconcile_core_pause_with_overlay, rom_picker_supported,
+        scaled_window_dimensions, should_capture_frame,
         should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
-        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
-        update_button_bits, validate_action_allowed, write_frame_ppm,
+        should_update_input_delay, slot_action_for_hotkey,
+        validate_action_allowed, write_frame_ppm,
     };
-    use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
     use nes_desktop::actions::AppAction;
     use nes_desktop::overlay::OverlayModel;
@@ -2223,11 +2224,6 @@ mod tests {
         rom[6] = (mapper_id & 0x0F) << 4;
         rom[7] = mapper_id & 0xF0;
         rom
-    }
-
-    fn fake_gamepad_id(raw: usize) -> GamepadId {
-        // SAFETY: Test-only helper to synthesize opaque identifiers for equality checks.
-        unsafe { std::mem::transmute::<usize, GamepadId>(raw) }
     }
 
     #[test]
@@ -2567,10 +2563,6 @@ mod tests {
 
         assert!(!is_player_two_slot(0));
         assert!(is_player_two_slot(1));
-        assert_eq!(
-            merge_local_input_bits(0b0000_0011, 0b0000_0101),
-            0b0000_0111
-        );
 
         assert!(netplay_feature_enabled(true, false));
         assert!(netplay_feature_enabled(false, true));

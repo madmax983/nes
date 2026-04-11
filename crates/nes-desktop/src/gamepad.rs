@@ -2,7 +2,6 @@ use gilrs::GamepadId;
 use nes_core::{Button, Command, NesCore};
 use winit::event::VirtualKeyCode;
 use nes_desktop::app::map_key_event_to_button_bit;
-use crate::map_virtual_keycode;
 
 pub(crate) const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
 pub(crate) const CONTROLLER_BUTTONS: [Button; 8] = [
