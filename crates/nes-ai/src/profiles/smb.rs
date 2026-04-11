@@ -2,22 +2,31 @@ use nes_core::NesCore;
 
 use crate::{config::AiProfileConfig, profile::TaskProfile};
 
+/// The internal RAM variables extracted from Super Mario Bros. that are fed to the AI.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SmbFeatures {
+    /// The player's X coordinate representing horizontal progression through the level.
     pub level_progress: f32,
+    /// The player's current horizontal sub-pixel speed velocity.
     pub horizontal_speed: f32,
+    /// The player's current vertical sub-pixel speed velocity.
     pub vertical_speed: f32,
+    /// Boolean flag indicating if Mario is currently jumping or falling.
     pub airborne: bool,
+    /// The internal state machine enum value for the player (e.g. dying, entering pipe).
     pub player_state: u8,
+    /// The remaining lives. Used heavily by the reward function to penalize death.
     pub lives: u8,
 }
 
+/// The implementation of `TaskProfile` specialized for training on Super Mario Bros.
 #[derive(Debug, Clone)]
 pub struct SmbProfile {
     config: AiProfileConfig,
 }
 
 impl SmbProfile {
+    /// Creates a new profile runner for the SMB1 training task.
     #[must_use]
     pub fn new(config: AiProfileConfig) -> Self {
         Self { config }

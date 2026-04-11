@@ -1,3 +1,21 @@
+//! The Hybrid Policy-Value Network Architecture.
+//!
+//! This module contains the core neural network definition used by our reinforcement
+//! learning agent. It is a "hybrid" network because it accepts two distinct modalities
+//! of input simultaneously:
+//!
+//! 1. **Visual Data**: A stack of grayscale emulator frames processed by Convolutional
+//!    Neural Network (CNN) layers.
+//! 2. **Numeric Features**: Extracted RAM values (like player speed, coordinates)
+//!    processed by dense linear layers.
+//!
+//! These two modalities are concatenated together into a single "trunk" representation.
+//!
+//! It is a "Policy-Value" network because it produces two outputs:
+//!
+//! 1. **Policy (Actor)**: A probability distribution across all possible controller actions.
+//! 2. **Value (Critic)**: An estimate of the expected future reward from the current state.
+
 use burn_core as burn;
 use burn_core::prelude::{Backend, Config, Module, Tensor};
 use burn_nn::{
@@ -8,18 +26,25 @@ use burn_nn::{
 
 use crate::{config::MIN_OBSERVATION_DIM, env::ObservationSnapshot};
 
+/// Configuration parameters for initializing a `HybridPolicyValueNet`.
 #[derive(Config, Debug)]
 pub struct HybridPolicyValueConfig {
+    /// The number of sequential grayscale frames bundled into a single observation.
     pub frame_stack: usize,
+    /// The length of the numeric feature vector (e.g., extracted RAM values).
     pub feature_count: usize,
+    /// The total number of discrete controller actions the network can output.
     pub action_count: usize,
+    /// The horizontal resolution of the downsampled grayscale input frame.
     #[config(default = "84")]
     pub observation_width: usize,
+    /// The vertical resolution of the downsampled grayscale input frame.
     #[config(default = "84")]
     pub observation_height: usize,
 }
 
 impl HybridPolicyValueConfig {
+    /// Creates a new configuration builder using the dimensions from a captured observation.
     #[must_use]
     pub fn from_observation(observation: &ObservationSnapshot, action_count: usize) -> Self {
         Self::new(
@@ -31,6 +56,7 @@ impl HybridPolicyValueConfig {
         .with_observation_height(observation.height)
     }
 
+    /// Initializes the actual neural network module on the specified backend device.
     #[must_use]
     pub fn init<B: Backend>(&self, device: &B::Device) -> HybridPolicyValueNet<B> {
         self.validate();
@@ -61,18 +87,25 @@ impl HybridPolicyValueConfig {
     }
 }
 
+/// A bundled batch of input data for the hybrid network.
 #[derive(Debug)]
 pub struct HybridObservationBatch<B: Backend> {
+    /// The visual pixel data. Shape: `[batch_size, frame_stack, height, width]`.
     pub frames: Tensor<B, 4>,
+    /// The numeric RAM-extracted features. Shape: `[batch_size, feature_count]`.
     pub features: Tensor<B, 2>,
 }
 
+/// The paired outputs returned from a forward pass of the hybrid network.
 #[derive(Debug)]
 pub struct HybridPolicyValueOutput<B: Backend> {
+    /// The unnormalized action probabilities. Shape: `[batch_size, action_count]`.
     pub policy_logits: Tensor<B, 2>,
+    /// The estimated future reward value. Shape: `[batch_size, 1]`.
     pub value: Tensor<B, 2>,
 }
 
+/// The core neural network architecture combining CNN vision and dense feature processing.
 #[derive(Module, Debug)]
 pub struct HybridPolicyValueNet<B: Backend> {
     conv1: Conv2d<B>,
@@ -86,6 +119,7 @@ pub struct HybridPolicyValueNet<B: Backend> {
 }
 
 impl<B: Backend> HybridPolicyValueNet<B> {
+    /// Constructs the layers of the hybrid network.
     #[must_use]
     pub fn new(device: &B::Device, cfg: &HybridPolicyValueConfig) -> Self {
         let conv1 = Conv2dConfig::new([cfg.frame_stack, 16], [8, 8])
@@ -112,6 +146,8 @@ impl<B: Backend> HybridPolicyValueNet<B> {
         }
     }
 
+    /// Executes a forward pass of the network, transforming an observation batch
+    /// into action probabilities (policy) and a state estimate (value).
     #[must_use]
     pub fn forward(&self, batch: HybridObservationBatch<B>) -> HybridPolicyValueOutput<B> {
         let vision = self.activation.forward(self.conv1.forward(batch.frames));
