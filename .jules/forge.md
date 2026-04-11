@@ -16,3 +16,6 @@
 **[Extract profile name formatting]
 **Learning:** In `crates/nes-desktop/src/rta.rs`, `select_profile` had duplicate manual `for` loops to concatenate a comma-separated list of profile IDs without allocating a standard vector buffer. This bloated the error handling blocks.
 **Action:** Extracted the manual join loop into a pure generic `format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String` helper function, preserving the zero-allocation characteristics while drastically improving readability and DRY-ness across both matched error conditions.
+**[Refactoring excessive unwrap() usage in trainer loop]**
+**Learning:** Found multiple usages of `model.as_ref().unwrap()` and reassignment via `.take().expect(...)` inside the hot PPO update loop in `nes-ai/src/trainer.rs`. This added visual clutter and made ownership unclear.
+**Action:** Changed the signature of `ppo_update` to take `mut model: HybridPolicyValueNet` and return it back to the caller instead of taking a mutable reference to an `Option`. This eliminated all `unwrap()` calls on the model in both the outer loop and the inner update function, greatly improving clarity and explicitly modeling the ownership transfer through the optimizer mapping step.

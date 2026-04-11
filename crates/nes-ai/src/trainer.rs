@@ -502,23 +502,23 @@ where
         &initial_observation,
         ControlAction::action_count(),
     );
-    let mut model = Some(model_cfg.init::<TrainBackend>(&device));
+    let mut model = model_cfg.init::<TrainBackend>(&device);
     let mut checkpoint_paths = Vec::new();
 
     for update in 0..cfg.training_updates {
-        let rollout = collect_rollout(cfg, &mut env, model.as_ref().unwrap(), &mut rng)?;
-        ppo_update(cfg, &mut model, &rollout, &mut rng);
+        let rollout = collect_rollout(cfg, &mut env, &model, &mut rng)?;
+        model = ppo_update(cfg, model, &rollout, &mut rng);
 
         if cfg
             .checkpoint_dir
             .as_ref()
             .is_some_and(|_| (update + 1) % cfg.checkpoint_interval == 0)
         {
-            checkpoint_paths.push(save_checkpoint(model.as_ref().unwrap(), cfg, update + 1)?);
+            checkpoint_paths.push(save_checkpoint(&model, cfg, update + 1)?);
         }
     }
 
-    let infer_model = model.as_ref().unwrap().valid();
+    let infer_model = model.valid();
     let evaluation = evaluate_model_with_factory(cfg, episodes, &infer_model, make_env)?;
 
     Ok(TrainSummary {
@@ -725,10 +725,10 @@ fn normalize_advantages(samples: &mut [PpoSample]) {
 
 fn ppo_update(
     cfg: &TrainerConfig,
-    model: &mut Option<HybridPolicyValueNet<TrainBackend>>,
+    mut model: HybridPolicyValueNet<TrainBackend>,
     samples: &[PpoSample],
     rng: &mut StdRng,
-) {
+) -> HybridPolicyValueNet<TrainBackend> {
     let device = <TrainBackend as Backend>::Device::default();
     let mut indices = (0..samples.len()).collect::<Vec<_>>();
 
@@ -736,7 +736,7 @@ fn ppo_update(
         indices.shuffle(rng);
         for chunk in indices.chunks(cfg.minibatch_size) {
             let batch = build_train_batch(samples, chunk, &device);
-            let output = model.as_ref().unwrap().forward(batch.observations);
+            let output = model.forward(batch.observations);
             let log_probs = log_softmax(output.policy_logits.clone(), 1);
             let selected_log_probs = log_probs.clone().gather(1, batch.action_indices);
             let ratios = (selected_log_probs.clone() - batch.old_log_probs).exp();
@@ -758,10 +758,11 @@ fn ppo_update(
                 grads: &mut grads,
                 learning_rate: cfg.learning_rate,
             };
-            let current = model.take().expect("model should exist during PPO update");
-            *model = Some(current.map(&mut optimizer));
+            model = model.map(&mut optimizer);
         }
     }
+
+    model
 }
 
 fn build_train_batch<B: Backend>(
