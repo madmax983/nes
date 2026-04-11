@@ -121,7 +121,7 @@ WASM path (web host -> core):
 Desktop can optionally host MCP on the same live `NesCore` instance:
 
 ```powershell
-cargo run -p nes-desktop --features mcp-host -- --mcp-host --mcp-bind 127.0.0.1:6502
+cargo run -p nes-desktop --features mcp-host -- ./roms/homebrew/homebrew.nes --mcp-host --mcp-bind 127.0.0.1:6502
 ```
 
 Desktop quicksave / quickload:
