@@ -1,9 +1,17 @@
-# 🗣️ Echo: Getting Started example is broken
+# 👺 Havoc: Macro Engine Denial of Service
 
-**Description:**
+I've successfully identified a devastating DoS vulnerability in the `nes-mcp` macro engine. The `WAIT` command accepts a `u64` representing the number of frames to run. By passing `18446744073709551615` (which is `u64::MAX`), the engine happily queues up ~9.75 billion years of simulation on the host thread without batting an eye.
 
-* 🤦 **The Confusion:** Tried to run the desktop and netplay examples directly from the README block. The system immediately errored out with `Failed to read ROM at 'C:\Users\markm\roms\Super Mario Bros. (World).nes': No such file or directory (os error 2)`.
+The `execute_macro_script` function loops continuously:
 
-* 🕵️ **The Reality:** Turns out the `README.md` examples use hardcoded local Windows paths pointing to a specific user's `markm` directory. As a new user, I don't have this directory, nor do I have these specific ROMs named exactly this way. The example just fails.
+```rust
+let frames: u64 = arg.parse().unwrap();
+for _ in 0..frames {
+    core.execute(Command::StepFrame)?;
+    frames_elapsed += 1;
+}
+```
 
-* 💡 **The Fix:** Change the quickstart commands in the README to point to the locally bundled homebrew ROM (`.\roms\homebrew\homebrew.nes`) or clearly indicate `<path-to-your-rom>.nes`. If I can't copy-paste and run it, I'm out!
+This single command locks up the executing thread indefinitely, blocking the entire MCP daemon if issued directly, or crashing testing frameworks via timeout.
+
+There is no bounds checking. There is no maximum wait limit. You trusted the user. You were wrong.
