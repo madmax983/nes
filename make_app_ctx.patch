@@ -1,0 +1,20 @@
+--- crates/nes-desktop/src/main.rs
++++ crates/nes-desktop/src/main.rs
+@@ -1265,11 +1265,11 @@
+-                        let mut ctx = AppContext {
+-                            core: &mut core,
+-                            session: &mut session,
+-                            session_cheats: &mut session_cheats,
+-                            overlay: &mut overlay,
+-                            rollback_enabled: rollback.is_some(),
+-                            runtime: &runtime,
+-                            audio_output: audio_output.as_ref(),
+-                            time_machine: &mut time_machine,
+-                            rewind_held: &mut rewind_held,
+-                            metrics: &mut metrics,
+-                            keyboard_bits,
+-                            gamepad_bits: &mut gamepad_bits,
+-                            window: &window,
+-                            rta_manager: &mut rta_manager,
+-                            frame_index,
+-                        };
