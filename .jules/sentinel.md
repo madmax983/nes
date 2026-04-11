@@ -57,3 +57,13 @@
 **Mutant:** `replace > with ==`, `<` and `>=` in `next.level_progress() > prev.level_progress()` at `crates/nes-ai/src/env.rs:163`
 **Diagnosis:** `MISSING_COVERAGE` - Tests using the mock profile never advanced `level_progress` and never triggered the `stalled_frames >= stall_frames` penalty. Thus, mutants that inverted or changed the reset condition survived because `stalled_frames` never hit the penalty threshold or never reset correctly on a simulated positive progression.
 **Kill Shot:** Exposed `core_mut()` in `ProfileEnv` to allow tests to manually write to the mock ROM memory location `0x006D` (the `level_progress` counter). Added `profile_env_applies_stall_penalty_when_no_progress_made` to test hitting the stall boundary and `profile_env_resets_stall_penalty_when_progress_increases` to test that the threshold resets to 0 when `level_progress` advances.
+
+**CheatCode bitwise OR vs XOR**
+**Mutant:** replace `|` with `^` in bitwise assembly of address, value, compare in `<impl FromStr for CheatCode>::from_str`
+**Diagnosis:** EQUIVALENT_MUTANT. The various components being ORed together are mutually exclusive sets of bits. Therefore `|` and `^` do the exact same thing here.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+
+**Test Gap in CheatCode**
+**Mutant:** Replaced `|` with `^` and `&` in bitwise operations in `from_str` for `address`, `value`, and `compare`.
+**Diagnosis:** `WEAK_ASSERTION` / `MISSING_COVERAGE` - The existing tests only checked a handful of valid NES Game Genie codes, which left many individual bits untested. This allowed mutants to flip bitwise ORs to XORs, or bit shifts to different directions, without failing the tests.
+**Kill Shot:** Added exhaustive, bit-level property checks in `cheat_code_decodes_address_bits_correctly`, `cheat_code_decodes_value_bits_correctly`, and `cheat_code_applies_to_logic` to ensure every single 4-bit nybble contributed exactly the correct bits to the final decoded address, value, and compare bytes. Also added tests to ensure `raw()` returns the exact string and not empty or hardcoded values, and tested `alphabet_digit` directly.

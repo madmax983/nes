@@ -3,7 +3,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
 use nes_test_harness::{
@@ -82,7 +82,7 @@ fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Col
 fn main() {
     let mut stdout = std::io::stdout();
     if let Err(err) = run(&mut stdout) {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
         std::process::exit(1);
     }
 }
@@ -213,6 +213,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
 fn build_summary_table(rows: &[RowData]) -> Table {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("ROM").fg(TableColor::Cyan),
         Cell::new("Status").fg(TableColor::Cyan),

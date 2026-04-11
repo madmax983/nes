@@ -617,27 +617,7 @@ impl Ppu {
     /// Writes a CPU-visible PPU register (`$2000-$2007`).
     pub fn write_register(&mut self, register: u16, value: u8) {
         match register {
-            0x2000 => {
-                let nmi_before = self.ctrl & CTRL_NMI_ENABLE != 0;
-                self.ctrl = value;
-                self.temp_addr = (self.temp_addr & !0x0C00) | (u16::from(value & 0x03) << 10);
-                let nmi_after = self.ctrl & CTRL_NMI_ENABLE != 0;
-                if !nmi_before && nmi_after && self.status & STATUS_VBLANK != 0 {
-                    self.nmi_pending = true;
-                }
-                if self.scanline < FRAME_HEIGHT as u16
-                    && self.dot > FRAME_WIDTH as u16
-                    && self.rendering_enabled()
-                    && self.live_bg_tracks_vram_addr
-                {
-                    // A late visible-frame $2000 write seeds the temp scroll bits for later reloads,
-                    // but it must not stomp the live nametable/Y state already being driven from `v`.
-                    self.live_ctrl = (value & !0x03) | (self.live_ctrl & 0x03);
-                } else {
-                    self.sync_live_bg_state();
-                }
-                self.mark_render_state_dirty();
-            }
+            0x2000 => self.write_ctrl(value),
             0x2001 => {
                 self.mask = value;
                 self.mark_render_state_dirty();
@@ -651,87 +631,110 @@ impl Ppu {
                 self.oam_addr = self.oam_addr.wrapping_add(1);
                 self.mark_render_state_dirty();
             }
-            0x2005 => {
-                let update_live_scroll = self.scanline >= 240 || self.dot < 257;
-                if !self.write_toggle {
-                    if update_live_scroll {
-                        self.scroll_x = value;
-                    }
-                    self.fine_x = value & 0x07;
-                    self.temp_addr = (self.temp_addr & !0x001F) | u16::from(value >> 3);
-                } else {
-                    if update_live_scroll {
-                        self.scroll_y = value;
-                    }
-                    self.temp_addr =
-                        (self.temp_addr & !0x03E0) | (u16::from((value >> 3) & 0x1F) << 5);
-                    self.temp_addr = (self.temp_addr & !0x7000) | (u16::from(value & 0x07) << 12);
-                }
-                self.write_toggle = !self.write_toggle;
-                if update_live_scroll {
-                    self.sync_live_bg_state();
-                }
-                self.mark_render_state_dirty();
-            }
-            0x2006 => {
-                if !self.write_toggle {
-                    self.temp_addr = (self.temp_addr & 0x00FF) | (u16::from(value & 0x3F) << 8);
-                } else {
-                    self.temp_addr = (self.temp_addr & 0x7F00) | u16::from(value);
-                    self.vram_addr = self.temp_addr & PPU_ADDR_MASK;
-                    // During visible rendering, derive scroll from the new vram_addr
-                    // so mid-frame $2006 writes (e.g. MMC3 IRQ handler screen splits)
-                    // update the background scroll used by the renderer.
-                    if self.scanline < 240 {
-                        let coarse_x = (self.vram_addr & 0x001F) as u8;
-                        let coarse_y = ((self.vram_addr >> 5) & 0x001F) as u8;
-                        let fine_y = ((self.vram_addr >> 12) & 0x07) as u8;
-                        let nt = ((self.vram_addr >> 10) & 0x03) as usize;
-                        let world_x =
-                            (nt & 1) * 256 + usize::from(coarse_x) * 8 + usize::from(self.fine_x);
-                        let world_y =
-                            ((nt >> 1) & 1) * 240 + usize::from(coarse_y) * 8 + usize::from(fine_y);
-                        let (screen_x, screen_y) = if self.dot > FRAME_WIDTH as u16 {
-                            // HBlank-visible $2006 writes feed the next scanline, not the
-                            // already-finished current one.
-                            (
-                                0,
-                                usize::from(
-                                    self.scanline
-                                        .saturating_add(1)
-                                        .min((FRAME_HEIGHT.saturating_sub(1)) as u16),
-                                ),
-                            )
-                        } else {
-                            (
-                                usize::from(self.dot.min(FRAME_WIDTH as u16)),
-                                usize::from(self.scanline),
-                            )
-                        };
-                        let origin_x = (world_x + 512 - screen_x) % 512;
-                        let origin_y = (world_y + 480 - screen_y) % 480;
-                        let origin_nt =
-                            (((origin_y / 240) & 1) << 1 | ((origin_x / 256) & 1)) as u8;
-                        self.scroll_x = (origin_x % 256) as u8;
-                        self.scroll_y = (origin_y % 240) as u8;
-                        self.ctrl = (self.ctrl & !0x03) | origin_nt;
-                        if self.dot > FRAME_WIDTH as u16 || !self.rendering_enabled() {
-                            self.sync_live_bg_state();
-                            self.live_bg_tracks_vram_addr = true;
-                        } else {
-                            self.queue_live_bg_state_update();
-                        }
-                        self.mark_render_state_dirty();
-                    }
-                }
-                self.write_toggle = !self.write_toggle;
-            }
+            0x2005 => self.write_scroll(value),
+            0x2006 => self.write_addr(value),
             0x2007 => {
                 self.write_ppu_data(self.vram_addr, value);
                 self.increment_vram_addr();
             }
             _ => {}
         }
+    }
+
+    fn write_ctrl(&mut self, value: u8) {
+        let nmi_before = self.ctrl & CTRL_NMI_ENABLE != 0;
+        self.ctrl = value;
+        self.temp_addr = (self.temp_addr & !0x0C00) | (u16::from(value & 0x03) << 10);
+        let nmi_after = self.ctrl & CTRL_NMI_ENABLE != 0;
+        if !nmi_before && nmi_after && self.status & STATUS_VBLANK != 0 {
+            self.nmi_pending = true;
+        }
+        if self.scanline < FRAME_HEIGHT as u16
+            && self.dot > FRAME_WIDTH as u16
+            && self.rendering_enabled()
+            && self.live_bg_tracks_vram_addr
+        {
+            // A late visible-frame $2000 write seeds the temp scroll bits for later reloads,
+            // but it must not stomp the live nametable/Y state already being driven from `v`.
+            self.live_ctrl = (value & !0x03) | (self.live_ctrl & 0x03);
+        } else {
+            self.sync_live_bg_state();
+        }
+        self.mark_render_state_dirty();
+    }
+
+    fn write_scroll(&mut self, value: u8) {
+        let update_live_scroll = self.scanline >= 240 || self.dot < 257;
+        if !self.write_toggle {
+            if update_live_scroll {
+                self.scroll_x = value;
+            }
+            self.fine_x = value & 0x07;
+            self.temp_addr = (self.temp_addr & !0x001F) | u16::from(value >> 3);
+        } else {
+            if update_live_scroll {
+                self.scroll_y = value;
+            }
+            self.temp_addr = (self.temp_addr & !0x03E0) | (u16::from((value >> 3) & 0x1F) << 5);
+            self.temp_addr = (self.temp_addr & !0x7000) | (u16::from(value & 0x07) << 12);
+        }
+        self.write_toggle = !self.write_toggle;
+        if update_live_scroll {
+            self.sync_live_bg_state();
+        }
+        self.mark_render_state_dirty();
+    }
+
+    fn write_addr(&mut self, value: u8) {
+        if !self.write_toggle {
+            self.temp_addr = (self.temp_addr & 0x00FF) | (u16::from(value & 0x3F) << 8);
+        } else {
+            self.temp_addr = (self.temp_addr & 0x7F00) | u16::from(value);
+            self.vram_addr = self.temp_addr & PPU_ADDR_MASK;
+            // During visible rendering, derive scroll from the new vram_addr
+            // so mid-frame $2006 writes (e.g. MMC3 IRQ handler screen splits)
+            // update the background scroll used by the renderer.
+            if self.scanline < 240 {
+                let coarse_x = (self.vram_addr & 0x001F) as u8;
+                let coarse_y = ((self.vram_addr >> 5) & 0x001F) as u8;
+                let fine_y = ((self.vram_addr >> 12) & 0x07) as u8;
+                let nt = ((self.vram_addr >> 10) & 0x03) as usize;
+                let world_x = (nt & 1) * 256 + usize::from(coarse_x) * 8 + usize::from(self.fine_x);
+                let world_y =
+                    ((nt >> 1) & 1) * 240 + usize::from(coarse_y) * 8 + usize::from(fine_y);
+                let (screen_x, screen_y) = if self.dot > FRAME_WIDTH as u16 {
+                    // HBlank-visible $2006 writes feed the next scanline, not the
+                    // already-finished current one.
+                    (
+                        0,
+                        usize::from(
+                            self.scanline
+                                .saturating_add(1)
+                                .min((FRAME_HEIGHT.saturating_sub(1)) as u16),
+                        ),
+                    )
+                } else {
+                    (
+                        usize::from(self.dot.min(FRAME_WIDTH as u16)),
+                        usize::from(self.scanline),
+                    )
+                };
+                let origin_x = (world_x + 512 - screen_x) % 512;
+                let origin_y = (world_y + 480 - screen_y) % 480;
+                let origin_nt = (((origin_y / 240) & 1) << 1 | ((origin_x / 256) & 1)) as u8;
+                self.scroll_x = (origin_x % 256) as u8;
+                self.scroll_y = (origin_y % 240) as u8;
+                self.ctrl = (self.ctrl & !0x03) | origin_nt;
+                if self.dot > FRAME_WIDTH as u16 || !self.rendering_enabled() {
+                    self.sync_live_bg_state();
+                    self.live_bg_tracks_vram_addr = true;
+                } else {
+                    self.queue_live_bg_state_update();
+                }
+                self.mark_render_state_dirty();
+            }
+        }
+        self.write_toggle = !self.write_toggle;
     }
 
     /// Performs OAM DMA write burst from a 256-byte page.

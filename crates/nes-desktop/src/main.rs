@@ -1,44 +1,36 @@
 use crate::metrics::PerfMetrics;
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
+pub(crate) mod config;
 pub(crate) mod gamepad;
 #[cfg(feature = "mcp-host")]
 mod mcp_host;
 pub(crate) mod metrics;
 mod netplay;
+pub(crate) mod session;
+use crate::config::*;
+use crate::session::*;
 
 use crate::gamepad::*;
-use comfy_table::{Cell, Color as TableColor, Table};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
-use nes_config::{
-    DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
-    parse_config_path_arg,
-};
-use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo};
+use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
-use nes_desktop::args::parse_runtime_args;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
-use nes_desktop::manual_state::{
-    SaveSlotMetadata, SaveSlotStatus, load_state_file, read_slot_metadata, save_state_file,
-    slot_path_for_rom, slot_paths_for_rom,
-};
+use nes_desktop::manual_state::{load_state_file, save_state_file};
 use nes_desktop::menu::{
     DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
 };
-use nes_desktop::overlay::{
-    OverlayCheatSummary, OverlayCommand, OverlayModel, OverlaySlotSummary, draw_overlay,
-};
+use nes_desktop::overlay::{OverlayCheatSummary, OverlayCommand, OverlayModel, draw_overlay};
 use nes_desktop::rta::{
-    CalibrationRecorder, DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, ForbiddenAction,
-    ProfileStatus, RtaEvent, RtaManager, RtaProfile, RtaRuntimeConfig, compute_rom_hash,
+    CalibrationRecorder, ForbiddenAction, ProfileStatus, RtaEvent, RtaManager, RtaProfile,
     load_profiles, select_profile,
 };
 use nes_desktop::session_cheats::SessionCheats;
@@ -55,59 +47,16 @@ use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
-use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
+use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
-const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
-const DEFAULT_WINDOW_SCALE: u32 = 3;
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
-const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
-const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
-const SAVE_SLOT_COUNT: u8 = 5;
-
-struct RuntimeConfig {
-    rom_path: String,
-    cheat_codes: Vec<String>,
-    window_scale: u32,
-    step_mode: StepMode,
-    audio_enabled: bool,
-    trace_every_frames: u64,
-    metrics_enabled: bool,
-    metrics_every_frames: u64,
-    capture: Option<CaptureConfig>,
-    loaded_config_path: Option<PathBuf>,
-    mcp_enabled: bool,
-    mcp_bind_addr: String,
-    netplay: Option<NetplayRuntimeConfig>,
-    rta: Option<RtaRuntimeConfig>,
-    #[cfg(feature = "nova")]
-    auto_player_enabled: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StepMode {
-    CpuBudget(u32),
-    Frame,
-}
-
-#[derive(Debug, Clone)]
-struct CaptureConfig {
-    path_template: String,
-    every_n_frames: u64,
-}
-
-struct LoadedRomSession {
-    rom_path: PathBuf,
-    rom_hash: String,
-    info: RomLoadInfo,
-    slot_metadata: Vec<SaveSlotMetadata>,
-}
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
     }
 }
 
@@ -172,12 +121,17 @@ fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct KeyboardInputMode {
+    pub rollback_enabled: bool,
+    pub rta_enabled: bool,
+    pub rta_calibrate: bool,
+}
+
 fn classify_keyboard_input(
     key: VirtualKeyCode,
     pressed: bool,
-    rollback_enabled: bool,
-    rta_enabled: bool,
-    rta_calibrate: bool,
+    mode: KeyboardInputMode,
 ) -> KeyboardDecision {
     if key == VirtualKeyCode::Escape && pressed {
         return KeyboardDecision::ToggleOverlay;
@@ -191,10 +145,10 @@ fn classify_keyboard_input(
     if key == VirtualKeyCode::R {
         return KeyboardDecision::SetRewindHeld(pressed);
     }
-    if rta_enabled && pressed && key == VirtualKeyCode::F9 {
+    if mode.rta_enabled && pressed && key == VirtualKeyCode::F9 {
         return KeyboardDecision::RtaManualSplit;
     }
-    if rta_enabled && rta_calibrate && pressed && key == VirtualKeyCode::F10 {
+    if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
         return KeyboardDecision::RtaFinish;
     }
 
@@ -202,7 +156,7 @@ fn classify_keyboard_input(
         return KeyboardDecision::Noop;
     };
 
-    if rollback_enabled {
+    if mode.rollback_enabled {
         if let Some(mask) = map_key_event_to_button_bit(key_code) {
             KeyboardDecision::UpdateKeyboardBits { mask, pressed }
         } else {
@@ -224,90 +178,6 @@ fn slot_action_for_hotkey(is_save: bool, selected_slot: u8) -> Option<AppAction>
     } else {
         AppAction::LoadSlot(selected_slot)
     })
-}
-
-fn apply_runtime_cheat_codes(core: &mut NesCore, cheat_codes: &[String]) -> Result<(), String> {
-    core.clear_cheat_codes();
-    for raw_code in cheat_codes {
-        core.add_cheat_code(raw_code)
-            .map_err(|err| format!("Invalid cheat code '{raw_code}': {err}"))?;
-    }
-    Ok(())
-}
-
-fn apply_session_cheats(core: &mut NesCore, cheats: &SessionCheats) -> Result<(), String> {
-    apply_runtime_cheat_codes(core, &cheats.enabled_codes())
-}
-
-fn load_rom_session(
-    core: &mut NesCore,
-    rom_path: &Path,
-    cheats: &SessionCheats,
-) -> Result<LoadedRomSession, String> {
-    let rom_bytes = fs::read(rom_path)
-        .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
-    core.clear_cheat_codes();
-    let info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {err}"))?;
-    apply_session_cheats(core, cheats)?;
-    let rom_hash = compute_rom_hash(&rom_bytes);
-    let slot_metadata = load_slot_metadata_for_rom(rom_path, &rom_hash)?;
-    Ok(LoadedRomSession {
-        rom_path: rom_path.to_path_buf(),
-        rom_hash,
-        info,
-        slot_metadata,
-    })
-}
-
-fn load_slot_metadata_for_rom(
-    rom_path: &Path,
-    rom_hash: &str,
-) -> Result<Vec<SaveSlotMetadata>, String> {
-    slot_paths_for_rom(rom_path, rom_hash, 1..=SAVE_SLOT_COUNT)
-        .into_iter()
-        .map(|path| read_slot_metadata(&path, rom_hash))
-        .collect()
-}
-
-fn refresh_slot_metadata(session: &mut LoadedRomSession) -> Result<(), String> {
-    session.slot_metadata = load_slot_metadata_for_rom(&session.rom_path, &session.rom_hash)?;
-    Ok(())
-}
-
-fn slot_path_for_selection(session: &LoadedRomSession, slot: u8) -> PathBuf {
-    slot_path_for_rom(&session.rom_path, &session.rom_hash, slot)
-}
-
-fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
-    let status_label = match metadata.status {
-        SaveSlotStatus::Empty => "Empty",
-        SaveSlotStatus::Saved => "Saved",
-        SaveSlotStatus::Corrupt => "Corrupt",
-        SaveSlotStatus::IncompatibleRom => "Mismatch",
-    };
-    OverlaySlotSummary {
-        slot: metadata.slot,
-        status_label,
-        modified_unix_secs: metadata.modified_unix_secs,
-    }
-}
-
-fn rom_display_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or("ROM")
-        .to_owned()
-}
-
-fn window_title(session: &LoadedRomSession, overlay_open: bool) -> String {
-    let suffix = if overlay_open { " [Paused]" } else { "" };
-    format!(
-        "nes-desktop - {}{suffix}",
-        rom_display_name(&session.rom_path)
-    )
 }
 
 fn apply_overlay_keyboard_input(
@@ -821,10 +691,6 @@ fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
     keyboard_bits | local_gamepad_bits
 }
 
-fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
-    runtime_flag || config_flag
-}
-
 fn should_log_rollback(distance: u64) -> bool {
     distance > 0
 }
@@ -1137,13 +1003,13 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
-                match classify_keyboard_input(
-                    key,
-                    pressed,
-                    rollback.is_some(),
-                    rta_manager.is_some(),
-                    rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
-                ) {
+                let mode = KeyboardInputMode {
+                    rollback_enabled: rollback.is_some(),
+                    rta_enabled: rta_manager.is_some(),
+                    rta_calibrate: rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
+                };
+
+                match classify_keyboard_input(key, pressed, mode) {
                     KeyboardDecision::ToggleOverlay => {
                         let mut ctx = AppContext {
                             core: &mut core,
@@ -1636,134 +1502,6 @@ fn run() -> Result<(), String> {
     });
 }
 
-fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
-    let raw_args: Vec<String> = env::args().skip(1).collect();
-    let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
-    let runtime_args = parse_runtime_args(&pass_through)?;
-
-    let loaded_config_path = config_path.clone().or_else(|| {
-        let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
-        if default_path.exists() {
-            Some(default_path)
-        } else {
-            None
-        }
-    });
-    let config = NesConfig::load_or_default(config_path.as_deref())?;
-
-    let rom_path = runtime_args
-        .rom_path
-        .or_else(|| config.desktop.rom_path.clone())
-        .or_else(|| config.roms.smb.clone())
-        .ok_or_else(|| {
-            format!(
-                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
-            )
-        })?;
-    let window_scale = normalize_nonzero_u32(config.desktop.window_scale, DEFAULT_WINDOW_SCALE);
-    let cpu_steps_per_frame = normalize_nonzero_u32(
-        config.desktop.cpu_steps_per_frame,
-        DEFAULT_CPU_STEPS_PER_FRAME,
-    );
-    let trace_every_frames = normalize_nonzero_u64(
-        config.desktop.trace_every_frames,
-        DEFAULT_TRACE_EVERY_FRAMES,
-    );
-    let metrics_every_frames = normalize_nonzero_u64(config.desktop.metrics_every_frames, 60);
-    let capture = capture_config_from_parts(
-        config.desktop.capture_path_template,
-        config.desktop.capture_every_frames,
-    );
-    let netplay_enabled =
-        netplay_feature_enabled(runtime_args.netplay_enabled, config.netplay.enabled);
-    let step_mode = if netplay_enabled {
-        StepMode::Frame
-    } else {
-        match config.desktop.step_mode {
-            StepModeConfig::Frame => StepMode::Frame,
-            StepModeConfig::Cpu => StepMode::CpuBudget(cpu_steps_per_frame),
-        }
-    };
-
-    let netplay = if netplay_enabled {
-        let relay_addr = runtime_args
-            .netplay_relay_addr
-            .or_else(|| Some(config.netplay.relay_addr.clone()))
-            .unwrap_or_default();
-        let room = runtime_args
-            .netplay_room
-            .or_else(|| Some(config.netplay.room.clone()))
-            .unwrap_or_default();
-        let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
-        let input_delay_frames = runtime_args
-            .netplay_input_delay_frames
-            .unwrap_or(config.netplay.input_delay_frames);
-        let max_rollback_frames = runtime_args
-            .netplay_max_rollback_frames
-            .unwrap_or(config.netplay.max_rollback_frames);
-        let hash_check_every_frames = runtime_args
-            .netplay_hash_check_every_frames
-            .unwrap_or(config.netplay.hash_check_every_frames);
-        if room.trim().is_empty() {
-            return Err("netplay room cannot be empty".to_owned());
-        }
-        Some(NetplayRuntimeConfig {
-            relay_addr,
-            room,
-            player,
-            input_delay_frames,
-            max_rollback_frames,
-            hash_check_every_frames,
-        })
-    } else {
-        None
-    };
-    let rta_enabled = runtime_args.rta_enabled
-        || runtime_args.rta_profile_id.is_some()
-        || runtime_args.rta_profiles_dir.is_some()
-        || runtime_args.rta_runs_dir.is_some()
-        || runtime_args.rta_calibrate;
-    let rta = if rta_enabled {
-        Some(RtaRuntimeConfig {
-            profile_id_override: runtime_args.rta_profile_id.clone(),
-            profiles_dir: PathBuf::from(
-                runtime_args
-                    .rta_profiles_dir
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
-            ),
-            runs_dir: PathBuf::from(
-                runtime_args
-                    .rta_runs_dir
-                    .clone()
-                    .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
-            ),
-            calibrate: runtime_args.rta_calibrate,
-        })
-    } else {
-        None
-    };
-
-    Ok(RuntimeConfig {
-        rom_path,
-        cheat_codes: runtime_args.cheat_codes,
-        window_scale,
-        step_mode,
-        audio_enabled: config.desktop.audio_enabled,
-        trace_every_frames,
-        metrics_enabled: config.desktop.metrics_enabled,
-        metrics_every_frames,
-        capture,
-        loaded_config_path,
-        mcp_enabled: runtime_args.mcp_enabled,
-        mcp_bind_addr: runtime_args.mcp_bind_addr,
-        netplay,
-        rta,
-        #[cfg(feature = "nova")]
-        auto_player_enabled: runtime_args.auto_player_enabled,
-    })
-}
-
 fn recommended_input_delay_frames(
     rtt_ms: Option<f64>,
     jitter_ms: f64,
@@ -1821,20 +1559,6 @@ fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Resul
     }
 }
 
-fn capture_config_from_parts(
-    path_template: Option<String>,
-    every_n_frames: u64,
-) -> Option<CaptureConfig> {
-    let template = path_template?;
-    if template.trim().is_empty() {
-        return None;
-    }
-    Some(CaptureConfig {
-        path_template: template,
-        every_n_frames: normalize_nonzero_u64(every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES),
-    })
-}
-
 fn capture_path_for_frame(template: &str, frame: u64) -> String {
     if template.contains("{frame}") {
         template.replace("{frame}", &format!("{frame:06}"))
@@ -1850,37 +1574,19 @@ fn write_frame_ppm(path: &str, rgba: &[u8]) -> Result<(), String> {
     let bytes = if path.to_ascii_lowercase().ends_with(".bmp") {
         nes_core::bmp::encode_bmp(FRAME_WIDTH, FRAME_HEIGHT, rgba)?
     } else {
-        encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba)
+        encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba).map_err(|e| e.to_string())?
     };
     fs::write(path, bytes).map_err(|err| format!("unable to write '{path}': {err}"))
 }
 
-fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> Vec<u8> {
+fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
     use std::io::Write;
     let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    write!(&mut ppm, "P6\n{width} {height}\n255\n").unwrap();
+    write!(&mut ppm, "P6\n{width} {height}\n255\n")?;
     for px in rgba.chunks_exact(4) {
         ppm.extend_from_slice(&px[..3]);
     }
-    ppm
-}
-
-fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
-    if err.kind() == std::io::ErrorKind::NotFound {
-        format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
-        )
-    } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path,
-            err
-        )
-    }
+    Ok(ppm)
 }
 
 fn build_startup_table(
@@ -1890,6 +1596,7 @@ fn build_startup_table(
     rta_manager: Option<&RtaManager>,
 ) -> Table {
     let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
     table.set_header(vec![
         Cell::new("Setting").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
@@ -1980,6 +1687,7 @@ fn build_startup_table(
 
 #[cfg(test)]
 mod tests {
+    use super::KeyboardInputMode;
 
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
@@ -2025,16 +1733,14 @@ mod tests {
     }
 
     use super::{
-        DEFAULT_CAPTURE_EVERY_FRAMES, FRAME_HEIGHT, FRAME_WIDTH, FrameDecision,
-        GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, KeyboardDecision, NetplayRuntimeStats, StepMode,
-        TARGET_FRAME_TIME, WindowEventDecision, advance_core_for_host_frame,
-        apply_gamepad_delta_commands, apply_overlay_keyboard_input, apply_runtime_cheat_codes,
-        audio_queue_dropped, capture_config_from_parts, capture_path_for_frame,
-        classify_keyboard_input, classify_window_event, connected_gamepad_ids,
-        controller_state_delta_for_player, element_state_pressed, encode_ppm,
-        evaluate_frame_deadline, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, netplay_feature_enabled,
+        FRAME_HEIGHT, FRAME_WIDTH, FrameDecision, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        KeyboardDecision, NetplayRuntimeStats, StepMode, TARGET_FRAME_TIME, WindowEventDecision,
+        advance_core_for_host_frame, apply_gamepad_delta_commands, apply_overlay_keyboard_input,
+        audio_queue_dropped, capture_path_for_frame, classify_keyboard_input,
+        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
+        element_state_pressed, encode_ppm, evaluate_frame_deadline, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
         overlay_input_requires_redraw, recommended_input_delay_frames,
         reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
         scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
@@ -2193,51 +1899,86 @@ mod tests {
 
     #[test]
     fn classify_keyboard_input_covers_exit_rewind_rollback_and_core_paths() {
+        let base_mode = KeyboardInputMode {
+            rollback_enabled: false,
+            rta_enabled: false,
+            rta_calibrate: false,
+        };
+
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::Escape, true, base_mode),
             KeyboardDecision::ToggleOverlay
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::F5, true, base_mode),
             KeyboardDecision::ManualSaveState
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F8, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::F8, true, base_mode),
             KeyboardDecision::ManualLoadState
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, true, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::R, true, base_mode),
             KeyboardDecision::SetRewindHeld(true)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::R, false, true, false, false),
+            classify_keyboard_input(
+                VirtualKeyCode::R,
+                false,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::SetRewindHeld(false)
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Z, true, true, false, false),
+            classify_keyboard_input(
+                VirtualKeyCode::Z,
+                true,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::UpdateKeyboardBits {
                 mask: Button::A.bit_mask(),
                 pressed: true
             }
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::X, false, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::X, false, base_mode),
             KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::Escape, false, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::Escape, false, base_mode),
             KeyboardDecision::Noop
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F9, true, false, true, false),
+            classify_keyboard_input(
+                VirtualKeyCode::F9,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::RtaManualSplit
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F10, true, false, true, true),
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
             KeyboardDecision::RtaFinish
         );
         assert_eq!(
-            classify_keyboard_input(VirtualKeyCode::F5, false, false, false, false),
+            classify_keyboard_input(VirtualKeyCode::F5, false, base_mode),
             KeyboardDecision::Noop
         );
     }
@@ -2351,16 +2092,6 @@ mod tests {
     }
 
     #[test]
-    fn applying_runtime_cheat_codes_replaces_existing_codes() {
-        let mut core = NesCore::new();
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
-            .expect("first cheat application should succeed");
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
-            .expect("second cheat application should succeed");
-        assert_eq!(core.cheat_codes().len(), 1);
-    }
-
-    #[test]
     fn evaluate_frame_deadline_classifies_wait_and_step_cases() {
         let now = Instant::now();
         let future = now + Duration::from_millis(2);
@@ -2420,10 +2151,6 @@ mod tests {
             merge_local_input_bits(0b0000_0011, 0b0000_0101),
             0b0000_0111
         );
-
-        assert!(netplay_feature_enabled(true, false));
-        assert!(netplay_feature_enabled(false, true));
-        assert!(!netplay_feature_enabled(false, false));
 
         assert!(!should_log_rollback(0));
         assert!(should_log_rollback(1));
@@ -2712,14 +2439,6 @@ mod tests {
 
     #[test]
     fn capture_config_helpers_handle_placeholders_and_defaults() {
-        assert!(capture_config_from_parts(None, 10).is_none());
-        assert!(capture_config_from_parts(Some("   ".to_owned()), 10).is_none());
-
-        let cfg = capture_config_from_parts(Some("snap-{frame}.ppm".to_owned()), 0)
-            .expect("valid template should produce config");
-        assert_eq!(cfg.path_template, "snap-{frame}.ppm");
-        assert_eq!(cfg.every_n_frames, DEFAULT_CAPTURE_EVERY_FRAMES);
-
         assert_eq!(
             capture_path_for_frame("snap-{frame}.ppm", 42),
             "snap-000042.ppm"
@@ -2729,7 +2448,7 @@ mod tests {
 
     #[test]
     fn encode_ppm_emits_expected_headers_and_pixel_layout() {
-        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]);
+        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]).unwrap();
         assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
         assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
     }
