@@ -459,7 +459,7 @@ mod tests {
 
         // Artificially replace the receiver with a black hole to force a timeout
         let (_dummy_reply_tx, dummy_rx) = std::sync::mpsc::sync_channel(1);
-        let (dummy_work_tx, _dummy_work_rx) = std::sync::mpsc::sync_channel(1);
+        let (dummy_work_tx, dummy_work_rx) = std::sync::mpsc::sync_channel(1);
 
         // Replace BOTH rx and tx to avoid panicking the worker thread when the dummy sender goes out of scope or the actual channel closes.
         tm.rx = dummy_rx;
@@ -473,5 +473,9 @@ mod tests {
 
         // Restore tx to allow graceful shutdown
         tm.tx = old_tx;
+
+        // Ensure dummy_work_rx stays alive until old_tx is restored to avoid
+        // "Worker thread failed to sync" panic on tx drop in some environments
+        drop(dummy_work_rx);
     }
 }
