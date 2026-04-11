@@ -1,7 +1,7 @@
+use nes_mcp::publish_frame_with;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use nes_mcp::publish_frame_with;
 
 #[test]
 #[should_panic(expected = "output state lock")]
@@ -22,7 +22,8 @@ fn havoc_test_mutex_poison() {
     });
 
     // Wait for the background thread to panic
-    rx.recv_timeout(Duration::from_millis(500)).expect("timeout");
+    rx.recv_timeout(Duration::from_millis(500))
+        .expect("timeout");
 
     // The state lock is now poisoned.
     // If the application attempts to read a frame later, it will panic unconditionally.
