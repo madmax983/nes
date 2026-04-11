@@ -1977,4 +1977,116 @@ mod tests {
             panic!("Expected Memory");
         }
     }
+
+    #[test]
+    fn test_core_snapshot_mapper_delta() {
+        let core1 = NesCore::new();
+        let snap1 = core1.save_state();
+        let core2 = NesCore::new();
+        let mut snap2 = core2.save_state();
+
+        let delta = snap1.mapper_delta(&snap2);
+        assert!(delta.is_none());
+
+        let delta = MapperDelta {
+            kind: MapperDeltaKind::Replace(None),
+        };
+        snap2.apply_mapper_delta(&delta);
+        assert!(snap2.mapper.is_none());
+    }
+
+    #[test]
+    fn test_core_error_display() {
+        use crate::api::CoreError;
+        assert_eq!(
+            format!("{}", CoreError::UnsupportedCommand),
+            "unsupported command"
+        );
+        assert_eq!(
+            format!("{}", CoreError::InvalidSpeed(123)),
+            "invalid speed multiplier: 123"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                CoreError::RomLoadFailed(crate::rom::RomError::InvalidMagic)
+            ),
+            "rom load failed: invalid iNES magic header"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                CoreError::CpuStepFailed(crate::cpu::CpuError::UnknownOpcode(0x12))
+            ),
+            "cpu step failed: unknown opcode 0x12"
+        );
+    }
+
+    #[test]
+    fn test_nescore_default() {
+        let core = NesCore::default();
+        assert!(core.mapper.is_none());
+    }
+
+    #[test]
+    fn test_core_query_fps_and_frame() {
+        let core = NesCore::new();
+        let fps = core.query(CoreQuery::FpsMilli);
+        assert!(matches!(fps, QueryResult::FpsMilli(_)));
+
+        let p_frame = core.query(CoreQuery::PpuFrameCounter);
+        assert!(matches!(p_frame, QueryResult::PpuFrameCounter(_)));
+    }
+
+    #[test]
+    fn test_mapper_hash_components() {
+        use crate::mapper::Axrom;
+        use crate::mapper::Cnrom;
+        use crate::mapper::Gxrom;
+        use crate::mapper::Mmc1;
+        use crate::mapper::Mmc3;
+        use crate::mapper::Nrom;
+        use crate::mapper::Uxrom;
+        use crate::rom::NametableMirroring;
+
+        let mut core = NesCore::new();
+
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        core.mapper = Some(LoadedMapper::Nrom(nrom));
+        assert_eq!(core.mapper_hash_component(), 0x10);
+
+        let uxrom = Uxrom::from_prg_rom(vec![0; 64 * 1024]);
+        core.mapper = Some(LoadedMapper::Uxrom(uxrom));
+        assert_ne!(core.mapper_hash_component(), 0);
+
+        let mmc1 = Mmc1::from_prg_rom(vec![0; 64 * 1024], 0);
+        core.mapper = Some(LoadedMapper::Mmc1(mmc1));
+        assert_ne!(core.mapper_hash_component(), 0);
+
+        let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        core.mapper = Some(LoadedMapper::Cnrom(cnrom));
+        assert_ne!(core.mapper_hash_component(), 0);
+
+        let axrom = Axrom::from_prg_rom(vec![0; 64 * 1024]);
+        core.mapper = Some(LoadedMapper::Axrom(axrom));
+        assert_ne!(core.mapper_hash_component(), 0);
+
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        core.mapper = Some(LoadedMapper::Gxrom(gxrom));
+        assert_ne!(core.mapper_hash_component(), 0);
+
+        let mmc3 = Mmc3::from_prg_chr(vec![0; 64 * 1024], vec![], NametableMirroring::Vertical);
+        core.mapper = Some(LoadedMapper::Mmc3(mmc3));
+        assert_ne!(core.mapper_hash_component(), 0);
+    }
+
+    #[test]
+    fn test_cheat_code_hash_component() {
+        use std::str::FromStr;
+        let mut core = NesCore::new();
+        let code = crate::cheat_codes::CheatCode::from_str("SXTPOU").unwrap();
+        core.cheat_codes.push(code);
+        let hash = core.cheat_code_hash_component();
+        assert_ne!(hash, 0);
+    }
 }
