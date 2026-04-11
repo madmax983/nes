@@ -15,13 +15,12 @@ mod netplay;
 use comfy_table::{Cell, Color as TableColor, Table};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
-use crate::gamepad::*;
 use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
 };
 use nes_core::{
-    Button, Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo,
+    Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore, RomLoadInfo,
 };
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
@@ -55,7 +54,6 @@ use winit::window::{Window, WindowBuilder};
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 pub(crate) mod gamepad;
-pub(crate) use gamepad::*;
 #[cfg(feature = "mcp-host")]
 use crate::mcp_host::McpHost;
 use crate::netplay::{NetplayClient, NetplayRuntimeConfig, NetplayRuntimeStats};
@@ -65,21 +63,10 @@ const DEFAULT_WINDOW_SCALE: u32 = 3;
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
 const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
-const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
 const NETPLAY_AUTO_DELAY_MIN_FRAMES: u32 = 1;
 const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 const SAVE_SLOT_COUNT: u8 = 5;
-const CONTROLLER_BUTTONS: [Button; 8] = [
-    Button::A,
-    Button::B,
-    Button::Select,
-    Button::Start,
-    Button::Up,
-    Button::Down,
-    Button::Left,
-    Button::Right,
-];
 
 struct RuntimeConfig {
     rom_path: String,
@@ -702,7 +689,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
                 ctx.runtime.metrics_every_frames,
                 ctx.core.ppu_frame_counter(),
             );
-            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
+            crate::gamepad::resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
             set_overlay_open(
                 ctx.overlay,
@@ -744,7 +731,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             ctx.core.load_state(&snapshot);
             apply_session_cheats(ctx.core, ctx.session_cheats)?;
             reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
-            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
+            crate::gamepad::resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             if let Some(output) = ctx.audio_output {
                 output.clear();
             }
@@ -816,21 +803,6 @@ fn scaled_window_dimensions(window_scale: u32) -> (f64, f64) {
     )
 }
 
-fn gamepad_assignments_changed(
-    next: [Option<GamepadId>; 2],
-    current: [Option<GamepadId>; 2],
-) -> bool {
-    next != current
-}
-
-fn gamepad_slot_changed(
-    next: [Option<GamepadId>; 2],
-    current: [Option<GamepadId>; 2],
-    player: usize,
-) -> bool {
-    next[player] != current[player]
-}
-
 fn element_state_pressed(state: ElementState) -> bool {
     state == ElementState::Pressed
 }
@@ -839,37 +811,9 @@ fn should_resume_after_rewind_hold(held: bool) -> bool {
     !held
 }
 
-fn release_all_buttons(core: &mut NesCore) {
-    for &button in &CONTROLLER_BUTTONS {
-        let _ = core.execute(Command::ReleaseButton(button));
-        let _ = core.execute(Command::ReleaseButton2(button));
-    }
-}
-
-fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
-        && let Some(mask) = map_key_event_to_button_bit(key_code)
-    {
-        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
-    }
-}
-
-fn resync_restored_inputs(
-    core: &mut NesCore,
-    keyboard_bits: u8,
-    gamepad_bits: &mut [u8; 2],
-) -> Result<(), String> {
-    release_all_buttons(core);
-    *gamepad_bits = [0; 2];
-    apply_gamepad_delta_commands(core, 0, keyboard_bits, nes_core::Player::One)
-}
 
 fn is_player_two_slot(player_index: usize) -> bool {
     player_index == 1
-}
-
-fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
-    keyboard_bits | local_gamepad_bits
 }
 
 fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
@@ -896,26 +840,6 @@ fn should_capture_frame(every_n_frames: u64, frame_index: u64) -> bool {
     every_n_frames != 0 && frame_index.is_multiple_of(every_n_frames)
 }
 
-fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
-    if pressed {
-        current | mask
-    } else {
-        current & !mask
-    }
-}
-
-fn apply_gamepad_delta_commands(
-    core: &mut NesCore,
-    previous_bits: u8,
-    next_bits: u8,
-    player: nes_core::Player,
-) -> Result<(), String> {
-    for command in controller_state_delta_for_player(previous_bits, next_bits, player) {
-        core.execute(command)
-            .map_err(|err| format!("Gamepad command failed: {err}"))?;
-    }
-    Ok(())
-}
 
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
@@ -1084,7 +1008,7 @@ fn run() -> Result<(), String> {
     };
     let mut active_gamepads = [None::<GamepadId>; 2];
     if let Some(gilrs_state) = gilrs.as_ref() {
-        let connected = connected_gamepad_ids(
+        let connected = crate::gamepad::connected_gamepad_ids(
             gilrs_state
                 .gamepads()
                 .map(|(id, gamepad)| (id, gamepad.is_connected())),
@@ -1187,7 +1111,7 @@ fn run() -> Result<(), String> {
                     }
                     return;
                 }
-                track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
+                crate::gamepad::track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits, map_virtual_keycode);
                 match classify_keyboard_input(
                     key,
                     pressed,
@@ -1281,7 +1205,7 @@ fn run() -> Result<(), String> {
                             // held at that historical frame. Release both pads so the
                             // core's latch matches the host's live input state going forward.
                             if let Err(err) =
-                                resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
+                                crate::gamepad::resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
                             {
                                 eprintln!("Input resync failed: {err}");
                                 *control_flow = ControlFlow::Exit;
@@ -1303,7 +1227,7 @@ fn run() -> Result<(), String> {
                         }
                     }
                     KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
-                        keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
+                        keyboard_bits = crate::gamepad::update_button_bits(keyboard_bits, mask, pressed);
                     }
                     KeyboardDecision::ExecuteCore(command) => {
                         if let Some(action) = command_marks_rta_invalidation(command)
@@ -1370,15 +1294,15 @@ fn run() -> Result<(), String> {
 
             if let Some(gilrs_state) = gilrs.as_mut() {
                 while gilrs_state.next_event().is_some() {}
-                let connected = connected_gamepad_ids(
+                let connected = crate::gamepad::connected_gamepad_ids(
                     gilrs_state
                         .gamepads()
                         .map(|(id, gamepad)| (id, gamepad.is_connected())),
                 );
-                let next_active = select_active_gamepad_ids(&connected, active_gamepads);
-                if gamepad_assignments_changed(next_active, active_gamepads) {
+                let next_active = crate::gamepad::select_active_gamepad_ids(&connected, active_gamepads);
+                if crate::gamepad::gamepad_assignments_changed(next_active, active_gamepads) {
                     for player in 0..active_gamepads.len() {
-                        if gamepad_slot_changed(next_active, active_gamepads, player) {
+                        if crate::gamepad::gamepad_slot_changed(next_active, active_gamepads, player) {
                             if let Some(gamepad_id) = next_active[player] {
                                 println!(
                                     "Gamepad P{} active: {}",
@@ -1397,7 +1321,7 @@ fn run() -> Result<(), String> {
                     let next_gamepad_bits = active_gamepads[player]
                         .map(|gamepad_id| {
                             let gamepad = gilrs_state.gamepad(gamepad_id);
-                            gamepad_snapshot_to_bits(GamepadSnapshot {
+                            crate::gamepad::gamepad_snapshot_to_bits(crate::gamepad::GamepadSnapshot {
                                 connected: gamepad.is_connected(),
                                 south_pressed: gamepad.is_pressed(GamepadButton::South),
                                 east_pressed: gamepad.is_pressed(GamepadButton::East),
@@ -1416,7 +1340,7 @@ fn run() -> Result<(), String> {
                         .unwrap_or_default();
                     if rollback.is_none()
                         && !overlay.is_open()
-                        && let Err(err) = apply_gamepad_delta_commands(
+                        && let Err(err) = crate::gamepad::apply_gamepad_delta_commands(
                             &mut core,
                             gamepad_bits[player],
                             next_gamepad_bits,
@@ -1465,7 +1389,7 @@ fn run() -> Result<(), String> {
                 let local_gamepad_bits =
                     crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
                 let scheduled = rollback_engine
-                    .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
+                    .schedule_local_input(crate::gamepad::merge_local_input_bits(keyboard_bits, local_gamepad_bits));
                 if let Some(client) = netplay_client.as_ref()
                     && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
                 {
@@ -1639,7 +1563,7 @@ fn run() -> Result<(), String> {
                     metrics.on_audio_queue(audio_output.queue_len(), true);
                 } else {
                     let queued = audio_output.queue_samples(core.audio_chunk_i16());
-                    metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
+                        metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
                 }
             }
 
@@ -1855,116 +1779,6 @@ fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
         VirtualKeyCode::Right => Some("ArrowRight"),
         _ => None,
     }
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct GamepadSnapshot {
-    connected: bool,
-    south_pressed: bool,
-    east_pressed: bool,
-    west_pressed: bool,
-    north_pressed: bool,
-    select_pressed: bool,
-    start_pressed: bool,
-    dpad_up_pressed: bool,
-    dpad_down_pressed: bool,
-    dpad_left_pressed: bool,
-    dpad_right_pressed: bool,
-    left_x: f32,
-    left_y: f32,
-}
-
-fn connected_gamepad_ids(gamepads: impl IntoIterator<Item = (GamepadId, bool)>) -> Vec<GamepadId> {
-    gamepads
-        .into_iter()
-        .filter_map(|(id, connected)| connected.then_some(id))
-        .collect()
-}
-
-fn select_active_gamepad_ids(
-    connected: &[GamepadId],
-    current: [Option<GamepadId>; 2],
-) -> [Option<GamepadId>; 2] {
-    let mut next = [None::<GamepadId>; 2];
-
-    for player in 0..next.len() {
-        if let Some(gamepad_id) = current[player]
-            && connected.contains(&gamepad_id)
-            && !next.contains(&Some(gamepad_id))
-        {
-            next[player] = Some(gamepad_id);
-        }
-    }
-
-    for &gamepad_id in connected {
-        if next.iter().all(|slot| *slot != Some(gamepad_id))
-            && let Some(slot) = next.iter_mut().find(|slot| slot.is_none())
-        {
-            *slot = Some(gamepad_id);
-        }
-    }
-
-    next
-}
-
-fn gamepad_snapshot_to_bits(snapshot: GamepadSnapshot) -> u8 {
-    if !snapshot.connected {
-        return 0;
-    }
-
-    let mut bits = 0_u8;
-    // Keep both common face layouts usable across Xbox/Switch-style controllers.
-    if snapshot.south_pressed || snapshot.east_pressed {
-        bits |= Button::A.bit_mask();
-    }
-    if snapshot.west_pressed || snapshot.north_pressed {
-        bits |= Button::B.bit_mask();
-    }
-    if snapshot.select_pressed {
-        bits |= Button::Select.bit_mask();
-    }
-    if snapshot.start_pressed {
-        bits |= Button::Start.bit_mask();
-    }
-
-    if snapshot.dpad_up_pressed || snapshot.left_y <= -GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Up.bit_mask();
-    }
-    if snapshot.dpad_down_pressed || snapshot.left_y >= GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Down.bit_mask();
-    }
-    if snapshot.dpad_left_pressed || snapshot.left_x <= -GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Left.bit_mask();
-    }
-    if snapshot.dpad_right_pressed || snapshot.left_x >= GAMEPAD_AXIS_THRESHOLD {
-        bits |= Button::Right.bit_mask();
-    }
-
-    bits
-}
-
-/// **Performance optimization:** Returns an `impl Iterator` instead of `Vec<Command>`
-/// to eliminate a per-frame heap allocation when processing small, bounded state changes
-/// for the NES controllers.
-fn controller_state_delta_for_player(
-    previous: u8,
-    current: u8,
-    player: nes_core::Player,
-) -> impl Iterator<Item = Command> {
-    CONTROLLER_BUTTONS.into_iter().filter_map(move |button| {
-        let mask = button.bit_mask();
-        match (previous & mask != 0, current & mask != 0) {
-            (false, true) => Some(match player {
-                nes_core::Player::One => Command::PressButton(button),
-                nes_core::Player::Two => Command::PressButton2(button),
-            }),
-            (true, false) => Some(match player {
-                nes_core::Player::One => Command::ReleaseButton(button),
-                nes_core::Player::Two => Command::ReleaseButton2(button),
-            }),
-            _ => None,
-        }
-    })
 }
 
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {
