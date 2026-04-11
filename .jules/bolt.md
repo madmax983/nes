@@ -60,3 +60,7 @@
 **[Avoiding Allocations on Hot Paths]**
 **Learning:** Checking for string existence in a set on hot paths using `.contains()` with a borrowed `&str` before allocating and inserting avoids unnecessary heap allocations for recurrent values. Likewise, borrowing strings instead of allocating `Vec<String>` when purely doing data serialization significantly reduces allocations.
 **Action:** Use `.contains()` with `&str` instead of calling `.insert(value.to_owned())` directly on sets. Use lifetimes (e.g. `Vec<&'a str>`) on structures only intended for data serialization.
+
+**[Replacing String with Cow in overlay.rs]**
+**Learning:** Using `std::borrow::Cow<'static, str>` instead of `String` for the overlay status message avoids unnecessary heap allocations when passing static string literals (e.g. `set_status_message("Slot 1 loaded")`), while still allowing dynamic strings (e.g. via `format!()`) when needed.
+**Action:** When a struct field frequently stores static string literals but occasionally requires dynamic strings, replace `String` with `std::borrow::Cow<'static, str>`. Update setters to accept `impl Into<Cow<'static, str>>` to benefit from zero-cost `Cow::Borrowed` when passing `&'static str`.

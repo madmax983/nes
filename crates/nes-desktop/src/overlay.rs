@@ -99,7 +99,7 @@ pub struct OverlayModel {
     cheats_selection_index: usize,
     add_cheat_input: Option<String>,
     main_entries: Vec<MainMenuSelection>,
-    status_message: Option<String>,
+    status_message: Option<std::borrow::Cow<'static, str>>,
 }
 
 impl OverlayModel {
@@ -278,7 +278,7 @@ impl OverlayModel {
     }
 
     /// Sets a user-facing status message shown at the bottom of the overlay.
-    pub fn set_status_message(&mut self, message: impl Into<String>) {
+    pub fn set_status_message(&mut self, message: impl Into<std::borrow::Cow<'static, str>>) {
         self.status_message = Some(message.into());
     }
 
