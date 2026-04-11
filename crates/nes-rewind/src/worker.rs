@@ -198,19 +198,18 @@ impl TimeMachine {
         });
 
         // Wait up to one frame-budget (16 ms) for the reply.
-        match self.rx.recv_timeout(Duration::from_millis(16)) {
-            Ok(WorkerReply::Reconstructed { frame_id, snapshot }) => {
-                cursor.current_frame = frame_id;
-                core.load_state(&snapshot);
-                self.state = TimeMachineState::Rewinding {
-                    seconds_remaining: frame_id as f32 / 60.0,
-                };
-                Some(frame_id)
-            }
-            _ => {
-                self.state = TimeMachineState::Exhausted;
-                None
-            }
+        if let Ok(WorkerReply::Reconstructed { frame_id, snapshot }) =
+            self.rx.recv_timeout(Duration::from_millis(16))
+        {
+            cursor.current_frame = frame_id;
+            core.load_state(&snapshot);
+            self.state = TimeMachineState::Rewinding {
+                seconds_remaining: frame_id as f32 / 60.0,
+            };
+            Some(frame_id)
+        } else {
+            self.state = TimeMachineState::Exhausted;
+            None
         }
     }
 

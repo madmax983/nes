@@ -191,15 +191,14 @@ impl NesConfig {
     /// let config = NesConfig::load_or_default(None).unwrap();
     /// ```
     pub fn load_or_default(path: Option<&Path>) -> Result<Self, String> {
-        match path {
-            Some(config_path) => Self::load(config_path),
-            None => {
-                let default_path = Path::new(DEFAULT_CONFIG_PATH);
-                if default_path.exists() {
-                    Self::load(default_path)
-                } else {
-                    Ok(Self::default())
-                }
+        if let Some(config_path) = path {
+            Self::load(config_path)
+        } else {
+            let default_path = Path::new(DEFAULT_CONFIG_PATH);
+            if default_path.exists() {
+                Self::load(default_path)
+            } else {
+                Ok(Self::default())
             }
         }
     }

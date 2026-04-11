@@ -206,22 +206,19 @@ fn handle_client(
 
     let join = read_client_message(&mut reader)?
         .ok_or_else(|| "client disconnected before join".to_owned())?;
-    let (room, player) = match join {
-        ClientMessage::Join { room, player } => {
-            if !matches!(player, 1 | 2) {
-                let _ = tx_out.send(ServerMessage::Error {
-                    message: "player must be 1 or 2".to_owned(),
-                });
-                return Err(format!("invalid player slot {player}"));
-            }
-            (room, player)
-        }
-        _ => {
+    let (room, player) = if let ClientMessage::Join { room, player } = join {
+        if !matches!(player, 1 | 2) {
             let _ = tx_out.send(ServerMessage::Error {
-                message: "first message must be join".to_owned(),
+                message: "player must be 1 or 2".to_owned(),
             });
-            return Err("first message must be join".to_owned());
+            return Err(format!("invalid player slot {player}"));
         }
+        (room, player)
+    } else {
+        let _ = tx_out.send(ServerMessage::Error {
+            message: "first message must be join".to_owned(),
+        });
+        return Err("first message must be join".to_owned());
     };
 
     {
