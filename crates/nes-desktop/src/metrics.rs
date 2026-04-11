@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use comfy_table::Table;
+use crossterm::{cursor, execute, terminal};
 use nes_config::normalize_nonzero_u64;
 use nes_core::NesCore;
 
@@ -30,6 +31,7 @@ pub(crate) struct PerfMetrics {
     netplay_max_rollback_distance: u64,
     netplay_desyncs: u64,
     netplay_input_delay_frames: u32,
+    first_report: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -96,6 +98,7 @@ impl PerfMetrics {
             netplay_max_rollback_distance: 0,
             netplay_desyncs: 0,
             netplay_input_delay_frames: 0,
+            first_report: true,
         }
     }
 
@@ -234,7 +237,18 @@ impl PerfMetrics {
             self.netplay_input_delay_frames.to_string(),
         ]);
 
-        println!("{table}");
+        let table_str = format!("{table}");
+        let lines = table_str.lines().count() as u16;
+
+        if !self.first_report {
+            let _ = execute!(
+                std::io::stdout(),
+                cursor::MoveUp(lines),
+                terminal::Clear(terminal::ClearType::FromCursorDown)
+            );
+        }
+        self.first_report = false;
+        println!("{table_str}");
 
         self.report_start = Instant::now();
         self.report_start_ppu_frame = ppu_now;
