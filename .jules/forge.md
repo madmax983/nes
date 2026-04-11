@@ -22,3 +22,11 @@
 **[Refactoring excessive unwrap() usage in trainer loop]**
 **Learning:** Found multiple usages of `model.as_ref().unwrap()` and reassignment via `.take().expect(...)` inside the hot PPO update loop in `nes-ai/src/trainer.rs`. This added visual clutter and made ownership unclear.
 **Action:** Changed the signature of `ppo_update` to take `mut model: HybridPolicyValueNet` and return it back to the caller instead of taking a mutable reference to an `Option`. This eliminated all `unwrap()` calls on the model in both the outer loop and the inner update function, greatly improving clarity and explicitly modeling the ownership transfer through the optimizer mapping step.
+
+**[Refactoring select_profile to flatten matches and use early returns]
+**Learning:** Found a nested loop and match pattern in `nes-desktop/src/rta.rs` where `select_profile` was handling profile filtering. It used `if let Some(first) = ...` followed by `if let Some(second) = ...` without early returning from errors smoothly.
+**Action:** Flattened the execution flow of `select_profile` by extracting the draft rule logic to a closure `check_draft` and using early returns via `if let Some(...) else { return ... }`.
+
+**[Refactoring print_metrics_table]
+**Learning:** Found a lot of repeated code with `table.add_row(vec![Cell::new("key"), Cell::new(val)])`.
+**Action:** Created an inline helper closure `add_row` to remove the `.add_row(vec![...])` boilerplate, increasing DRY-ness.
