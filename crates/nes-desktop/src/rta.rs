@@ -1485,6 +1485,9 @@ impl CalibrationRecorder {
     /// **⚡ Bolt Optimization:** Uses `VecDeque::pop_front` instead of `Vec::remove(0)`
     /// to avoid an O(N) memory shift of up to 30,000 frames on every single frame execution.
     ///
+    /// **⚡ Bolt Optimization:** Recycles the `Vec<u8>` from the oldest frame when the buffer
+    /// reaches capacity, eliminating a 2KB heap allocation on every single frame.
+    ///
     /// # Examples
     ///
     /// ```no_run
@@ -1500,12 +1503,17 @@ impl CalibrationRecorder {
     where
         F: FnMut(u16) -> u8,
     {
-        let mut work_ram = vec![0_u8; 0x0800];
+        let mut work_ram = if self.frames.len() >= self.max_frames {
+            self.frames
+                .pop_front()
+                .map(|f| f.work_ram)
+                .unwrap_or_else(|| vec![0_u8; 0x0800])
+        } else {
+            vec![0_u8; 0x0800]
+        };
+
         for (offset, byte) in work_ram.iter_mut().enumerate() {
             *byte = read_u8(offset as u16);
-        }
-        if self.frames.len() >= self.max_frames {
-            self.frames.pop_front();
         }
         self.frames.push_back(CalibrationFrame { frame, work_ram });
     }
