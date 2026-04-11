@@ -7,3 +7,9 @@
 ## 2025-06-18 - [Add Missing Examples for Desktop/Web APIS]
 **Confusion:** The core runtime structures `ProfileEnv` and `NetplayClient` lacked context on why they were needed (thread handling vs I/O boundaries)
 **Clarification:** Added context directly referencing asynchronous network loops and `no_run` example blocks to explain how users connect safely.
+## 2025-06-18 - [Add Missing Examples for Desktop/Web APIS]
+**Confusion:** The core runtime structures `ProfileEnv` and `NetplayClient` lacked context on why they were needed (thread handling vs I/O boundaries)
+**Clarification:** Added context directly referencing asynchronous network loops and `no_run` example blocks to explain how users connect safely.
+## 2025-06-18 - JSON Protocol Serialization and Relay Configs
+**Confusion:** `ClientMessage` and `ServerMessage` were undocumented, leaving developers unaware of how matchmaking and determinism worked. The Relay server config also lacked context on its simulator behavior.
+**Clarification:** Added narrative module and item-level docs explaining the 'why' (e.g., deterministic pulse of inputs, artificial latency injection) along with executable doctests that assert the exact JSON wire format.

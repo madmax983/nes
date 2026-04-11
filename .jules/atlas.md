@@ -26,3 +26,10 @@
 **Extract Gamepad Logic from main.rs**
 **Tangle:** The `main.rs` file in `nes-desktop` contained several gamepad-specific structs (`GamepadSnapshot`), constants (`CONTROLLER_BUTTONS`, `GAMEPAD_AXIS_THRESHOLD`), and helper methods mapping external inputs to internal NES core bits mixed in with generic UI state logic.
 **Blueprint:** Extracted all gamepad translation logic and related structs/constants into a new internal module `crates/nes-desktop/src/gamepad.rs`. Registered the module in `main.rs` as `pub(crate) mod gamepad;` to maintain strict boundary isolation from the public API while reducing `main.rs` bloat.
+
+**Extract Session State from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` contained the `LoadedRomSession` struct and related helper functions mixed with the main loop and UI logic.
+**Blueprint:** Extracted the `LoadedRomSession` struct and related functions (`load_rom_session`, `apply_session_cheats`, etc.) into a dedicated `crates/nes-desktop/src/session.rs` module, exposing them internally via `pub(crate)`.
+**Extract RuntimeConfig from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` was bloated and contained configuration parsing (`resolve_runtime_config`, `RuntimeConfig`, `CaptureConfig`) mixed directly with the GUI application loop.
+**Blueprint:** Extracted `RuntimeConfig`, `StepMode`, `CaptureConfig` and the `resolve_runtime_config` setup function into a separate internal `config.rs` module and updated `main.rs` imports to pull from it.

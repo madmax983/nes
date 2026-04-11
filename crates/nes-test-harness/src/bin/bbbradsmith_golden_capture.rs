@@ -82,7 +82,7 @@ fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Col
 fn main() {
     let mut stdout = std::io::stdout();
     if let Err(err) = run(&mut stdout) {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
         std::process::exit(1);
     }
 }

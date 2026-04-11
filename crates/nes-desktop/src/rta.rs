@@ -469,32 +469,18 @@ pub fn select_profile(
     });
 
     let Some(first_match) = match_iter.next() else {
-        // **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
-        // a String and joining manually.
-        let mut known = String::new();
-        for (i, profile) in profiles.iter().enumerate() {
-            if i > 0 {
-                known.push_str(", ");
-            }
-            known.push_str(profile.profile.id.as_str());
-        }
         return Err(format!(
             "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
-            known
+            format_profile_names(profiles.iter())
         ));
     };
 
     if let Some(second_match) = match_iter.next() {
-        // **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
-        // a String and joining manually.
-        let mut conflict = String::new();
-        conflict.push_str(first_match.profile.id.as_str());
-        conflict.push_str(", ");
-        conflict.push_str(second_match.profile.id.as_str());
-        for profile in match_iter {
-            conflict.push_str(", ");
-            conflict.push_str(profile.profile.id.as_str());
-        }
+        let conflict = format_profile_names(
+            std::iter::once(first_match)
+                .chain(std::iter::once(second_match))
+                .chain(match_iter),
+        );
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
@@ -586,6 +572,19 @@ impl TriggerRuntime {
         self.cooldown = self.rule.debounce_frames;
         true
     }
+}
+
+/// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
+/// a String and joining manually.
+fn format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String {
+    let mut names = String::new();
+    for (i, profile) in profiles.enumerate() {
+        if i > 0 {
+            names.push_str(", ");
+        }
+        names.push_str(profile.profile.id.as_str());
+    }
+    names
 }
 
 fn evaluate_trigger_rule(op: TriggerOp, current: u32, value: u32, previous: Option<u32>) -> bool {
