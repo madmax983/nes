@@ -68,7 +68,7 @@ pub struct RpcRequest {
 /// message and an optional data payload for extended diagnostic context.
 ///
 /// When converting this error into a JSON value for transmission, you must use
-/// the [`RpcError::to_json`] method to avoid non-exhaustive pattern compilation errors
+/// the [`RpcError::into_json`] method to avoid non-exhaustive pattern compilation errors
 /// that can arise from custom serialization strategies.
 #[derive(Debug, Clone)]
 pub struct RpcError {
@@ -133,7 +133,7 @@ impl RpcError {
 
     /// Serializes the error into a valid JSON-RPC 2.0 error object.
     ///
-    /// **Important:** You must use this custom `to_json()` method instead of `as_json()`
+    /// **Important:** You must use this custom `into_json()` method instead of `as_json()`
     /// when constructing the response payload. It gracefully handles the optional `data`
     /// field without generating compilation errors associated with non-exhaustive patterns.
     ///
@@ -143,19 +143,19 @@ impl RpcError {
     /// use nes_mcp::protocol::RpcError;
     ///
     /// let err = RpcError::invalid_params("missing required field 'rom_path'");
-    /// let json_val = err.to_json();
+    /// let json_val = err.into_json();
     ///
     /// assert_eq!(json_val["code"], -32602);
     /// assert_eq!(json_val["message"], "missing required field 'rom_path'");
     /// assert!(json_val.get("data").is_none());
     /// ```
     #[must_use]
-    pub fn to_json(&self) -> Value {
+    pub fn into_json(self) -> Value {
         let mut value = json!({
             "code": self.code,
             "message": self.message,
         });
-        if let Some(data) = self.data.clone()
+        if let Some(data) = self.data
             && let Some(obj) = value.as_object_mut()
         {
             obj.insert("data".to_owned(), data);
@@ -491,7 +491,7 @@ pub fn jsonrpc_error(id: Value, err: RpcError) -> Value {
     json!({
         "jsonrpc": JSONRPC_VERSION,
         "id": id,
-        "error": err.to_json()
+        "error": err.into_json()
     })
 }
 
@@ -593,7 +593,7 @@ mod tests {
         assert_eq!(internal.code, -32603);
         assert_eq!(internal.message, "boom");
 
-        let json = internal.to_json();
+        let json = internal.into_json();
         assert_eq!(json["code"], -32603);
         assert_eq!(json["message"], "boom");
     }
