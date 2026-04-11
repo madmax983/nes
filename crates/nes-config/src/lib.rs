@@ -219,28 +219,46 @@ pub fn normalize_nonzero_u64(value: u64, fallback: u64) -> u64 {
 pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<String>), String> {
     let mut config_path = None::<PathBuf>;
     let mut pass_through = Vec::new();
-    let mut arg_iter = args.iter();
-    while let Some(arg) = arg_iter.next() {
-        if arg == "--config" {
-            let Some(path) = arg_iter.next() else {
-                return Err("missing value after --config".to_owned());
-            };
-            if path.starts_with("--") {
+    let mut idx = 0_usize;
+    while idx < args.len() {
+        let arg = &args[idx];
+        if parse_arg(args, &mut idx, "--config", |value| {
+            if value.starts_with("--") {
                 return Err("missing value after --config".to_owned());
             }
-            config_path = Some(PathBuf::from(path));
+            config_path = Some(PathBuf::from(value));
+            Ok(())
+        })? {
             continue;
         }
-        if let Some(value) = arg.strip_prefix("--config=") {
-            if !value.is_empty() {
-                config_path = Some(PathBuf::from(value));
-                continue;
-            }
-            return Err("missing value after --config=".to_owned());
-        }
         pass_through.push(arg.clone());
+        idx += 1;
     }
     Ok((config_path, pass_through))
+}
+
+fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
+where
+    F: FnMut(&str) -> Result<(), String>,
+{
+    let arg = &args[*idx];
+    if arg == flag {
+        let Some(value) = args.get(*idx + 1) else {
+            return Err(format!("missing value after {flag}"));
+        };
+        apply(value)?;
+        *idx += 2;
+        Ok(true)
+    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
+        if value.is_empty() {
+            return Err(format!("missing value after {flag}="));
+        }
+        apply(value)?;
+        *idx += 1;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 #[cfg(test)]

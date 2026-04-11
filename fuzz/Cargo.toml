@@ -1,0 +1,25 @@
+[package]
+name = "nes-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+serde_json = "1.0"
+nes-netplay = { path = "../crates/nes-netplay" }
+libfuzzer-sys = "0.4"
+
+[dependencies.nes-relay]
+path = "../crates/nes-relay"
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

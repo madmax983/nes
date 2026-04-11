@@ -1,3 +1,17 @@
+//! Model Context Protocol (MCP) host server integration.
+//!
+//! This module provides the `McpHost`, a background server that bridges the
+//! emulator core to an external MCP client via JSON-RPC over TCP.
+//!
+//! # Architecture
+//! The MCP host runs its TCP listener and connection handling on a dedicated
+//! background thread. Because the `NesCore` emulator state is thread-local and
+//! must be tightly synchronized with the render loop, the background thread
+//! does not execute emulator commands directly. Instead, it parses incoming
+//! requests and forwards them via an `mpsc` channel to the main thread.
+//! The main thread must regularly call `McpHost::drain` to apply these queued
+//! commands to the emulator state.
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -613,5 +627,15 @@ mod tests {
         assert_eq!(call_response["id"], 3);
         assert_eq!(call_response["result"]["isError"], false);
         assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
+    }
+
+    #[test]
+    fn host_start_fails_on_invalid_bind_address() {
+        let result = McpHost::start("256.256.256.256:0");
+        if let Err(err) = result {
+            assert!(err.contains("Failed to bind MCP host"));
+        } else {
+            panic!("Expected an error when binding to invalid address");
+        }
     }
 }

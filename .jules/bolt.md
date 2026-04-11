@@ -49,3 +49,7 @@
 ## 2025-06-19 - Removed format! and Vec::new() on hot emulator path
 **Learning:** Returning `String` and `Vec<u8>` from inner parsing routines on the CPU emulation hot loop causes multiple allocations per executed opcode, degrading performance.
 **Action:** Replace `format!` and `vec![]` with `format_args!` and array slices (`&[u8]`). Pass `fmt::Arguments` to diagnostic functions that only evaluate and allocate them when tracing is explicitly enabled.
+
+## 2026-04-08 - [Iterator Clone Performance Pitfall in Overlay]
+**Learning:** The UI rendering loop repeatedly called `.clone()` on an iterator mapping states. Even if mapping is cheap, cloning and traversing $O(N^2)$ times inside the frame renderer generates unnecessary overhead.
+**Action:** Pre-collect small UI list states (like slot summaries) into fixed-size stack arrays `[Option<T>; 5]` outside the rendering loop, eliminating iterator clones and reducing lookups to $O(1)$ without heap allocations.

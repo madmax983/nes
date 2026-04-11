@@ -7,14 +7,23 @@ use sha2::{Digest, Sha256};
 
 use crate::error::AiError;
 
+/// The expected version of the snapshot bundle schema.
 pub const SNAPSHOT_BUNDLE_VERSION: u32 = 1;
 
+/// A serialized representation of a full emulator snapshot along with its metadata.
+///
+/// Includes the `CoreSnapshot` itself, as well as the hash of the ROM that it
+/// requires in order to run correctly.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SnapshotBundle {
+    /// The version of the snapshot schema.
     pub version: u32,
+    /// The SHA256 hash of the ROM file used to generate this snapshot.
     pub rom_hash: String,
+    /// A human-readable identifier for this snapshot.
     pub snapshot_id: String,
+    /// The actual serialized emulator core state.
     pub snapshot: CoreSnapshot,
 }
 
@@ -80,6 +89,14 @@ pub fn load_snapshot_bundle(path: &Path) -> Result<SnapshotBundle, AiError> {
     Ok(bundle)
 }
 
+/// Computes the SHA256 hash of a byte slice and returns it as a lowercase hex string.
+///
+/// ## Examples
+/// ```
+/// use nes_ai::snapshot::sha256_hex;
+/// let hash = sha256_hex(b"hello world");
+/// assert_eq!(hash, "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9");
+/// ```
 #[must_use]
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);

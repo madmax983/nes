@@ -1,14 +1,56 @@
+/// Configures simulated network degradation for testing netcode resilience.
+///
+/// This struct allows you to inject artificial latency, jitter, packet loss, and reordering
+/// to simulate poor real-world internet conditions.
+///
+/// A netcode system is only as robust as the chaos it can endure. `LinkCondition` transforms
+/// a pristine local loopback into a stormy ocean of dropped packets and wildly fluctuating latency.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_relay::config::LinkCondition;
+///
+/// let condition = LinkCondition {
+///     latency_ms: 100,
+///     jitter_ms: 20,
+///     loss_pct: 5,
+///     reorder_pct: 1,
+/// };
+/// ```
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LinkCondition {
+    /// The baseline artificial latency to inject (in milliseconds).
     pub latency_ms: u64,
+    /// The maximum variance in latency (in milliseconds).
     pub jitter_ms: u64,
+    /// The percentage probability (0-100) of dropping a packet.
     pub loss_pct: u8,
+    /// The percentage probability (0-100) of reordering a packet.
     pub reorder_pct: u8,
 }
 
+/// The parsed configuration arguments for the relay server.
+///
+/// This encapsulates both the physical binding instructions for the server and the
+/// simulated atmospheric conditions (the `LinkCondition`) it should impose upon all
+/// who connect.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_relay::config::{RelayArgs, LinkCondition};
+///
+/// let args = RelayArgs {
+///     bind_addr: "127.0.0.1:4545".to_string(),
+///     link: LinkCondition::default(),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct RelayArgs {
+    /// The address and port to bind the TCP listener to (e.g., `127.0.0.1:4545`).
     pub bind_addr: String,
+    /// The simulated network conditions for all connected clients.
     pub link: LinkCondition,
 }
 

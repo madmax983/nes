@@ -16,3 +16,9 @@
 **Extracting Background Palette Tile Cache Logic**
 **Learning:** Found a large, deep block of logic inside `background_palette_index_cached` (in `crates/nes-core/src/ppu.rs`) spanning 16+ lines dedicated solely to reading PPU memory and updating a 4-color palette cache on a cache miss. This bloated the core rendering pipeline.
 **Action:** Extracted this entire cache-miss population block into a standalone `populate_bg_tile_cache` helper function that takes the `BgTileCacheKey`. This flattened the hot path conditional from 16 lines down to a single function call, improving readability while strictly preserving zero-behavior-change semantics.
+**[Extract profile name formatting]
+**Learning:** In `crates/nes-desktop/src/rta.rs`, `select_profile` had duplicate manual `for` loops to concatenate a comma-separated list of profile IDs without allocating a standard vector buffer. This bloated the error handling blocks.
+**Action:** Extracted the manual join loop into a pure generic `format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String` helper function, preserving the zero-allocation characteristics while drastically improving readability and DRY-ness across both matched error conditions.
+**[Refactoring excessive unwrap() usage in trainer loop]**
+**Learning:** Found multiple usages of `model.as_ref().unwrap()` and reassignment via `.take().expect(...)` inside the hot PPO update loop in `nes-ai/src/trainer.rs`. This added visual clutter and made ownership unclear.
+**Action:** Changed the signature of `ppo_update` to take `mut model: HybridPolicyValueNet` and return it back to the caller instead of taking a mutable reference to an `Option`. This eliminated all `unwrap()` calls on the model in both the outer loop and the inner update function, greatly improving clarity and explicitly modeling the ownership transfer through the optimizer mapping step.

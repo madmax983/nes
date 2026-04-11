@@ -100,3 +100,42 @@ fn compare_guarded_cheat_codes_track_uxrom_bank_switches() {
     core.write_cpu_bus(0x8000, 0x00);
     assert_eq!(core.read_memory(cpu_addr), 0x02);
 }
+
+#[test]
+fn state_hash_differentiates_cheat_code_variations() {
+    let empty_core = NesCore::new();
+    let hash_empty = empty_core.state_hash();
+
+    let mut core1 = NesCore::new();
+    core1.add_cheat_code("GOSSIP").unwrap();
+    let hash1 = core1.state_hash();
+
+    let mut core2 = NesCore::new();
+    core2.add_cheat_code("SXTPOU").unwrap();
+    let hash2 = core2.state_hash();
+
+    let mut core3 = NesCore::new();
+    core3.add_cheat_code("ZEXPYGLA").unwrap();
+    let hash3 = core3.state_hash();
+
+    // Different order of same codes should produce different hash
+    let mut core4 = NesCore::new();
+    core4.add_cheat_code("GOSSIP").unwrap();
+    core4.add_cheat_code("SXTPOU").unwrap();
+    let hash4 = core4.state_hash();
+
+    let mut core5 = NesCore::new();
+    core5.add_cheat_code("SXTPOU").unwrap();
+    core5.add_cheat_code("GOSSIP").unwrap();
+    let hash5 = core5.state_hash();
+
+    // Verify all hashes are unique
+    let mut hashes = vec![hash_empty, hash1, hash2, hash3, hash4, hash5];
+    hashes.sort();
+    hashes.dedup();
+    assert_eq!(
+        hashes.len(),
+        6,
+        "All cheat code variations should produce unique state hashes"
+    );
+}

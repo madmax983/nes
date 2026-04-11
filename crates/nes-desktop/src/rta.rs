@@ -469,32 +469,18 @@ pub fn select_profile(
     });
 
     let Some(first_match) = match_iter.next() else {
-        // **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
-        // a String and joining manually.
-        let mut known = String::new();
-        for (i, profile) in profiles.iter().enumerate() {
-            if i > 0 {
-                known.push_str(", ");
-            }
-            known.push_str(profile.profile.id.as_str());
-        }
         return Err(format!(
             "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
-            known
+            format_profile_names(profiles.iter())
         ));
     };
 
     if let Some(second_match) = match_iter.next() {
-        // **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
-        // a String and joining manually.
-        let mut conflict = String::new();
-        conflict.push_str(first_match.profile.id.as_str());
-        conflict.push_str(", ");
-        conflict.push_str(second_match.profile.id.as_str());
-        for profile in match_iter {
-            conflict.push_str(", ");
-            conflict.push_str(profile.profile.id.as_str());
-        }
+        let conflict = format_profile_names(
+            std::iter::once(first_match)
+                .chain(std::iter::once(second_match))
+                .chain(match_iter),
+        );
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
@@ -588,6 +574,19 @@ impl TriggerRuntime {
     }
 }
 
+/// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
+/// a String and joining manually.
+fn format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String {
+    let mut names = String::new();
+    for (i, profile) in profiles.enumerate() {
+        if i > 0 {
+            names.push_str(", ");
+        }
+        names.push_str(profile.profile.id.as_str());
+    }
+    names
+}
+
 fn evaluate_trigger_rule(op: TriggerOp, current: u32, value: u32, previous: Option<u32>) -> bool {
     match op {
         TriggerOp::Eq => current == value,
@@ -662,14 +661,14 @@ pub struct RunArtifactPaths {
 }
 
 #[derive(Debug, Serialize)]
-struct RunArtifact {
-    profile_id: String,
-    rom_hash: String,
-    state: String,
+struct RunArtifact<'a> {
+    profile_id: &'a str,
+    rom_hash: &'a str,
+    state: &'a str,
     valid: bool,
     elapsed_ms: u128,
     invalidation_reasons: Vec<String>,
-    splits: Vec<SplitEvent>,
+    splits: &'a [SplitEvent],
 }
 
 /// The active state machine that tracks a speedrun session.
@@ -1323,18 +1322,19 @@ impl RtaManager {
 
     fn write_run_artifact(&self, base_name: &str) -> Result<PathBuf, String> {
         let run_json_path = self.runs_dir.join(format!("{base_name}.run.json"));
+        // **⚡ Bolt Optimization:** Avoids unnecessary heap allocations when creating the `RunArtifact` struct for serialization by borrowing `&str` instead of calling `.clone()` or `.to_owned()`.
         let artifact = RunArtifact {
-            profile_id: self.profile.id.clone(),
-            rom_hash: self.rom_hash.clone(),
+            profile_id: &self.profile.id,
+            rom_hash: &self.rom_hash,
             state: if self.is_valid_run() {
-                "finished_valid".to_owned()
+                "finished_valid"
             } else {
-                "finished_invalid_practice".to_owned()
+                "finished_invalid_practice"
             },
             valid: self.is_valid_run(),
             elapsed_ms: self.elapsed_at_finish.unwrap_or_default().as_millis(),
             invalidation_reasons: self.invalidation_reasons(),
-            splits: self.split_events.clone(),
+            splits: &self.split_events,
         };
 
         let run_json = serde_json::to_string_pretty(&artifact)
@@ -1485,6 +1485,9 @@ impl CalibrationRecorder {
     /// **⚡ Bolt Optimization:** Uses `VecDeque::pop_front` instead of `Vec::remove(0)`
     /// to avoid an O(N) memory shift of up to 30,000 frames on every single frame execution.
     ///
+    /// **⚡ Bolt Optimization:** Recycles the `Vec<u8>` from the oldest frame when the buffer
+    /// reaches capacity, eliminating a 2KB heap allocation on every single frame.
+    ///
     /// # Examples
     ///
     /// ```no_run
@@ -1500,12 +1503,17 @@ impl CalibrationRecorder {
     where
         F: FnMut(u16) -> u8,
     {
-        let mut work_ram = vec![0_u8; 0x0800];
+        let mut work_ram = if self.frames.len() >= self.max_frames {
+            self.frames
+                .pop_front()
+                .map(|f| f.work_ram)
+                .unwrap_or_else(|| vec![0_u8; 0x0800])
+        } else {
+            vec![0_u8; 0x0800]
+        };
+
         for (offset, byte) in work_ram.iter_mut().enumerate() {
             *byte = read_u8(offset as u16);
-        }
-        if self.frames.len() >= self.max_frames {
-            self.frames.pop_front();
         }
         self.frames.push_back(CalibrationFrame { frame, work_ram });
     }

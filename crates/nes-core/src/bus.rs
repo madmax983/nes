@@ -75,6 +75,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn bus_region_is_legal() {
+        assert!(BusRegion::CpuRam.is_legal());
+        assert!(BusRegion::PpuRegisters.is_legal());
+        assert!(BusRegion::ApuIo.is_legal());
+        assert!(BusRegion::DisabledIo.is_legal());
+        assert!(BusRegion::CartridgeExpansion.is_legal());
+        assert!(BusRegion::CartridgePrgRam.is_legal());
+        assert!(BusRegion::CartridgePrgRom.is_legal());
+    }
+
+    #[test]
+    fn map_region_boundaries() {
+        assert_eq!(map_region(0x0000), BusRegion::CpuRam);
+        assert_eq!(map_region(0x1FFF), BusRegion::CpuRam);
+        assert_eq!(map_region(0x2000), BusRegion::PpuRegisters);
+        assert_eq!(map_region(0x3FFF), BusRegion::PpuRegisters);
+        assert_eq!(map_region(0x4000), BusRegion::ApuIo);
+        assert_eq!(map_region(0x4017), BusRegion::ApuIo);
+        assert_eq!(map_region(0x4018), BusRegion::DisabledIo);
+        assert_eq!(map_region(0x401F), BusRegion::DisabledIo);
+        assert_eq!(map_region(0x4020), BusRegion::CartridgeExpansion);
+        assert_eq!(map_region(0x5FFF), BusRegion::CartridgeExpansion);
+        assert_eq!(map_region(0x6000), BusRegion::CartridgePrgRam);
+        assert_eq!(map_region(0x7FFF), BusRegion::CartridgePrgRam);
+        assert_eq!(map_region(0x8000), BusRegion::CartridgePrgRom);
+        assert_eq!(map_region(0xFFFF), BusRegion::CartridgePrgRom);
+    }
+
+    #[test]
     fn map_region_returns_correct_region() {
         // CpuRam: 0x0000..=0x1FFF
         assert_eq!(map_region(0x0000), BusRegion::CpuRam);
