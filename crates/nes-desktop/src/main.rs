@@ -1870,6 +1870,49 @@ mod tests {
         assert!(!rewind_held);
     }
 
+    struct DummyAudioSink {
+        cleared: std::sync::Arc<std::sync::Mutex<bool>>,
+    }
+    impl nes_desktop::audio::AudioSinkControl for DummyAudioSink {
+        fn queue_len(&self) -> usize {
+            0
+        }
+        fn append_i16(&self, _samples: Vec<i16>) {}
+        fn clear(&self) {
+            *self.cleared.lock().unwrap() = true;
+        }
+        fn stop(&self) {}
+    }
+
+    #[test]
+    fn reset_core_metrics_and_time_machine_clears_state_and_audio() {
+        let mut core = nes_core::NesCore::new();
+        let mut time_machine =
+            nes_rewind::TimeMachine::new(nes_rewind::TimeMachineConfig::default());
+        let mut rewind_held = true;
+        let mut metrics = crate::metrics::PerfMetrics::new(true, 60, 100);
+
+        let cleared = std::sync::Arc::new(std::sync::Mutex::new(false));
+        let fake_sink = DummyAudioSink {
+            cleared: cleared.clone(),
+        };
+        let audio_output =
+            nes_desktop::audio::AudioOutput::new_with_sink(Box::new(fake_sink), None);
+
+        super::reset_core_metrics_and_time_machine(
+            Some(&audio_output),
+            &mut rewind_held,
+            &mut time_machine,
+            &mut core,
+            &mut metrics,
+            true,
+            60,
+        );
+
+        assert!(!rewind_held);
+        assert!(*cleared.lock().unwrap());
+    }
+
     #[test]
     fn open_rom_menu_action_requires_platform_picker_support() {
         assert_eq!(
