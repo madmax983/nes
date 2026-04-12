@@ -437,6 +437,16 @@ pub fn select_profile(
     manual_override: Option<&str>,
     allow_draft: bool,
 ) -> Result<ProfileSelection, String> {
+    let check_draft = |profile: &LoadedProfile| -> Result<(), String> {
+        if !allow_draft && profile.profile.status == ProfileStatus::Draft {
+            return Err(format!(
+                "RTA profile '{}' is draft and cannot be used in strict mode",
+                profile.profile.id
+            ));
+        }
+        Ok(())
+    };
+
     if let Some(override_id) = manual_override {
         let Some(found) = profiles
             .iter()
@@ -448,12 +458,7 @@ pub fn select_profile(
                 override_id
             ));
         };
-        if !allow_draft && found.profile.status == ProfileStatus::Draft {
-            return Err(format!(
-                "RTA profile '{}' is draft and cannot be used in strict mode",
-                found.profile.id
-            ));
-        }
+        check_draft(&found)?;
         return Ok(ProfileSelection {
             selected: found,
             source: ProfileSelectionSource::ManualOverride,
@@ -487,12 +492,7 @@ pub fn select_profile(
     }
 
     let selected = first_match.clone();
-    if !allow_draft && selected.profile.status == ProfileStatus::Draft {
-        return Err(format!(
-            "RTA profile '{}' is draft and cannot be used in strict mode",
-            selected.profile.id
-        ));
-    }
+    check_draft(&selected)?;
 
     Ok(ProfileSelection {
         selected,
