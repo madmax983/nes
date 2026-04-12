@@ -396,6 +396,7 @@ mod tests {
             || lowered.contains("would block")
             || lowered.contains("timed out")
             || lowered.contains("non-blocking socket operation")
+            || lowered.contains("os error 10060")
     }
 
     fn read_response_with_host_drain(
