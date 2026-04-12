@@ -1,4 +1,3 @@
-
 #[cfg(feature = "nova")]
 #[cfg(test)]
 mod tests {
@@ -25,7 +24,7 @@ mod tests {
 
     #[test]
     fn apply_theme_grayscale() {
-        let mut buffer = [255, 0, 0, 255,   0, 255, 0, 128]; // Red pixel, Green pixel
+        let mut buffer = [255, 0, 0, 255, 0, 255, 0, 128]; // Red pixel, Green pixel
 
         ThemeFilter::apply_theme(&mut buffer, Theme::Grayscale);
 
@@ -45,10 +44,10 @@ mod tests {
     #[test]
     fn apply_theme_gameboy() {
         let mut buffer = [
-            0, 0, 0, 255,          // Black (Luma: 0)
-            80, 80, 80, 255,       // Dark gray (Luma: 80)
-            150, 150, 150, 255,    // Light gray (Luma: 150)
-            255, 255, 255, 255,    // White (Luma: 255)
+            0, 0, 0, 255, // Black (Luma: 0)
+            80, 80, 80, 255, // Dark gray (Luma: 80)
+            150, 150, 150, 255, // Light gray (Luma: 150)
+            255, 255, 255, 255, // White (Luma: 255)
         ];
 
         ThemeFilter::apply_theme(&mut buffer, Theme::Gameboy);
