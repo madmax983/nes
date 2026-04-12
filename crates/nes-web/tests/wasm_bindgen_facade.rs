@@ -145,6 +145,52 @@ fn wasm_bindgen_facade_loads_rom_and_reads_buffers() {
     let _ = NesWebEmulator::default();
 }
 
+#[test]
+fn wasm_bindgen_facade_pause_resume() {
+    let mut emulator = NesWebEmulator::new();
+    let rom = minimal_nrom_rom();
+    emulator.load_rom(&rom).unwrap();
+
+    let initial_hash = emulator.state_hash();
+    emulator.pause().unwrap();
+
+    let hash_after_paused = emulator.state_hash();
+    assert_ne!(
+        initial_hash, hash_after_paused,
+        "pause should change state hash"
+    );
+
+    emulator.resume().unwrap();
+    let hash_after_resumed = emulator.state_hash();
+    assert_eq!(
+        initial_hash, hash_after_resumed,
+        "resume should restore state hash"
+    );
+}
+
+#[test]
+fn wasm_bindgen_facade_refresh_frame_rgba_updates_ptr_buffer() {
+    let mut emulator = NesWebEmulator::new();
+    let rom = minimal_nrom_rom();
+    emulator.load_rom(&rom).unwrap();
+
+    // step a frame to generate data
+    emulator.step_frame().unwrap();
+
+    // call the manual refresh
+    emulator.refresh_frame_rgba();
+
+    // Now read the buffer via the pointer
+    let ptr = emulator.frame_rgba_ptr();
+    let len = emulator.frame_rgba_len();
+
+    let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
+    assert!(
+        slice.iter().any(|&c| c != 0),
+        "refresh_frame_rgba should populate the underlying ptr buffer"
+    );
+}
+
 fn minimal_nrom_rom() -> Vec<u8> {
     const HEADER_LEN: usize = 16;
     const PRG_LEN: usize = 16 * 1024;
