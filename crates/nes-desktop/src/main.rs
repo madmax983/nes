@@ -339,17 +339,25 @@ fn dispatch_overlay_command(
     }
 }
 
-fn reset_core_metrics_and_time_machine(ctx: &mut AppContext<'_>) {
-    if let Some(output) = ctx.audio_output {
+fn reset_core_metrics_and_time_machine(
+    audio_output: Option<&crate::AudioOutput>,
+    rewind_held: &mut bool,
+    time_machine: &mut nes_rewind::TimeMachine,
+    core: &mut nes_core::NesCore,
+    metrics: &mut crate::metrics::PerfMetrics,
+    metrics_enabled: bool,
+    metrics_every_frames: u64,
+) {
+    if let Some(output) = audio_output {
         output.clear();
     }
-    *ctx.rewind_held = false;
-    *ctx.time_machine = TimeMachine::new(TimeMachineConfig::default());
-    ctx.time_machine.record_frame(ctx.core);
-    *ctx.metrics = PerfMetrics::new(
-        ctx.runtime.metrics_enabled,
-        ctx.runtime.metrics_every_frames,
-        ctx.core.ppu_frame_counter(),
+    *rewind_held = false;
+    *time_machine = nes_rewind::TimeMachine::new(nes_rewind::TimeMachineConfig::default());
+    time_machine.record_frame(core);
+    *metrics = crate::metrics::PerfMetrics::new(
+        metrics_enabled,
+        metrics_every_frames,
+        core.ppu_frame_counter(),
     );
 }
 
@@ -417,7 +425,15 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             let cleared_cheats = SessionCheats::new();
             *ctx.session = load_rom_session(ctx.core, &path, &cleared_cheats)?;
             ctx.session_cheats.clear();
-            reset_core_metrics_and_time_machine(ctx);
+            reset_core_metrics_and_time_machine(
+                ctx.audio_output,
+                ctx.rewind_held,
+                ctx.time_machine,
+                ctx.core,
+                ctx.metrics,
+                ctx.runtime.metrics_enabled,
+                ctx.runtime.metrics_every_frames,
+            );
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
             set_overlay_open(
@@ -461,7 +477,15 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             apply_session_cheats(ctx.core, ctx.session_cheats)?;
             reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
-            reset_core_metrics_and_time_machine(ctx);
+            reset_core_metrics_and_time_machine(
+                ctx.audio_output,
+                ctx.rewind_held,
+                ctx.time_machine,
+                ctx.core,
+                ctx.metrics,
+                ctx.runtime.metrics_enabled,
+                ctx.runtime.metrics_every_frames,
+            );
             refresh_slot_metadata(ctx.session)?;
             ctx.overlay.focus_slot(slot, false);
             ctx.overlay
@@ -472,7 +496,15 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             ctx.core
                 .execute(Command::Reset)
                 .map_err(|err| format!("Reset failed: {err}"))?;
-            reset_core_metrics_and_time_machine(ctx);
+            reset_core_metrics_and_time_machine(
+                ctx.audio_output,
+                ctx.rewind_held,
+                ctx.time_machine,
+                ctx.core,
+                ctx.metrics,
+                ctx.runtime.metrics_enabled,
+                ctx.runtime.metrics_every_frames,
+            );
             ctx.overlay.set_status_message("System reset");
             set_overlay_open(
                 ctx.overlay,
@@ -1815,6 +1847,27 @@ mod tests {
         let err = validate_action_allowed(AppAction::SaveSlot(2), true)
             .expect_err("save slot should be blocked during rollback");
         assert!(err.contains("unavailable while netplay/rollback is active"));
+    }
+
+    #[test]
+    fn reset_core_metrics_and_time_machine_clears_state() {
+        let mut core = nes_core::NesCore::new();
+        let mut time_machine =
+            nes_rewind::TimeMachine::new(nes_rewind::TimeMachineConfig::default());
+        let mut rewind_held = true;
+        let mut metrics = crate::metrics::PerfMetrics::new(true, 60, 100);
+
+        super::reset_core_metrics_and_time_machine(
+            None,
+            &mut rewind_held,
+            &mut time_machine,
+            &mut core,
+            &mut metrics,
+            true,
+            60,
+        );
+
+        assert!(!rewind_held);
     }
 
     #[test]
