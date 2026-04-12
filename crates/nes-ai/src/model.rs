@@ -166,3 +166,28 @@ impl<B: Backend> HybridPolicyValueNet<B> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::env::ObservationSnapshot;
+
+    #[test]
+    fn should_return_config_from_observation() {
+        let obs = ObservationSnapshot {
+            frame_stack: 4,
+            width: 84,
+            height: 84,
+            frames: vec![],
+            features: vec![0.0; 12],
+        };
+
+        let config = HybridPolicyValueConfig::from_observation(&obs, 14);
+
+        assert_eq!(config.frame_stack, 4, "Frame stack mismatch");
+        assert_eq!(config.feature_count, 12, "Feature count mismatch");
+        assert_eq!(config.action_count, 14, "Action count mismatch");
+        assert_eq!(config.observation_width, 84, "Width mismatch");
+        assert_eq!(config.observation_height, 84, "Height mismatch");
+    }
+}
