@@ -60,3 +60,7 @@
 **[Avoiding Allocations on Hot Paths]**
 **Learning:** Checking for string existence in a set on hot paths using `.contains()` with a borrowed `&str` before allocating and inserting avoids unnecessary heap allocations for recurrent values. Likewise, borrowing strings instead of allocating `Vec<String>` when purely doing data serialization significantly reduces allocations.
 **Action:** Use `.contains()` with `&str` instead of calling `.insert(value.to_owned())` directly on sets. Use lifetimes (e.g. `Vec<&'a str>`) on structures only intended for data serialization.
+
+**[Eliminating clone in to_json serialization]**
+**Learning:** `RpcError::to_json(&self)` took `&self` and performed an explicit `.clone()` on `self.data` which could contain an arbitrary, heap-allocated `serde_json::Value`. This clone happens on every JSON-RPC error response, causing unnecessary heap allocations.
+**Action:** When a method constructs an owned value (like a new JSON object) from a struct's internal data, and the original struct is no longer needed after the conversion, use an `into_json(self)` signature that consumes `self` by value, allowing internal fields to be moved directly into the new structure without cloning.
