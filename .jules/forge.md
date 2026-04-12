@@ -30,3 +30,6 @@
 **[Refactoring print_metrics_table]
 **Learning:** Found a lot of repeated code with `table.add_row(vec![Cell::new("key"), Cell::new(val)])`.
 **Action:** Created an inline helper closure `add_row` to remove the `.add_row(vec![...])` boilerplate, increasing DRY-ness.
+**[Refactoring repetitive AppContext instantiation]**
+**Learning:** Found massive boilerplate in the `run` event loop of `crates/nes-desktop/src/main.rs` where `AppContext` was manually instantiated 5 times with 15 fields each, causing deep nesting and visual clutter.
+**Action:** Extracted the instantiation into a local macro `build_ctx!()` capturing the environment, flattening the codebase while avoiding complex lifetime or ownership issues.
