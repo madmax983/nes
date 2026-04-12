@@ -1584,6 +1584,8 @@ fn build_startup_table(
 
 #[cfg(test)]
 mod tests {
+    use crate::{RuntimeConfig, LoadedRomSession, AppContext, execute_app_action};
+    use nes_desktop::session_cheats::SessionCheats;
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
@@ -1912,6 +1914,7 @@ mod tests {
         assert!(!rewind_held);
         assert!(*cleared.lock().unwrap());
     }
+
 
     #[test]
     fn open_rom_menu_action_requires_platform_picker_support() {
