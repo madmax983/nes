@@ -189,9 +189,13 @@ impl SessionCheats {
         &self.entries
     }
 
-    /// Extracts an array of just the raw Game Genie strings that are currently switched on.
+    /// Extracts an iterator of just the raw Game Genie strings that are currently switched on.
     ///
     /// This output is ideal for directly feeding into the core emulator configuration.
+    ///
+    /// **⚡ Bolt Optimization:** Returns an `impl Iterator<Item = &str>` instead of allocating
+    /// and returning a `Vec<String>`. This achieves zero-cost abstraction and eliminates
+    /// `.clone()` overhead on memory allocations.
     ///
     /// ## Examples
     ///
@@ -201,15 +205,14 @@ impl SessionCheats {
     /// cheats.add("GOSSIP").unwrap();
     /// cheats.add("ZEXPYGLA").unwrap();
     /// cheats.toggle(1).unwrap(); // disable the second code
-    /// assert_eq!(cheats.enabled_codes(), vec!["GOSSIP"]);
+    /// let codes: Vec<_> = cheats.enabled_codes().collect();
+    /// assert_eq!(codes, vec!["GOSSIP"]);
     /// ```
-    #[must_use]
-    pub fn enabled_codes(&self) -> Vec<String> {
+    pub fn enabled_codes(&self) -> impl Iterator<Item = &str> {
         self.entries
             .iter()
             .filter(|entry| entry.enabled)
-            .map(|entry| entry.raw_code.clone())
-            .collect()
+            .map(|entry| entry.raw_code.as_str())
     }
 
     /// Counts how many distinct cheat codes are being tracked, regardless of active status.
@@ -272,7 +275,8 @@ mod tests {
         .expect("seeded codes should validate");
 
         assert_eq!(cheats.len(), 3);
-        assert_eq!(cheats.enabled_codes(), vec!["GOSSIP", "ZEXPYGLA", "GOSSIP"]);
+        let enabled: Vec<_> = cheats.enabled_codes().collect();
+        assert_eq!(enabled, vec!["GOSSIP", "ZEXPYGLA", "GOSSIP"]);
     }
 
     #[test]
@@ -283,7 +287,8 @@ mod tests {
 
         cheats.toggle(0).expect("toggle should succeed");
         assert!(!cheats.entries()[0].enabled);
-        assert_eq!(cheats.enabled_codes(), vec!["ZEXPYGLA"]);
+        let enabled: Vec<_> = cheats.enabled_codes().collect();
+        assert_eq!(enabled, vec!["ZEXPYGLA"]);
 
         let removed = cheats.remove(1).expect("remove should succeed");
         assert_eq!(removed.raw_code, "ZEXPYGLA");

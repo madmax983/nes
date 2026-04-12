@@ -20,9 +20,9 @@ pub(crate) struct LoadedRomSession {
     pub(crate) slot_metadata: Vec<SaveSlotMetadata>,
 }
 
-pub(crate) fn apply_runtime_cheat_codes(
+pub(crate) fn apply_runtime_cheat_codes<'a>(
     core: &mut NesCore,
-    cheat_codes: &[String],
+    cheat_codes: impl IntoIterator<Item = &'a str>,
 ) -> Result<(), String> {
     core.clear_cheat_codes();
     for raw_code in cheat_codes {
@@ -36,7 +36,7 @@ pub(crate) fn apply_session_cheats(
     core: &mut NesCore,
     cheats: &SessionCheats,
 ) -> Result<(), String> {
-    apply_runtime_cheat_codes(core, &cheats.enabled_codes())
+    apply_runtime_cheat_codes(core, cheats.enabled_codes())
 }
 
 pub(crate) fn load_rom_session(
@@ -136,9 +136,9 @@ mod tests {
     #[test]
     fn applying_runtime_cheat_codes_replaces_existing_codes() {
         let mut core = NesCore::new();
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+        apply_runtime_cheat_codes(&mut core, ["GOSSIP"])
             .expect("first cheat application should succeed");
-        apply_runtime_cheat_codes(&mut core, &[String::from("GOSSIP")])
+        apply_runtime_cheat_codes(&mut core, ["GOSSIP"])
             .expect("second cheat application should succeed");
         assert_eq!(core.cheat_codes().len(), 1);
     }
