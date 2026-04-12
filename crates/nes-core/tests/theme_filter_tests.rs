@@ -14,7 +14,7 @@ mod tests {
     fn apply_theme_ignores_invalid_length_buffer() {
         // Buffer length not divisible by 4
         let mut buffer = [255, 0, 0, 255, 0, 255, 0];
-        let original_buffer = buffer.clone();
+        let original_buffer = buffer;
 
         ThemeFilter::apply_theme(&mut buffer, Theme::Grayscale);
 
