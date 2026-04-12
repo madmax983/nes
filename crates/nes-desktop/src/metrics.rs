@@ -356,6 +356,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn compute_metrics_snapshot_math() {
+        let snapshot = compute_metrics_snapshot(
+            120,                        // frames
+            2.0,                        // seconds
+            100,                        // start ppu
+            220,                        // end ppu (diff 120)
+            Duration::from_millis(600), // step work
+            Duration::from_millis(300), // render work
+        )
+        .expect("valid input should produce snapshot");
+
+        assert_eq!(snapshot.wall_fps, 60.0); // 120 / 2.0
+        assert_eq!(snapshot.emu_fps, 60.0); // 120 / 2.0
+        assert_eq!(snapshot.avg_step_ms, 5.0); // 600 / 120
+        assert_eq!(snapshot.avg_render_ms, 2.5); // 300 / 120
+    }
+
+    #[test]
+    fn compute_metrics_snapshot_handles_zero_work() {
+        let snapshot = compute_metrics_snapshot(
+            120,            // frames
+            2.0,            // seconds
+            100,            // start ppu
+            220,            // end ppu (diff 120)
+            Duration::ZERO, // step work
+            Duration::ZERO, // render work
+        )
+        .expect("valid input should produce snapshot");
+
+        assert_eq!(snapshot.wall_fps, 60.0); // 120 / 2.0
+        assert_eq!(snapshot.emu_fps, 60.0); // 120 / 2.0
+        assert_eq!(snapshot.avg_step_ms, 0.0);
+        assert_eq!(snapshot.avg_render_ms, 0.0);
+    }
+
+    #[test]
     fn compute_metrics_snapshot_derives_expected_rates() {
         let snapshot = compute_metrics_snapshot(
             2,
@@ -397,6 +433,21 @@ mod tests {
     }
 
     #[test]
+    fn perf_metrics_on_step_handles_initial_pc() {
+        let core = NesCore::new();
+        let mut metrics = PerfMetrics::new(true, 0, 0);
+
+        // Before first step, last_pc is None
+        assert_eq!(metrics.last_pc, None);
+
+        metrics.on_step(&core, Duration::from_millis(4), false);
+
+        // last_pc should be populated now, but stall count should be 0 because it didn't match None
+        assert_eq!(metrics.pc_stall_frames, 0);
+        assert_eq!(metrics.last_pc, Some(core.cpu_pc()));
+    }
+
+    #[test]
     fn perf_metrics_on_step_tracks_stalls_and_recovers_on_pc_change() {
         let core = NesCore::new();
         let mut metrics = PerfMetrics::new(true, 0, 0);
@@ -427,6 +478,22 @@ mod tests {
         metrics.on_step(&core, Duration::from_millis(1), false);
         assert_eq!(metrics.pc_stall_frames, 0);
         assert!(!metrics.warned_stall);
+    }
+
+    #[test]
+    fn perf_metrics_on_render_resets_unchanged_frame_count() {
+        let mut metrics = PerfMetrics::new(true, 0, 0);
+        let mut frame = vec![0_u8; 256 * 240 * 4];
+
+        metrics.on_render(&frame, Duration::from_millis(3));
+        assert_eq!(metrics.unchanged_frame_count, 0);
+
+        metrics.on_render(&frame, Duration::from_millis(2));
+        assert_eq!(metrics.unchanged_frame_count, 1);
+
+        frame[0] = 1;
+        metrics.on_render(&frame, Duration::from_millis(2));
+        assert_eq!(metrics.unchanged_frame_count, 0);
     }
 
     #[test]
