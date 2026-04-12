@@ -1,6 +1,7 @@
 //! Modal pause overlay model and bitmap renderer for `nes-desktop`.
 
 use font8x8::{BASIC_FONTS, UnicodeFonts};
+use std::borrow::Cow;
 use winit::event::VirtualKeyCode;
 
 use crate::actions::AppAction;
@@ -99,7 +100,7 @@ pub struct OverlayModel {
     cheats_selection_index: usize,
     add_cheat_input: Option<String>,
     main_entries: Vec<MainMenuSelection>,
-    status_message: Option<String>,
+    status_message: Option<Cow<'static, str>>,
 }
 
 impl OverlayModel {
@@ -278,7 +279,7 @@ impl OverlayModel {
     }
 
     /// Sets a user-facing status message shown at the bottom of the overlay.
-    pub fn set_status_message(&mut self, message: impl Into<String>) {
+    pub fn set_status_message(&mut self, message: impl Into<Cow<'static, str>>) {
         self.status_message = Some(message.into());
     }
 
