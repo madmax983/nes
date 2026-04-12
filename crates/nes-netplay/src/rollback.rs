@@ -711,8 +711,8 @@ impl RollbackEngine {
         frame: u64,
     ) -> Result<(u8, u8, u64), RollbackError> {
         self.snapshots.insert(frame, core.save_state());
-        let local_bits = self.resolve_bits(frame, true);
-        let remote_bits = self.resolve_bits(frame, false);
+        let local_bits = self.resolve_local_bits(frame);
+        let remote_bits = self.resolve_remote_bits(frame);
         self.resolved_local.insert(frame, local_bits);
         self.resolved_remote.insert(frame, remote_bits);
 
@@ -730,23 +730,20 @@ impl RollbackEngine {
         Ok((local_bits, remote_bits, hash))
     }
 
-    fn resolve_bits(&self, frame: u64, local: bool) -> u8 {
+    fn resolve_local_bits(&self, frame: u64) -> u8 {
         let prior = frame
             .checked_sub(1)
-            .and_then(|prev| {
-                if local {
-                    self.resolved_local.get(&prev).copied()
-                } else {
-                    self.resolved_remote.get(&prev).copied()
-                }
-            })
+            .and_then(|prev| self.resolved_local.get(&prev).copied())
             .unwrap_or_default();
+        self.local_inputs.get(&frame).copied().unwrap_or(prior)
+    }
 
-        if local {
-            self.local_inputs.get(&frame).copied().unwrap_or(prior)
-        } else {
-            self.remote_inputs.get(&frame).copied().unwrap_or(prior)
-        }
+    fn resolve_remote_bits(&self, frame: u64) -> u8 {
+        let prior = frame
+            .checked_sub(1)
+            .and_then(|prev| self.resolved_remote.get(&prev).copied())
+            .unwrap_or_default();
+        self.remote_inputs.get(&frame).copied().unwrap_or(prior)
     }
 
     fn clear_from(&mut self, frame: u64) {
