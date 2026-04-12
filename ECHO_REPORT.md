@@ -2,8 +2,8 @@
 
 **Description:**
 
-* 🤦 **The Confusion:** Tried to run the desktop and netplay examples directly from the README block. The system immediately errored out with `Failed to read ROM at 'C:\Users\markm\roms\Super Mario Bros. (World).nes': No such file or directory (os error 2)`.
+* 🤦 **The Confusion:** Tried to run the examples directly from the README block. The basic configuration example (`cargo run -p nes-desktop --release -- --config ./nes.toml`) fails immediately with `Error: failed to read config './nes.toml': No such file or directory`. The RTA mode example (`--rta-profile smb-any`) also fails. The AI training example (`--bin train_smb_control`) crashes with `Failed to read profile config: No such file or directory`.
 
-* 🕵️ **The Reality:** Turns out the `README.md` examples use hardcoded local Windows paths pointing to a specific user's `markm` directory. As a new user, I don't have this directory, nor do I have these specific ROMs named exactly this way. The example just fails.
+* 🕵️ **The Reality:** Turns out the `README.md` examples assume several `.toml` configuration files and profiles (`nes.toml`, `smb-any.toml`, `smb-control.toml`) exist in the workspace, but only `.example.toml` versions are checked into the repository. As a new user, I shouldn't have to guess that I need to manually copy these files before the provided examples will run.
 
-* 💡 **The Fix:** Change the quickstart commands in the README to point to the locally bundled homebrew ROM (`.\roms\homebrew\homebrew.nes`) or clearly indicate `<path-to-your-rom>.nes`. If I can't copy-paste and run it, I'm out!
+* 💡 **The Fix:** Either change the README examples to point directly to the `.example.toml` files, or explicitly tell the user to run `cp nes.example.toml nes.toml`, `cp ./config/rta/profiles/smb-any.example.toml ./config/rta/profiles/smb-any.toml`, etc., before running the commands.
