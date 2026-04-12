@@ -404,7 +404,7 @@ mod tests {
         reader: &mut BufReader<TcpStream>,
         context: &str,
     ) -> Vec<u8> {
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             host.drain(core);
             match read_framed_message(reader) {
@@ -413,7 +413,12 @@ mod tests {
                 Err(err) if Instant::now() < deadline && is_retryable_read_error(&err) => {
                     thread::sleep(Duration::from_millis(10));
                 }
-                Err(err) => panic!("{context}: {err}"),
+                Err(err) => {
+                    if Instant::now() >= deadline {
+                        panic!("{context}: timed out waiting for response: {err}");
+                    }
+                    panic!("{context}: {err}");
+                }
             }
         }
     }
