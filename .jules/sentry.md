@@ -5,3 +5,7 @@
 ## 2025-05-15 - Testing TAS Record/Run Coalescing
 **Learning:** Run aggregation bugs inside recording modules (like `TasMovie`) can easily manifest if edge cases like adding 0-frames or overflowing the frame counters aren't checked explicitly.
 **Action:** When working with types encapsulating arrays of structured runs, push tests targeting the zero-op insertion, bounds checks, and overflow boundaries.
+
+## 2024-05-24 - [MemoryHeatmap Test Coverage]
+**Finding:** Uncovered code in `MemoryHeatmap::new` was resolved by adding initialization tests using default parameters and verifying correct sizing of the heap allocations.
+**Action:** Always verify `new()` implementations on experimental visualizers and ensure initialization defaults behave exactly as documented. Ensure coverage is maintained on utility/experimental tools as regressions there often signal core breakage later on.
