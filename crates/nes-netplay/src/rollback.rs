@@ -1043,6 +1043,19 @@ mod tests {
 
         let missing_snapshot = RollbackError::MissingSnapshot(12).to_string();
         assert!(missing_snapshot.contains("frame 12"));
+
+        let window_exceeded = RollbackError::RollbackWindowExceeded {
+            rollback_from: 10,
+            next_frame: 20,
+            max_rollback_frames: 5,
+        }
+        .to_string();
+        assert!(window_exceeded.contains("rollback_from=10"));
+        assert!(window_exceeded.contains("next_frame=20"));
+        assert!(window_exceeded.contains("max=5"));
+
+        let core_error = RollbackError::Core(nes_core::CoreError::UnsupportedCommand).to_string();
+        assert!(core_error.contains("unsupported command"));
     }
 
     #[test]
