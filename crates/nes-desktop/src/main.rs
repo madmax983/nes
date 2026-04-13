@@ -829,8 +829,7 @@ fn run() -> Result<(), String> {
         None
     };
 
-    event_loop.run(move |event, _, control_flow| {
-        macro_rules! build_ctx {
+    macro_rules! build_ctx {
             () => {
                 AppContext {
                     core: &mut core,
@@ -852,6 +851,7 @@ fn run() -> Result<(), String> {
             };
         }
 
+    event_loop.run(move |event, _, control_flow| {
         match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
             WindowEventDecision::CloseRequested => {
