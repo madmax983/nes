@@ -7,3 +7,14 @@ pub mod menu;
 pub mod overlay;
 pub mod rta;
 pub mod session_cheats;
+
+#[cfg(feature = "nova")]
+pub mod auto_player;
+pub mod config;
+pub mod gamepad;
+pub mod input;
+#[cfg(feature = "mcp-host")]
+pub mod mcp_host;
+pub mod metrics;
+pub mod netplay;
+pub mod session;

@@ -21,6 +21,7 @@ use rand::Rng;
 /// auto_player.step(&mut core);
 /// ```
 #[cfg(feature = "nova")]
+#[derive(Default)]
 pub struct AutoPlayer {
     frame_counter: u64,
     current_buttons: u8,
@@ -30,10 +31,7 @@ pub struct AutoPlayer {
 impl AutoPlayer {
     /// Creates a new `AutoPlayer` with internal frame counters reset.
     pub fn new() -> Self {
-        Self {
-            frame_counter: 0,
-            current_buttons: 0,
-        }
+        Self::default()
     }
 
     /// Updates the auto player's internal state and injects input commands into the `NesCore`

@@ -59,9 +59,9 @@ pub struct NetplayRuntimeConfig {
 /// client.send_ping(1234).unwrap();
 /// ```
 pub struct NetplayClient {
-    tx: Sender<ClientMessage>,
-    rx: Receiver<ServerMessage>,
-    err_rx: Receiver<String>,
+    pub tx: Sender<ClientMessage>,
+    pub rx: Receiver<ServerMessage>,
+    pub err_rx: Receiver<String>,
 }
 
 impl NetplayClient {

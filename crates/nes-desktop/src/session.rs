@@ -3,24 +3,24 @@ use nes_core::{NesCore, RomLoadInfo};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nes_desktop::manual_state::{
+use crate::manual_state::{
     SaveSlotMetadata, SaveSlotStatus, read_slot_metadata, slot_path_for_rom, slot_paths_for_rom,
 };
-use nes_desktop::overlay::OverlaySlotSummary;
-use nes_desktop::rta::compute_rom_hash;
-use nes_desktop::session_cheats::SessionCheats;
+use crate::overlay::OverlaySlotSummary;
+use crate::rta::compute_rom_hash;
+use crate::session_cheats::SessionCheats;
 
 // Assuming SAVE_SLOT_COUNT is 5 based on main.rs
 pub const SAVE_SLOT_COUNT: u8 = 5;
 
-pub(crate) struct LoadedRomSession {
-    pub(crate) rom_path: PathBuf,
-    pub(crate) rom_hash: String,
-    pub(crate) info: RomLoadInfo,
-    pub(crate) slot_metadata: Vec<SaveSlotMetadata>,
+pub struct LoadedRomSession {
+    pub rom_path: PathBuf,
+    pub rom_hash: String,
+    pub info: RomLoadInfo,
+    pub slot_metadata: Vec<SaveSlotMetadata>,
 }
 
-pub(crate) fn apply_runtime_cheat_codes<'a>(
+pub fn apply_runtime_cheat_codes<'a>(
     core: &mut NesCore,
     cheat_codes: impl IntoIterator<Item = &'a str>,
 ) -> Result<(), String> {
@@ -32,14 +32,11 @@ pub(crate) fn apply_runtime_cheat_codes<'a>(
     Ok(())
 }
 
-pub(crate) fn apply_session_cheats(
-    core: &mut NesCore,
-    cheats: &SessionCheats,
-) -> Result<(), String> {
+pub fn apply_session_cheats(core: &mut NesCore, cheats: &SessionCheats) -> Result<(), String> {
     apply_runtime_cheat_codes(core, cheats.enabled_codes())
 }
 
-pub(crate) fn load_rom_session(
+pub fn load_rom_session(
     core: &mut NesCore,
     rom_path: &Path,
     cheats: &SessionCheats,
@@ -61,7 +58,7 @@ pub(crate) fn load_rom_session(
     })
 }
 
-pub(crate) fn load_slot_metadata_for_rom(
+pub fn load_slot_metadata_for_rom(
     rom_path: &Path,
     rom_hash: &str,
 ) -> Result<Vec<SaveSlotMetadata>, String> {
@@ -71,16 +68,16 @@ pub(crate) fn load_slot_metadata_for_rom(
         .collect()
 }
 
-pub(crate) fn refresh_slot_metadata(session: &mut LoadedRomSession) -> Result<(), String> {
+pub fn refresh_slot_metadata(session: &mut LoadedRomSession) -> Result<(), String> {
     session.slot_metadata = load_slot_metadata_for_rom(&session.rom_path, &session.rom_hash)?;
     Ok(())
 }
 
-pub(crate) fn slot_path_for_selection(session: &LoadedRomSession, slot: u8) -> PathBuf {
+pub fn slot_path_for_selection(session: &LoadedRomSession, slot: u8) -> PathBuf {
     slot_path_for_rom(&session.rom_path, &session.rom_hash, slot)
 }
 
-pub(crate) fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
+pub fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSummary {
     let status_label = match metadata.status {
         SaveSlotStatus::Empty => "Empty",
         SaveSlotStatus::Saved => "Saved",
@@ -94,7 +91,7 @@ pub(crate) fn format_slot_status(metadata: &SaveSlotMetadata) -> OverlaySlotSumm
     }
 }
 
-pub(crate) fn rom_display_name(path: &Path) -> String {
+pub fn rom_display_name(path: &Path) -> String {
     path.file_name()
         .and_then(|name| name.to_str())
         .filter(|name| !name.is_empty())
@@ -102,7 +99,7 @@ pub(crate) fn rom_display_name(path: &Path) -> String {
         .to_owned()
 }
 
-pub(crate) fn window_title(session: &LoadedRomSession, overlay_open: bool) -> String {
+pub fn window_title(session: &LoadedRomSession, overlay_open: bool) -> String {
     let suffix = if overlay_open { " [Paused]" } else { "" };
     format!(
         "nes-desktop - {}{suffix}",
@@ -110,7 +107,7 @@ pub(crate) fn window_title(session: &LoadedRomSession, overlay_open: bool) -> St
     )
 }
 
-pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+pub fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
             "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",

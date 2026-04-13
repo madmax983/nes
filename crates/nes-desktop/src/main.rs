@@ -1,24 +1,12 @@
-use crate::metrics::PerfMetrics;
+use nes_desktop::metrics::PerfMetrics;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-#[cfg(feature = "nova")]
-mod auto_player;
-pub(crate) mod config;
-pub(crate) mod gamepad;
-pub(crate) mod input;
-#[cfg(feature = "mcp-host")]
-mod mcp_host;
-pub(crate) mod metrics;
-mod netplay;
-pub(crate) mod session;
-use crate::config::*;
-use crate::session::*;
+use nes_desktop::config::*;
+use nes_desktop::session::*;
 
-use crate::gamepad::*;
-use crate::input::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
@@ -26,6 +14,8 @@ use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::map_key_event_to_button_bit;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
+use nes_desktop::gamepad::*;
+use nes_desktop::input::*;
 use nes_desktop::manual_state::{load_state_file, save_state_file};
 use nes_desktop::menu::{
     DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
@@ -48,8 +38,8 @@ use winit::window::{Window, WindowBuilder};
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
-use crate::mcp_host::McpHost;
-use crate::netplay::{NetplayClient, NetplayRuntimeStats};
+use nes_desktop::mcp_host::McpHost;
+use nes_desktop::netplay::{NetplayClient, NetplayRuntimeStats};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
 const NETPLAY_PING_INTERVAL: Duration = Duration::from_millis(500);
@@ -824,7 +814,7 @@ fn run() -> Result<(), String> {
 
     #[cfg(feature = "nova")]
     let mut auto_player = if runtime.auto_player_enabled {
-        Some(crate::auto_player::AutoPlayer::new())
+        Some(nes_desktop::auto_player::AutoPlayer::new())
     } else {
         None
     };
@@ -1156,7 +1146,7 @@ fn run() -> Result<(), String> {
 
             if let Some(rollback_engine) = rollback.as_mut() {
                 let local_gamepad_bits =
-                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+                    nes_desktop::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
                 let scheduled = rollback_engine
                     .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
                 if let Some(client) = netplay_client.as_ref()
@@ -1167,7 +1157,7 @@ fn run() -> Result<(), String> {
                     return;
                 }
                 if let Some(client) = netplay_client.as_ref() {
-                    if let Some(nonce) = crate::netplay::schedule_netplay_ping(
+                    if let Some(nonce) = nes_desktop::netplay::schedule_netplay_ping(
                         now,
                         &mut netplay_next_ping_at,
                         &mut netplay_ping_nonce,
@@ -1193,7 +1183,7 @@ fn run() -> Result<(), String> {
                         let Some(message) = message else {
                             break;
                         };
-                        if let Err(err) = crate::netplay::handle_netplay_server_message(
+                        if let Err(err) = nes_desktop::netplay::handle_netplay_server_message(
                             message,
                             rollback_engine,
                             netplay_local_player,
@@ -1255,7 +1245,7 @@ fn run() -> Result<(), String> {
                             stats.input_delay_frames = current_delay;
                         }
 
-                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
+                        if nes_desktop::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
                             && let Some(client) = netplay_client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
@@ -1858,7 +1848,7 @@ mod tests {
 
     #[test]
     fn sync_native_menu_state_executes_without_panic_in_test_mode() {
-        use crate::sync_native_menu_state;
+        use super::sync_native_menu_state;
         use nes_desktop::menu::build_native_menu;
         let menu = build_native_menu(3);
         sync_native_menu_state(&menu, false, false, false);

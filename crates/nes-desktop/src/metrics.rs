@@ -9,39 +9,39 @@ use crate::netplay::NetplayRuntimeStats;
 
 const DEFAULT_METRICS_EVERY_FRAMES: u64 = 60;
 
-pub(crate) struct PerfMetrics {
-    enabled: bool,
-    every_n_frames: u64,
-    report_start: Instant,
-    report_start_ppu_frame: u64,
-    report_frames: u64,
-    step_work: Duration,
-    render_work: Duration,
-    late_frames: u64,
-    last_pc: Option<u16>,
-    pc_stall_frames: u64,
-    last_frame_signature: Option<u64>,
-    unchanged_frame_count: u64,
-    warned_stall: bool,
-    audio_queue_peak: usize,
-    audio_queue_drops: u64,
-    netplay_rtt_ms: f64,
-    netplay_jitter_ms: f64,
-    netplay_rollbacks: u64,
-    netplay_max_rollback_distance: u64,
-    netplay_desyncs: u64,
-    netplay_input_delay_frames: u32,
+pub struct PerfMetrics {
+    pub enabled: bool,
+    pub every_n_frames: u64,
+    pub report_start: Instant,
+    pub report_start_ppu_frame: u64,
+    pub report_frames: u64,
+    pub step_work: Duration,
+    pub render_work: Duration,
+    pub late_frames: u64,
+    pub last_pc: Option<u16>,
+    pub pc_stall_frames: u64,
+    pub last_frame_signature: Option<u64>,
+    pub unchanged_frame_count: u64,
+    pub warned_stall: bool,
+    pub audio_queue_peak: usize,
+    pub audio_queue_drops: u64,
+    pub netplay_rtt_ms: f64,
+    pub netplay_jitter_ms: f64,
+    pub netplay_rollbacks: u64,
+    pub netplay_max_rollback_distance: u64,
+    pub netplay_desyncs: u64,
+    pub netplay_input_delay_frames: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct MetricsSnapshot {
-    pub(crate) wall_fps: f64,
-    pub(crate) emu_fps: f64,
-    pub(crate) avg_step_ms: f64,
-    pub(crate) avg_render_ms: f64,
+pub struct MetricsSnapshot {
+    pub wall_fps: f64,
+    pub emu_fps: f64,
+    pub avg_step_ms: f64,
+    pub avg_render_ms: f64,
 }
 
-pub(crate) fn compute_metrics_snapshot(
+pub fn compute_metrics_snapshot(
     report_frames: u64,
     elapsed_secs: f64,
     report_start_ppu_frame: u64,
@@ -69,7 +69,7 @@ pub(crate) fn compute_metrics_snapshot(
 /// **Performance optimization:** Uses `chunks_exact(64)` rather than `.step_by(64)`
 /// and indexing `rgba[idx]`. This allows the Rust compiler to elide the bounds check
 /// because it knows the slice is length 64, avoiding 3,840 bounds checks per frame.
-pub(crate) fn frame_signature(rgba: &[u8]) -> u64 {
+pub fn frame_signature(rgba: &[u8]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for chunk in rgba.chunks_exact(64) {
         hash ^= u64::from(chunk[0]);
@@ -79,7 +79,7 @@ pub(crate) fn frame_signature(rgba: &[u8]) -> u64 {
 }
 
 impl PerfMetrics {
-    pub(crate) fn new(enabled: bool, every_n_frames: u64, initial_ppu_frame: u64) -> Self {
+    pub fn new(enabled: bool, every_n_frames: u64, initial_ppu_frame: u64) -> Self {
         Self {
             enabled,
             every_n_frames: normalize_nonzero_u64(every_n_frames, DEFAULT_METRICS_EVERY_FRAMES),
@@ -105,12 +105,7 @@ impl PerfMetrics {
         }
     }
 
-    pub(crate) fn on_step(
-        &mut self,
-        core: &NesCore,
-        step_elapsed: Duration,
-        missed_deadline: bool,
-    ) {
+    pub fn on_step(&mut self, core: &NesCore, step_elapsed: Duration, missed_deadline: bool) {
         if !self.enabled {
             return;
         }
@@ -146,7 +141,7 @@ impl PerfMetrics {
         }
     }
 
-    pub(crate) fn on_render(&mut self, frame: &[u8], render_elapsed: Duration) {
+    pub fn on_render(&mut self, frame: &[u8], render_elapsed: Duration) {
         if !self.enabled {
             return;
         }
@@ -160,7 +155,7 @@ impl PerfMetrics {
         self.last_frame_signature = Some(signature);
     }
 
-    pub(crate) fn maybe_report(&mut self, core: &NesCore) {
+    pub fn maybe_report(&mut self, core: &NesCore) {
         if !self.enabled || self.report_frames < self.every_n_frames {
             return;
         }
@@ -192,7 +187,7 @@ impl PerfMetrics {
         self.netplay_desyncs = 0;
     }
 
-    pub(crate) fn on_audio_queue(&mut self, queue_depth: usize, dropped: bool) {
+    pub fn on_audio_queue(&mut self, queue_depth: usize, dropped: bool) {
         if !self.enabled {
             return;
         }
@@ -202,7 +197,7 @@ impl PerfMetrics {
         }
     }
 
-    pub(crate) fn on_netplay_stats(&mut self, stats: &NetplayRuntimeStats) {
+    pub fn on_netplay_stats(&mut self, stats: &NetplayRuntimeStats) {
         if !self.enabled {
             return;
         }

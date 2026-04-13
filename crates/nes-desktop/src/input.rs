@@ -1,10 +1,10 @@
+use crate::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use nes_core::Command;
-use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WindowEventDecision {
+pub enum WindowEventDecision {
     CloseRequested,
     KeyboardInput {
         key: Option<VirtualKeyCode>,
@@ -22,7 +22,7 @@ pub(crate) enum WindowEventDecision {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum KeyboardDecision {
+pub enum KeyboardDecision {
     ToggleOverlay,
     ManualSaveState,
     ManualLoadState,
@@ -35,7 +35,7 @@ pub(crate) enum KeyboardDecision {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum FrameDecision {
+pub enum FrameDecision {
     WaitUntil(Instant),
     Step {
         missed_deadline: bool,
@@ -51,7 +51,7 @@ pub struct KeyboardInputMode {
 }
 
 #[must_use]
-pub(crate) fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
+pub fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecision {
     match event {
         WindowEvent::CloseRequested => WindowEventDecision::CloseRequested,
         WindowEvent::KeyboardInput { input, .. } => WindowEventDecision::KeyboardInput {
@@ -72,7 +72,7 @@ pub(crate) fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecis
     }
 }
 
-pub(crate) fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
+pub fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
     match key {
         VirtualKeyCode::Up => Some("ArrowUp"),
         VirtualKeyCode::Down => Some("ArrowDown"),
@@ -89,7 +89,7 @@ pub(crate) fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
 }
 
 #[must_use]
-pub(crate) fn classify_keyboard_input(
+pub fn classify_keyboard_input(
     key: VirtualKeyCode,
     pressed: bool,
     mode: KeyboardInputMode,
@@ -131,7 +131,7 @@ pub(crate) fn classify_keyboard_input(
 }
 
 #[must_use]
-pub(crate) fn evaluate_frame_deadline(
+pub fn evaluate_frame_deadline(
     now: Instant,
     next_frame_deadline: Instant,
     target_frame_time: Duration,
@@ -147,7 +147,7 @@ pub(crate) fn evaluate_frame_deadline(
 }
 
 #[must_use]
-pub(crate) fn element_state_pressed(state: ElementState) -> bool {
+pub fn element_state_pressed(state: ElementState) -> bool {
     state == ElementState::Pressed
 }
 

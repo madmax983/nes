@@ -6,51 +6,51 @@ use nes_config::{
     parse_config_path_arg,
 };
 
+use crate::args::parse_runtime_args;
 use crate::netplay::NetplayRuntimeConfig;
-use nes_desktop::args::parse_runtime_args;
-use nes_desktop::rta::{DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, RtaRuntimeConfig};
+use crate::rta::{DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, RtaRuntimeConfig};
 
 pub const DEFAULT_CPU_STEPS_PER_FRAME: u32 = 10_000;
 pub const DEFAULT_WINDOW_SCALE: u32 = 3;
 pub const DEFAULT_TRACE_EVERY_FRAMES: u64 = 0;
 pub const DEFAULT_CAPTURE_EVERY_FRAMES: u64 = 1;
 
-pub(crate) struct RuntimeConfig {
-    pub(crate) rom_path: String,
-    pub(crate) cheat_codes: Vec<String>,
-    pub(crate) window_scale: u32,
-    pub(crate) step_mode: StepMode,
-    pub(crate) audio_enabled: bool,
-    pub(crate) trace_every_frames: u64,
-    pub(crate) metrics_enabled: bool,
-    pub(crate) metrics_every_frames: u64,
-    pub(crate) capture: Option<CaptureConfig>,
-    pub(crate) loaded_config_path: Option<PathBuf>,
-    pub(crate) mcp_enabled: bool,
-    pub(crate) mcp_bind_addr: String,
-    pub(crate) netplay: Option<NetplayRuntimeConfig>,
-    pub(crate) rta: Option<RtaRuntimeConfig>,
+pub struct RuntimeConfig {
+    pub rom_path: String,
+    pub cheat_codes: Vec<String>,
+    pub window_scale: u32,
+    pub step_mode: StepMode,
+    pub audio_enabled: bool,
+    pub trace_every_frames: u64,
+    pub metrics_enabled: bool,
+    pub metrics_every_frames: u64,
+    pub capture: Option<CaptureConfig>,
+    pub loaded_config_path: Option<PathBuf>,
+    pub mcp_enabled: bool,
+    pub mcp_bind_addr: String,
+    pub netplay: Option<NetplayRuntimeConfig>,
+    pub rta: Option<RtaRuntimeConfig>,
     #[cfg(feature = "nova")]
-    pub(crate) auto_player_enabled: bool,
+    pub auto_player_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum StepMode {
+pub enum StepMode {
     CpuBudget(u32),
     Frame,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CaptureConfig {
-    pub(crate) path_template: String,
-    pub(crate) every_n_frames: u64,
+pub struct CaptureConfig {
+    pub path_template: String,
+    pub every_n_frames: u64,
 }
 
-pub(crate) fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
+pub fn netplay_feature_enabled(runtime_flag: bool, config_flag: bool) -> bool {
     runtime_flag || config_flag
 }
 
-pub(crate) fn capture_config_from_parts(
+pub fn capture_config_from_parts(
     path_template: Option<String>,
     every_n_frames: u64,
 ) -> Option<CaptureConfig> {
@@ -64,7 +64,7 @@ pub(crate) fn capture_config_from_parts(
     })
 }
 
-pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
+pub fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     let raw_args: Vec<String> = env::args().skip(1).collect();
     let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
     let runtime_args = parse_runtime_args(&pass_through)?;
