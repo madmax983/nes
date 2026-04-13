@@ -382,7 +382,6 @@ mod tests {
         assert_eq!(code_n1.address(), 0x8000 | 0x0080);
 
         // Check `compare` byte for 8 character codes
-        // let compare = Some(((digits[7] & 0x7) << 4) | ((digits[6] & 0x8) << 4) | (digits[6] & 0x7) | (digits[5] & 0x8));
         let code_n7_n6_n5 = CheatCode::from_str("AAAAANNN").unwrap();
         // digits[5] = 0xF => address has 0x700, value has 8, compare has 8
         // digits[6] = 0xF => compare has (0xF & 0x8) << 4 = 0x80, (0xF & 0x7) = 0x07
