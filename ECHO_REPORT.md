@@ -1,9 +1,9 @@
-# 🗣️ Echo: Getting Started example is broken
+# 🗣️ Echo: Getting Started commands fail due to missing .toml files
 
 **Description:**
 
-* 🤦 **The Confusion:** Tried to run the desktop and netplay examples directly from the README block. The system immediately errored out with `Failed to read ROM at 'C:\Users\markm\roms\Super Mario Bros. (World).nes': No such file or directory (os error 2)`.
+* 🤦 **The Confusion:** I tried to run the commands in the README such as `cargo run -p nes-desktop --release -- --config ./nes.toml` and noticed that the file does not exist.
 
-* 🕵️ **The Reality:** Turns out the `README.md` examples use hardcoded local Windows paths pointing to a specific user's `markm` directory. As a new user, I don't have this directory, nor do I have these specific ROMs named exactly this way. The example just fails.
+* 🕵️ **The Reality:** The repository only contains template files like `nes.example.toml`, `smb-any.example.toml`, and `smb-control.example.toml`. The actual `.toml` files expected by the commands don't exist, and the README never tells the user they need to manually copy and rename these files before running the commands.
 
-* 💡 **The Fix:** Change the quickstart commands in the README to point to the locally bundled homebrew ROM (`.\roms\homebrew\homebrew.nes`) or clearly indicate `<path-to-your-rom>.nes`. If I can't copy-paste and run it, I'm out!
+* 💡 **The Fix:** Add a clear instruction in the README before the launch commands telling the user to copy the `.example.toml` files to `.toml` files (e.g. `cp nes.example.toml nes.toml`).
