@@ -830,27 +830,26 @@ fn run() -> Result<(), String> {
     };
 
     macro_rules! build_ctx {
-            () => {
-                AppContext {
-                    core: &mut core,
-                    session: &mut session,
-                    session_cheats: &mut session_cheats,
-                    overlay: &mut overlay,
-                    rollback_enabled: rollback.is_some(),
-                    runtime: &runtime,
-                    audio_output: audio_output.as_ref(),
-                    time_machine: &mut time_machine,
-                    rewind_held: &mut rewind_held,
-                    metrics: &mut metrics,
-                    keyboard_bits,
-                    gamepad_bits: &mut gamepad_bits,
-                    window: &window,
-                    rta_manager: &mut rta_manager,
-                    frame_index,
-                }
-            };
-        }
-
+        () => {
+            AppContext {
+                core: &mut core,
+                session: &mut session,
+                session_cheats: &mut session_cheats,
+                overlay: &mut overlay,
+                rollback_enabled: rollback.is_some(),
+                runtime: &runtime,
+                audio_output: audio_output.as_ref(),
+                time_machine: &mut time_machine,
+                rewind_held: &mut rewind_held,
+                metrics: &mut metrics,
+                keyboard_bits,
+                gamepad_bits: &mut gamepad_bits,
+                window: &window,
+                rta_manager: &mut rta_manager,
+                frame_index,
+            }
+        };
+    }
     event_loop.run(move |event, _, control_flow| {
         match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
