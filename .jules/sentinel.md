@@ -72,3 +72,8 @@
 **Mutant:** Replaced `to_js_error -> JsValue` with `Default::default()`
 **Diagnosis:** EQUIVALENT_MUTANT natively. The `JsValue` type panics on `from_str()` and `as_string()` in native `cargo test` because it's meant for `wasm32`. If an error occurs during a native test, it panics regardless. If we return `Default::default()`, it also doesn't panic. Thus it's impossible to test natively without an abort, making this an unviable mutant for native test suites.
 **Kill Shot:** None. This mutant should be documented as unviable natively.
+
+**Bitwise OR vs XOR in Status bits encoding**
+**Mutant:** `replace | with ^ in Status::bits_for_php` and `replace | with ^ in Status::bits_for_stack_push`
+**Diagnosis:** EQUIVALENT_MUTANT. The encoding functions `bits_for_php` and `bits_for_stack_push` bitwise OR the raw status bits with distinct constant flags (`UNUSED_BIT` and/or `BREAK_BIT`). Because the corresponding bits in `self.bits` are 0 (never set by the rest of the CPU emulator, which forces `BREAK_BIT` to be virtual and `UNUSED_BIT` to always be read as 1 but internally tracked as whatever), replacing `|` with `^` has the exact same mathematical result since the bits do not overlap.
+**Kill Shot:** Documented as equivalent mutant.
