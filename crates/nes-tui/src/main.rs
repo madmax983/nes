@@ -916,7 +916,7 @@ fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes",
+            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
             "Error:".with(crossterm::style::Color::Red).bold(),
             rom_path.with(crossterm::style::Color::Yellow),
             "Hint:".with(crossterm::style::Color::Cyan).bold()
