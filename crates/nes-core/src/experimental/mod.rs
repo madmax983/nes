@@ -4,5 +4,6 @@ pub mod event_tracker;
 pub mod memory_heatmap;
 pub mod memory_visualizer;
 pub mod nametable_viewer;
+pub mod oam_spatial_query;
 pub mod sprite_extractor;
 pub mod theme_filter;
