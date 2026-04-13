@@ -326,7 +326,7 @@ mod tests {
     fn is_empty_returns_true_for_empty_list() {
         let mut cheats = SessionCheats::new();
         assert!(cheats.is_empty());
-        cheats.add("GOSSIP").unwrap();
+        cheats.add("GOSSIP").expect("code should add successfully");
         assert!(!cheats.is_empty());
         cheats.clear();
         assert!(cheats.is_empty());
