@@ -64,3 +64,6 @@
 **[Eliminating clone in to_json serialization]**
 **Learning:** `RpcError::to_json(&self)` took `&self` and performed an explicit `.clone()` on `self.data` which could contain an arbitrary, heap-allocated `serde_json::Value`. This clone happens on every JSON-RPC error response, causing unnecessary heap allocations.
 **Action:** When a method constructs an owned value (like a new JSON object) from a struct's internal data, and the original struct is no longer needed after the conversion, use an `into_json(self)` signature that consumes `self` by value, allowing internal fields to be moved directly into the new structure without cloning.
+**[Optimizing SessionCheats::enabled_codes]**
+**Learning:** `Vec<String>` returning iterators over statically/infrequently modified collections causes unnecessary heap allocations for `.clone()`.
+**Action:** Replace `Vec<String>` with `impl Iterator<Item = &str>` when callers just need to iterate over the strings or read them to pass them forward.
