@@ -191,3 +191,121 @@ pub fn parse_percent_arg(value: &str, flag: &str) -> Result<u8, String> {
     }
     Ok(parsed)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_parse_default_args() {
+        let args = vec![];
+        let parsed = parse_args(args).expect("Failed to parse empty args");
+        assert_eq!(
+            parsed.bind_addr, "127.0.0.1:4545",
+            "Default bind address mismatch"
+        );
+        assert_eq!(parsed.link.latency_ms, 0, "Default latency mismatch");
+        assert_eq!(parsed.link.jitter_ms, 0, "Default jitter mismatch");
+        assert_eq!(parsed.link.loss_pct, 0, "Default loss mismatch");
+        assert_eq!(parsed.link.reorder_pct, 0, "Default reorder mismatch");
+    }
+
+    #[test]
+    fn should_return_help_error() {
+        let args = vec!["--help".to_string()];
+        let err = parse_args(args).expect_err("Expected error for --help");
+        assert!(
+            err.contains("Usage:"),
+            "Help message should contain Usage instructions"
+        );
+
+        let args = vec!["-h".to_string()];
+        let err = parse_args(args).expect_err("Expected error for -h");
+        assert!(
+            err.contains("Usage:"),
+            "Help message should contain Usage instructions"
+        );
+    }
+
+    #[test]
+    fn should_parse_bind_arg() {
+        let args = vec!["--bind".to_string(), "0.0.0.0:8080".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --bind");
+        assert_eq!(parsed.bind_addr, "0.0.0.0:8080", "Bind address mismatch");
+
+        let args = vec!["--bind=192.168.1.1:9090".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --bind=");
+        assert_eq!(
+            parsed.bind_addr, "192.168.1.1:9090",
+            "Bind address mismatch"
+        );
+    }
+
+    #[test]
+    fn should_parse_latency_arg() {
+        let args = vec!["--latency-ms".to_string(), "150".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --latency-ms");
+        assert_eq!(parsed.link.latency_ms, 150, "Latency mismatch");
+
+        let args = vec!["--latency-ms=200".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --latency-ms=");
+        assert_eq!(parsed.link.latency_ms, 200, "Latency mismatch");
+    }
+
+    #[test]
+    fn should_parse_jitter_arg() {
+        let args = vec!["--jitter-ms".to_string(), "25".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --jitter-ms");
+        assert_eq!(parsed.link.jitter_ms, 25, "Jitter mismatch");
+
+        let args = vec!["--jitter-ms=30".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --jitter-ms=");
+        assert_eq!(parsed.link.jitter_ms, 30, "Jitter mismatch");
+    }
+
+    #[test]
+    fn should_parse_loss_pct_arg() {
+        let args = vec!["--loss-pct".to_string(), "5".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --loss-pct");
+        assert_eq!(parsed.link.loss_pct, 5, "Loss percentage mismatch");
+
+        let args = vec!["--loss-pct=10".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --loss-pct=");
+        assert_eq!(parsed.link.loss_pct, 10, "Loss percentage mismatch");
+    }
+
+    #[test]
+    fn should_parse_reorder_pct_arg() {
+        let args = vec!["--reorder-pct".to_string(), "15".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --reorder-pct");
+        assert_eq!(parsed.link.reorder_pct, 15, "Reorder percentage mismatch");
+
+        let args = vec!["--reorder-pct=20".to_string()];
+        let parsed = parse_args(args).expect("Failed to parse --reorder-pct=");
+        assert_eq!(parsed.link.reorder_pct, 20, "Reorder percentage mismatch");
+    }
+
+    #[test]
+    fn should_return_error_for_unknown_arg() {
+        let args = vec!["--unknown".to_string()];
+        let err = parse_args(args).expect_err("Expected error for unknown argument");
+        assert!(
+            err.contains("unknown argument '--unknown'"),
+            "Error message mismatch"
+        );
+    }
+
+    #[test]
+    fn should_return_error_for_missing_value() {
+        let args = vec!["--bind".to_string()];
+        let err = parse_args(args).expect_err("Expected error for missing value");
+        assert_eq!(err, "missing value after --bind", "Error message mismatch");
+
+        let args = vec!["--latency-ms=".to_string()];
+        let err = parse_args(args).expect_err("Expected error for missing value with =");
+        assert_eq!(
+            err, "missing value after --latency-ms=",
+            "Error message mismatch"
+        );
+    }
+}
