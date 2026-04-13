@@ -30,3 +30,4 @@
 **[Refactoring print_metrics_table]
 **Learning:** Found a lot of repeated code with `table.add_row(vec![Cell::new("key"), Cell::new(val)])`.
 **Action:** Created an inline helper closure `add_row` to remove the `.add_row(vec![...])` boilerplate, increasing DRY-ness.
+**Use Safe Error Handling in Tests**\n**Learning:** Bare `.unwrap()` calls in tests can lead to opaque panics that hide the root cause. Using `.expect()` with a descriptive message is preferred.\n**Action:** Replaced `unwrap()` with `expect("valid config")` in `crates/nes-netplay/src/rollback.rs`.

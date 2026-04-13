@@ -1059,7 +1059,8 @@ mod tests {
     fn rollback_engine_clears_from_frame_on_rollback() {
         let core = make_core_for_rollback();
 
-        let mut manual_engine = RollbackEngine::new(RollbackConfig::default()).unwrap();
+        let mut manual_engine =
+            RollbackEngine::new(RollbackConfig::default()).expect("valid config");
         manual_engine.snapshots.insert(1, core.save_state());
         manual_engine.snapshots.insert(2, core.save_state());
         manual_engine.snapshots.insert(3, core.save_state());
