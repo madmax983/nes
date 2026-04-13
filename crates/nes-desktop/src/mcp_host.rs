@@ -638,4 +638,15 @@ mod tests {
             panic!("Expected an error when binding to invalid address");
         }
     }
+
+    #[test]
+    #[should_panic(expected = "capacity overflow")]
+    #[ignore = "Havoc OOM Attack"]
+    fn havoc_mcp_read_framed_dos() {
+        let malicious_payload = b"Content-Length: 18446744073709551615\r\n\r\n";
+        let mut reader = std::io::BufReader::new(&malicious_payload[..]);
+
+        // This will panic with capacity overflow because we try to allocate an impossibly large Vec.
+        let _ = super::read_framed_message(&mut reader);
+    }
 }

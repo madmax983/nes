@@ -26,3 +26,9 @@ timeout
 📉 **The Stack Trace:** Loom model trace panics on deadlock detection.
 🧪 **Reproduction:** `RUSTFLAGS="--cfg loom" cargo test --test havoc_loom_deadlock -- --ignored`
 😈 **Comment:** "Thread-safe" is a lie until proven by `loom`.
+
+**Havoc OOM Attack on MCP Host**
+**The Trigger:** Malicious client sends `Content-Length: 18446744073709551615` to MCP host, causing an immediate OOM panic due to unvalidated `vec![0_u8; len]` allocation.
+**The Stack Trace:** `thread 'havoc_mcp_read_framed_dos' panicked at alloc/src/raw_vec.rs: capacity overflow`
+**Reproduction:** Run `cargo test -p nes-desktop --test havoc_mcp_dos -- --ignored`
+**Comment:** You assumed users wouldn't send arbitrary headers. You were wrong.
