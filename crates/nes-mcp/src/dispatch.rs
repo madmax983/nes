@@ -665,12 +665,12 @@ fn handle_load_state(
             .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
         slots.get(&slot).cloned()
     };
-    if let Some(snapshot) = snapshot {
-        core.load_state(&snapshot);
-        Ok(DispatchOutput::StateSlot { slot })
-    } else {
-        Err(DispatchError::StateSlotNotFound(slot))
-    }
+    let Some(snapshot) = snapshot else {
+        return Err(DispatchError::StateSlotNotFound(slot));
+    };
+
+    core.load_state(&snapshot);
+    Ok(DispatchOutput::StateSlot { slot })
 }
 
 fn handle_load_rom(
