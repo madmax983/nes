@@ -112,6 +112,28 @@ mod tests {
     use crate::NesCore;
 
     #[test]
+    fn should_initialize_heatmap_with_provided_parameters() {
+        let heatmap = MemoryHeatmap::new(0.85, 0.25);
+
+        assert_eq!(
+            heatmap.decay_rate, 0.85,
+            "Decay rate should match the provided value"
+        );
+        assert_eq!(
+            heatmap.intensity, 0.25,
+            "Intensity should match the provided value"
+        );
+        assert_eq!(
+            heatmap.heat.len(),
+            65536,
+            "Heat array should be exactly 64KB"
+        );
+        assert!(
+            heatmap.heat.iter().all(|&h| h == 0.0),
+            "All heat values should be initialized to 0.0"
+        );
+    }
+    #[test]
     fn heatmap_records_and_decays() {
         let mut core = NesCore::new();
         core.set_trace_enabled(true);
