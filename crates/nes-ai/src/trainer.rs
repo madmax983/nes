@@ -8,7 +8,7 @@ use burn_core::{
 use burn_ndarray::NdArray;
 use burn_tensor::{
     Int, Tensor, TensorData,
-    activation::{log_softmax, softmax},
+    activation::log_softmax,
     backend::{AutodiffBackend, Backend},
 };
 use nes_core::tas::{TasMovie, TasRecorder};
@@ -747,7 +747,7 @@ fn ppo_update(
             let value_loss = (output.value.clone() - batch.returns)
                 .powf_scalar(2.0)
                 .mean();
-            let entropy = (softmax(output.policy_logits, 1) * log_probs)
+            let entropy = (log_probs.clone().exp() * log_probs)
                 .sum_dim(1)
                 .mean()
                 .mul_scalar(-1.0);
