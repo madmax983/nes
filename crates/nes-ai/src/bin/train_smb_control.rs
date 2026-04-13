@@ -1,3 +1,8 @@
+//! PPO training binary for SMB control task
+//!
+//! A utility to train a PPO reinforcement learning agent on the Super Mario Bros
+//! control task. Outputs model checkpoints and periodic evaluation replays.
+
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};

@@ -13,3 +13,6 @@
 ## 2025-06-18 - JSON Protocol Serialization and Relay Configs
 **Confusion:** `ClientMessage` and `ServerMessage` were undocumented, leaving developers unaware of how matchmaking and determinism worked. The Relay server config also lacked context on its simulator behavior.
 **Clarification:** Added narrative module and item-level docs explaining the 'why' (e.g., deterministic pulse of inputs, artificial latency injection) along with executable doctests that assert the exact JSON wire format.
+## 2025-06-18 - Missing Crate-Level Documentation
+**Confusion:** Rustdoc throws warnings for missing `//!` crate-level documentation even on library roots or binaries when compiled with `-W rustdoc::missing_crate_level_docs`. Users were unable to understand the high level purpose of a crate from generated docs.
+**Clarification:** Added module-level `//!` docs at the top of all root library files and binary entry points to explain the high-level intent.

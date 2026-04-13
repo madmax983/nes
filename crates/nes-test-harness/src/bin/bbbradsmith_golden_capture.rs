@@ -1,3 +1,9 @@
+//! bbbradsmith audio golden PCM capture utility
+//!
+//! Generates "golden" reference PCM audio files by running the bbbradsmith audio
+//! test suite. These reference files are later used by the harness to ensure
+//! emulator audio output does not regress.
+
 use std::env;
 use std::fs;
 use std::io::Write;
