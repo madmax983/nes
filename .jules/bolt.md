@@ -67,3 +67,6 @@
 **[Optimizing SessionCheats::enabled_codes]**
 **Learning:** `Vec<String>` returning iterators over statically/infrequently modified collections causes unnecessary heap allocations for `.clone()`.
 **Action:** Replace `Vec<String>` with `impl Iterator<Item = &str>` when callers just need to iterate over the strings or read them to pass them forward.
+**Entropy optimization in PPO loop**
+**Learning:** Recomputing `softmax(logits)` for entropy when `log_probs` is already available via `log_softmax` is redundant. Instead, `log_probs.clone().exp()` can be used.
+**Action:** Always identify existing `log_softmax` results to avoid recomputing `softmax` during policy evaluation or entropy calculation.
