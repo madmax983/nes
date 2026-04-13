@@ -234,3 +234,14 @@ fn minimal_nrom_rom() -> Vec<u8> {
     rom.extend(std::iter::repeat_n(0_u8, CHR_LEN));
     rom
 }
+
+#[test]
+fn execute_commands_propagate_properly() {
+    let mut runtime = WebRuntime::new();
+
+    // If we step frame it succeeds returning `Ok(())`. `execute` doesn't return `Result` error from `Core::execute` since that never fails for these, but let's test it returns `Ok(true)` for DOM keys mapped.
+    let mapped = runtime.dispatch_dom_key("KeyZ", true).unwrap();
+    assert!(mapped);
+    let unmapped = runtime.dispatch_dom_key("KeyQ", true).unwrap();
+    assert!(!unmapped);
+}
