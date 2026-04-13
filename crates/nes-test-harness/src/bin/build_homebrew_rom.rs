@@ -1,3 +1,9 @@
+//! Homebrew ROM builder binary
+//!
+//! A standalone utility used to assemble and write the custom homebrew NES ROM.
+//! This allows the workspace to have a deterministic test target without needing
+//! an external 6502 assembler.
+
 use std::env;
 use std::path::PathBuf;
 

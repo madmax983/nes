@@ -1,3 +1,8 @@
+//! Snapshot preparation binary for SMB control task
+//!
+//! A utility to bootstrap the reinforcement learning environment by saving
+//! a snapshot state (e.g., SMB 1-1) required to train the control policy.
+
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};

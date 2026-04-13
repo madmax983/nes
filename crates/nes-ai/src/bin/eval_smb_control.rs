@@ -1,3 +1,8 @@
+//! Evaluation binary for SMB control policies
+//!
+//! A utility to evaluate a trained model checkpoint against the environment.
+//! It executes the policy and writes deterministic TAS replay artifacts.
+
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
