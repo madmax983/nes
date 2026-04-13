@@ -31,3 +31,7 @@
 **Learning:** Found a lot of repeated code with `table.add_row(vec![Cell::new("key"), Cell::new(val)])`.
 **Action:** Created an inline helper closure `add_row` to remove the `.add_row(vec![...])` boilerplate, increasing DRY-ness.
 **Use Safe Error Handling in Tests**\n**Learning:** Bare `.unwrap()` calls in tests can lead to opaque panics that hide the root cause. Using `.expect()` with a descriptive message is preferred.\n**Action:** Replaced `unwrap()` with `expect("valid config")` in `crates/nes-netplay/src/rollback.rs`.
+
+**Extract AppContext instantiation to a build_ctx! macro in nes-desktop event loop**
+**Learning:** Found repetitive boilerplate inside the heavily nested closures of the `event_loop.run` in `crates/nes-desktop/src/main.rs`. We were manually instantiating `AppContext` with 15 struct fields over and over again, cluttering the logic for event handling.
+**Action:** Replaced the repetitive `AppContext { ... }` blocks with a localized `macro_rules! build_ctx` that implicitly captures the required local variables, condensing multiple lines down to `let mut ctx = build_ctx!();`. This reduces boilerplate and improves readability without changing behavioral runtime.
