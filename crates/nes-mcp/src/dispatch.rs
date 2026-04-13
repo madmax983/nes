@@ -730,6 +730,9 @@ fn write_frame_image(
         .map_err(|err| DispatchError::InvalidParams(format!("unable to write '{path}': {err}")))
 }
 
+// SECURITY: Ensure we propagate formatting errors using `?` rather than `unwrap()`.
+// Attempting to `unwrap()` when writing to an I/O device (like a file) can lead to
+// application crashes/panics if the underlying disk becomes full or permissions change.
 fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
     use std::io::Write;
     let mut ppm = Vec::with_capacity(32 + width * height * 3);
