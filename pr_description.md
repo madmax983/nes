@@ -1,10 +1,9 @@
-🔒 [Security Note] Document safe IO patterns for PPM encoding
+**[Extracting Boilerplate Struct Initialization]**
 
-🎯 **What:**
-The task description mentioned a potential vulnerability where `fs::File::create(path)` was followed by an unsafe `unwrap()` call on the `write!` macro for generating PPM images. After thoroughly inspecting the codebase, this specific vulnerable code was not found. Instead, the codebase already implements a safe pattern by encoding the image into a pre-allocated vector (`encode_ppm`) and writing it securely to disk via `fs::write`.
+🚮 **Smell:** `crates/nes-desktop/src/main.rs` contained severe code duplication inside its core event loop. The `AppContext` struct (which requires 15 distinct fields and borrows) was being manually constructed 5 separate times within `run()`. This created a "Pyramid of Doom" of visual noise and violated DRY.
 
-⚠️ **Risk:**
-If an `unwrap()` was used on file IO operations (as described in the task), a simple failure—such as insufficient disk space or restricted file permissions—could cause the entire application to panic and crash, leading to a Denial of Service (DoS) vulnerability.
+✨ **Solution:** Extracted the struct instantiation into a localized `build_ctx!()` macro defined right before the event loop closure. Replaced all 5 instances of `AppContext { ... }` with `build_ctx!()`.
 
-🛡️ **Solution:**
-Since the vulnerability is not currently present (the code already uses `?` and maps errors effectively), I added explicit `// SECURITY:` documentation blocks to the `encode_ppm` functions in both `crates/nes-desktop/src/main.rs` and `crates/nes-mcp/src/dispatch.rs`. This ensures that future developers maintain this safe pattern and do not introduce regressions (like using `unwrap()` for IO streams) during refactors.
+🧼 **Benefit:** Drastically reduces cognitive load and visual clutter in the main event loop. Using a macro elegantly sidesteps the complex lifetime/borrowing issues that would arise if we tried to extract this into a helper closure or function, while ensuring the exact same variables are captured.
+
+🛡️ **Verification:** Tests passed. `cargo clippy`, `cargo test`, and `cargo fmt` executed successfully. No logic or runtime behavior changed; this is strictly a refactor of boilerplate initialization.
