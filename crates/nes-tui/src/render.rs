@@ -335,24 +335,38 @@ fn average_region_rgb(
 
 #[must_use]
 fn choose_quarter_mask_and_palette(samples: [(u8, u8, u8); 4]) -> (u8, (u8, u8, u8), (u8, u8, u8)) {
-    let mut candidates = Vec::with_capacity(4);
+    // **⚡ Bolt Optimization:** We use a stack-allocated fixed-size array instead of a `Vec`
+    // to gather unique color candidates. This is invoked for every character cell on the screen
+    // (potentially thousands of times per frame), completely eliminating heap allocations
+    // on this extremely hot path.
+    let mut candidates = [(0, 0, 0); 4];
+    let mut candidates_len = 0;
+
     for sample in samples {
-        if !candidates.contains(&sample) {
-            candidates.push(sample);
+        let mut found = false;
+        for &existing in &candidates[..candidates_len] {
+            if existing == sample {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            candidates[candidates_len] = sample;
+            candidates_len += 1;
         }
     }
-    if candidates.is_empty() {
+    if candidates_len == 0 {
         return (0, (0, 0, 0), (0, 0, 0));
     }
-    if candidates.len() == 1 {
+    if candidates_len == 1 {
         return (15, candidates[0], candidates[0]);
     }
 
     let mut best_error = u32::MAX;
     let mut best = (15_u8, candidates[0], candidates[1]);
 
-    for &fg in &candidates {
-        for &bg in &candidates {
+    for &fg in &candidates[..candidates_len] {
+        for &bg in &candidates[..candidates_len] {
             let mut mask = 0_u8;
             let mut error = 0_u32;
             for (idx, &sample) in samples.iter().enumerate() {
