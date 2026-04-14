@@ -698,4 +698,23 @@ mod more_tests {
         m.write_prg(0xA000, 0x01);
         assert_eq!(m.mirroring(), NametableMirroring::Horizontal);
     }
+
+    #[test]
+    fn mmc3_prg_ram_protect_is_ignored() {
+        let mut m = Mmc3::new(8, 8);
+        // PRG RAM protect is currently ignored, but test coverage is missing.
+        m.write_prg(0xA001, 0x00); // Does nothing.
+    }
+
+    #[test]
+    fn mmc3_write_e000_disables_irq() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xE001, 1);
+        assert!(m.state().irq_enabled);
+
+        m.write_prg(0xE000, 0);
+        let state = m.state();
+        assert!(!state.irq_enabled);
+        assert!(!state.irq_pending);
+    }
 }

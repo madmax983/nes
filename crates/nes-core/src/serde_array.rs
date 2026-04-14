@@ -108,4 +108,18 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("invalid length 3, expected a byte array of length 4"));
     }
+
+    #[test]
+    fn test_expected_length_fmt() {
+        use serde::de::Expected;
+        struct Wrapper<'a>(&'a dyn Expected);
+        impl<'a> std::fmt::Display for Wrapper<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+        let expected = ExpectedLength(42);
+        let formatted = format!("{}", Wrapper(&expected));
+        assert_eq!(formatted, "a byte array of length 42");
+    }
 }
