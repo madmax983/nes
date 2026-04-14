@@ -16,3 +16,6 @@
 ## 2025-06-18 - Missing Crate-Level Documentation
 **Confusion:** Rustdoc throws warnings for missing `//!` crate-level documentation even on library roots or binaries when compiled with `-W rustdoc::missing_crate_level_docs`. Users were unable to understand the high level purpose of a crate from generated docs.
 **Clarification:** Added module-level `//!` docs at the top of all root library files and binary entry points to explain the high-level intent.
+## 2025-06-18 - Adding Doc Tests to Missing APIs
+**Confusion:** Some newer experimental or foundational APIs (like `EventTracker` and `nes-proof` scaffolding) lacked documentation entirely, resulting in "missing documentation" warnings when compiling docs with `#![warn(missing_docs)]` and leaving users to figure out usage entirely by source code exploration.
+**Clarification:** Added thorough `///` comments containing `## Examples` sections to all public methods in `EventTracker` and to the `proof_crate_marker` function, providing executable context.
