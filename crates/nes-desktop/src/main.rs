@@ -829,7 +829,6 @@ fn run() -> Result<(), String> {
         None
     };
 
-    #[cfg(not(tarpaulin_include))]
     macro_rules! build_ctx {
         () => {
             AppContext {
