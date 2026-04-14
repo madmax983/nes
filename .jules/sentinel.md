@@ -72,3 +72,7 @@
 **Mutant:** Replaced `to_js_error -> JsValue` with `Default::default()`
 **Diagnosis:** EQUIVALENT_MUTANT natively. The `JsValue` type panics on `from_str()` and `as_string()` in native `cargo test` because it's meant for `wasm32`. If an error occurs during a native test, it panics regardless. If we return `Default::default()`, it also doesn't panic. Thus it's impossible to test natively without an abort, making this an unviable mutant for native test suites.
 **Kill Shot:** None. This mutant should be documented as unviable natively.
+**[Equivalent Mutant in CPU Status]**
+**Mutant:** `replace | with ^ in Status::bits_for_php` (line 154)
+**Diagnosis:** EQUIVALENT_MUTANT. The operation `self.bits | (Self::UNUSED_BIT | Self::BREAK_BIT)` compared to `self.bits | (Self::UNUSED_BIT ^ Self::BREAK_BIT)` mathematically evaluates to the same thing since `Self::UNUSED_BIT` (0x20) and `Self::BREAK_BIT` (0x10) are non-overlapping bitmasks. Their bitwise OR and bitwise XOR are identical (0x30).
+**Kill Shot:** Skipped, logged as equivalent.

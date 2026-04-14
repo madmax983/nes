@@ -337,4 +337,64 @@ mod tests {
         assert_eq!(restored.bits() & Status::BREAK_BIT, 0); // B flag should be cleared on restore
         assert_ne!(restored.bits() & Status::UNUSED_BIT, 0); // U flag is always forced set
     }
+
+    #[test]
+    fn bits_for_stack_push_preserves_other_flags_and_forces_unused_set_and_break_clear() {
+        // Test with a base state where U is 0 and B is 0
+        let status = Status::with_bits(Status::CARRY_BIT | Status::NEGATIVE_BIT);
+        let push_bits = status.bits_for_stack_push();
+        assert_eq!(
+            push_bits,
+            Status::CARRY_BIT | Status::NEGATIVE_BIT | Status::UNUSED_BIT
+        );
+
+        // Test with a base state where U is 1 and B is 1
+        let status2 = Status::with_bits(
+            Status::CARRY_BIT | Status::NEGATIVE_BIT | Status::UNUSED_BIT | Status::BREAK_BIT,
+        );
+        let push_bits2 = status2.bits_for_stack_push();
+        assert_eq!(
+            push_bits2,
+            Status::CARRY_BIT | Status::NEGATIVE_BIT | Status::UNUSED_BIT
+        );
+    }
+
+    #[test]
+    fn bits_for_php_preserves_other_flags_and_forces_unused_and_break_set() {
+        // Test with a base state where U is 0 and B is 0
+        let status = Status::with_bits(Status::OVERFLOW_BIT | Status::DECIMAL_BIT);
+        let push_bits = status.bits_for_php();
+        assert_eq!(
+            push_bits,
+            Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT | Status::BREAK_BIT
+        );
+
+        // Test with a base state where U is 1 and B is 1
+        let status2 = Status::with_bits(
+            Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT | Status::BREAK_BIT,
+        );
+        let push_bits2 = status2.bits_for_php();
+        assert_eq!(
+            push_bits2,
+            Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT | Status::BREAK_BIT
+        );
+
+        // Test with a base state where U is 0 and B is 1
+        let status3 =
+            Status::with_bits(Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::BREAK_BIT);
+        let push_bits3 = status3.bits_for_php();
+        assert_eq!(
+            push_bits3,
+            Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT | Status::BREAK_BIT
+        );
+
+        // Test with a base state where U is 1 and B is 0
+        let status4 =
+            Status::with_bits(Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT);
+        let push_bits4 = status4.bits_for_php();
+        assert_eq!(
+            push_bits4,
+            Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT | Status::BREAK_BIT
+        );
+    }
 }
