@@ -34,6 +34,3 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses]
 **Learning:** Functions like `parse_expr` and `handle_load_state` used cascading `if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
-**[Extracting Boilerplate Struct Initialization]
-**Learning:** Initializing large context structs (like `AppContext`) multiple times inside a monolithic `event_loop.run` closure leads to massive code duplication and visual noise, breaking DRY. Extracting this into a function is hard due to complex lifetime and borrow checker errors associated with closures capturing local variables.
-**Action:** Use a localized, empty-matcher `macro_rules!` (e.g., `build_ctx!()`) defined just outside the closure to unhygienically capture local variables and instantiate the struct. This eliminates the boilerplate, flattens the code, and requires zero changes to lifetimes or function signatures.
