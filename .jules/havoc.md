@@ -26,3 +26,32 @@ timeout
 📉 **The Stack Trace:** Loom model trace panics on deadlock detection.
 🧪 **Reproduction:** `RUSTFLAGS="--cfg loom" cargo test --test havoc_loom_deadlock -- --ignored`
 😈 **Comment:** "Thread-safe" is a lie until proven by `loom`.
+
+**[nes-mcp Output Mutex Poisoning]**
+**The Trigger:** Triggering a panic within the closure passed to `nes_mcp::publish_frame_with`.
+**The Stack Trace:**
+```
+thread 'havoc_test_mutex_poison' panicked at crates/nes-mcp/src/output.rs:163:14:
+output state lock poisoned
+```
+**Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_output_dos -- --ignored`.
+**Comment:** A simple panic in the frame publishing closure completely destroys the global frame metadata state because the lock is poisoned. The whole application crashes unrecoverably.
+
+**[nes-relay Loom Deadlock]**
+**The Trigger:** Acquiring locks while holding locks within cleanup client loop.
+**The Stack Trace:**
+```
+thread '<unnamed>' panicked at 'deadlock', crates/nes-relay/tests/havoc_loom_deadlock.rs:25:17
+```
+**Reproduction:** Run `cargo test -p nes-relay --test havoc_loom_deadlock`.
+**Comment:** We simulated a deadlock vector in `nes-relay`'s client cleanup if it attempts to lock the state again while iterating peers. This proves the system is fragile to naive lock usage during broadcasts.
+
+**[nes-mcp Output Mutex Poisoning - Audio]**
+**The Trigger:** Triggering a panic within the closure passed to `nes_mcp::publish_audio_with`.
+**The Stack Trace:**
+```
+thread 'havoc_test_mutex_poison' panicked at crates/nes-mcp/src/output.rs:163:14:
+output state lock poisoned
+```
+**Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_audio_dos -- --ignored`.
+**Comment:** A simple panic in the audio publishing closure completely destroys the global audio metadata state because the lock is poisoned. The whole application crashes unrecoverably.

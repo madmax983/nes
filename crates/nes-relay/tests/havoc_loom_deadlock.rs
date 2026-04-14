@@ -2,7 +2,6 @@ use loom::sync::{Arc, Mutex};
 use loom::thread;
 use std::collections::HashMap;
 
-// We use Loom's synchronization primitives to explicitly show the deadlock vector.
 #[derive(Default)]
 struct RelayState {
     rooms: HashMap<String, RoomState>,
@@ -24,10 +23,7 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
         should_remove_room = room_state.players.is_empty();
     }
 
-    // Creating a more natural deadlock by attempting to take another lock while still holding the first.
-    // In real scenarios, this often happens during event dispatch where the caller isn't aware they're holding a lock.
     if !should_remove_room {
-        // Assume sending to a peer required some locking or other behavior
         match state.try_lock() {
             Ok(_) => {}
             Err(_) => {
@@ -75,9 +71,8 @@ fn havoc_test_loom_cleanup_client_deadlock() {
         });
     });
 
-    // We should expect this test to panic
     if result.is_err() {
-        // Expected panic!
+        // Expected panic
     } else {
         panic!("deadlock panic expected");
     }
