@@ -226,7 +226,7 @@ struct TuiRuntime {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("\n{}", format!("Error: {err}").with(crossterm::style::Color::Red).bold());
     }
 }
 
