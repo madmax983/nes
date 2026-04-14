@@ -1,4 +1,5 @@
 pub mod audio_exporter;
+pub mod cheat_encoder;
 pub mod cheat_finder;
 pub mod event_tracker;
 pub mod execution_graph;
