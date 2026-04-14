@@ -256,7 +256,7 @@ fn append_submenu_entries(
     for entry in entries {
         match entry {
             DesktopMenuEntry::Item(spec) => {
-                let item = MenuItem::with_id(spec.id.clone(), &spec.label, true, None);
+                let item = MenuItem::with_id(&spec.id, &spec.label, true, None);
                 submenu
                     .append(&item)
                     .map_err(|err| format!("Failed to append menu item `{}`: {err}", spec.label))?;
