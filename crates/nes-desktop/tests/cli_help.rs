@@ -11,8 +11,8 @@ fn help_flag_prints_usage_and_default_config_path() {
         "help invocation should exit successfully"
     );
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Usage: nes-desktop"));
-    assert!(stderr.contains("Default config path:"));
-    assert!(stderr.contains("--cheat-code <code>"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Usage: nes-desktop"));
+    assert!(stdout.contains("Default config path:"));
+    assert!(stdout.contains("--cheat-code <code>"));
 }

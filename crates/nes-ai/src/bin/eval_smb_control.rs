@@ -14,8 +14,40 @@ use nes_ai::{
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
+        eprintln!("\n{err}");
         std::process::exit(1);
+    }
+}
+
+fn format_profile_read_error(profile_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the profile config file at '{}'.\n{} Copy the example profile: cp config/ai/profiles/smb-control.example.toml {}",
+            "Error:".with(Color::Red).bold(),
+            profile_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold(),
+            profile_path.with(Color::Yellow)
+        )
+    } else {
+        format!(
+            "{} Failed to read profile config at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            profile_path,
+            err
+        )
+    }
+}
+
+fn format_eval_error(err: String) -> String {
+    if err.contains("No such file or directory") && err.contains(".state.json") {
+        format!(
+            "{} {}\n{} You may need to generate the snapshot first. Run:\n  cargo run -p nes-ai --bin prepare_smb_control -- ./roms/homebrew/homebrew.nes ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json ./artifacts/ai/snapshots/smb-1-1-control.state.json",
+            "Error:".with(Color::Red).bold(),
+            err.with(Color::Red),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!("{} {}", "Error:".with(Color::Red).bold(), err)
     }
 }
 
@@ -40,14 +72,14 @@ fn run() -> Result<(), String> {
         .get(3)
         .map(|value| value.parse::<usize>())
         .transpose()
-        .map_err(|e| format!("Failed to parse episodes: {e}"))?
+        .map_err(|e| format!("{} Failed to parse episodes: {}", "Error:".with(Color::Red).bold(), e))?
         .unwrap_or(2);
     let artifact_dir = args.get(4).map(PathBuf::from);
 
     let profile_str = fs::read_to_string(&profile_path)
-        .map_err(|e| format!("Failed to read profile config: {e}"))?;
+        .map_err(|e| format_profile_read_error(&profile_path.to_string_lossy(), &e))?;
     let profile_cfg: AiProfileConfig =
-        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
+        toml::from_str(&profile_str).map_err(|e| format!("{} Failed to parse profile config: {}", "Error:".with(Color::Red).bold(), e))?;
 
     let trainer_cfg = TrainerConfig {
         artifact_dir: artifact_dir.clone(),
@@ -58,7 +90,7 @@ fn run() -> Result<(), String> {
 
     let summary =
         evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
-            .map_err(|e| format!("Evaluation failed: {e}"))?;
+            .map_err(|e| format_eval_error(format!("Evaluation failed: {e}")))?;
 
     println!(
         "\n{}",

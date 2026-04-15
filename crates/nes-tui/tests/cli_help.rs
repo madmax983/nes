@@ -11,7 +11,7 @@ fn help_flag_prints_usage_and_default_config_path() {
         "help invocation should exit successfully"
     );
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Usage: nes-tui"));
-    assert!(stderr.contains("Default config path:"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Usage: nes-tui"));
+    assert!(stdout.contains("Default config path:"));
 }

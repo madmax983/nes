@@ -35,6 +35,24 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     }
 }
 
+fn format_movie_read_error(movie_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the TAS json file at '{}'.\n{} Check the path or copy the included bootstrap movie from ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json",
+            "Error:".with(Color::Red).bold(),
+            movie_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read TAS json at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            movie_path,
+            err
+        )
+    }
+}
+
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
@@ -54,9 +72,9 @@ fn run() -> Result<(), String> {
         fs::read(&rom_path).map_err(|e| format_rom_read_error(&rom_path.to_string_lossy(), &e))?;
     let rom_hash = sha256_hex(&rom);
 
-    let movie_json = fs::read(&movie_path).map_err(|e| format!("Failed to read TAS json: {e}"))?;
+    let movie_json = fs::read(&movie_path).map_err(|e| format_movie_read_error(&movie_path.to_string_lossy(), &e))?;
     let movie: TasMovie = serde_json::from_slice(&movie_json)
-        .map_err(|e| format!("Failed to parse TAS json: {e}"))?;
+        .map_err(|e| format!("{} Failed to parse TAS json: {}", "Error:".with(Color::Red).bold(), e))?;
 
     let mut core = NesCore::new();
     core.load_ines_rom(&rom)

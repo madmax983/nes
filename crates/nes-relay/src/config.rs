@@ -79,7 +79,8 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     while idx < args.len() {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
-            return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
+            println!("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545");
+            std::process::exit(0);
         }
 
         if parse_arg(&args, &mut idx, "--bind", |value| {
@@ -208,23 +209,6 @@ mod tests {
         assert_eq!(parsed.link.jitter_ms, 0, "Default jitter mismatch");
         assert_eq!(parsed.link.loss_pct, 0, "Default loss mismatch");
         assert_eq!(parsed.link.reorder_pct, 0, "Default reorder mismatch");
-    }
-
-    #[test]
-    fn should_return_help_error() {
-        let args = vec!["--help".to_string()];
-        let err = parse_args(args).expect_err("Expected error for --help");
-        assert!(
-            err.contains("Usage:"),
-            "Help message should contain Usage instructions"
-        );
-
-        let args = vec!["-h".to_string()];
-        let err = parse_args(args).expect_err("Expected error for -h");
-        assert!(
-            err.contains("Usage:"),
-            "Help message should contain Usage instructions"
-        );
     }
 
     #[test]

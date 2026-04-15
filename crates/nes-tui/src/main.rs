@@ -817,7 +817,10 @@ fn parse_tui_args(pass_through: Vec<String>) -> Result<(Option<String>, TuiCliOp
 
     for arg in pass_through {
         match arg.as_str() {
-            "--help" | "-h" => return Err(usage_message()),
+            "--help" | "-h" => {
+                println!("{}", usage_message());
+                std::process::exit(0);
+            }
             "--hud" => {
                 options.show_hud = true;
                 continue;
@@ -1156,15 +1159,6 @@ mod tests {
         assert!(msg.contains("Failed to read ROM at"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("permission denied"));
-    }
-
-    #[test]
-    fn parse_tui_args_help_flags_return_usage_message() {
-        let long_help = parse_tui_args(vec!["--help".to_owned()]).expect_err("help should stop");
-        assert_eq!(long_help, usage_message());
-
-        let short_help = parse_tui_args(vec!["-h".to_owned()]).expect_err("help should stop");
-        assert_eq!(short_help, usage_message());
     }
 
     #[test]

@@ -85,9 +85,8 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     while idx < args.len() {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
-            return Err(format!(
-                "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
-            ));
+            println!("{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}");
+            std::process::exit(0);
         }
 
         if parse_arg(
@@ -472,12 +471,6 @@ mod tests {
 
     #[test]
     fn parse_runtime_args_help_and_validation_paths() {
-        let help = parse_runtime_args_with_timeout(vec!["--help".to_owned()])
-            .expect_err("help returns usage");
-        assert!(help.contains("Usage: nes-desktop"));
-        assert!(help.contains("Default config path"));
-        assert!(help.contains("--cheat-code <code>"));
-
         let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
             .expect_err("missing mcp bind");
         assert!(missing_bind.contains("missing value after --mcp-bind"));
