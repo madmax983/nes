@@ -335,12 +335,16 @@ fn average_region_rgb(
 
 #[must_use]
 fn choose_quarter_mask_and_palette(samples: [(u8, u8, u8); 4]) -> (u8, (u8, u8, u8), (u8, u8, u8)) {
-    let mut candidates = Vec::with_capacity(4);
+    let mut candidates = [(0, 0, 0); 4];
+    let mut len = 0;
     for sample in samples {
-        if !candidates.contains(&sample) {
-            candidates.push(sample);
+        if !candidates[..len].contains(&sample) {
+            candidates[len] = sample;
+            len += 1;
         }
     }
+    let candidates = &candidates[..len];
+
     if candidates.is_empty() {
         return (0, (0, 0, 0), (0, 0, 0));
     }
@@ -351,8 +355,8 @@ fn choose_quarter_mask_and_palette(samples: [(u8, u8, u8); 4]) -> (u8, (u8, u8, 
     let mut best_error = u32::MAX;
     let mut best = (15_u8, candidates[0], candidates[1]);
 
-    for &fg in &candidates {
-        for &bg in &candidates {
+    for &fg in candidates {
+        for &bg in candidates {
             let mut mask = 0_u8;
             let mut error = 0_u32;
             for (idx, &sample) in samples.iter().enumerate() {
