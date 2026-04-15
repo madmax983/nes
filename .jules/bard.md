@@ -19,3 +19,6 @@
 ## 2025-06-18 - Adding Doc Tests to Missing APIs
 **Confusion:** Some newer experimental or foundational APIs (like `EventTracker` and `nes-proof` scaffolding) lacked documentation entirely, resulting in "missing documentation" warnings when compiling docs with `#![warn(missing_docs)]` and leaving users to figure out usage entirely by source code exploration.
 **Clarification:** Added thorough `///` comments containing `## Examples` sections to all public methods in `EventTracker` and to the `proof_crate_marker` function, providing executable context.
+## 2026-04-15 - README Runtime Config Setup
+**Confusion:** Users encountering 'No such file or directory' errors because `nes.toml` does not exist by default.
+**Clarification:** Added explicit `cp nes.example.toml nes.toml` step in the README.
