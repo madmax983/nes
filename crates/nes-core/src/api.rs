@@ -2090,3 +2090,35 @@ mod tests {
         assert_ne!(hash, 0);
     }
 }
+
+#[cfg(test)]
+mod strobe_tests {
+    use super::*;
+
+    #[test]
+    fn test_controller_strobe_behavior() {
+        let mut ports = ControllerPorts::default();
+
+        // Initially shift should be 0
+        ports.set_controller_bits(0b10101010, Player::One);
+        assert_eq!(ports.controllers[Player::One.index()].shift, 0);
+
+        // Setting strobe to 1 should update shift to bits
+        ports.write_controller_strobe(1);
+        assert!(ports.controller_strobe);
+        assert_eq!(ports.controllers[Player::One.index()].shift, 0b10101010);
+
+        // While strobe is 1, changing bits should immediately update shift
+        ports.set_controller_bits(0b11001100, Player::One);
+        assert_eq!(ports.controllers[Player::One.index()].shift, 0b11001100);
+
+        // Setting strobe back to 0 should clear the strobe flag and leave shift latched
+        ports.write_controller_strobe(0);
+        assert!(!ports.controller_strobe);
+        assert_eq!(ports.controllers[Player::One.index()].shift, 0b11001100);
+
+        // Changing bits now should NOT update shift
+        ports.set_controller_bits(0b00001111, Player::One);
+        assert_eq!(ports.controllers[Player::One.index()].shift, 0b11001100);
+    }
+}

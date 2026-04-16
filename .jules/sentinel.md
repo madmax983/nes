@@ -76,3 +76,15 @@
 **Mutant:** `replace | with ^ in Status::bits_for_php` (line 154)
 **Diagnosis:** EQUIVALENT_MUTANT. The operation `self.bits | (Self::UNUSED_BIT | Self::BREAK_BIT)` compared to `self.bits | (Self::UNUSED_BIT ^ Self::BREAK_BIT)` mathematically evaluates to the same thing since `Self::UNUSED_BIT` (0x20) and `Self::BREAK_BIT` (0x10) are non-overlapping bitmasks. Their bitwise OR and bitwise XOR are identical (0x30).
 **Kill Shot:** Skipped, logged as equivalent.
+## YYYY-MM-DD - Missing Test Coverage in `nes-core/src/api.rs` for `write_controller_strobe`
+**Mutant:** Replace `write_controller_strobe` body with `()`, change `value & 1 != 0` to `==`, etc.
+**Diagnosis:** `MISSING_COVERAGE`. There were no tests verifying that the controller strobe correctly latched shift registers.
+**Kill Shot:** Added `strobe_tests` module and `test_controller_strobe_behavior`.
+## YYYY-MM-DD - Equivalent Mutants in Mmc3::from_prg_chr
+**Mutant:** Replace `<` with `<=` in `if prg_rom.len() < min_prg_bytes`.
+**Diagnosis:** `EQUIVALENT_MUTANT`. `prg_rom.resize(min_prg_bytes, 0)` on a vec that is already exactly `min_prg_bytes` long is a no-op.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+## YYYY-MM-DD - Equivalent Mutants in Gxrom::from_prg_chr
+**Mutant:** Replace `<` with `<=` in `if prg_rom.len() < PRG_BANK_32K`.
+**Diagnosis:** `EQUIVALENT_MUTANT`. `prg_rom.resize(PRG_BANK_32K, 0)` on a vec that is already exactly `PRG_BANK_32K` long is a no-op.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
