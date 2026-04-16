@@ -11,3 +11,6 @@
 **Remove Duplicated input methods in main.rs**
 **Tangle:** The `map_virtual_keycode` method was duplicated in `main.rs` but it already existed and had been moved to `input.rs` in an earlier refactor (as mentioned in a previous journal entry).
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `crates/nes-desktop/src/main.rs`.
+**Extract AppContext boilerplate in main.rs**
+**Tangle:** The `crates/nes-desktop/src/main.rs` file was cluttered with 5 occurrences of the complex struct initialization for `AppContext`. This made the `event_loop.run` closure bloated and repetitive, violating DRY principles. Extracting it to a function is difficult because it borrows 15+ local mutable variables within the same scope.
+**Blueprint:** Replaced the struct instantiations with a locally scoped `macro_rules! build_ctx!()` that implicitly captures all the local variables, reducing boilerplate while avoiding lifetime/borrowing issues.

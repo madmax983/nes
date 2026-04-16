@@ -829,6 +829,28 @@ fn run() -> Result<(), String> {
         None
     };
 
+
+    macro_rules! build_ctx {
+        () => {
+            AppContext {
+                core: &mut core,
+                session: &mut session,
+                session_cheats: &mut session_cheats,
+                overlay: &mut overlay,
+                rollback_enabled: rollback.is_some(),
+                runtime: &runtime,
+                audio_output: audio_output.as_ref(),
+                time_machine: &mut time_machine,
+                rewind_held: &mut rewind_held,
+                metrics: &mut metrics,
+                keyboard_bits,
+                gamepad_bits: &mut gamepad_bits,
+                window: &window,
+                rta_manager: &mut rta_manager,
+                frame_index,
+            }
+        };
+    }
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
             WindowEventDecision::CloseRequested => {
@@ -859,23 +881,7 @@ fn run() -> Result<(), String> {
                         window.request_redraw();
                     }
                     if let Some(command) = action {
-                        let mut ctx = AppContext {
-                            core: &mut core,
-                            session: &mut session,
-                            session_cheats: &mut session_cheats,
-                            overlay: &mut overlay,
-                            rollback_enabled: rollback.is_some(),
-                            runtime: &runtime,
-                            audio_output: audio_output.as_ref(),
-                            time_machine: &mut time_machine,
-                            rewind_held: &mut rewind_held,
-                            metrics: &mut metrics,
-                            keyboard_bits,
-                            gamepad_bits: &mut gamepad_bits,
-                            window: &window,
-                            rta_manager: &mut rta_manager,
-                            frame_index,
-                        };
+                        let mut ctx = build_ctx!();
                         let _ = dispatch_overlay_command(command, &mut ctx, control_flow);
                     }
                     return;
@@ -889,45 +895,13 @@ fn run() -> Result<(), String> {
 
                 match classify_keyboard_input(key, pressed, mode) {
                     KeyboardDecision::ToggleOverlay => {
-                        let mut ctx = AppContext {
-                            core: &mut core,
-                            session: &mut session,
-                            session_cheats: &mut session_cheats,
-                            overlay: &mut overlay,
-                            rollback_enabled: rollback.is_some(),
-                            runtime: &runtime,
-                            audio_output: audio_output.as_ref(),
-                            time_machine: &mut time_machine,
-                            rewind_held: &mut rewind_held,
-                            metrics: &mut metrics,
-                            keyboard_bits,
-                            gamepad_bits: &mut gamepad_bits,
-                            window: &window,
-                            rta_manager: &mut rta_manager,
-                            frame_index,
-                        };
+                        let mut ctx = build_ctx!();
                         let _ = dispatch_app_action(AppAction::ToggleOverlay, &mut ctx, control_flow);
                     }
                     KeyboardDecision::ManualSaveState => {
                         if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
                             let _ = {
-                                let mut ctx = AppContext {
-                                    core: &mut core,
-                                    session: &mut session,
-                                    session_cheats: &mut session_cheats,
-                                    overlay: &mut overlay,
-                                    rollback_enabled: rollback.is_some(),
-                                    runtime: &runtime,
-                                    audio_output: audio_output.as_ref(),
-                                    time_machine: &mut time_machine,
-                                    rewind_held: &mut rewind_held,
-                                    metrics: &mut metrics,
-                                    keyboard_bits,
-                                    gamepad_bits: &mut gamepad_bits,
-                                    window: &window,
-                                    rta_manager: &mut rta_manager,
-                                    frame_index,
-                                };
+                                let mut ctx = build_ctx!();
                                 dispatch_app_action(action, &mut ctx, control_flow)
                             };
                         }
@@ -935,23 +909,7 @@ fn run() -> Result<(), String> {
                     KeyboardDecision::ManualLoadState => {
                         if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
                             let _ = {
-                                let mut ctx = AppContext {
-                                    core: &mut core,
-                                    session: &mut session,
-                                    session_cheats: &mut session_cheats,
-                                    overlay: &mut overlay,
-                                    rollback_enabled: rollback.is_some(),
-                                    runtime: &runtime,
-                                    audio_output: audio_output.as_ref(),
-                                    time_machine: &mut time_machine,
-                                    rewind_held: &mut rewind_held,
-                                    metrics: &mut metrics,
-                                    keyboard_bits,
-                                    gamepad_bits: &mut gamepad_bits,
-                                    window: &window,
-                                    rta_manager: &mut rta_manager,
-                                    frame_index,
-                                };
+                                let mut ctx = build_ctx!();
                                 dispatch_app_action(action, &mut ctx, control_flow)
                             };
                         }
@@ -1039,23 +997,7 @@ fn run() -> Result<(), String> {
                 rta_manager.is_some(),
             );
             while let Some(action) = desktop_menu.poll_action() {
-                let mut ctx = AppContext {
-                    core: &mut core,
-                    session: &mut session,
-                    session_cheats: &mut session_cheats,
-                    overlay: &mut overlay,
-                    rollback_enabled: rollback.is_some(),
-                    runtime: &runtime,
-                    audio_output: audio_output.as_ref(),
-                    time_machine: &mut time_machine,
-                    rewind_held: &mut rewind_held,
-                    metrics: &mut metrics,
-                    keyboard_bits,
-                    gamepad_bits: &mut gamepad_bits,
-                    window: &window,
-                    rta_manager: &mut rta_manager,
-                    frame_index,
-                };
+                let mut ctx = build_ctx!();
                 if dispatch_app_action(action, &mut ctx, control_flow) {
                     return;
                 }
