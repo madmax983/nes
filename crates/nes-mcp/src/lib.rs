@@ -1,9 +1,12 @@
 //! Model Context Protocol (MCP) server integration for the NES emulator.
 
 mod dispatch;
+/// Execution engine for deterministic automation macros.
 pub mod macro_engine;
 mod output;
+/// Message protocol definitions for MCP communications.
 pub mod protocol;
+/// External tools integration mappings for the core.
 pub mod tools;
 
 pub use dispatch::{DispatchError, DispatchOutput, ToolParams, dispatch_tool};

@@ -19,7 +19,9 @@
 //! assert_eq!(frame_bytes.len(), 256 * 240 * 4);
 //! ```
 
+/// Web bridge layer translating JS events to core commands.
 pub mod bridge;
+/// Core WebAssembly runtime container for the emulator.
 pub mod runtime;
 
 pub use runtime::WebRuntime;
