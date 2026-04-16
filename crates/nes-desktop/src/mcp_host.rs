@@ -638,3 +638,13 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    #[test]
+    fn test_mcp_host_start() {
+        let host = McpHost::start("127.0.0.1:0").unwrap();
+        assert!(host.bind_addr().starts_with("127.0.0.1:"));
+    }
+}
