@@ -1492,7 +1492,8 @@ fn build_startup_table(
         Cell::new(format!(
             "Mapper {}, PRG {} bytes, reset vector ${:04X}",
             session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
-        )).fg(TableColor::Green),
+        ))
+        .fg(TableColor::Green),
     ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
         table.add_row(vec![
@@ -1512,7 +1513,8 @@ fn build_startup_table(
             "native menu bar + Esc overlay"
         } else {
             "Esc overlay only on this platform"
-        }).fg(TableColor::Green),
+        })
+        .fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("Gamepad"),
@@ -1520,7 +1522,10 @@ fn build_startup_table(
     ]);
     match step_mode {
         StepMode::Frame => {
-            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame").fg(TableColor::Green)]);
+            table.add_row(vec![
+                Cell::new("Step Mode"),
+                Cell::new("frame").fg(TableColor::Green),
+            ]);
         }
         StepMode::CpuBudget(steps) => {
             table.add_row(vec![
@@ -1540,7 +1545,8 @@ fn build_startup_table(
                 netplay.input_delay_frames,
                 netplay.max_rollback_frames,
                 netplay.hash_check_every_frames
-            )).fg(TableColor::Green),
+            ))
+            .fg(TableColor::Green),
         ]);
     }
     if let Some(rta) = rta_manager.as_ref() {
@@ -1550,7 +1556,8 @@ fn build_startup_table(
                 "enabled profile='{}' calibrate={}",
                 rta.profile_id(),
                 rta.is_calibrating()
-            )).fg(TableColor::Green),
+            ))
+            .fg(TableColor::Green),
         ]);
     }
     #[cfg(feature = "nova")]

@@ -24,7 +24,9 @@ pub enum AiError {
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to read snapshot bundle '{path}': {source}\nHint: Ensure the file exists or check the profile configuration.")]
+    #[error(
+        "failed to read snapshot bundle '{path}': {source}\nHint: Ensure the file exists or check the profile configuration."
+    )]
     SnapshotRead {
         path: PathBuf,
         #[source]
@@ -87,7 +89,9 @@ pub enum AiError {
         source: RecorderError,
     },
     /// Failed to read the target NES ROM from disk.
-    #[error("failed to read ROM '{path}': {source}\nHint: Ensure the ROM file exists and is accessible.")]
+    #[error(
+        "failed to read ROM '{path}': {source}\nHint: Ensure the ROM file exists and is accessible."
+    )]
     RomRead {
         /// The path of the missing or unreadable ROM file.
         path: PathBuf,
