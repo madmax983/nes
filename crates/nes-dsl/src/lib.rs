@@ -660,12 +660,7 @@ impl Assembler {
                 self.emit_u8(hi)
             }
             Expr::Symbol(symbol) => {
-                if let Some(value) = self.resolve_symbol(&symbol) {
-                    let value = fit_u16(value, line_no)?;
-                    let [lo, hi] = value.to_le_bytes();
-                    self.emit_u8(lo)?;
-                    self.emit_u8(hi)?;
-                } else {
+                let Some(value) = self.resolve_symbol(&symbol) else {
                     let fixup_addr = self.current_addr;
                     self.emit_u8(0)?;
                     self.emit_u8(0)?;
@@ -675,8 +670,12 @@ impl Assembler {
                         expr: Expr::Symbol(symbol),
                         kind: FixupKind::Word,
                     });
-                }
-                Ok(())
+                    return Ok(());
+                };
+                let value = fit_u16(value, line_no)?;
+                let [lo, hi] = value.to_le_bytes();
+                self.emit_u8(lo)?;
+                self.emit_u8(hi)
             }
         }
     }
@@ -703,9 +702,7 @@ impl Assembler {
                 self.emit_u8((delta as i8) as u8)
             }
             (Expr::Symbol(symbol), FixupKind::Byte) => {
-                if let Some(value) = self.resolve_symbol(symbol) {
-                    self.emit_u8(fit_u8(value, line_no)?)
-                } else {
+                let Some(value) = self.resolve_symbol(symbol) else {
                     let fixup_addr = self.current_addr;
                     self.emit_u8(0)?;
                     self.fixups.push(Fixup {
@@ -714,23 +711,12 @@ impl Assembler {
                         expr,
                         kind: FixupKind::Byte,
                     });
-                    Ok(())
-                }
+                    return Ok(());
+                };
+                self.emit_u8(fit_u8(value, line_no)?)
             }
             (Expr::Symbol(symbol), FixupKind::Relative) => {
-                if let Some(value) = self.resolve_symbol(symbol) {
-                    let target = fit_u16(value, line_no)?;
-                    let next_pc = self.current_addr.wrapping_add(1);
-                    let delta = i32::from(target) - i32::from(next_pc);
-                    if !(-128..=127).contains(&delta) {
-                        return Err(DslError::BranchOutOfRange {
-                            line: line_no,
-                            from: next_pc,
-                            to: target,
-                        });
-                    }
-                    self.emit_u8((delta as i8) as u8)
-                } else {
+                let Some(value) = self.resolve_symbol(symbol) else {
                     let fixup_addr = self.current_addr;
                     self.emit_u8(0)?;
                     self.fixups.push(Fixup {
@@ -739,8 +725,19 @@ impl Assembler {
                         expr,
                         kind: FixupKind::Relative,
                     });
-                    Ok(())
+                    return Ok(());
+                };
+                let target = fit_u16(value, line_no)?;
+                let next_pc = self.current_addr.wrapping_add(1);
+                let delta = i32::from(target) - i32::from(next_pc);
+                if !(-128..=127).contains(&delta) {
+                    return Err(DslError::BranchOutOfRange {
+                        line: line_no,
+                        from: next_pc,
+                        to: target,
+                    });
                 }
+                self.emit_u8((delta as i8) as u8)
             }
             (_, FixupKind::Word) => Err(DslError::Parse {
                 line: line_no,
@@ -756,17 +753,17 @@ impl Assembler {
     }
 
     fn write_resolved_byte(&mut self, addr: u16, byte: u8) -> Result<(), DslError> {
-        if let Some(existing) = self.bytes.get(&addr) {
-            if *existing != byte {
-                return Err(DslError::DuplicateAddress {
-                    addr,
-                    existing: *existing,
-                    incoming: byte,
-                });
-            }
+        let Some(&existing) = self.bytes.get(&addr) else {
+            self.bytes.insert(addr, byte);
             return Ok(());
+        };
+        if existing != byte {
+            return Err(DslError::DuplicateAddress {
+                addr,
+                existing,
+                incoming: byte,
+            });
         }
-        self.bytes.insert(addr, byte);
         Ok(())
     }
 }

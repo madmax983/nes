@@ -34,3 +34,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses]
 **Learning:** Functions like `parse_expr` and `handle_load_state` used cascading `if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**Flatten symbol resolution fallback logic**
+**Learning:** Guard clauses using `let Some(...) = ... else { ... }` are great for flattening logic that otherwise pushes to lists and requires large else blocks.
+**Action:** Extract the else case to return early, moving the Some path to the top level.
