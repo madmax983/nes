@@ -978,10 +978,11 @@ impl RtaManager {
     ///
     /// let mut manager = RtaManager::new(RtaProfile::default(), "hash".to_owned(), PathBuf::from("out"), None);
     /// manager.mark_forbidden_action(ForbiddenAction::FrameStep, 0, Instant::now());
-    /// assert_eq!(manager.invalidation_reasons(), vec!["frame_step".to_owned()]);
+    /// let reasons: Vec<_> = manager.invalidation_reasons().collect();
+    /// assert_eq!(reasons, vec!["frame_step"]);
     /// ```
-    pub fn invalidation_reasons(&self) -> Vec<String> {
-        self.invalidation_reasons.iter().cloned().collect()
+    pub fn invalidation_reasons(&self) -> impl Iterator<Item = &str> {
+        self.invalidation_reasons.iter().map(String::as_str)
     }
 
     /// The beating heart of the RTA Engine. Evaluates all active memory triggers for the current frame.
@@ -1335,11 +1336,7 @@ impl RtaManager {
             },
             valid: self.is_valid_run(),
             elapsed_ms: self.elapsed_at_finish.unwrap_or_default().as_millis(),
-            invalidation_reasons: self
-                .invalidation_reasons
-                .iter()
-                .map(String::as_str)
-                .collect(),
+            invalidation_reasons: self.invalidation_reasons().collect(),
             splits: &self.split_events,
         };
 
