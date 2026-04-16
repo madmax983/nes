@@ -3,6 +3,7 @@
 //! This crate parses `nes.toml` files and CLI overrides into a strongly-typed [`NesConfig`] struct.
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -178,8 +179,13 @@ impl NesConfig {
     /// let config = NesConfig::load(Path::new("my_nes.toml")).unwrap();
     /// ```
     pub fn load(path: &Path) -> Result<Self, String> {
-        let bytes = fs::read_to_string(path)
-            .map_err(|err| format!("failed to read config '{}': {err}", path.display()))?;
+        let bytes = fs::read_to_string(path).map_err(|err| {
+            if err.kind() == ErrorKind::NotFound && path.file_name().and_then(|n| n.to_str()) == Some("nes.toml") {
+                "failed to read config 'nes.toml': Copy the example profile (cp nes.example.toml nes.toml)".to_owned()
+            } else {
+                format!("failed to read config '{}': {err}", path.display())
+            }
+        })?;
         toml::from_str::<Self>(&bytes)
             .map_err(|err| format!("failed to parse config '{}': {err}", path.display()))
     }
@@ -324,6 +330,15 @@ room = "arena"
         let path = temp_config_path("missing");
         let err = NesConfig::load(&path).expect_err("missing config should fail");
         assert!(err.contains("failed to read config"));
+    }
+
+    #[test]
+    fn load_returns_hint_for_missing_nes_toml() {
+
+        // We will create a path ending with "nes.toml" by joining with a non-existent dir
+        let path = std::env::temp_dir().join(format!("nes-config-missing-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos())).join("nes.toml");
+        let err = NesConfig::load(&path).expect_err("missing config should fail");
+        assert!(err.contains("Copy the example profile"));
     }
 
     #[test]

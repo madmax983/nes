@@ -77,7 +77,22 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
             None
         }
     });
-    let config = NesConfig::load_or_default(config_path.as_deref())?;
+    let config = match NesConfig::load_or_default(config_path.as_deref()) {
+        Ok(c) => c,
+        Err(err) => {
+            if err.contains("failed to read config 'nes.toml': Copy the example profile") {
+                use crossterm::style::Stylize;
+                return Err(format!(
+                    "{} {}",
+                    "failed to read config 'nes.toml':".red().bold(),
+                    "Copy the example profile (cp nes.example.toml nes.toml)".yellow()
+                ));
+            } else {
+                return Err(err);
+            }
+        }
+    };
+
 
     let rom_path = runtime_args
         .rom_path
