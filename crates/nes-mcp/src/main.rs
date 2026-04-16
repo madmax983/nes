@@ -75,7 +75,7 @@ impl ServerState {
 
 fn main() {
     if let Err(err) = run() {
-        let _ = writeln!(io::stderr(), "nes-mcpd fatal error: {err}");
+        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
         std::process::exit(1);
     }
 }

@@ -737,16 +737,14 @@ fn ppo_update(
         for chunk in indices.chunks(cfg.minibatch_size) {
             let batch = build_train_batch(samples, chunk, &device);
             let output = model.forward(batch.observations);
-            let log_probs = log_softmax(output.policy_logits.clone(), 1);
+            let log_probs = log_softmax(output.policy_logits, 1);
             let selected_log_probs = log_probs.clone().gather(1, batch.action_indices);
-            let ratios = (selected_log_probs.clone() - batch.old_log_probs).exp();
+            let ratios = (selected_log_probs - batch.old_log_probs).exp();
             let unclipped = ratios.clone() * batch.advantages.clone();
             let clipped =
                 ratios.clamp(1.0 - cfg.clip_epsilon, 1.0 + cfg.clip_epsilon) * batch.advantages;
             let policy_loss = unclipped.min_pair(clipped).mean().mul_scalar(-1.0);
-            let value_loss = (output.value.clone() - batch.returns)
-                .powf_scalar(2.0)
-                .mean();
+            let value_loss = (output.value - batch.returns).powf_scalar(2.0).mean();
             let entropy = (log_probs.clone().exp() * log_probs)
                 .sum_dim(1)
                 .mean()

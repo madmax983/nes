@@ -70,3 +70,6 @@
 **[Optimizing Softmax Entropy in PPO]
 **Learning:** Recomputing `softmax(logits)` to calculate PPO entropy is redundant if `log_probs` is already available from a prior `log_softmax(logits)` call.
 **Action:** When calculating PPO entropy, use `log_probs.clone().exp()` instead of evaluating a new `softmax(logits)` to avoid redundant computations and unnecessary tensor operations under the hood.
+**Bolt optimization implemented**
+**Learning:** Returning an `impl Iterator` from a public method that previously returned a `Vec<String>` is a breaking API change, as it prevents downstream consumers from using `Vec`-specific methods like `.len()`.
+**Action:** Always maintain the public API signature unless explicitly allowed. Focus on internal optimizations like avoiding duplicate tensor allocations.
