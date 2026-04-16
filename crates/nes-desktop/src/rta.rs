@@ -1298,8 +1298,8 @@ impl RtaManager {
         if self.state != RtaSessionState::Finished {
             return Ok(None);
         }
-        if let Some(existing) = self.artifacts_written.clone() {
-            return Ok(Some(existing));
+        if let Some(existing) = self.artifacts_written.as_ref() {
+            return Ok(Some(existing.clone()));
         }
 
         fs::create_dir_all(&self.runs_dir).map_err(|err| {

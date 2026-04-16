@@ -92,9 +92,8 @@ impl McpHost {
             .to_string();
 
         let (tx, rx) = mpsc::channel::<ToolRequest>();
-        let thread_tx = tx.clone();
         let thread_bind_addr = local_addr.clone();
-        let handle = thread::spawn(move || run_listener(listener, thread_tx, &thread_bind_addr));
+        let handle = thread::spawn(move || run_listener(listener, tx, &thread_bind_addr));
 
         Ok(Self {
             requests: rx,
