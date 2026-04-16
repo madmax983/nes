@@ -2090,3 +2090,125 @@ mod tests {
         assert_ne!(hash, 0);
     }
 }
+
+#[cfg(test)]
+mod tests_rom_loader_internal {
+    use super::*;
+    use crate::rom::NametableMirroring;
+
+    #[test]
+    fn test_build_mapper_unsupported_prg_layouts() {
+        let core = NesCore::new();
+
+        // NROM
+        let err = core
+            .build_mapper(0, &[0; 48 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(49152))
+        ));
+
+        // MMC1
+        let err = core
+            .build_mapper(1, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
+        ));
+
+        // UXROM
+        let err = core
+            .build_mapper(2, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
+        ));
+
+        // CNROM
+        let err = core
+            .build_mapper(3, &[0; 48 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(49152))
+        ));
+
+        let err = core
+            .build_mapper(
+                3,
+                &[0; 16 * 1024],
+                &[0; 10 * 1024],
+                NametableMirroring::Horizontal,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240))
+        ));
+
+        // MMC3
+        let err = core
+            .build_mapper(4, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
+        ));
+
+        let err = core
+            .build_mapper(
+                4,
+                &[0; 32 * 1024],
+                &[0; 10 * 1024],
+                NametableMirroring::Horizontal,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240))
+        ));
+
+        // AXROM
+        let err = core
+            .build_mapper(7, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
+        ));
+
+        // GXROM
+        let err = core
+            .build_mapper(66, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
+        ));
+
+        let err = core
+            .build_mapper(
+                66,
+                &[0; 32 * 1024],
+                &[0; 10 * 1024],
+                NametableMirroring::Horizontal,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240))
+        ));
+
+        // Unsupported Mapper
+        let err = core
+            .build_mapper(99, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
+        ));
+    }
+}
