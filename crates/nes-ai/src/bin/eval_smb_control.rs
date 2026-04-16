@@ -72,7 +72,7 @@ fn build_summary_table(average_return: f32, artifact_paths_len: usize) -> Table 
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
-        Cell::new("Metric").fg(TableColor::Cyan),
+        Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
     ]);
 
@@ -82,7 +82,7 @@ fn build_summary_table(average_return: f32, artifact_paths_len: usize) -> Table 
     ]);
     table.add_row(vec![
         Cell::new("Artifacts Written"),
-        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Green),
+        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Yellow),
     ]);
 
     table

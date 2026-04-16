@@ -82,13 +82,13 @@ fn build_success_table(rom_hash: &str, out_path: &std::path::Path) -> Table {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
-        Cell::new("Metric").fg(TableColor::Cyan),
+        Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
     ]);
 
     table.add_row(vec![
         Cell::new("ROM Hash"),
-        Cell::new(rom_hash).fg(TableColor::Yellow),
+        Cell::new(rom_hash).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("Output Path"),

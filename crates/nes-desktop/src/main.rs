@@ -1479,7 +1479,7 @@ fn build_startup_table(
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
     ]);
 
@@ -1492,19 +1492,19 @@ fn build_startup_table(
         Cell::new(format!(
             "Mapper {}, PRG {} bytes, reset vector ${:04X}",
             session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
-        )),
+        )).fg(TableColor::Green),
     ]);
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
         table.add_row(vec![
             Cell::new("Config"),
-            Cell::new(config_path.display().to_string()),
+            Cell::new(config_path.display().to_string()).fg(TableColor::Green),
         ]);
     }
     table.add_row(vec![
         Cell::new("Controls"),
         Cell::new(
             "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
-        ),
+        ).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("Menu"),
@@ -1512,20 +1512,20 @@ fn build_startup_table(
             "native menu bar + Esc overlay"
         } else {
             "Esc overlay only on this platform"
-        }),
+        }).fg(TableColor::Green),
     ]);
     table.add_row(vec![
         Cell::new("Gamepad"),
-        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick"),
+        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick").fg(TableColor::Green),
     ]);
     match step_mode {
         StepMode::Frame => {
-            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame")]);
+            table.add_row(vec![Cell::new("Step Mode"), Cell::new("frame").fg(TableColor::Green)]);
         }
         StepMode::CpuBudget(steps) => {
             table.add_row(vec![
                 Cell::new("Step Mode"),
-                Cell::new(format!("cpu ({steps} instructions/frame)")),
+                Cell::new(format!("cpu ({steps} instructions/frame)")).fg(TableColor::Green),
             ]);
         }
     }
@@ -1540,7 +1540,7 @@ fn build_startup_table(
                 netplay.input_delay_frames,
                 netplay.max_rollback_frames,
                 netplay.hash_check_every_frames
-            )),
+            )).fg(TableColor::Green),
         ]);
     }
     if let Some(rta) = rta_manager.as_ref() {
@@ -1550,7 +1550,7 @@ fn build_startup_table(
                 "enabled profile='{}' calibrate={}",
                 rta.profile_id(),
                 rta.is_calibrating()
-            )),
+            )).fg(TableColor::Green),
         ]);
     }
     #[cfg(feature = "nova")]
