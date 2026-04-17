@@ -89,7 +89,7 @@ impl CpuHotspotProfiler {
                 hotspots.push((addr as u16, count));
             }
         }
-        hotspots.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        hotspots.sort_unstable_by_key(|&(_, count)| std::cmp::Reverse(count));
         hotspots.truncate(n);
         hotspots
     }
