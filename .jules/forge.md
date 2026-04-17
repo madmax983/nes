@@ -34,3 +34,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses]
 **Learning:** Functions like `parse_expr` and `handle_load_state` used cascading `if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract netplay frame logic to Context struct]**
+**Learning:** The massive `MainEventsCleared` event handling loop in `nes-desktop/src/main.rs` contained an embedded 120-line block to schedule local input, process server messages, and compute the adaptive delay for the Netplay rollback engine. This "God Function" was hard to follow and read.
+**Action:** Created `ProcessNetplayFrameContext` to wrap the 12 disparate variables needed for netplay, and extracted the entire 120-line block into a cleanly named `process_netplay_frame(ctx: &mut ProcessNetplayFrameContext<'_>)` helper function. This flattened the original 200-line match block, reduced the pyramid of doom, and strictly avoided `#[allow(clippy::too_many_arguments)]`.
