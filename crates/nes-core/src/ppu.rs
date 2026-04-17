@@ -3,7 +3,7 @@
 //! The PPU owns CHR/nametable/palette memory, dot/scanline counters, register
 //! semantics, sprite evaluation, and the RGBA framebuffer consumed by hosts.
 
-use crate::api::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
+use crate::constants::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use crate::rom::NametableMirroring;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -1782,7 +1782,7 @@ mod tests {
         CHR_BYTES, DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW,
         STATUS_VBLANK, VBLANK_EDGE_DOT, VBLANK_SCANLINE,
     };
-    use crate::api::{FRAME_RGBA_BYTES, FRAME_WIDTH};
+    use crate::constants::{FRAME_RGBA_BYTES, FRAME_WIDTH};
     use crate::rom::NametableMirroring;
 
     #[test]

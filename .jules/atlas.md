@@ -11,3 +11,7 @@
 **Remove Duplicated input methods in main.rs**
 **Tangle:** The `map_virtual_keycode` method was duplicated in `main.rs` but it already existed and had been moved to `input.rs` in an earlier refactor (as mentioned in a previous journal entry).
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `crates/nes-desktop/src/main.rs`.
+
+**Extract Constants from api.rs**
+**Tangle:** A circular dependency existed in `nes-core` where `apu.rs` and `ppu.rs` (internal modules) imported domain constants (`FRAME_WIDTH`, `AUDIO_SAMPLE_RATE`, etc.) from the public facade module `api.rs`.
+**Blueprint:** Extracted the domain constants into a new internal `constants.rs` module, breaking the circular dependency while continuing to re-export the constants via `lib.rs` for external consumers.
