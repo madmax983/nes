@@ -1,9 +1,10 @@
 //! The core emulator API surface.
-//!
+//
 //! This module provides the primary interface for controlling the NES emulator,
 //! injecting inputs, and querying its state. The [`NesCore`] struct is the
 //! main entry point for host applications.
 
+use crate::constants::*;
 use core::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -28,16 +29,6 @@ const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
 const CHR_8K_BYTES: usize = 8 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
-/// NES visible frame width in pixels.
-pub const FRAME_WIDTH: usize = 256;
-/// NES visible frame height in pixels.
-pub const FRAME_HEIGHT: usize = 240;
-/// Framebuffer byte count for `RGBA8` format.
-pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
-/// Default host audio sample rate.
-pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
-/// Samples produced/consumed per 60Hz host frame.
-pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
 
 /// Represents a standard NES controller button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1997,7 +1988,6 @@ mod tests {
 
     #[test]
     fn test_core_error_display() {
-        use crate::api::CoreError;
         assert_eq!(
             format!("{}", CoreError::UnsupportedCommand),
             "unsupported command"

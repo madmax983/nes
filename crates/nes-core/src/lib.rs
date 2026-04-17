@@ -8,6 +8,7 @@ pub mod bmp;
 pub mod bus;
 /// NES cheat code decoding and patch metadata.
 pub mod cheat_codes;
+pub mod constants;
 /// 6502 CPU engine and status register helpers.
 pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
@@ -21,11 +22,13 @@ pub mod serde_array;
 pub mod tas;
 
 pub use api::{
-    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, Button, Command, CoreError, CoreQuery, CoreSnapshot,
-    EmulatorState, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, MapperDelta, NesCore, Player,
-    QueryResult, RomLoadInfo,
+    Button, Command, CoreError, CoreQuery, CoreSnapshot, EmulatorState, MapperDelta, NesCore,
+    Player, QueryResult, RomLoadInfo,
 };
 pub use cheat_codes::{CheatCode, CheatCodeError};
+pub use constants::{
+    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH,
+};
 
 #[cfg(feature = "nova")]
 pub mod experimental;

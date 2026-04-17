@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::api::AUDIO_SAMPLE_RATE;
+use crate::constants::AUDIO_SAMPLE_RATE;
 
 const CPU_CLOCK_HZ: u64 = 1_789_773;
 const MAX_SAMPLE_AMPLITUDE: f32 = 11_500.0;
