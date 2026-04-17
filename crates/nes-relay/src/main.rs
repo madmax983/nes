@@ -108,7 +108,7 @@ fn build_startup_table(args: &RelayArgs) -> Table {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
     ]);
 

@@ -90,13 +90,13 @@ fn run() -> Result<(), McpError> {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
-        Cell::new("Setting").fg(TableColor::Cyan),
+        Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
     ]);
 
     table.add_row(vec![
         Cell::new("Protocol Version"),
-        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Green),
+        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Yellow),
     ]);
     table.add_row(vec![
         Cell::new("Tools Loaded"),
