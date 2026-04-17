@@ -557,6 +557,56 @@ impl Assembler {
         Ok(())
     }
 
+    fn resolve_addressing_mode(
+        &self,
+        mnemonic: &str,
+        syntax: OperandSyntax,
+    ) -> (AddressingMode, Option<FixupKind>, Option<Expr>) {
+        match syntax {
+            OperandSyntax::Implied => (AddressingMode::Implied, None, None),
+            OperandSyntax::Accumulator => (AddressingMode::Accumulator, None, None),
+            OperandSyntax::Immediate(expr) => {
+                (AddressingMode::Immediate, Some(FixupKind::Byte), Some(expr))
+            }
+            OperandSyntax::IndirectX(expr) => {
+                (AddressingMode::IndirectX, Some(FixupKind::Byte), Some(expr))
+            }
+            OperandSyntax::IndirectY(expr) => {
+                (AddressingMode::IndirectY, Some(FixupKind::Byte), Some(expr))
+            }
+            OperandSyntax::Indirect(expr) => {
+                (AddressingMode::Indirect, Some(FixupKind::Word), Some(expr))
+            }
+            OperandSyntax::AbsoluteX(expr) => {
+                if self.can_use_zeropage(&expr)
+                    && opcode_for(mnemonic, AddressingMode::ZeroPageX).is_some()
+                {
+                    (AddressingMode::ZeroPageX, Some(FixupKind::Byte), Some(expr))
+                } else {
+                    (AddressingMode::AbsoluteX, Some(FixupKind::Word), Some(expr))
+                }
+            }
+            OperandSyntax::AbsoluteY(expr) => {
+                if self.can_use_zeropage(&expr)
+                    && opcode_for(mnemonic, AddressingMode::ZeroPageY).is_some()
+                {
+                    (AddressingMode::ZeroPageY, Some(FixupKind::Byte), Some(expr))
+                } else {
+                    (AddressingMode::AbsoluteY, Some(FixupKind::Word), Some(expr))
+                }
+            }
+            OperandSyntax::AbsoluteOrZeroPage(expr) => {
+                if self.can_use_zeropage(&expr)
+                    && opcode_for(mnemonic, AddressingMode::ZeroPage).is_some()
+                {
+                    (AddressingMode::ZeroPage, Some(FixupKind::Byte), Some(expr))
+                } else {
+                    (AddressingMode::Absolute, Some(FixupKind::Word), Some(expr))
+                }
+            }
+        }
+    }
+
     fn handle_instruction(&mut self, line_no: usize, line: &str) -> Result<(), DslError> {
         let (head, rest) = split_head(line);
         let mnemonic = head.to_ascii_uppercase();
@@ -583,49 +633,7 @@ impl Assembler {
 
         let syntax = parse_operand_syntax(operand, line_no)?;
 
-        let (mode, kind, expr_opt) = match syntax {
-            OperandSyntax::Implied => (AddressingMode::Implied, None, None),
-            OperandSyntax::Accumulator => (AddressingMode::Accumulator, None, None),
-            OperandSyntax::Immediate(expr) => {
-                (AddressingMode::Immediate, Some(FixupKind::Byte), Some(expr))
-            }
-            OperandSyntax::IndirectX(expr) => {
-                (AddressingMode::IndirectX, Some(FixupKind::Byte), Some(expr))
-            }
-            OperandSyntax::IndirectY(expr) => {
-                (AddressingMode::IndirectY, Some(FixupKind::Byte), Some(expr))
-            }
-            OperandSyntax::Indirect(expr) => {
-                (AddressingMode::Indirect, Some(FixupKind::Word), Some(expr))
-            }
-            OperandSyntax::AbsoluteX(expr) => {
-                if self.can_use_zeropage(&expr)
-                    && opcode_for(&mnemonic, AddressingMode::ZeroPageX).is_some()
-                {
-                    (AddressingMode::ZeroPageX, Some(FixupKind::Byte), Some(expr))
-                } else {
-                    (AddressingMode::AbsoluteX, Some(FixupKind::Word), Some(expr))
-                }
-            }
-            OperandSyntax::AbsoluteY(expr) => {
-                if self.can_use_zeropage(&expr)
-                    && opcode_for(&mnemonic, AddressingMode::ZeroPageY).is_some()
-                {
-                    (AddressingMode::ZeroPageY, Some(FixupKind::Byte), Some(expr))
-                } else {
-                    (AddressingMode::AbsoluteY, Some(FixupKind::Word), Some(expr))
-                }
-            }
-            OperandSyntax::AbsoluteOrZeroPage(expr) => {
-                if self.can_use_zeropage(&expr)
-                    && opcode_for(&mnemonic, AddressingMode::ZeroPage).is_some()
-                {
-                    (AddressingMode::ZeroPage, Some(FixupKind::Byte), Some(expr))
-                } else {
-                    (AddressingMode::Absolute, Some(FixupKind::Word), Some(expr))
-                }
-            }
-        };
+        let (mode, kind, expr_opt) = self.resolve_addressing_mode(&mnemonic, syntax);
 
         let opcode = opcode_for(&mnemonic, mode)
             .ok_or_else(|| unknown_or_mode_error(line_no, &mnemonic, mode))?;
