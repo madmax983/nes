@@ -462,7 +462,7 @@ mod tests {
         let (dummy_work_tx, dummy_work_rx) = std::sync::mpsc::sync_channel(1);
 
         // Replace BOTH rx and tx to avoid panicking the worker thread when the dummy sender goes out of scope or the actual channel closes.
-        tm.rx = dummy_rx;
+        let old_rx = std::mem::replace(&mut tm.rx, dummy_rx);
         let old_tx = std::mem::replace(&mut tm.tx, dummy_work_tx);
 
         // This call will time out waiting for the dummy_rx
@@ -471,11 +471,12 @@ mod tests {
         assert_eq!(result, None);
         assert_eq!(tm.state(), TimeMachineState::Exhausted);
 
-        // Restore tx to allow graceful shutdown
+        // Restore tx and rx to allow graceful shutdown and prevent the worker thread from panicking on drop
         tm.tx = old_tx;
+        tm.rx = old_rx;
 
-        // Ensure dummy_work_rx stays alive until old_tx is restored to avoid
-        // "Worker thread failed to sync" panic on tx drop in some environments
+        // Ensure dummy channels stay alive until old connections are restored
         drop(dummy_work_rx);
+        drop(_dummy_reply_tx);
     }
 }
