@@ -8,4 +8,5 @@ pub mod memory_visualizer;
 pub mod nametable_viewer;
 pub mod oam_spatial_query;
 pub mod sprite_extractor;
+pub mod sprite_heatmap;
 pub mod theme_filter;
