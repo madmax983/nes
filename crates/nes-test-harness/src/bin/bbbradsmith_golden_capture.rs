@@ -232,13 +232,13 @@ fn build_summary_table(rows: &[RowData]) -> Table {
 
     for row in rows {
         table.add_row(vec![
-            Cell::new(&row.rom_name),
+            Cell::new(&row.rom_name).fg(TableColor::Green),
             Cell::new(&row.status).fg(row.status_color),
-            Cell::new(&row.mapper),
-            Cell::new(&row.samples),
-            Cell::new(&row.rms),
-            Cell::new(&row.peak),
-            Cell::new(&row.hash),
+            Cell::new(&row.mapper).fg(TableColor::Yellow),
+            Cell::new(&row.samples).fg(TableColor::Yellow),
+            Cell::new(&row.rms).fg(TableColor::Yellow),
+            Cell::new(&row.peak).fg(TableColor::Yellow),
+            Cell::new(&row.hash).fg(TableColor::Green),
         ]);
     }
 

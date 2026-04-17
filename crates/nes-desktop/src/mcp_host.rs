@@ -92,9 +92,8 @@ impl McpHost {
             .to_string();
 
         let (tx, rx) = mpsc::channel::<ToolRequest>();
-        let thread_tx = tx.clone();
         let thread_bind_addr = local_addr.clone();
-        let handle = thread::spawn(move || run_listener(listener, thread_tx, &thread_bind_addr));
+        let handle = thread::spawn(move || run_listener(listener, tx, &thread_bind_addr));
 
         Ok(Self {
             requests: rx,
@@ -637,5 +636,15 @@ mod tests {
         } else {
             panic!("Expected an error when binding to invalid address");
         }
+    }
+}
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::*;
+    #[test]
+    fn test_mcp_host_start() {
+        let host = McpHost::start("127.0.0.1:0").unwrap();
+        assert!(host.bind_addr().starts_with("127.0.0.1:"));
     }
 }

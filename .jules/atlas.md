@@ -14,3 +14,7 @@
 **Extract AppContext boilerplate in main.rs**
 **Tangle:** The `crates/nes-desktop/src/main.rs` file was cluttered with 5 occurrences of the complex struct initialization for `AppContext`. This made the `event_loop.run` closure bloated and repetitive, violating DRY principles. Extracting it to a function is difficult because it borrows 15+ local mutable variables within the same scope.
 **Blueprint:** Replaced the struct instantiations with a locally scoped `macro_rules! build_ctx!()` that implicitly captures all the local variables, reducing boilerplate while avoiding lifetime/borrowing issues.
+
+**Extract Constants from api.rs**
+**Tangle:** A circular dependency existed in `nes-core` where `apu.rs` and `ppu.rs` (internal modules) imported domain constants (`FRAME_WIDTH`, `AUDIO_SAMPLE_RATE`, etc.) from the public facade module `api.rs`.
+**Blueprint:** Extracted the domain constants into a new internal `constants.rs` module, breaking the circular dependency while continuing to re-export the constants via `lib.rs` for external consumers.

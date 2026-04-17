@@ -80,7 +80,7 @@ fn build_summary_table(
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
-        Cell::new("Metric").fg(TableColor::Cyan),
+        Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
     ]);
 
@@ -90,11 +90,11 @@ fn build_summary_table(
     ]);
     table.add_row(vec![
         Cell::new("Checkpoints Written"),
-        Cell::new(checkpoint_paths_len.to_string()).fg(TableColor::Green),
+        Cell::new(checkpoint_paths_len.to_string()).fg(TableColor::Yellow),
     ]);
     table.add_row(vec![
         Cell::new("Artifacts Written"),
-        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Green),
+        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Yellow),
     ]);
 
     table

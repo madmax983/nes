@@ -3,4 +3,5 @@
 //! This library currently provides configuration parsing and structure definitions
 //! necessary for starting the standalone relay server.
 
+/// Configuration structures for the relay server.
 pub mod config;

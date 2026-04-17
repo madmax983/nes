@@ -73,3 +73,7 @@
 **Bolt optimization implemented**
 **Learning:** Returning an `impl Iterator` from a public method that previously returned a `Vec<String>` is a breaking API change, as it prevents downstream consumers from using `Vec`-specific methods like `.len()`.
 **Action:** Always maintain the public API signature unless explicitly allowed. Focus on internal optimizations like avoiding duplicate tensor allocations.
+
+**[Avoiding unnecessary clone via tx.clone()]**
+**Learning:** Cloning a mpsc Sender via `tx.clone()` just to immediately move it into a closure is unnecessary when the original sender is no longer needed.
+**Action:** Move `tx` directly into the closure instead of creating an intermediate clone when the sender won't be reused in the outer scope.

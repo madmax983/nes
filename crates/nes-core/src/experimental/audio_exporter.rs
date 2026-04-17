@@ -6,7 +6,7 @@
 //! the audio of a complete TAS run.
 
 #[cfg(feature = "nova")]
-use crate::api::AUDIO_SAMPLE_RATE;
+use crate::constants::AUDIO_SAMPLE_RATE;
 
 /// A utility for recording 16-bit PCM samples and exporting them as a RIFF `.wav` file.
 ///

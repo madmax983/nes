@@ -668,7 +668,7 @@ mod tests {
         rom
     }
 
-    use crate::netplay::{
+    use super::{
         NetplayRuntimeStats, compute_local_netplay_bits, handle_netplay_server_message,
         schedule_netplay_ping, should_send_netplay_hash,
     };

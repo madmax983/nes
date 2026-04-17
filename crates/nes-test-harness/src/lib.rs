@@ -26,6 +26,7 @@ use std::fs;
 use std::path::Path;
 
 mod homebrew;
+/// Provides hardcoded path resolution for testing ROMs.
 pub mod rom_paths;
 
 pub use homebrew::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
