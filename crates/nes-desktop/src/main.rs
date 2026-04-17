@@ -1266,9 +1266,11 @@ fn run() -> Result<(), String> {
             }
 
             if let Some(audio_output) = audio_output.as_ref() {
+                let is_full = audio_output.queue_len() >= MAX_AUDIO_QUEUE_CHUNKS;
                 let mut audio_buf = [0_i16; nes_core::AUDIO_CHUNK_SAMPLES];
                 core.fill_audio_chunk_i16(&mut audio_buf);
-                if audio_output.queue_len() >= MAX_AUDIO_QUEUE_CHUNKS {
+
+                if is_full {
                     metrics.on_audio_queue(audio_output.queue_len(), true);
                 } else {
                     let queued = audio_output.queue_samples(&audio_buf);
