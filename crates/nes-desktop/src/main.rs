@@ -519,8 +519,12 @@ struct ProcessNetplayFrameContext<'a> {
 fn process_netplay_frame(ctx: &mut ProcessNetplayFrameContext<'_>) -> Result<(), String> {
     let local_gamepad_bits =
         crate::netplay::compute_local_netplay_bits(ctx.gamepad_bits, ctx.netplay_local_player);
-    let scheduled = ctx.rollback_engine
-        .schedule_local_input(merge_local_input_bits(ctx.keyboard_bits, local_gamepad_bits));
+    let scheduled = ctx
+        .rollback_engine
+        .schedule_local_input(merge_local_input_bits(
+            ctx.keyboard_bits,
+            local_gamepad_bits,
+        ));
 
     if let Some(client) = ctx.netplay_client
         && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
@@ -571,7 +575,8 @@ fn process_netplay_frame(ctx: &mut ProcessNetplayFrameContext<'_>) -> Result<(),
             }
 
             let current_delay = ctx.rollback_engine.input_delay_frames();
-            let max_auto_delay = ctx.rollback_engine
+            let max_auto_delay = ctx
+                .rollback_engine
                 .max_rollback_frames()
                 .clamp(NETPLAY_AUTO_DELAY_MIN_FRAMES, NETPLAY_AUTO_DELAY_MAX_FRAMES);
             let target_delay = if let Some(stats) = ctx.netplay_stats.as_ref() {
