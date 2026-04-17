@@ -501,127 +501,6 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
     }
 }
 
-struct ProcessNetplayFrameContext<'a> {
-    core: &'a mut NesCore,
-    rollback_engine: &'a mut nes_netplay::RollbackEngine,
-    netplay_client: Option<&'a crate::netplay::NetplayClient>,
-    netplay_local_player: u8,
-    gamepad_bits: [u8; 2],
-    keyboard_bits: u8,
-    now: Instant,
-    netplay_next_ping_at: &'a mut Instant,
-    netplay_ping_nonce: &'a mut u64,
-    netplay_pending_pings: &'a mut std::collections::BTreeMap<u64, Instant>,
-    netplay_stats: &'a mut Option<crate::netplay::NetplayRuntimeStats>,
-    netplay_hash_check_every: u64,
-}
-
-fn process_netplay_frame(ctx: &mut ProcessNetplayFrameContext<'_>) -> Result<(), String> {
-    let local_gamepad_bits =
-        crate::netplay::compute_local_netplay_bits(ctx.gamepad_bits, ctx.netplay_local_player);
-    let scheduled = ctx
-        .rollback_engine
-        .schedule_local_input(merge_local_input_bits(
-            ctx.keyboard_bits,
-            local_gamepad_bits,
-        ));
-
-    if let Some(client) = ctx.netplay_client
-        && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
-    {
-        return Err(format!("Netplay send input failed: {err}"));
-    }
-
-    if let Some(client) = ctx.netplay_client {
-        if let Some(nonce) = crate::netplay::schedule_netplay_ping(
-            ctx.now,
-            ctx.netplay_next_ping_at,
-            ctx.netplay_ping_nonce,
-            ctx.netplay_pending_pings,
-            NETPLAY_PING_INTERVAL,
-            128,
-        ) && let Err(err) = client.send_ping(nonce)
-        {
-            return Err(format!("Netplay send ping failed: {err}"));
-        }
-
-        loop {
-            let message = client
-                .try_recv()
-                .map_err(|err| format!("Netplay receive failed: {err}"))?;
-            let Some(message) = message else {
-                break;
-            };
-            crate::netplay::handle_netplay_server_message(
-                message,
-                ctx.rollback_engine,
-                ctx.netplay_local_player,
-                ctx.netplay_stats,
-                ctx.netplay_pending_pings,
-            )?;
-        }
-    }
-
-    match ctx.rollback_engine.advance_frame(ctx.core) {
-        Ok(step) => {
-            if should_log_rollback(step.rollback_distance) {
-                eprintln!(
-                    "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
-                    step.rollback_distance, step.frame, step.local_bits, step.remote_bits
-                );
-                if let Some(stats) = ctx.netplay_stats.as_mut() {
-                    stats.observe_rollback(step.rollback_distance);
-                }
-            }
-
-            let current_delay = ctx.rollback_engine.input_delay_frames();
-            let max_auto_delay = ctx
-                .rollback_engine
-                .max_rollback_frames()
-                .clamp(NETPLAY_AUTO_DELAY_MIN_FRAMES, NETPLAY_AUTO_DELAY_MAX_FRAMES);
-            let target_delay = if let Some(stats) = ctx.netplay_stats.as_ref() {
-                recommended_input_delay_frames(
-                    stats.latest_rtt_ms,
-                    stats.jitter_ms,
-                    NETPLAY_AUTO_DELAY_MIN_FRAMES,
-                    max_auto_delay,
-                    current_delay,
-                )
-            } else {
-                current_delay
-            };
-            if should_update_input_delay(target_delay, current_delay) {
-                ctx.rollback_engine
-                    .set_input_delay_frames(target_delay)
-                    .map_err(|err| format!("Netplay adaptive delay update failed: {err}"))?;
-                if let Some(stats) = ctx.netplay_stats.as_mut() {
-                    stats.input_delay_frames = target_delay;
-                    eprintln!(
-                        "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
-                        current_delay,
-                        target_delay,
-                        stats.latest_rtt_ms_or_zero(),
-                        stats.jitter_ms
-                    );
-                }
-            } else if let Some(stats) = ctx.netplay_stats.as_mut() {
-                stats.input_delay_frames = current_delay;
-            }
-
-            if crate::netplay::should_send_netplay_hash(ctx.netplay_hash_check_every, step.frame)
-                && let Some(client) = ctx.netplay_client
-                && let Err(err) = client.send_hash(step.frame, step.state_hash)
-            {
-                return Err(format!("Netplay send hash failed: {err}"));
-            }
-        }
-        Err(err) => {
-            return Err(format!("Netplay rollback step failed: {err}"));
-        }
-    }
-    Ok(())
-}
-
 fn command_marks_rta_invalidation(command: Command) -> Option<ForbiddenAction> {
     match command {
         Command::StepCpu | Command::StepScanline | Command::StepFrame => {
@@ -1217,24 +1096,120 @@ fn run() -> Result<(), String> {
             }
 
             if let Some(rollback_engine) = rollback.as_mut() {
-                let mut ctx = ProcessNetplayFrameContext {
-                    core: &mut core,
-                    rollback_engine,
-                    netplay_client: netplay_client.as_ref(),
-                    netplay_local_player,
-                    gamepad_bits,
-                    keyboard_bits,
-                    now,
-                    netplay_next_ping_at: &mut netplay_next_ping_at,
-                    netplay_ping_nonce: &mut netplay_ping_nonce,
-                    netplay_pending_pings: &mut netplay_pending_pings,
-                    netplay_stats: &mut netplay_stats,
-                    netplay_hash_check_every,
-                };
-                if let Err(err) = process_netplay_frame(&mut ctx) {
-                    eprintln!("{err}");
+                let local_gamepad_bits =
+                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+                let scheduled = rollback_engine
+                    .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
+                if let Some(client) = netplay_client.as_ref()
+                    && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
+                {
+                    eprintln!("Netplay send input failed: {err}");
                     *control_flow = ControlFlow::Exit;
                     return;
+                }
+                if let Some(client) = netplay_client.as_ref() {
+                    if let Some(nonce) = crate::netplay::schedule_netplay_ping(
+                        now,
+                        &mut netplay_next_ping_at,
+                        &mut netplay_ping_nonce,
+                        &mut netplay_pending_pings,
+                        NETPLAY_PING_INTERVAL,
+                        128,
+                    ) && let Err(err) = client.send_ping(nonce)
+                    {
+                        eprintln!("Netplay send ping failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
+
+                    loop {
+                        let message = match client.try_recv() {
+                            Ok(next) => next,
+                            Err(err) => {
+                                eprintln!("Netplay receive failed: {err}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                        };
+                        let Some(message) = message else {
+                            break;
+                        };
+                        if let Err(err) = crate::netplay::handle_netplay_server_message(
+                            message,
+                            rollback_engine,
+                            netplay_local_player,
+                            &mut netplay_stats,
+                            &mut netplay_pending_pings,
+                        ) {
+                            eprintln!("{err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                    }
+                }
+
+                match rollback_engine.advance_frame(&mut core) {
+                    Ok(step) => {
+                        if should_log_rollback(step.rollback_distance) {
+                            eprintln!(
+                                "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
+                                step.rollback_distance, step.frame, step.local_bits, step.remote_bits
+                            );
+                            if let Some(stats) = netplay_stats.as_mut() {
+                                stats.observe_rollback(step.rollback_distance);
+                            }
+                        }
+
+                        let current_delay = rollback_engine.input_delay_frames();
+                        let max_auto_delay = rollback_engine.max_rollback_frames().clamp(
+                            NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                            NETPLAY_AUTO_DELAY_MAX_FRAMES,
+                        );
+                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
+                            recommended_input_delay_frames(
+                                stats.latest_rtt_ms,
+                                stats.jitter_ms,
+                                NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                                max_auto_delay,
+                                current_delay,
+                            )
+                        } else {
+                            current_delay
+                        };
+                        if should_update_input_delay(target_delay, current_delay) {
+                            if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
+                                eprintln!("Netplay adaptive delay update failed: {err}");
+                                *control_flow = ControlFlow::Exit;
+                                return;
+                            }
+                            if let Some(stats) = netplay_stats.as_mut() {
+                                stats.input_delay_frames = target_delay;
+                                eprintln!(
+                                    "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                                    current_delay,
+                                    target_delay,
+                                    stats.latest_rtt_ms_or_zero(),
+                                    stats.jitter_ms
+                                );
+                            }
+                        } else if let Some(stats) = netplay_stats.as_mut() {
+                            stats.input_delay_frames = current_delay;
+                        }
+
+                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
+                            && let Some(client) = netplay_client.as_ref()
+                            && let Err(err) = client.send_hash(step.frame, step.state_hash)
+                        {
+                            eprintln!("Netplay send hash failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("Netplay rollback step failed: {err}");
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
                 }
             } else if rewind_held {
                 time_machine.rewind_step(&mut core);
