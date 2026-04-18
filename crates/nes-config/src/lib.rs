@@ -178,8 +178,16 @@ impl NesConfig {
     /// let config = NesConfig::load(Path::new("my_nes.toml")).unwrap();
     /// ```
     pub fn load(path: &Path) -> Result<Self, String> {
-        let bytes = fs::read_to_string(path)
-            .map_err(|err| format!("failed to read config '{}': {err}", path.display()))?;
+        let bytes = fs::read_to_string(path).map_err(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                format!(
+                    "failed to read config '{}': file not found. Hint: copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                    path.display()
+                )
+            } else {
+                format!("failed to read config '{}': {err}", path.display())
+            }
+        })?;
         toml::from_str::<Self>(&bytes)
             .map_err(|err| format!("failed to parse config '{}': {err}", path.display()))
     }
@@ -324,6 +332,15 @@ room = "arena"
         let path = temp_config_path("missing");
         let err = NesConfig::load(&path).expect_err("missing config should fail");
         assert!(err.contains("failed to read config"));
+        assert!(err.contains("Hint: copy the example profile"));
+    }
+
+    #[test]
+    fn load_returns_underlying_error_for_non_not_found_io_errors() {
+        let path = std::path::Path::new("."); // Reading a directory should cause IsADirectory or similar OS error
+        let err = NesConfig::load(path).expect_err("loading a directory should fail");
+        assert!(err.contains("failed to read config"));
+        assert!(!err.contains("Hint: copy the example profile"));
     }
 
     #[test]
