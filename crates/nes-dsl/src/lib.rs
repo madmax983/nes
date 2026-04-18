@@ -227,24 +227,23 @@ fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, 
     if operand.eq_ignore_ascii_case("A") {
         return Ok(OperandSyntax::Accumulator);
     }
+
     if let Some(raw) = operand.strip_prefix('#') {
         return Ok(OperandSyntax::Immediate(parse_expr(raw.trim(), line_no)?));
     }
-    if let Some(inner) = operand
-        .strip_prefix('(')
-        .and_then(|v| v.strip_suffix(",X)"))
-    {
-        return Ok(OperandSyntax::IndirectX(parse_expr(inner.trim(), line_no)?));
+
+    if let Some(inner) = operand.strip_prefix('(') {
+        if let Some(inner) = inner.strip_suffix(",X)") {
+            return Ok(OperandSyntax::IndirectX(parse_expr(inner.trim(), line_no)?));
+        }
+        if let Some(inner) = inner.strip_suffix("),Y") {
+            return Ok(OperandSyntax::IndirectY(parse_expr(inner.trim(), line_no)?));
+        }
+        if let Some(inner) = inner.strip_suffix(')') {
+            return Ok(OperandSyntax::Indirect(parse_expr(inner.trim(), line_no)?));
+        }
     }
-    if let Some(inner) = operand
-        .strip_prefix('(')
-        .and_then(|v| v.strip_suffix("),Y"))
-    {
-        return Ok(OperandSyntax::IndirectY(parse_expr(inner.trim(), line_no)?));
-    }
-    if let Some(inner) = operand.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
-        return Ok(OperandSyntax::Indirect(parse_expr(inner.trim(), line_no)?));
-    }
+
     if let Some(prefix) = operand.strip_suffix(",X") {
         return Ok(OperandSyntax::AbsoluteX(parse_expr(
             prefix.trim(),
@@ -257,6 +256,7 @@ fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, 
             line_no,
         )?));
     }
+
     Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(
         operand.trim(),
         line_no,
@@ -1224,12 +1224,7 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
         return Ok(Expr::Symbol(symbol));
     };
 
-    let signed = match sign {
-        -1 => -value,
-        1 => value,
-        _ => unreachable!("parse_expr sign is always +/-1"),
-    };
-    Ok(Expr::Number(signed))
+    Ok(Expr::Number(sign * value))
 }
 
 fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
