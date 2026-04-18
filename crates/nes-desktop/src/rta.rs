@@ -8,13 +8,13 @@
 //!
 //! # The Lore
 //!
-//! When a user selects a game, the system loads an [`RtaProfile`]. This profile is a contract
+//! When a user selects a game, the system loads an [`crate::rta::RtaProfile`]. This profile is a contract
 //! that dictates exactly which memory addresses define the start, end, and intermediate
 //! milestones (splits) of a run.
 //!
-//! The beating heart of this system is the [`RtaManager`], which must be `.tick()`'d every
+//! The beating heart of this system is the [`crate::rta::RtaManager`], which must be `.tick()`'d every
 //! single frame. It constantly interrogates the emulator's memory to see if any of the profile's
-//! [`TriggerRule`] conditions have been met. When the dust settles, the manager spits out
+//! [`crate::rta::TriggerRule`] conditions have been met. When the dust settles, the manager spits out
 //! a cryptographically sound `.run.json` artifact containing the split times, the runner's
 //! controller inputs, and a verdict on the run's legitimacy.
 //!
@@ -22,10 +22,10 @@
 //!
 //! The RTA engine is built upon these pillars:
 //!
-//! * **Profiles ([`RtaProfile`]):** The immutable laws of the run, loaded from TOML files.
-//! * **Triggers ([`TriggerRule`]):** The exact memory mutations (e.g., "Address `0x071A` becomes `1`") that cause the stopwatch to react.
-//! * **The Manager ([`RtaManager`]):** The active state machine that relentlessly enforces the profile rules frame-by-frame.
-//! * **Calibration ([`CalibrationRecorder`]):** The automated drafting tool that hallucinates new profiles by statistically analyzing a user's manual splits.
+//! * **Profiles ([`crate::rta::RtaProfile`]):** The immutable laws of the run, loaded from TOML files.
+//! * **Triggers ([`crate::rta::TriggerRule`]):** The exact memory mutations (e.g., "Address `0x071A` becomes `1`") that cause the stopwatch to react.
+//! * **The Manager ([`crate::rta::RtaManager`]):** The active state machine that relentlessly enforces the profile rules frame-by-frame.
+//! * **Calibration ([`crate::rta::CalibrationRecorder`]):** The automated drafting tool that hallucinates new profiles by statistically analyzing a user's manual splits.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
@@ -727,7 +727,7 @@ pub struct RtaManager {
 impl RtaManager {
     /// Forges a new session manager that serves as the impartial referee for a speedrun attempt.
     ///
-    /// The manager evaluates the provided [`RtaProfile`] against the live emulation state
+    /// The manager evaluates the provided [`crate::rta::RtaProfile`] against the live emulation state
     /// to determine when to automatically start the timer, mark splits, or invalidate the run entirely.
     /// It requires the ROM hash upfront to cryptographically bind the resulting run artifact
     /// to a specific game version, preventing spoofing.
@@ -809,7 +809,7 @@ impl RtaManager {
         self.state
     }
 
-    /// Reveals the unique string ID of the active [`RtaProfile`].
+    /// Reveals the unique string ID of the active [`crate::rta::RtaProfile`].
     ///
     /// UI overlays rely on this identifier to fetch and display the correct splits layout
     /// for the currently loaded game.
@@ -1187,7 +1187,7 @@ impl RtaManager {
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
     ///
     /// This is the ultimate escape hatch for runners when a game glitches or an automated trigger fails.
-    /// It is also heavily utilized during drafting to train the [`CalibrationRecorder`] on exactly *when*
+    /// It is also heavily utilized during drafting to train the [`crate::rta::CalibrationRecorder`] on exactly *when*
     /// significant events occur.
     ///
     /// # Examples
