@@ -178,8 +178,16 @@ impl NesConfig {
     /// let config = NesConfig::load(Path::new("my_nes.toml")).unwrap();
     /// ```
     pub fn load(path: &Path) -> Result<Self, String> {
-        let bytes = fs::read_to_string(path)
-            .map_err(|err| format!("failed to read config '{}': {err}", path.display()))?;
+        let bytes = fs::read_to_string(path).map_err(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                format!(
+                    "failed to read config '{}': file not found. Hint: copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                    path.display()
+                )
+            } else {
+                format!("failed to read config '{}': {err}", path.display())
+            }
+        })?;
         toml::from_str::<Self>(&bytes)
             .map_err(|err| format!("failed to parse config '{}': {err}", path.display()))
     }
