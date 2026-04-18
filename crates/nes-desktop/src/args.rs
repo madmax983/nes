@@ -573,4 +573,13 @@ mod tests {
         .expect("netplay hash-every branch should parse");
         assert_eq!(hash_every.netplay_hash_check_every_frames, Some(90));
     }
+
+    #[test]
+    #[cfg(feature = "nova")]
+    fn parse_runtime_args_accepts_auto_player_flag() {
+        let args = vec!["--auto-player".to_owned(), "game.nes".to_owned()];
+        let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
+        assert!(parsed.auto_player_enabled);
+        assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+    }
 }
