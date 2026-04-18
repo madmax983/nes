@@ -113,15 +113,13 @@ pub(crate) fn window_title(session: &LoadedRomSession, overlay_open: bool) -> St
 pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
+            "Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
             rom_path.with(Color::Yellow),
             "Hint:".with(Color::Cyan).bold()
         )
     } else {
         format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
+            "Failed to read ROM at '{}': {}",
             rom_path,
             err
         )

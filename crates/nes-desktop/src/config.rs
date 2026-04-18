@@ -1,6 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
+use crossterm::style::{Color, Stylize};
 use nes_config::{
     DEFAULT_CONFIG_PATH, NesConfig, StepModeConfig, normalize_nonzero_u32, normalize_nonzero_u64,
     parse_config_path_arg,
@@ -85,7 +86,8 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
             format!(
-                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
+                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}.\n{} Try running with a ROM like `nes-desktop roms/mario.nes`",
+                "Hint:".with(Color::Cyan).bold()
             )
         })?;
     let window_scale = normalize_nonzero_u32(config.desktop.window_scale, DEFAULT_WINDOW_SCALE);

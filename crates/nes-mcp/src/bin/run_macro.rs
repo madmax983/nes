@@ -28,7 +28,7 @@ fn main() {
     let script_path = &args[2];
 
     if let Err(err) = run(rom_path, script_path) {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(Color::Red).bold());
         std::process::exit(1);
     }
 }
@@ -36,15 +36,13 @@ fn main() {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
+            "Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
             rom_path.with(Color::Yellow),
             "Hint:".with(Color::Cyan).bold()
         )
     } else {
         format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
+            "Failed to read ROM at '{}': {}",
             rom_path,
             err
         )
@@ -54,15 +52,13 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
 fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the macro script at '{}'.\n{} Check the path or create a new .txt file.",
-            "Error:".with(Color::Red).bold(),
+            "Could not find the macro script at '{}'.\n{} Check the path or create a new .txt file.",
             script_path.with(Color::Yellow),
             "Hint:".with(Color::Cyan).bold()
         )
     } else {
         format!(
-            "{} Failed to read script at '{}': {}",
-            "Error:".with(Color::Red).bold(),
+            "Failed to read script at '{}': {}",
             script_path,
             err
         )
