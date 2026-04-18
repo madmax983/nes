@@ -1,16 +1,20 @@
-🤖 **Sentinel: Closing Test Coverage Gaps in `cheat_codes.rs` and `tas.rs`**
-
-This PR aims to close test gaps identified through `cargo-mutants` where there were previously untested boundary cases or properties.
-
 **🧬 Mutants Found:**
-- `cheat_codes.rs`: Mutations substituting bitwise `|` with bitwise `^`. These are **Equivalent Mutants** since the masks ensure distinct bit fields are populated independently without overlap. Documented in journal.
-- `cheat_codes.rs`: Missing coverage for checking the specific individual bits parsed from the string and stored in the internal fields.
-- `tas.rs`: Missing coverage asserting exactly what data structures `TasFrameRun::new()` and `TasMovie::runs()` output or return. Missing basic interaction tests confirming things like `record_core_frame` logic. Note: Cargo mutants has an issue successfully recognizing the mutations as caught in integration test files directly due to missing or unsupported cargo configuration inside the workspace environment or test isolation. The tests provided strictly enforce the API signatures in the normal cargo test suite.
+Count and summary: Found 206 mutants tested across `nes-test-harness` and `nes-config` in targeted runs.
+- `nes-test-harness/src/lib.rs`: 178 mutants. Killed most. Identified 2 surviving logic gaps (now closed), 1 expected test weakness (now closed), and several equivalent bitwise mutants (documented).
+- `nes-test-harness/src/homebrew.rs`: 8 mutants. 100% killed natively.
+- `nes-test-harness/src/rom_paths.rs`: 16 mutants. Expected weaknesses natively due to `nes.toml` config dependencies for copyrighted ROM paths (documented).
+- `nes-config/src/lib.rs`: Identified multiple timeout mutants in CLI loop parsing loops.
 
 **🎯 Tests Added/Strengthened:**
-- **`cheat_codes.rs`**: Added explicit test verifying that `raw()` returns the normalized string intact. Added explicit failure case tests to handle strings made up solely of hyphens and whitespace.
-- **`cheat_codes.rs`**: Added `test_cheat_code_decodes_mutants` to rigidly test bitfields and verify all exact bit states for address and values are extracted correctly.
-- **`tas.rs`**: Added basic unit level property tests like `test_tas_movie_methods` and `test_tas_frame_run_new` to verify basic functionality locally within the testing suite.
+- **`nes-test-harness/src/lib.rs`**: Strengthened `collect_apu_register_writes_tracks_apu_bus_stores` to assert `apu_write_hash` inequalities explicitly when components of the `ApuWriteEvent` are bitwise mutated.
+- **`nes-test-harness/src/lib.rs`**: Added `collect_apu_register_writes_ignores_reads` and `collect_apu_register_writes_ignores_non_apu_writes` to kill mutants changing the collection conditional logic from `&&` to `||` or mutating the address check.
+- **`nes-config/src/lib.rs`**: Added `parse_config_path_loop_terminates` to assert that internal parsing loops iterate exactly the expected amount and terminate, responding to timeout mutants found when mutating the `idx += 1` assignments.
 
 **⚠️ Suspected Bugs:**
-- None detected here.
+None. Surviving mutants were either weak assertions or expected equivalent/timeout mutants.
+
+**📊 Kill Rate:**
+Improved kill rates in `nes-test-harness` core functions by capturing bitwise mutations on `apu_write_hash` and `collect_apu_register_writes` logic boundaries. `nes-config` parsing logic is now firmly asserted to terminate correctly.
+
+**🔗 Havoc Interaction:**
+Equivalent mutants and timeouts logged to `.jules/sentinel.md` journal.
