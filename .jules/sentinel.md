@@ -76,3 +76,12 @@
 **Mutant:** `replace | with ^ in Status::bits_for_php` (line 154)
 **Diagnosis:** EQUIVALENT_MUTANT. The operation `self.bits | (Self::UNUSED_BIT | Self::BREAK_BIT)` compared to `self.bits | (Self::UNUSED_BIT ^ Self::BREAK_BIT)` mathematically evaluates to the same thing since `Self::UNUSED_BIT` (0x20) and `Self::BREAK_BIT` (0x10) are non-overlapping bitmasks. Their bitwise OR and bitwise XOR are identical (0x30).
 **Kill Shot:** Skipped, logged as equivalent.
+
+## YYYY-MM-DD - Missing Tests in `tas.rs` and `cheat_codes.rs`
+**Mutant:** `replace <impl FromStr for CheatCode>::from_str`
+**Diagnosis:** `EQUIVALENT_MUTANT`. The mutations replacing bitwise `|` with bitwise `^` in the construction of `address`, `value` and `compare` bytes. Because the masks (`0x7` and `0x8`) select non-overlapping bits and shift them into non-overlapping bitfields, `|` and `^` perform identical mathematical operations. These cannot be distinguished by behavior tests and should be skipped.
+**Kill Shot:** Documented as `EQUIVALENT_MUTANT`.
+
+**Mutant:** Missing test coverage for `TasMovie` and `TasRecorder` directly inside `tas.rs`
+**Diagnosis:** Cargo mutants struggles to link integration tests tightly when targeting the workspace `nes-core`, leaving 50 untested mutations.
+**Kill Shot:** Documented the boundary coverage missing in `tas.rs` and added explicit verification tests for instantiation (`TasFrameRun::new`), array reads (`TasMovie::runs()`), frame counting (`total_frames()`), and state updates on `TasRecorder` (`clear`, `stop`, `start`).
