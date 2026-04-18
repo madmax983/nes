@@ -296,3 +296,69 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_mutants {
+    use super::*;
+    use crate::NesCore;
+
+    fn looping_core() -> NesCore {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
+        core
+    }
+
+    #[test]
+    fn test_tas_frame_run_new() {
+        let run = TasFrameRun::new(1, 2, 3);
+        assert_eq!(run.controller1_bits, 1);
+        assert_eq!(run.controller2_bits, 2);
+        assert_eq!(run.frames, 3);
+    }
+
+    #[test]
+    fn test_tas_movie_methods() {
+        let mut movie = TasMovie::default();
+        assert_eq!(movie.total_frames(), 0);
+
+        movie = TasMovie::from_runs(vec![TasFrameRun::new(1, 2, 5)]);
+        assert_eq!(movie.total_frames(), 5);
+
+        let runs = movie.runs();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0], TasFrameRun::new(1, 2, 5));
+
+        let mut core = looping_core();
+        let frames = movie.replay(&mut core).unwrap();
+        assert_eq!(frames, 5);
+
+        movie.push_frame(3, 4);
+        assert_eq!(movie.runs().len(), 2);
+    }
+
+    #[test]
+    fn test_tas_recorder_methods() {
+        let mut recorder = TasRecorder::default();
+        assert!(!recorder.is_recording());
+
+        recorder.start();
+        assert!(recorder.is_recording());
+
+        recorder.record_frame(1);
+
+        recorder.stop();
+        assert!(!recorder.is_recording());
+
+        recorder.start();
+        recorder.record_frame_bits(1, 2);
+
+        recorder.clear();
+        assert!(recorder.is_recording());
+
+        let core = NesCore::new();
+        recorder.record_core_frame(&core);
+
+        let movie = recorder.finish();
+        let _ = movie.runs();
+    }
+}
