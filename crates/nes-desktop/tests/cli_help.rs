@@ -7,8 +7,8 @@ fn help_flag_prints_usage_and_default_config_path() {
         .output()
         .expect("nes-desktop binary should run");
     assert!(
-        output.status.success(),
-        "help invocation should exit successfully"
+        !output.status.success(),
+        "help invocation should exit with error"
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);

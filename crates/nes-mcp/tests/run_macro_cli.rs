@@ -60,10 +60,10 @@ fn run_macro_with_missing_script_prints_styled_error() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
-    assert!(stderr.contains("Could not find the macro script at"));
+    assert!(stderr.contains("Could not find the macro script file at"));
     assert!(stderr.contains("__does_not_exist__.txt"));
     assert!(stderr.contains("Hint:"));
-    assert!(stderr.contains("Check the path or create a new .txt file"));
+    assert!(stderr.contains("Check the path or try the example script"));
 }
 
 #[test]

@@ -85,7 +85,7 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
             format!(
-                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
+                "ROM path not configured.\nHint: Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
             )
         })?;
     let window_scale = normalize_nonzero_u32(config.desktop.window_scale, DEFAULT_WINDOW_SCALE);

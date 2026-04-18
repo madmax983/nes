@@ -867,7 +867,7 @@ fn resolve_rom_path() -> Result<(String, Option<PathBuf>, TuiCliOptions), String
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
             format!(
-                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
+                "ROM path not configured.\nHint: Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
             )
         })?;
     Ok((rom_path, loaded_config_path, cli_options))
@@ -921,18 +921,11 @@ fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            "Hint:".with(crossterm::style::Color::Cyan).bold()
+            "Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
+            rom_path
         )
     } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path,
-            err
-        )
+        format!("Failed to read ROM at '{}': {}", rom_path, err)
     }
 }
 

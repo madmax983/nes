@@ -12,7 +12,14 @@ use nes_core::{NesCore, tas::TasMovie};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{err}");
+        let err_str = err.to_string();
+        let err_str = err_str.trim_start_matches("Error: ");
+        if let Some((main_err, hint)) = err_str.split_once("\nHint: ") {
+            eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), main_err);
+            eprintln!("{} {}", "Hint:".with(crossterm::style::Color::Cyan).bold(), hint);
+        } else {
+            eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err_str);
+        }
         std::process::exit(1);
     }
 }
@@ -20,18 +27,11 @@ fn main() {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            "Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
+            rom_path
         )
     } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path,
-            err
-        )
+        format!("Failed to read ROM at '{}': {}", rom_path, err)
     }
 }
 

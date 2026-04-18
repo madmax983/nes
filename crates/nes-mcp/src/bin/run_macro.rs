@@ -28,7 +28,14 @@ fn main() {
     let script_path = &args[2];
 
     if let Err(err) = run(rom_path, script_path) {
-        eprintln!("\n{err}");
+        let err_str = err.to_string();
+        let err_str = err_str.trim_start_matches("Error: ");
+        if let Some((main_err, hint)) = err_str.split_once("\nHint: ") {
+            eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), main_err);
+            eprintln!("{} {}", "Hint:".with(Color::Cyan).bold(), hint);
+        } else {
+            eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), err_str);
+        }
         std::process::exit(1);
     }
 }
@@ -36,36 +43,22 @@ fn main() {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            "Could not find the ROM file at '{}'.\nHint: Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
+            rom_path
         )
     } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path,
-            err
-        )
+        format!("Failed to read ROM at '{}': {}", rom_path, err)
     }
 }
 
 fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the macro script at '{}'.\n{} Check the path or create a new .txt file.",
-            "Error:".with(Color::Red).bold(),
-            script_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            "Could not find the macro script file at '{}'.\nHint: Check the path or try the example script: ./crates/nes-mcp/assets/smb_jump.macro.txt",
+            script_path
         )
     } else {
-        format!(
-            "{} Failed to read script at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            script_path,
-            err
-        )
+        format!("Failed to read macro script at '{}': {}", script_path, err)
     }
 }
 
@@ -175,7 +168,7 @@ mod tests {
 
         let err = run(rom_path.to_str().unwrap(), "__missing_script__.txt")
             .expect_err("missing script should fail");
-        assert!(err.contains("Could not find the macro script at"));
+        assert!(err.contains("Could not find the macro script file at"));
         assert!(err.contains("__missing_script__.txt"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);

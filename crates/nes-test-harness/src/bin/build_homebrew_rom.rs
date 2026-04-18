@@ -13,7 +13,14 @@ use nes_test_harness::{default_homebrew_rom_path, write_homebrew_rom};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
+        let err_str = err.to_string();
+        let err_str = err_str.trim_start_matches("Error: ");
+        if let Some((main_err, hint)) = err_str.split_once("\nHint: ") {
+            eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), main_err);
+            eprintln!("{} {}", "Hint:".with(Color::Cyan).bold(), hint);
+        } else {
+            eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), err_str);
+        }
         std::process::exit(1);
     }
 }
