@@ -41,11 +41,7 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
             "Hint:".with(Color::Cyan).bold()
         )
     } else {
-        format!(
-            "Failed to read ROM at '{}': {}",
-            rom_path,
-            err
-        )
+        format!("Failed to read ROM at '{}': {}", rom_path, err)
     }
 }
 
@@ -57,11 +53,7 @@ fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
             "Hint:".with(Color::Cyan).bold()
         )
     } else {
-        format!(
-            "Failed to read script at '{}': {}",
-            script_path,
-            err
-        )
+        format!("Failed to read script at '{}': {}", script_path, err)
     }
 }
 
