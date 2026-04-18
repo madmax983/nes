@@ -908,10 +908,15 @@ mod tests {
         .expect_err("relay errors should propagate");
         assert!(err.contains("relay error"));
     }
-#[test]
+    #[test]
     fn poll_netplay_client_and_advance_frame_handles_missing_client_gracefully() {
         let mut core = nes_core::NesCore::default();
-        let mut engine = nes_netplay::RollbackEngine::new(nes_netplay::RollbackConfig { max_rollback_frames: 4, input_delay_frames: 0, local_player: 1 }).unwrap();
+        let mut engine = nes_netplay::RollbackEngine::new(nes_netplay::RollbackConfig {
+            max_rollback_frames: 4,
+            input_delay_frames: 0,
+            local_player: 1,
+        })
+        .unwrap();
         let now = std::time::Instant::now();
         let mut next_ping = now;
         let mut nonce = 0;
