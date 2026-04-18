@@ -5,8 +5,8 @@
 //! backpressure to ensure smooth audio playback without stuttering or overwhelming the
 //! audio device.
 //!
-//! The core of the module is the [`AudioOutput`] struct, which manages the audio stream
-//! and sink. It uses a trait-based approach ([`AudioSinkControl`]) to allow decoupling
+//! The core of the module is the [`crate::audio::AudioOutput`] struct, which manages the audio stream
+//! and sink. It uses a trait-based approach ([`crate::audio::AudioSinkControl`]) to allow decoupling
 //! the underlying audio library (`rodio`) for testing purposes.
 
 use nes_core::AUDIO_SAMPLE_RATE;
@@ -42,7 +42,7 @@ pub trait AudioSinkControl {
     fn stop(&self);
 }
 
-/// A concrete implementation of [`AudioSinkControl`] that wraps a `rodio::Sink`.
+/// A concrete implementation of [`crate::audio::AudioSinkControl`] that wraps a `rodio::Sink`.
 ///
 /// This struct adapts the standard `rodio` sink interface into our application's
 /// required trait, allowing it to be used dynamically via dynamic dispatch (`Box<dyn AudioSinkControl>`).
@@ -180,7 +180,7 @@ pub(crate) mod tests {
         pub stop_calls: usize,
     }
 
-    /// A mock implementation of [`AudioSinkControl`] for unit testing without audio hardware.
+    /// A mock implementation of [`crate::audio::AudioSinkControl`] for unit testing without audio hardware.
     ///
     /// The `FakeAudioSink` captures all interactions (queueing samples, clearing, stopping)
     /// into a shared `FakeAudioState`. This allows tests to assert that the `AudioOutput`
