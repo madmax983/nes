@@ -927,7 +927,7 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
             "Hint:".with(crossterm::style::Color::Cyan).bold()
         )
     } else {
-        format!("Failed to read ROM at '{}': {}", rom_path, err)
+        format!("Failed to read ROM at '{rom_path}': {err}")
     }
 }
 
