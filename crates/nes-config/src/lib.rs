@@ -332,6 +332,15 @@ room = "arena"
         let path = temp_config_path("missing");
         let err = NesConfig::load(&path).expect_err("missing config should fail");
         assert!(err.contains("failed to read config"));
+        assert!(err.contains("Hint: copy the example profile"));
+    }
+
+    #[test]
+    fn load_returns_underlying_error_for_non_not_found_io_errors() {
+        let path = std::path::Path::new("."); // Reading a directory should cause IsADirectory or similar OS error
+        let err = NesConfig::load(path).expect_err("loading a directory should fail");
+        assert!(err.contains("failed to read config"));
+        assert!(!err.contains("Hint: copy the example profile"));
     }
 
     #[test]
