@@ -661,14 +661,28 @@ pub struct RunArtifactPaths {
 }
 
 #[derive(Debug, Serialize)]
-struct RunArtifact<'a> {
+struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     profile_id: &'a str,
     rom_hash: &'a str,
     state: &'a str,
     valid: bool,
     elapsed_ms: u128,
-    invalidation_reasons: Vec<&'a str>,
+    #[serde(with = "serde_iter")]
+    invalidation_reasons: I,
     splits: &'a [SplitEvent],
+}
+
+mod serde_iter {
+    use serde::{Serialize, Serializer};
+
+    pub fn serialize<T, I, S>(iter: &I, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        T: Serialize,
+        I: Iterator<Item = T> + Clone,
+        S: Serializer,
+    {
+        serializer.collect_seq(iter.clone())
+    }
 }
 
 /// The active state machine that tracks a speedrun session.
@@ -981,7 +995,7 @@ impl RtaManager {
     /// let reasons: Vec<_> = manager.invalidation_reasons().collect();
     /// assert_eq!(reasons, vec!["frame_step"]);
     /// ```
-    pub fn invalidation_reasons(&self) -> impl Iterator<Item = &str> {
+    pub fn invalidation_reasons(&self) -> impl Iterator<Item = &str> + Clone + '_ {
         self.invalidation_reasons.iter().map(String::as_str)
     }
 
@@ -1336,7 +1350,7 @@ impl RtaManager {
             },
             valid: self.is_valid_run(),
             elapsed_ms: self.elapsed_at_finish.unwrap_or_default().as_millis(),
-            invalidation_reasons: self.invalidation_reasons().collect(),
+            invalidation_reasons: self.invalidation_reasons(),
             splits: &self.split_events,
         };
 

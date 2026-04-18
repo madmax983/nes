@@ -77,3 +77,7 @@
 **[Avoiding unnecessary clone via tx.clone()]**
 **Learning:** Cloning a mpsc Sender via `tx.clone()` just to immediately move it into a closure is unnecessary when the original sender is no longer needed.
 **Action:** Move `tx` directly into the closure instead of creating an intermediate clone when the sender won't be reused in the outer scope.
+
+**[Optimizing integer to string conversions on hot UI paths]**
+**Learning:** Calling `.to_string()` on integers (like `metrics.late_frames.to_string()`) when building UI tables allocates a new `String` on the heap for every single cell update. This causes frequent, unnecessary memory churn in recurring routines like the desktop metrics dashboard.
+**Action:** Change the rendering closure to accept `&dyn std::fmt::Display` and use `format_args!` (e.g. `&format_args!("{:.1}", fps)`) or directly pass references to integers (e.g. `&metrics.late_frames`), allowing the underlying table library to format the values without intermediate allocations.

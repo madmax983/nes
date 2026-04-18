@@ -1,24 +1,6 @@
-Wait, `choose_quarter_mask_and_palette` allocates a `Vec` for `candidates`!
-```rust
-#[must_use]
-fn choose_quarter_mask_and_palette(samples: [(u8, u8, u8); 4]) -> (u8, (u8, u8, u8), (u8, u8, u8)) {
-    let mut candidates = Vec::with_capacity(4);
-    for sample in samples {
-        if !candidates.contains(&sample) {
-            candidates.push(sample);
-        }
-    }
-```
-This is called per cell in `frame_lines_quarter_blocks`!
-```rust
-        for col in 0..width {
-            ...
-            let samples = [ ... ];
-            let (mask, fg, bg) = choose_quarter_mask_and_palette(samples);
-```
-If the terminal is 80x40, that's 3200 `Vec::with_capacity(4)` allocations *per frame*! 60 times a second! That's 192,000 heap allocations per second on the rendering hot path! This is a massive bottleneck.
-And it only ever holds up to 4 elements.
-
-I can optimize this by replacing `Vec::with_capacity(4)` with a stack-allocated array (or `arrayvec` / `tinyvec`, but a simple `[Option<(u8, u8, u8)>; 4]` or just keeping track of `len` in a fixed `[ (0,0,0); 4 ]` array works safely with 0 allocations).
-
-Let's test this in `nes-tui/src/render.rs`.
+1. **Remove heap allocations in string conversions in `nes-desktop/src/metrics.rs`**
+   - Change `add_row` closure to accept `&dyn std::fmt::Display` instead of `String`
+   - Use `format_args!` instead of `format!` for formatted strings.
+   - Pass integer references instead of `to_string()` results.
+2. **Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.**
+3. **Submit the PR with the title '⚡ Bolt: [performance improvement]' and structured description sections.**
