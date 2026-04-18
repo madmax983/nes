@@ -402,6 +402,101 @@ pub fn schedule_netplay_ping(
 }
 
 /// Processes an incoming message from the `nes-relay` server, updating rollback state and metrics.
+pub struct NetplayContext<'a> {
+    pub netplay_client: Option<&'a NetplayClient>,
+    pub rollback_engine: &'a mut nes_netplay::RollbackEngine,
+    pub core: &'a mut nes_core::NesCore,
+    pub netplay_local_player: u8,
+    pub netplay_stats: &'a mut Option<NetplayRuntimeStats>,
+    pub now: std::time::Instant,
+    pub netplay_next_ping_at: &'a mut std::time::Instant,
+    pub netplay_ping_nonce: &'a mut u64,
+    pub netplay_pending_pings: &'a mut std::collections::BTreeMap<u64, std::time::Instant>,
+    pub netplay_hash_check_every: u64,
+}
+
+pub fn poll_netplay_client_and_advance_frame(ctx: &mut NetplayContext<'_>) -> Result<(), String> {
+    if let Some(client) = ctx.netplay_client {
+        if let Some(nonce) = schedule_netplay_ping(
+            ctx.now,
+            ctx.netplay_next_ping_at,
+            ctx.netplay_ping_nonce,
+            ctx.netplay_pending_pings,
+            super::NETPLAY_PING_INTERVAL,
+            128,
+        ) {
+            client.send_ping(nonce)?;
+        }
+
+        while let Some(message) = client.try_recv()? {
+            handle_netplay_server_message(
+                message,
+                ctx.rollback_engine,
+                ctx.netplay_local_player,
+                ctx.netplay_stats,
+                ctx.netplay_pending_pings,
+            )?;
+        }
+    }
+
+    let step = ctx
+        .rollback_engine
+        .advance_frame(ctx.core)
+        .map_err(|e| e.to_string())?;
+
+    if step.rollback_distance > 0 {
+        eprintln!(
+            "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
+            step.rollback_distance, step.frame, step.local_bits, step.remote_bits
+        );
+        if let Some(stats) = ctx.netplay_stats.as_mut() {
+            stats.observe_rollback(step.rollback_distance);
+        }
+    }
+
+    let current_delay = ctx.rollback_engine.input_delay_frames();
+    let max_auto_delay = ctx.rollback_engine.max_rollback_frames().clamp(
+        super::NETPLAY_AUTO_DELAY_MIN_FRAMES,
+        super::NETPLAY_AUTO_DELAY_MAX_FRAMES,
+    );
+    let target_delay = if let Some(stats) = ctx.netplay_stats.as_ref() {
+        super::recommended_input_delay_frames(
+            stats.latest_rtt_ms,
+            stats.jitter_ms,
+            super::NETPLAY_AUTO_DELAY_MIN_FRAMES,
+            max_auto_delay,
+            current_delay,
+        )
+    } else {
+        current_delay
+    };
+    if target_delay != current_delay {
+        ctx.rollback_engine
+            .set_input_delay_frames(target_delay)
+            .map_err(|e| e.to_string())?;
+        if let Some(stats) = ctx.netplay_stats.as_mut() {
+            stats.input_delay_frames = target_delay;
+            eprintln!(
+                "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                current_delay,
+                target_delay,
+                stats.latest_rtt_ms_or_zero(),
+                stats.jitter_ms
+            );
+        }
+    } else if let Some(stats) = ctx.netplay_stats.as_mut() {
+        stats.input_delay_frames = current_delay;
+    }
+
+    if should_send_netplay_hash(ctx.netplay_hash_check_every, step.frame)
+        && let Some(client) = ctx.netplay_client
+    {
+        client.send_hash(step.frame, step.state_hash)?;
+    }
+
+    Ok(())
+}
+
 pub fn handle_netplay_server_message(
     message: ServerMessage,
     rollback_engine: &mut nes_netplay::RollbackEngine,

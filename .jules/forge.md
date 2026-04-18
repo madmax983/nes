@@ -1,3 +1,7 @@
+**[Refactoring netplay loop out of nes-desktop main.rs]
+**Learning:** The main game loop in `nes-desktop/src/main.rs` contained over 80 lines of heavily nested `if let Some` and `match` blocks dedicated solely to netplay message polling, rollback checking, and delay adjustments. This "God Function" approach made the frame progression logic incredibly hard to follow.
+**Action:** Extracted the entire block into a single `poll_netplay_client_and_advance_frame` function inside `nes-desktop/src/netplay.rs`. This flattens the execution flow in `main.rs` down to a single function call with early returns, greatly improving readability.
+
 **[Refactoring redundant controller input updates in nes-core api.rs]
 **Learning:** Found massive boilerplate in the `execute` method of `api.rs` where every controller state modification command manually called `self.ports.set_controller_bits` and `self.sync_ppu_register_image()`. This increased risk of forgetting the sync call for future input commands.
 **Action:** Flattened the execution block using early returns inside the `match` expression for non-input commands, letting input commands evaluate to a `(player, bits)` tuple. The actual state modification and synchronization is now performed exactly once at the bottom of the function.**Context Struct Extraction for Action Dispatchers**

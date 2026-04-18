@@ -569,14 +569,6 @@ fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
     keyboard_bits | local_gamepad_bits
 }
 
-fn should_log_rollback(distance: u64) -> bool {
-    distance > 0
-}
-
-fn should_update_input_delay(target_delay: u32, current_delay: u32) -> bool {
-    target_delay != current_delay
-}
-
 fn should_trace_frame(trace_every_frames: u64, frame_index: u64) -> bool {
     trace_every_frames != 0 && frame_index != 0 && frame_index.is_multiple_of(trace_every_frames)
 }
@@ -1107,109 +1099,23 @@ fn run() -> Result<(), String> {
                     *control_flow = ControlFlow::Exit;
                     return;
                 }
-                if let Some(client) = netplay_client.as_ref() {
-                    if let Some(nonce) = crate::netplay::schedule_netplay_ping(
+                if let Err(err) = crate::netplay::poll_netplay_client_and_advance_frame(
+                    &mut crate::netplay::NetplayContext {
+                        netplay_client: netplay_client.as_ref(),
+                        rollback_engine,
+                        core: &mut core,
+                        netplay_local_player,
+                        netplay_stats: &mut netplay_stats,
                         now,
-                        &mut netplay_next_ping_at,
-                        &mut netplay_ping_nonce,
-                        &mut netplay_pending_pings,
-                        NETPLAY_PING_INTERVAL,
-                        128,
-                    ) && let Err(err) = client.send_ping(nonce)
-                    {
-                        eprintln!("Netplay send ping failed: {err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
+                        netplay_next_ping_at: &mut netplay_next_ping_at,
+                        netplay_ping_nonce: &mut netplay_ping_nonce,
+                        netplay_pending_pings: &mut netplay_pending_pings,
+                        netplay_hash_check_every,
                     }
-
-                    loop {
-                        let message = match client.try_recv() {
-                            Ok(next) => next,
-                            Err(err) => {
-                                eprintln!("Netplay receive failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                        };
-                        let Some(message) = message else {
-                            break;
-                        };
-                        if let Err(err) = crate::netplay::handle_netplay_server_message(
-                            message,
-                            rollback_engine,
-                            netplay_local_player,
-                            &mut netplay_stats,
-                            &mut netplay_pending_pings,
-                        ) {
-                            eprintln!("{err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
-                    }
-                }
-
-                match rollback_engine.advance_frame(&mut core) {
-                    Ok(step) => {
-                        if should_log_rollback(step.rollback_distance) {
-                            eprintln!(
-                                "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
-                                step.rollback_distance, step.frame, step.local_bits, step.remote_bits
-                            );
-                            if let Some(stats) = netplay_stats.as_mut() {
-                                stats.observe_rollback(step.rollback_distance);
-                            }
-                        }
-
-                        let current_delay = rollback_engine.input_delay_frames();
-                        let max_auto_delay = rollback_engine.max_rollback_frames().clamp(
-                            NETPLAY_AUTO_DELAY_MIN_FRAMES,
-                            NETPLAY_AUTO_DELAY_MAX_FRAMES,
-                        );
-                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
-                            recommended_input_delay_frames(
-                                stats.latest_rtt_ms,
-                                stats.jitter_ms,
-                                NETPLAY_AUTO_DELAY_MIN_FRAMES,
-                                max_auto_delay,
-                                current_delay,
-                            )
-                        } else {
-                            current_delay
-                        };
-                        if should_update_input_delay(target_delay, current_delay) {
-                            if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
-                                eprintln!("Netplay adaptive delay update failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                            if let Some(stats) = netplay_stats.as_mut() {
-                                stats.input_delay_frames = target_delay;
-                                eprintln!(
-                                    "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
-                                    current_delay,
-                                    target_delay,
-                                    stats.latest_rtt_ms_or_zero(),
-                                    stats.jitter_ms
-                                );
-                            }
-                        } else if let Some(stats) = netplay_stats.as_mut() {
-                            stats.input_delay_frames = current_delay;
-                        }
-
-                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
-                            && let Some(client) = netplay_client.as_ref()
-                            && let Err(err) = client.send_hash(step.frame, step.state_hash)
-                        {
-                            eprintln!("Netplay send hash failed: {err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("Netplay rollback step failed: {err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
+                ) {
+                    eprintln!("Netplay loop failed: {err}");
+                    *control_flow = ControlFlow::Exit;
+                    return;
                 }
             } else if rewind_held {
                 time_machine.rewind_step(&mut core);
@@ -1569,9 +1475,9 @@ mod tests {
         menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
         recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
         rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        should_capture_frame, should_resume_after_rewind_hold, should_trace_frame,
+        slot_action_for_hotkey, track_keyboard_bits_for_key, update_button_bits,
+        validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1855,11 +1761,6 @@ mod tests {
             merge_local_input_bits(0b0000_0011, 0b0000_0101),
             0b0000_0111
         );
-
-        assert!(!should_log_rollback(0));
-        assert!(should_log_rollback(1));
-        assert!(!should_update_input_delay(2, 2));
-        assert!(should_update_input_delay(3, 2));
 
         assert!(!should_trace_frame(0, 120));
         assert!(!should_trace_frame(60, 0));
