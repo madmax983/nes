@@ -496,7 +496,82 @@ mod tests {
                 .any(|event| event.addr == 0x4000 && event.value == 0x0F),
             "expected write to $4000 in captured APU write trace"
         );
-        assert_ne!(apu_write_hash(&writes), 0);
+
+        let hash = apu_write_hash(&writes);
+        assert_ne!(hash, 0);
+        assert_ne!(hash, 1);
+
+        let mut altered_cycle = writes.clone();
+        altered_cycle[0].cpu_cycle ^= 0xFFFF;
+        assert_ne!(hash, apu_write_hash(&altered_cycle));
+
+        let mut altered_addr = writes.clone();
+        altered_addr[0].addr ^= 0xFFFF;
+        assert_ne!(hash, apu_write_hash(&altered_addr));
+
+        let mut altered_value = writes.clone();
+        altered_value[0].value ^= 0xFF;
+        assert_ne!(hash, apu_write_hash(&altered_value));
+
+        let mut altered_cycle_bitwise = writes.clone();
+        altered_cycle_bitwise[0].cpu_cycle |= 0xFFFF;
+        if altered_cycle_bitwise[0].cpu_cycle != writes[0].cpu_cycle {
+            assert_ne!(hash, apu_write_hash(&altered_cycle_bitwise));
+        }
+
+        let mut altered_addr_bitwise = writes.clone();
+        altered_addr_bitwise[0].addr &= 0x0000;
+        if altered_addr_bitwise[0].addr != writes[0].addr {
+            assert_ne!(hash, apu_write_hash(&altered_addr_bitwise));
+        }
+
+        let mut altered_value_bitwise = writes.clone();
+        altered_value_bitwise[0].value |= 0xFF;
+        if altered_value_bitwise[0].value != writes[0].value {
+            assert_ne!(hash, apu_write_hash(&altered_value_bitwise));
+        }
+
+        let mut altered_value_bitwise_and = writes.clone();
+        altered_value_bitwise_and[0].value &= 0x00;
+        if altered_value_bitwise_and[0].value != writes[0].value {
+            assert_ne!(hash, apu_write_hash(&altered_value_bitwise_and));
+        }
+    }
+
+    #[test]
+    fn collect_apu_register_writes_ignores_reads() {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(
+            0xC000,
+            &[
+                0xAD, 0x00, 0x40, // LDA $4000
+                0x4C, 0x00, 0xC0, // JMP $C000
+            ],
+        );
+
+        let writes =
+            collect_apu_register_writes(&mut core, 8).expect("step cpu should not fail in loop");
+        assert!(writes.is_empty(), "expected reads to be ignored");
+    }
+
+    #[test]
+    fn collect_apu_register_writes_ignores_non_apu_writes() {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(
+            0xC000,
+            &[
+                0xA9, 0x0F, // LDA #$0F
+                0x8D, 0x18, 0x40, // STA $4018 (outside APU range)
+                0x4C, 0x00, 0xC0, // JMP $C000
+            ],
+        );
+
+        let writes =
+            collect_apu_register_writes(&mut core, 8).expect("step cpu should not fail in loop");
+        assert!(
+            writes.is_empty(),
+            "expected out of bounds writes to be ignored"
+        );
     }
 
     #[test]

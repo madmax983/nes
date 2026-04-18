@@ -414,6 +414,33 @@ window_scale = 9
     }
 
     #[test]
+    fn parse_config_path_loop_terminates() {
+        let args = vec![
+            "--config".to_owned(),
+            "dummy.toml".to_owned(),
+            "extra".to_owned(),
+        ];
+
+        let start_idx = 0;
+        let mut idx = start_idx;
+        let res = super::parse_arg(&args, &mut idx, "--config", |_| Ok(()));
+        assert_eq!(res, Ok(true));
+        assert_eq!(idx, start_idx + 2); // Ensure it increments by 2
+
+        let mut idx = 0;
+        let args2 = vec!["--config=dummy.toml".to_owned(), "extra".to_owned()];
+        let res2 = super::parse_arg(&args2, &mut idx, "--config", |_| Ok(()));
+        assert_eq!(res2, Ok(true));
+        assert_eq!(idx, 1); // Ensure it increments by 1
+
+        let mut idx = 0;
+        let args3 = vec!["extra".to_owned()];
+        let res3 = super::parse_arg(&args3, &mut idx, "--config", |_| Ok(()));
+        assert_eq!(res3, Ok(false));
+        assert_eq!(idx, 0); // Unchanged when not matched
+    }
+
+    #[test]
     fn load_rejects_unknown_top_level_field() {
         let path = write_temp_config(
             r#"
