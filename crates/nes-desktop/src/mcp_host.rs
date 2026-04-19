@@ -645,7 +645,7 @@ mod tests {
         let host = McpHost::start("127.0.0.1:0").unwrap();
         let addr = host.bind_addr().to_owned();
 
-        let t = thread::spawn(move || {
+        let _t = thread::spawn(move || {
             let mut stream = TcpStream::connect(&addr).unwrap();
             use std::io::Write;
             let _ = write!(stream, "Content-Length: 18446744073709551615\r\n\r\n");
