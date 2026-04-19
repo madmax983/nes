@@ -1393,22 +1393,9 @@ fn write_frame_ppm(path: &str, rgba: &[u8]) -> Result<(), String> {
     let bytes = if path.to_ascii_lowercase().ends_with(".bmp") {
         nes_core::bmp::encode_bmp(FRAME_WIDTH, FRAME_HEIGHT, rgba)?
     } else {
-        encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba).map_err(|e| e.to_string())?
+        nes_core::ppm::encode_ppm(FRAME_WIDTH, FRAME_HEIGHT, rgba).map_err(|e| e.to_string())?
     };
     fs::write(path, bytes).map_err(|err| format!("unable to write '{path}': {err}"))
-}
-
-// SECURITY: Ensure we propagate formatting errors using `?` rather than `unwrap()`.
-// Attempting to `unwrap()` when writing to an I/O device (like a file) can lead to
-// application crashes/panics if the underlying disk becomes full or permissions change.
-fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
-    use std::io::Write;
-    let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    write!(&mut ppm, "P6\n{width} {height}\n255\n")?;
-    for px in rgba.chunks_exact(4) {
-        ppm.extend_from_slice(&px[..3]);
-    }
-    Ok(ppm)
 }
 
 fn build_startup_table(
@@ -1564,7 +1551,7 @@ mod tests {
         StepMode, WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
         apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
         classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, encode_ppm, format_rom_read_error, gamepad_assignments_changed,
+        element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
         menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
         recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
@@ -2148,13 +2135,6 @@ mod tests {
             "snap-000042.ppm"
         );
         assert_eq!(capture_path_for_frame("snap.ppm", 42), "snap.ppm");
-    }
-
-    #[test]
-    fn encode_ppm_emits_expected_headers_and_pixel_layout() {
-        let ppm = encode_ppm(2, 1, &[1, 2, 3, 255, 4, 5, 6, 255]).unwrap();
-        assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
-        assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
     }
 
     #[test]

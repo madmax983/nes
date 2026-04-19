@@ -34,3 +34,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses]
 **Learning:** Functions like `parse_expr` and `handle_load_state` used cascading `if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Extract encode_ppm into nes-core/ppm]
+**Learning:** Found duplicate implementations of `encode_ppm` across `nes-desktop` and `nes-mcp`. This logic is not directly tied to those layers but is a core utility that should be tested and reused across the system. It lacked sufficient validation against bounds and panics.
+**Action:** Extracted `encode_ppm` to a standalone, fully-tested `nes_core::ppm` module, removing duplication across crates. Replaced the `unwrap()` in size calculations with checked arithmetic to return proper IO errors instead of panicking on DoS inputs.
