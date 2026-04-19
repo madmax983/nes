@@ -11,11 +11,6 @@
 //! requests and forwards them via an `mpsc` channel to the main thread.
 //! The main thread must regularly call `McpHost::drain` to apply these queued
 //! commands to the emulator state.
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
-use std::time::Duration;
 use nes_core::NesCore;
 use nes_mcp::{
     DispatchError, DispatchOutput, ToolParams, dispatch_tool,
@@ -26,6 +21,11 @@ use nes_mcp::{
     tool_catalog,
 };
 use serde_json::{Value, json};
+use std::io::{BufRead, BufReader, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+use std::time::Duration;
 const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 /// A background server that bridges the emulator core to the Model Context Protocol (MCP).
 ///
