@@ -18,6 +18,8 @@ pub mod nametable_viewer;
 pub mod oam_spatial_query;
 /// Extracts sprite graphical data from memory for inspection.
 pub mod sprite_extractor;
+/// Renders a visual heatmap of sprite occurrences over time.
+pub mod sprite_heatmap;
 /// Applies color palette themes to the emulator output.
 pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
