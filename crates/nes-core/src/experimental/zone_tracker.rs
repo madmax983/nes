@@ -68,18 +68,14 @@ impl ZoneTracker {
         for zone in &self.zones {
             let overlapping_sprites = oam_query.query_rect(zone.x, zone.y, zone.w, zone.h);
 
-            let mut current_sprite_indices = Vec::new();
-            let previously_active = self
-                .active_sprites
-                .get(&zone.id)
-                .unwrap_or(&Vec::new())
-                .clone();
+            let mut current_sprite_indices = Vec::with_capacity(overlapping_sprites.len());
+            let previously_active = self.active_sprites.get(&zone.id);
 
             for sprite in overlapping_sprites {
                 current_sprite_indices.push(sprite.index);
 
                 // If the sprite wasn't in the zone last frame, it's a new entry event
-                if !previously_active.contains(&sprite.index) {
+                if previously_active.is_none_or(|prev| !prev.contains(&sprite.index)) {
                     self.events.push(ZoneEvent {
                         zone_id: zone.id,
                         sprite,
