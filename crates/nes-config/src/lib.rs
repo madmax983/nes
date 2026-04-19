@@ -178,8 +178,16 @@ impl NesConfig {
     /// let config = NesConfig::load(Path::new("my_nes.toml")).unwrap();
     /// ```
     pub fn load(path: &Path) -> Result<Self, String> {
-        let bytes = fs::read_to_string(path)
-            .map_err(|err| format!("failed to read config '{}': {err}", path.display()))?;
+        let bytes = fs::read_to_string(path).map_err(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                format!(
+                    "failed to read config '{}': file not found. Hint: copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                    path.display()
+                )
+            } else {
+                format!("failed to read config '{}': {err}", path.display())
+            }
+        })?;
         toml::from_str::<Self>(&bytes)
             .map_err(|err| format!("failed to parse config '{}': {err}", path.display()))
     }
@@ -324,6 +332,15 @@ room = "arena"
         let path = temp_config_path("missing");
         let err = NesConfig::load(&path).expect_err("missing config should fail");
         assert!(err.contains("failed to read config"));
+        assert!(err.contains("Hint: copy the example profile"));
+    }
+
+    #[test]
+    fn load_returns_underlying_error_for_non_not_found_io_errors() {
+        let path = std::path::Path::new("."); // Reading a directory should cause IsADirectory or similar OS error
+        let err = NesConfig::load(path).expect_err("loading a directory should fail");
+        assert!(err.contains("failed to read config"));
+        assert!(!err.contains("Hint: copy the example profile"));
     }
 
     #[test]
@@ -411,6 +428,33 @@ window_scale = 9
             Some(PathBuf::from("second.toml").as_path())
         );
         assert_eq!(rest, vec!["rom.nes".to_owned(), "--fullscreen".to_owned()]);
+    }
+
+    #[test]
+    fn parse_config_path_loop_terminates() {
+        let args = vec![
+            "--config".to_owned(),
+            "dummy.toml".to_owned(),
+            "extra".to_owned(),
+        ];
+
+        let start_idx = 0;
+        let mut idx = start_idx;
+        let res = super::parse_arg(&args, &mut idx, "--config", |_| Ok(()));
+        assert_eq!(res, Ok(true));
+        assert_eq!(idx, start_idx + 2); // Ensure it increments by 2
+
+        let mut idx = 0;
+        let args2 = vec!["--config=dummy.toml".to_owned(), "extra".to_owned()];
+        let res2 = super::parse_arg(&args2, &mut idx, "--config", |_| Ok(()));
+        assert_eq!(res2, Ok(true));
+        assert_eq!(idx, 1); // Ensure it increments by 1
+
+        let mut idx = 0;
+        let args3 = vec!["extra".to_owned()];
+        let res3 = super::parse_arg(&args3, &mut idx, "--config", |_| Ok(()));
+        assert_eq!(res3, Ok(false));
+        assert_eq!(idx, 0); // Unchanged when not matched
     }
 
     #[test]
