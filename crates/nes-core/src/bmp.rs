@@ -36,6 +36,15 @@
 /// assert_eq!(&bmp_bytes[0..2], b"BM");
 /// ```
 pub fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    let expected_len = width
+        .checked_mul(height)
+        .and_then(|w_h| w_h.checked_mul(4))
+        .ok_or_else(|| "bmp dimensions overflow".to_owned())?;
+
+    if rgba.len() != expected_len {
+        return Err("rgba buffer length does not match width * height * 4".to_owned());
+    }
+
     let row_bytes = width
         .checked_mul(3)
         .ok_or_else(|| "bmp row size overflow".to_owned())?;

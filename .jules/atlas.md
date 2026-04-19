@@ -18,3 +18,6 @@
 **Extract Constants from api.rs**
 **Tangle:** A circular dependency existed in `nes-core` where `apu.rs` and `ppu.rs` (internal modules) imported domain constants (`FRAME_WIDTH`, `AUDIO_SAMPLE_RATE`, etc.) from the public facade module `api.rs`.
 **Blueprint:** Extracted the domain constants into a new internal `constants.rs` module, breaking the circular dependency while continuing to re-export the constants via `lib.rs` for external consumers.
+**Extract encode_ppm**
+**Tangle:** The `encode_ppm` logic was duplicated in `crates/nes-desktop/src/main.rs` and `crates/nes-mcp/src/dispatch.rs`. Furthermore, `encode_bmp` and `encode_ppm` were susceptible to DoS out-of-bounds panics if provided malformed `rgba` slice lengths compared to the given dimensions.
+**Blueprint:** Created `crates/nes-core/src/ppm.rs` mirroring `bmp.rs` to house the extracted `encode_ppm`. Updated `encode_ppm` and `encode_bmp` to perform rigorous length validation (`rgba.len() != width * height * 4`) and propagate `Result` strings. Pointed call sites in `nes-desktop` and `nes-mcp` to use the centralized `nes_core::ppm::encode_ppm`.
