@@ -144,4 +144,21 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn encode_bmp_uses_expected_padding_for_width_3() {
+        let rgba = vec![
+            10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, // top row
+        ];
+        let bmp = encode_bmp(3, 1, &rgba).expect("encode bmp with 3-byte padding");
+        // file_size = 54 + (3 * 3 + 3) * 1 = 54 + 12 = 66
+        assert_eq!(bmp.len(), 66);
+        assert_eq!(u32::from_le_bytes([bmp[34], bmp[35], bmp[36], bmp[37]]), 12);
+        assert_eq!(
+            &bmp[54..],
+            &[
+                30, 20, 10, 60, 50, 40, 90, 80, 70, 0, 0, 0, // row + 3 bytes padding
+            ]
+        );
+    }
 }
