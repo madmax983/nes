@@ -672,9 +672,38 @@ struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     splits: &'a [SplitEvent],
 }
 
-mod serde_iter {
+pub mod serde_iter {
     use serde::{Serialize, Serializer};
 
+    /// Serializes an [`Iterator`] by treating it as a sequence.
+    ///
+    /// The `serde` framework natively supports serializing sequences like vectors, but does not
+    /// provide a direct `#[serde(serialize_with = "...")]` handler for custom lazily-evaluated
+    /// or non-owned iterators directly mapped to struct fields.
+    ///
+    /// This helper bridges the gap by leveraging [`Serializer::collect_seq`] to drain a
+    /// cloned iterator into the serializer stream, making it suitable for fields that yield
+    /// an iterator rather than a concrete collection.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust
+    /// use serde::Serialize;
+    /// # use nes_desktop::rta::serde_iter;
+    ///
+    /// #[derive(Serialize)]
+    /// struct Report<'a> {
+    ///     // Uses `serde_iter::serialize` to turn the slice iterator into a JSON array
+    ///     #[serde(with = "serde_iter")]
+    ///     items: std::slice::Iter<'a, i32>,
+    /// }
+    ///
+    /// let data = vec![1, 2, 3];
+    /// let report = Report { items: data.iter() };
+    ///
+    /// let json = serde_json::to_string(&report).unwrap();
+    /// assert_eq!(json, r#"{"items":[1,2,3]}"#);
+    /// ```
     pub fn serialize<T, I, S>(iter: &I, serializer: S) -> Result<S::Ok, S::Error>
     where
         T: Serialize,

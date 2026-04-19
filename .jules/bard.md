@@ -19,3 +19,6 @@
 ## 2025-06-18 - Adding Doc Tests to Missing APIs
 **Confusion:** Some newer experimental or foundational APIs (like `EventTracker` and `nes-proof` scaffolding) lacked documentation entirely, resulting in "missing documentation" warnings when compiling docs with `#![warn(missing_docs)]` and leaving users to figure out usage entirely by source code exploration.
 **Clarification:** Added thorough `///` comments containing `## Examples` sections to all public methods in `EventTracker` and to the `proof_crate_marker` function, providing executable context.
+## 2025-06-18 - Missing serde Module Docs
+**Confusion:** Internal helper modules for `serde` sequence iteration (like `serde_iter` in `nes-desktop`) often lack documentation because they are seen as implementation details. However, without docs, users don't understand how `serialize` treats iterators when compiling with strict warnings or viewing internal docs.
+**Clarification:** Added explicit module-level and function-level `///` docs to `serde_iter::serialize` explaining the `Serializer::collect_seq` bridging behavior, along with an executable `## Examples` doctest that asserts the JSON output. Made the module `pub` so doctests can access it properly.
