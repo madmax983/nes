@@ -153,4 +153,16 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn encode_bmp_returns_error_on_length_mismatch() {
+        let err = encode_bmp(2, 2, &[0; 15]).unwrap_err();
+        assert_eq!(err, "rgba buffer length does not match width * height * 4");
+    }
+
+    #[test]
+    fn encode_bmp_returns_error_on_dimensions_overflow() {
+        let err = encode_bmp(usize::MAX, 2, &[0; 4]).unwrap_err();
+        assert_eq!(err, "bmp dimensions overflow");
+    }
 }

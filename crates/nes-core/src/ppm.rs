@@ -48,4 +48,16 @@ mod tests {
         assert!(ppm.starts_with(b"P6\n2 1\n255\n"));
         assert!(ppm.ends_with(&[1, 2, 3, 4, 5, 6]));
     }
+
+    #[test]
+    fn encode_ppm_returns_error_on_length_mismatch() {
+        let err = encode_ppm(2, 2, &[0; 15]).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn encode_ppm_returns_error_on_dimensions_overflow() {
+        let err = encode_ppm(usize::MAX, 2, &[0; 4]).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
 }
