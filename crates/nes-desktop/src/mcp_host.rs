@@ -581,7 +581,6 @@ mod tests {
     }
     #[test]
     #[should_panic]
-    #[ignore = "Havoc DoS Attack"]
     fn havoc_mcp_host_oom() {
         let host = McpHost::start("127.0.0.1:0").unwrap();
         let addr = host.bind_addr().to_owned();
