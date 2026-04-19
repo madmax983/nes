@@ -55,3 +55,13 @@ output state lock poisoned
 ```
 **Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_audio_dos -- --ignored`.
 **Comment:** A simple panic in the audio publishing closure completely destroys the global audio metadata state because the lock is poisoned. The whole application crashes unrecoverably.
+
+## 2026-05-18 - Desktop MCP Host OOM Crash
+🧨 **The Trigger:** A malicious payload with an impossibly large `Content-Length` sent to the desktop TCP MCP Host.
+📉 **The Stack Trace:**
+```
+thread '<unnamed>' panicked at library/alloc/src/raw_vec/mod.rs:28:5:
+capacity overflow
+```
+🧪 **Reproduction:** Run `cargo test -p nes-desktop -- --ignored havoc_mcp_host_oom`
+😈 **Comment:** You assumed the client would not try to send 18 Exabytes to the desktop's MCP host. You were wrong.
