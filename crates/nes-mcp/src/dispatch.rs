@@ -724,23 +724,11 @@ fn write_frame_image(
     let image = if path.to_ascii_lowercase().ends_with(".bmp") {
         nes_core::bmp::encode_bmp(width, height, rgba).map_err(DispatchError::Internal)?
     } else {
-        encode_ppm(width, height, rgba).map_err(|e| DispatchError::Internal(e.to_string()))?
+        nes_core::ppm::encode_ppm(width, height, rgba)
+            .map_err(|e| DispatchError::Internal(e.to_string()))?
     };
     fs::write(path, image)
         .map_err(|err| DispatchError::InvalidParams(format!("unable to write '{path}': {err}")))
-}
-
-// SECURITY: Ensure we propagate formatting errors using `?` rather than `unwrap()`.
-// Attempting to `unwrap()` when writing to an I/O device (like a file) can lead to
-// application crashes/panics if the underlying disk becomes full or permissions change.
-fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
-    use std::io::Write;
-    let mut ppm = Vec::with_capacity(32 + width * height * 3);
-    write!(&mut ppm, "P6\n{width} {height}\n255\n")?;
-    for px in rgba.chunks_exact(4) {
-        ppm.extend_from_slice(&px[..3]);
-    }
-    Ok(ppm)
 }
 
 fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
