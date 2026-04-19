@@ -1,3 +1,6 @@
-1. Add new tests in `crates/nes-core/tests/step_cpu_coverage.rs` to cover all the CPU instruction opcodes missing in `src/cpu/engine.rs`. The script for tests should test various opcodes according to uncovered lines in `src/cpu/engine.rs` such as ORA, ASL, etc, targeting missing branches like `0x01`, `0x05`, `0x06`, `0x09`, `0x0B`, `0x0D`, `0x0E` etc. We will add a large integration test script covering these opcodes using table-driven test patterns.
-2. Complete pre commit steps to ensure proper testing, verification, review, and reflection are done.
-3. Submit using the `plan_step_complete` tool.
+1. **Remove heap allocations in string conversions in `nes-desktop/src/metrics.rs`**
+   - Change `add_row` closure to accept `&dyn std::fmt::Display` instead of `String`
+   - Use `format_args!` instead of `format!` for formatted strings.
+   - Pass integer references instead of `to_string()` results.
+2. **Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.**
+3. **Submit the PR with the title '⚡ Bolt: [performance improvement]' and structured description sections.**

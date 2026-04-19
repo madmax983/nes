@@ -223,33 +223,33 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    let mut add_row = |name: &str, val: String, color: TableColor| {
+    let mut add_row = |name: &str, val: &dyn std::fmt::Display, color: TableColor| {
         table.add_row(vec![Cell::new(name), Cell::new(val).fg(color)]);
     };
 
     add_row(
         "wall_fps",
-        format!("{:.1}", snapshot.wall_fps),
+        &format_args!("{:.1}", snapshot.wall_fps),
         TableColor::Green,
     );
     add_row(
         "emu_fps",
-        format!("{:.1}", snapshot.emu_fps),
+        &format_args!("{:.1}", snapshot.emu_fps),
         TableColor::Green,
     );
     add_row(
         "avg_step_ms",
-        format!("{:.2}", snapshot.avg_step_ms),
+        &format_args!("{:.2}", snapshot.avg_step_ms),
         TableColor::Yellow,
     );
     add_row(
         "avg_render_ms",
-        format!("{:.2}", snapshot.avg_render_ms),
+        &format_args!("{:.2}", snapshot.avg_render_ms),
         TableColor::Yellow,
     );
     add_row(
         "late_frames",
-        metrics.late_frames.to_string(),
+        &metrics.late_frames,
         if metrics.late_frames > 0 {
             TableColor::Red
         } else {
@@ -258,7 +258,7 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     );
     add_row(
         "pc_stall_frames",
-        metrics.pc_stall_frames.to_string(),
+        &metrics.pc_stall_frames,
         if metrics.pc_stall_frames > 0 {
             TableColor::Red
         } else {
@@ -267,17 +267,13 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     );
     add_row(
         "unchanged_frames",
-        metrics.unchanged_frame_count.to_string(),
+        &metrics.unchanged_frame_count,
         TableColor::DarkGrey,
     );
-    add_row(
-        "audio_peak_q",
-        metrics.audio_queue_peak.to_string(),
-        TableColor::White,
-    );
+    add_row("audio_peak_q", &metrics.audio_queue_peak, TableColor::White);
     add_row(
         "audio_drop_chunks",
-        metrics.audio_queue_drops.to_string(),
+        &metrics.audio_queue_drops,
         if metrics.audio_queue_drops > 0 {
             TableColor::Red
         } else {
@@ -286,7 +282,7 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     );
     add_row(
         "net_rtt_ms",
-        format!("{:.1}", metrics.netplay_rtt_ms),
+        &format_args!("{:.1}", metrics.netplay_rtt_ms),
         if metrics.netplay_rtt_ms > 100.0 {
             TableColor::Red
         } else if metrics.netplay_rtt_ms > 50.0 {
@@ -297,7 +293,7 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     );
     add_row(
         "net_jitter_ms",
-        format!("{:.1}", metrics.netplay_jitter_ms),
+        &format_args!("{:.1}", metrics.netplay_jitter_ms),
         if metrics.netplay_jitter_ms > 20.0 {
             TableColor::Red
         } else if metrics.netplay_jitter_ms > 5.0 {
@@ -308,17 +304,17 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     );
     add_row(
         "net_rollbacks",
-        metrics.netplay_rollbacks.to_string(),
+        &metrics.netplay_rollbacks,
         TableColor::White,
     );
     add_row(
         "net_max_rb",
-        metrics.netplay_max_rollback_distance.to_string(),
+        &metrics.netplay_max_rollback_distance,
         TableColor::White,
     );
     add_row(
         "net_desyncs",
-        metrics.netplay_desyncs.to_string(),
+        &metrics.netplay_desyncs,
         if metrics.netplay_desyncs > 0 {
             TableColor::Red
         } else {
@@ -327,7 +323,7 @@ fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     );
     add_row(
         "net_delay_frames",
-        metrics.netplay_input_delay_frames.to_string(),
+        &metrics.netplay_input_delay_frames,
         if metrics.netplay_input_delay_frames > 2 {
             TableColor::Red
         } else if metrics.netplay_input_delay_frames > 0 {
