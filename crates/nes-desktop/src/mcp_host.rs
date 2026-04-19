@@ -11,13 +11,11 @@
 //! requests and forwards them via an `mpsc` channel to the main thread.
 //! The main thread must regularly call `McpHost::drain` to apply these queued
 //! commands to the emulator state.
-
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-
 use nes_core::NesCore;
 use nes_mcp::{
     DispatchError, DispatchOutput, ToolParams, dispatch_tool,
@@ -28,9 +26,7 @@ use nes_mcp::{
     tool_catalog,
 };
 use serde_json::{Value, json};
-
 const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(5);
-
 /// A background server that bridges the emulator core to the Model Context Protocol (MCP).
 ///
 /// `McpHost` listens on a local TCP socket for incoming JSON-RPC connections from
@@ -56,13 +52,11 @@ pub struct McpHost {
     _thread: thread::JoinHandle<()>,
     bind_addr: String,
 }
-
 struct ToolRequest {
     name: String,
     params: ToolParams,
     respond_to: Sender<Result<DispatchOutput, DispatchError>>,
 }
-
 impl McpHost {
     /// Starts the MCP background server, listening for incoming JSON-RPC connections.
     ///
@@ -90,18 +84,15 @@ impl McpHost {
             .local_addr()
             .map_err(|err| format!("Failed to read MCP host local addr: {err}"))?
             .to_string();
-
         let (tx, rx) = mpsc::channel::<ToolRequest>();
         let thread_bind_addr = local_addr.clone();
         let handle = thread::spawn(move || run_listener(listener, tx, &thread_bind_addr));
-
         Ok(Self {
             requests: rx,
             _thread: handle,
             bind_addr: local_addr,
         })
     }
-
     /// Returns the local address that the MCP server is currently bound to.
     ///
     /// This is particularly useful when starting the server with port `0` (an ephemeral port),
@@ -119,7 +110,6 @@ impl McpHost {
     pub fn bind_addr(&self) -> &str {
         &self.bind_addr
     }
-
     /// Drains all pending MCP requests and executes them against the emulator core.
     ///
     /// The MCP server runs on a background thread and sends requests to the main thread via a channel.
@@ -148,7 +138,6 @@ impl McpHost {
         }
     }
 }
-
 fn run_listener(listener: TcpListener, request_tx: Sender<ToolRequest>, bind_addr: &str) {
     for stream in listener.incoming() {
         match stream {
@@ -161,14 +150,12 @@ fn run_listener(listener: TcpListener, request_tx: Sender<ToolRequest>, bind_add
         }
     }
 }
-
 fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Result<(), String> {
     let mut reader = BufReader::new(
         stream
             .try_clone()
             .map_err(|err| format!("failed to clone client socket: {err}"))?,
     );
-
     while let Some(payload) = read_framed_message(&mut reader)? {
         let Some(response) = handle_message(&payload, request_tx) else {
             continue;
@@ -177,7 +164,6 @@ fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Res
     }
     Ok(())
 }
-
 fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Value> {
     let request: RpcRequest = match serde_json::from_slice(payload) {
         Ok(request) => request,
@@ -188,13 +174,11 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
             ));
         }
     };
-
     // **Performance optimization:** `RpcRequest` is an owned value obtained from deserialization,
     // so we can consume `id` directly instead of allocating a new `Value` via `.clone()`.
     let id = request.id;
     let is_notification = id.is_none();
     let response_id = id.unwrap_or(Value::Null);
-
     if request.jsonrpc != JSONRPC_VERSION {
         if is_notification {
             return None;
@@ -204,7 +188,6 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
             RpcError::invalid_request("jsonrpc must be '2.0'"),
         ));
     }
-
     let method_result = match request.method.as_str() {
         "initialize" => handle_initialize(request.params.as_ref()),
         "notifications/initialized" => Ok(None),
@@ -219,28 +202,23 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
             request.method
         ))),
     };
-
     if is_notification {
         return None;
     }
-
     match method_result {
         Ok(Some(result)) => Some(jsonrpc_result(response_id, result)),
         Ok(None) => Some(jsonrpc_result(response_id, json!({}))),
         Err(err) => Some(jsonrpc_error(response_id, err)),
     }
 }
-
 fn handle_initialize(params: Option<&Value>) -> Result<Option<Value>, RpcError> {
     let params_obj = params
         .and_then(Value::as_object)
         .ok_or_else(|| RpcError::invalid_params("initialize params must be an object"))?;
-
     let requested_protocol = params_obj
         .get("protocolVersion")
         .and_then(Value::as_str)
         .unwrap_or(DEFAULT_PROTOCOL_VERSION);
-
     Ok(Some(json!({
         "protocolVersion": requested_protocol,
         "capabilities": {
@@ -255,7 +233,6 @@ fn handle_initialize(params: Option<&Value>) -> Result<Option<Value>, RpcError> 
         "instructions": "Embedded MCP host for the live desktop emulator core."
     })))
 }
-
 fn handle_tools_list() -> Value {
     let tools: Vec<Value> = tool_catalog()
         .iter()
@@ -269,7 +246,6 @@ fn handle_tools_list() -> Value {
         .collect();
     json!({ "tools": tools })
 }
-
 fn handle_tools_call(
     params: Option<Value>,
     request_tx: &Sender<ToolRequest>,
@@ -289,7 +265,6 @@ fn handle_tools_call(
     } else {
         Default::default()
     };
-
     let (reply_tx, reply_rx) = mpsc::channel();
     request_tx
         .send(ToolRequest {
@@ -298,11 +273,9 @@ fn handle_tools_call(
             respond_to: reply_tx,
         })
         .map_err(|_| RpcError::internal_error("desktop core request channel closed"))?;
-
     let call_result = reply_rx
         .recv_timeout(TOOL_CALL_TIMEOUT)
         .map_err(|_| RpcError::internal_error("tool call timed out waiting for desktop core"))?;
-
     let response = match call_result {
         Ok(output) => {
             let structured = dispatch_output_value(output);
@@ -329,10 +302,8 @@ fn handle_tools_call(
             })
         }
     };
-
     Ok(Some(response))
 }
-
 fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
     loop {
@@ -357,7 +328,6 @@ fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, Str
             content_length = Some(len);
         }
     }
-
     let len = content_length.ok_or_else(|| "missing Content-Length header".to_owned())?;
     let mut payload = vec![0_u8; len];
     reader
@@ -365,7 +335,6 @@ fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, Str
         .map_err(|err| format!("failed reading payload body: {err}"))?;
     Ok(Some(payload))
 }
-
 /// Writes a framed JSON-RPC message to the provided writer.
 ///
 /// **Performance optimization:** Uses `write!` macro directly to the writer instead
@@ -378,7 +347,6 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
         .and_then(|_| writer.flush())
         .map_err(|err| format!("failed writing framed response: {err}"))
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,7 +356,6 @@ mod tests {
     use std::sync::mpsc;
     use std::thread;
     use std::time::{Duration, Instant};
-
     fn is_retryable_read_error(message: &str) -> bool {
         let lowered = message.to_ascii_lowercase();
         lowered.contains("temporarily unavailable")
@@ -396,7 +363,6 @@ mod tests {
             || lowered.contains("timed out")
             || lowered.contains("non-blocking socket operation")
     }
-
     fn read_response_with_host_drain(
         host: &McpHost,
         core: &mut NesCore,
@@ -416,22 +382,18 @@ mod tests {
             }
         }
     }
-
     #[test]
     fn handle_initialize_and_message_routes_cover_core_jsonrpc_paths() {
         let init_err = handle_initialize(None).expect_err("missing params should fail");
         assert_eq!(init_err.code, -32602);
-
         let init = handle_initialize(Some(&json!({"protocolVersion": "2025-01-01"})))
             .expect("valid initialize should succeed")
             .expect("initialize should return a response");
         assert_eq!(init["protocolVersion"], "2025-01-01");
         assert_eq!(init["serverInfo"]["name"], "nes-desktop-mcp-host");
-
         let (request_tx, _request_rx) = mpsc::channel::<ToolRequest>();
         let parse = handle_message(b"{", &request_tx).expect("parse errors should respond");
         assert_eq!(parse["error"]["code"], -32700);
-
         let wrong_version_payload = serde_json::to_vec(&json!({
             "jsonrpc": "1.0",
             "id": 1,
@@ -441,7 +403,6 @@ mod tests {
         let wrong_version = handle_message(&wrong_version_payload, &request_tx)
             .expect("invalid version should respond");
         assert_eq!(wrong_version["error"]["code"], -32600);
-
         let ping_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": 9,
@@ -450,7 +411,6 @@ mod tests {
         .expect("serialize ping request");
         let ping = handle_message(&ping_payload, &request_tx).expect("ping should respond");
         assert_eq!(ping["result"], json!({}));
-
         let init_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": 10,
@@ -462,7 +422,6 @@ mod tests {
             handle_message(&init_payload, &request_tx).expect("initialize should respond");
         assert_eq!(init_response["id"], 10);
         assert_eq!(init_response["result"]["protocolVersion"], "2025-06-18");
-
         let initialized_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": 11,
@@ -472,7 +431,6 @@ mod tests {
         let initialized_response = handle_message(&initialized_payload, &request_tx)
             .expect("initialized notification with id should respond");
         assert_eq!(initialized_response["result"], json!({}));
-
         let resources_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": 12,
@@ -482,7 +440,6 @@ mod tests {
         let resources_response =
             handle_message(&resources_payload, &request_tx).expect("resources/list should respond");
         assert!(resources_response["result"]["resources"].is_array());
-
         let prompts_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": 13,
@@ -492,7 +449,6 @@ mod tests {
         let prompts_response =
             handle_message(&prompts_payload, &request_tx).expect("prompts/list should respond");
         assert!(prompts_response["result"]["prompts"].is_array());
-
         let logging_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "id": 14,
@@ -502,7 +458,6 @@ mod tests {
         let logging_response =
             handle_message(&logging_payload, &request_tx).expect("logging request should respond");
         assert_eq!(logging_response["result"], json!({}));
-
         let notification_payload = serde_json::to_vec(&json!({
             "jsonrpc": "2.0",
             "method": "notifications/initialized"
@@ -510,7 +465,6 @@ mod tests {
         .expect("serialize notification");
         assert_eq!(handle_message(&notification_payload, &request_tx), None);
     }
-
     #[test]
     fn handle_tools_call_dispatches_requests_and_wraps_dispatch_output() {
         let (request_tx, request_rx) = mpsc::channel::<ToolRequest>();
@@ -519,7 +473,6 @@ mod tests {
             assert_eq!(req.name, "pause");
             let _ = req.respond_to.send(Ok(DispatchOutput::Ack));
         });
-
         let params = json!({
             "name": "pause",
             "arguments": {
@@ -532,31 +485,26 @@ mod tests {
         assert_eq!(response["isError"], false);
         assert_eq!(response["structuredContent"]["kind"], "ack");
         worker.join().expect("worker join should succeed");
-
         let missing_name = handle_tools_call(Some(json!({ "arguments": {} })), &request_tx)
             .expect_err("missing name should fail");
         assert_eq!(missing_name.code, -32602);
     }
-
     #[test]
     fn framed_message_io_round_trips_payload_and_validates_headers() {
         let value = json!({"kind":"ping","nonce":7});
         let mut wire = Vec::<u8>::new();
         write_framed_message(&mut wire, &value).expect("framed write should succeed");
-
         let mut reader = BufReader::new(Cursor::new(wire));
         let payload = read_framed_message(&mut reader)
             .expect("framed read should succeed")
             .expect("payload should exist");
         let parsed: Value = serde_json::from_slice(&payload).expect("payload JSON should decode");
         assert_eq!(parsed, value);
-
         let mut bad_reader = BufReader::new(Cursor::new(b"{}\r\n\r\n".to_vec()));
         let err =
             read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
         assert!(err.contains("missing Content-Length"));
     }
-
     #[test]
     fn host_start_and_client_round_trip_cover_bind_addr_drain_and_dispatch() {
         let host = McpHost::start("127.0.0.1:0").expect("host should start");
@@ -565,7 +513,6 @@ mod tests {
             bind_addr.starts_with("127.0.0.1:"),
             "bind addr should include localhost endpoint"
         );
-
         let mut stream = TcpStream::connect(&bind_addr).expect("client should connect to host");
         stream
             .set_read_timeout(Some(Duration::from_millis(500)))
@@ -575,7 +522,6 @@ mod tests {
                 .try_clone()
                 .expect("client stream clone for reader should succeed"),
         );
-
         let ping_request = json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -589,7 +535,6 @@ mod tests {
             serde_json::from_slice(&ping_payload).expect("decode ping response");
         assert_eq!(ping_response["id"], 1);
         assert_eq!(ping_response["result"], json!({}));
-
         let tools_list_request = json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -602,7 +547,6 @@ mod tests {
         let list_response: Value =
             serde_json::from_slice(&list_payload).expect("decode tools/list response");
         assert!(list_response["result"]["tools"].is_array());
-
         let tools_call_request = json!({
             "jsonrpc": "2.0",
             "id": 3,
@@ -613,7 +557,6 @@ mod tests {
             }
         });
         write_framed_message(&mut stream, &tools_call_request).expect("write tools/call");
-
         let mut core = NesCore::new();
         let call_payload = read_response_with_host_drain(
             &host,
@@ -627,7 +570,6 @@ mod tests {
         assert_eq!(call_response["result"]["isError"], false);
         assert_eq!(call_response["result"]["structuredContent"]["kind"], "ack");
     }
-
     #[test]
     fn host_start_fails_on_invalid_bind_address() {
         let result = McpHost::start("256.256.256.256:0");
@@ -637,28 +579,23 @@ mod tests {
             panic!("Expected an error when binding to invalid address");
         }
     }
-
     #[test]
     #[should_panic]
     #[ignore = "Havoc DoS Attack"]
-    #[cfg(not(tarpaulin_include))]
     fn havoc_mcp_host_oom() {
         let host = McpHost::start("127.0.0.1:0").unwrap();
         let addr = host.bind_addr().to_owned();
-
         let _t = thread::spawn(move || {
             let mut stream = TcpStream::connect(&addr).unwrap();
             use std::io::Write;
             let _ = write!(stream, "Content-Length: 18446744073709551615\r\n\r\n");
             let _ = stream.flush();
         });
-
         thread::sleep(Duration::from_millis(500));
         // The actual DoS occurs on the background thread. We just panic here to satisfy the attribute
         panic!("Triggering explicit panic to satisfy test runner");
     }
 }
-
 #[cfg(test)]
 mod coverage_tests {
     use super::*;
