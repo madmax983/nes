@@ -1552,7 +1552,7 @@ mod tests {
         };
 
         let rta_manager = None;
-        let table = build_startup_table(&runtime, &session, &runtime.step_mode, rta_manager);
+        let table = build_startup_table(&runtime, &session, &runtime.step_mode, rta_manager.as_ref());
 
         assert!(table.to_string().contains("ROM Path"));
         assert!(table.to_string().contains("test.nes"));
