@@ -9,6 +9,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use std::borrow::Cow;
+
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
@@ -20,40 +22,44 @@ use nes_test_harness::{
 const AUDIO_WARMUP_FRAMES: u32 = 60;
 const AUDIO_CAPTURE_FRAMES: u32 = 180;
 
+/// Represents data for a single row in the summary table.
+/// We use `Cow<'static, str>` instead of `String` for text fields to eliminate
+/// heap allocations for static values (like `"-"` or `"Written"`) while still
+/// allowing dynamic string conversions (like formatted numbers) without complex lifetimes.
 struct RowData {
     rom_name: String,
-    status: String,
+    status: Cow<'static, str>,
     status_color: TableColor,
     mapper: String,
-    samples: String,
-    rms: String,
-    peak: String,
-    hash: String,
+    samples: Cow<'static, str>,
+    rms: Cow<'static, str>,
+    peak: Cow<'static, str>,
+    hash: Cow<'static, str>,
 }
 
 fn format_skipped_mapper_row(rom_name: String, mapper_id: u16) -> RowData {
     RowData {
         rom_name,
-        status: "Skip (Mapper)".to_string(),
+        status: "Skip (Mapper)".into(),
         status_color: TableColor::Magenta,
         mapper: mapper_id.to_string(),
-        samples: "-".to_string(),
-        rms: "-".to_string(),
-        peak: "-".to_string(),
-        hash: "-".to_string(),
+        samples: "-".into(),
+        rms: "-".into(),
+        peak: "-".into(),
+        hash: "-".into(),
     }
 }
 
 fn format_skipped_existing_row(rom_name: String, mapper_id: u16) -> RowData {
     RowData {
         rom_name,
-        status: "Skip (Exists)".to_string(),
+        status: "Skip (Exists)".into(),
         status_color: TableColor::Yellow,
         mapper: mapper_id.to_string(),
-        samples: "-".to_string(),
-        rms: "-".to_string(),
-        peak: "-".to_string(),
-        hash: "-".to_string(),
+        samples: "-".into(),
+        rms: "-".into(),
+        peak: "-".into(),
+        hash: "-".into(),
     }
 }
 
@@ -66,13 +72,13 @@ fn format_written_row(
 ) -> RowData {
     RowData {
         rom_name,
-        status: "Written".to_string(),
+        status: "Written".into(),
         status_color: TableColor::Green,
         mapper: mapper_id.to_string(),
-        samples: samples_len.to_string(),
-        rms: format!("{:.2}", stats.rms),
-        peak: stats.peak.to_string(),
-        hash: format!("{:016X}", hash),
+        samples: samples_len.to_string().into(),
+        rms: format!("{:.2}", stats.rms).into(),
+        peak: stats.peak.to_string().into(),
+        hash: format!("{:016X}", hash).into(),
     }
 }
 
@@ -202,7 +208,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     let _ = write!(stdout, "\r\x1B[2K");
     let _ = stdout.flush();
 
-    let _ = writeln!(stdout, "{}", build_summary_table(&rows));
+    let _ = writeln!(stdout, "{}", build_summary_table(rows));
     let _ = writeln!(
         stdout,
         "done: written={} skipped_mapper={} skipped_existing={}",
@@ -217,7 +223,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     Ok(())
 }
 
-fn build_summary_table(rows: &[RowData]) -> Table {
+fn build_summary_table(rows: Vec<RowData>) -> Table {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec![
@@ -230,15 +236,15 @@ fn build_summary_table(rows: &[RowData]) -> Table {
         Cell::new("Hash").fg(TableColor::Cyan),
     ]);
 
-    for row in rows {
+    for row in rows.into_iter() {
         table.add_row(vec![
-            Cell::new(&row.rom_name).fg(TableColor::Green),
-            Cell::new(&row.status).fg(row.status_color),
-            Cell::new(&row.mapper).fg(TableColor::Yellow),
-            Cell::new(&row.samples).fg(TableColor::Yellow),
-            Cell::new(&row.rms).fg(TableColor::Yellow),
-            Cell::new(&row.peak).fg(TableColor::Yellow),
-            Cell::new(&row.hash).fg(TableColor::Green),
+            Cell::new(row.rom_name).fg(TableColor::Green),
+            Cell::new(row.status).fg(row.status_color),
+            Cell::new(row.mapper).fg(TableColor::Yellow),
+            Cell::new(row.samples).fg(TableColor::Yellow),
+            Cell::new(row.rms).fg(TableColor::Yellow),
+            Cell::new(row.peak).fg(TableColor::Yellow),
+            Cell::new(row.hash).fg(TableColor::Green),
         ]);
     }
 
@@ -346,27 +352,27 @@ mod tests {
         let rows = vec![
             RowData {
                 rom_name: "test1.nes".to_string(),
-                status: "Written".to_string(),
+                status: "Written".into(),
                 status_color: TableColor::Green,
                 mapper: "0".to_string(),
-                samples: "1000".to_string(),
-                rms: "1.23".to_string(),
-                peak: "50".to_string(),
-                hash: "0000111122223333".to_string(),
+                samples: "1000".into(),
+                rms: "1.23".into(),
+                peak: "50".into(),
+                hash: "0000111122223333".into(),
             },
             RowData {
                 rom_name: "test2.nes".to_string(),
-                status: "Skip (Mapper)".to_string(),
+                status: "Skip (Mapper)".into(),
                 status_color: TableColor::Magenta,
                 mapper: "255".to_string(),
-                samples: "-".to_string(),
-                rms: "-".to_string(),
-                peak: "-".to_string(),
-                hash: "-".to_string(),
+                samples: "-".into(),
+                rms: "-".into(),
+                peak: "-".into(),
+                hash: "-".into(),
             },
         ];
 
-        let table = build_summary_table(&rows);
+        let table = build_summary_table(rows);
         let output = table.to_string();
 
         assert!(output.contains("test1.nes"));
