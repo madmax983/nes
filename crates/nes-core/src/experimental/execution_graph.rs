@@ -11,6 +11,29 @@ use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
+/// Records the flow of CPU execution by tracking Program Counter (PC) transitions.
+///
+/// `ExecutionGraph` builds a directed graph representing the paths the CPU takes during
+/// execution. This is invaluable for reverse engineering ROMs, discovering hidden game
+/// loops, or visualizing where an AI agent spends its time.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::NesCore;
+/// # use nes_core::experimental::execution_graph::ExecutionGraph;
+/// let mut core = NesCore::new();
+/// let mut graph = ExecutionGraph::new();
+///
+/// // Simulate stepping the CPU and recording the transition
+/// graph.record_step(&core);
+/// let _ = core.execute(nes_core::Command::StepCpu);
+/// graph.record_step(&core);
+///
+/// // Export the recorded path to Graphviz DOT format
+/// let dot_data = graph.to_dot();
+/// assert!(dot_data.contains("digraph ExecutionFlow {"));
+/// ```
 pub struct ExecutionGraph {
     /// Maps a source PC to a set of destination PCs.
     transitions: HashMap<u16, HashSet<u16>>,

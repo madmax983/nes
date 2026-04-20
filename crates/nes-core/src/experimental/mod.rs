@@ -1,3 +1,11 @@
+//! Experimental features, visualizers, and tools ("Nova" persona).
+//!
+//! This module contains additive, exploratory features that build upon the core emulator.
+//! These include visualizers for memory, nametables, and execution flow, as well as
+//! tools for spatial querying, hotspot profiling, and memory heatmaps. They are
+//! gated behind the `nova` feature flag to keep the base emulator footprint small
+//! and ensure that core accuracy isn't impacted by experimental R&D.
+
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
 /// Utility for discovering cheat codes by monitoring RAM changes.
