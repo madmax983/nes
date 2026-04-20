@@ -115,7 +115,7 @@ impl AmbilightAnalyzer {
             }
         }
 
-        let avg = |sum: u64, count: u64| -> u8 { if count == 0 { 0 } else { (sum / count) as u8 } };
+        let avg = |sum: u64, count: u64| -> u8 { sum.checked_div(count).unwrap_or(0) as u8 };
 
         AmbientColors {
             top: Color {
