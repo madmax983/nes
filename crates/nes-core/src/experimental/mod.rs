@@ -1,3 +1,5 @@
+/// Experimental ambient light analyzer for the framebuffer.
+pub mod ambient_light;
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
 /// Utility for discovering cheat codes by monitoring RAM changes.
