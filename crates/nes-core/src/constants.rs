@@ -1,3 +1,10 @@
+//! Global constants defining the core properties of the NES system.
+//!
+//! This module centralizes critical system-wide values like display dimensions
+//! and audio sample rates. Keeping these constants here ensures that all modules
+//! (like the PPU and APU) and external crates (like the TUI or Desktop apps)
+//! share a single source of truth, preventing "magic number" drift.
+
 /// The width of the NES screen in pixels.
 pub const FRAME_WIDTH: usize = 256;
 

@@ -8,6 +8,13 @@ use crate::bmp::encode_bmp;
 use crate::rom::NametableMirroring;
 
 #[cfg(feature = "nova")]
+/// A tool for visualizing the PPU's background nametable memory layout.
+///
+/// `NametableViewer` is designed to help developers and reverse-engineers understand
+/// how a game organizes its scrolling backgrounds. By extracting the 4-nametable layout
+/// into a single image, it makes it trivial to debug scrolling artifacts, mirroring modes
+/// (like Vertical or Horizontal), and tile placement without needing to piece together
+/// a scene from raw PPU memory reads.
 pub struct NametableViewer;
 
 #[cfg(feature = "nova")]

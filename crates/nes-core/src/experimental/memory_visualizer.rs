@@ -6,6 +6,12 @@ use crate::NesCore;
 use crate::bmp::encode_bmp;
 
 #[cfg(feature = "nova")]
+/// A utility for rendering the entire CPU memory map as a visual image.
+///
+/// `MemoryVisualizer` exists to provide an immediate, color-coded macroscopic view of the
+/// 64KB address space. This makes it easy for developers to spot uninitialized memory,
+/// understand where specific segments (like PPU or PRG ROM) are mapped, and debug
+/// mapper bank-switching behavior without staring at raw hex dumps.
 pub struct MemoryVisualizer;
 
 #[cfg(feature = "nova")]

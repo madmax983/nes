@@ -23,10 +23,15 @@ pub struct ZoneEvent {
 #[derive(Debug, Clone)]
 /// A defined rectangular area on the screen to monitor.
 pub struct Zone {
+    /// The unique identifier for this zone.
     pub id: usize,
+    /// The left X coordinate of the zone bounding box.
     pub x: u8,
+    /// The top Y coordinate of the zone bounding box.
     pub y: u8,
+    /// The width of the zone in pixels.
     pub w: u8,
+    /// The height of the zone in pixels.
     pub h: u8,
 }
 

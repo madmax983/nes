@@ -8,20 +8,38 @@ use crate::NesCore;
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
+/// Represents a recorded occurrence of a tracked memory condition.
+///
+/// An `Event` is generated when the CPU memory matches a condition defined by a [`Trigger`].
+/// This allows external analysis tools (like speedrun verifiers or AI) to know exactly what
+/// values were seen at specific addresses without continuously polling the emulator memory themselves.
 pub struct Event {
+    /// The memory address that triggered this event.
     pub addr: u16,
+    /// The specific byte value that was read at the triggered address.
     pub value: u8,
 }
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
+/// A condition defining what memory state should generate an [`Event`].
+///
+/// Triggers are registered with the [`EventTracker`] to specify which memory addresses
+/// to monitor and what values indicate a notable event has occurred.
 pub struct Trigger {
+    /// The memory address to monitor.
     pub addr: u16,
+    /// The byte value that, when present at `addr`, will fire the trigger.
     pub expected_value: u8,
 }
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
+/// Monitors emulator memory to generate discrete [`Event`]s based on registered [`Trigger`]s.
+///
+/// `EventTracker` exists to bridge the gap between continuous emulator state and discrete
+/// actions, enabling features like auto-splitters, achievement tracking, or debugging
+/// watchpoints by recording when specific memory addresses attain specific values.
 pub struct EventTracker {
     triggers: Vec<Trigger>,
     events: Vec<Event>,

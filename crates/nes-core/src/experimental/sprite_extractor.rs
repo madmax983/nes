@@ -1,6 +1,6 @@
 //! Experimental tools for extracting sprite and tile data directly from the emulator's memory.
 //!
-//! This module provides utilities like [`SpriteExtractor`] to parse CHR-RAM data and convert it
+//! This module provides utilities like [`crate::experimental::sprite_extractor::SpriteExtractor`] to parse CHR-RAM data and convert it
 //! into recognizable image formats (such as BMP files). It is primarily useful for debugging,
 //! automated sprite sheet generation, or external visualization tools that need to inspect
 //! graphics state without manually reading individual bytes.
