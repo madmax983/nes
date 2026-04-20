@@ -274,4 +274,12 @@ mod tests {
         assert_eq!(mapper.prg_bank_count, 2);
         assert_eq!(mapper.prg_rom.len(), 2 * PRG_BANK_32K);
     }
+
+    #[test]
+    fn gxrom_from_prg_chr_exact_32k() {
+        let prg_rom = vec![0; PRG_BANK_32K];
+        let mapper = Gxrom::from_prg_chr(prg_rom, vec![]);
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), PRG_BANK_32K);
+    }
 }

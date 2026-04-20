@@ -67,3 +67,48 @@ impl Mapper for Nrom {
         // NROM has fixed PRG bank mapping and ignores bank-select writes.
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nrom_from_prg_rom_exact_16k() {
+        let prg_rom = vec![0; PRG_16K_BYTES];
+        let nrom = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(nrom.prg_rom.len(), PRG_16K_BYTES);
+    }
+
+    #[test]
+    fn test_nrom_from_prg_rom_exact_32k() {
+        let prg_rom = vec![0; PRG_32K_BYTES];
+        let nrom = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(nrom.prg_rom.len(), PRG_32K_BYTES);
+    }
+
+    #[test]
+    fn test_nrom_from_prg_rom_truncate() {
+        let prg_rom = vec![0; PRG_32K_BYTES + 1];
+        let nrom = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(nrom.prg_rom.len(), PRG_32K_BYTES);
+    }
+
+    #[test]
+    fn test_nrom_read_prg() {
+        let mut prg_rom = vec![0; PRG_16K_BYTES];
+        prg_rom[0] = 0xAA;
+        let nrom = Nrom::from_prg_rom(prg_rom);
+
+        // 0x8000 maps to offset 0
+        assert_eq!(nrom.read_prg(0x8000), 0xAA);
+        assert_eq!(<Nrom as Mapper>::read_prg(&nrom, 0x8000), 0xAA);
+    }
+
+    #[test]
+    fn test_nrom_write_prg() {
+        let mut nrom = Nrom::new_32k();
+        // Should not panic, hardware ignores
+        nrom.write_prg(0x8000, 0xAA);
+        <Nrom as Mapper>::write_prg(&mut nrom, 0x8000, 0xAA);
+    }
+}
