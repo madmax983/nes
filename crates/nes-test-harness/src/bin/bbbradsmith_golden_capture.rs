@@ -153,10 +153,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     let mut written = 0_usize;
     let mut skipped_mapper = 0_usize;
     let mut skipped_existing = 0_usize;
-    // ⚡ Bolt Optimization:
-    // Pre-allocating the vector with the exact capacity prevents unnecessary
-    // heap re-allocations as rows are added during processing.
-    let mut rows: Vec<RowData> = Vec::with_capacity(rom_paths.len());
+    let mut rows: Vec<RowData> = Vec::new();
 
     for rom_path in rom_paths {
         let rom_name = rom_path
