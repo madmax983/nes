@@ -114,6 +114,9 @@ mod tests {
         let expected = ExpectedLength(42);
 
         let err: serde_json::Error = serde::de::Error::invalid_length(99, &expected);
-        assert_eq!(err.to_string(), "invalid length 99, expected a byte array of length 42");
+        assert_eq!(
+            err.to_string(),
+            "invalid length 99, expected a byte array of length 42"
+        );
     }
 }
