@@ -110,16 +110,13 @@ mod tests {
     }
 
     #[test]
-    fn test_expected_length_fmt() {
-        use serde::de::Expected;
-        struct Wrapper<'a>(&'a dyn Expected);
-        impl<'a> std::fmt::Display for Wrapper<'a> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                self.0.fmt(f)
-            }
-        }
+    fn test_expected_length_formatting() {
         let expected = ExpectedLength(42);
-        let formatted = format!("{}", Wrapper(&expected));
-        assert_eq!(formatted, "a byte array of length 42");
+
+        let err: serde_json::Error = serde::de::Error::invalid_length(99, &expected);
+        assert_eq!(
+            err.to_string(),
+            "invalid length 99, expected a byte array of length 42"
+        );
     }
 }
