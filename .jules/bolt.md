@@ -1,3 +1,3 @@
-## 2023-10-24 - [Avoid unwrap_or clone on Option borrowed from HashMap]
-**Learning:** [When dealing with an `Option<&Vec<T>>` returned from `HashMap::get`, using `.unwrap_or(&Vec::new()).clone()` forces an unnecessary heap allocation. Furthermore, `Vec` does not implement `map_or` directly, but `Option` does. Using `Option::is_none_or()` is the most idiomatic and performant way to evaluate a condition against the optional borrowed value without allocating.]
-**Action:** [Always use `is_none_or` or `map_or` for conditional checks on borrowed `Option` values instead of cloning them or providing fallback heap allocations.]
+**[Eliminating BTreeMap on the Hot Path]**
+**Learning:** In `nes-desktop/src/rta.rs`, `RtaManager` was using a `BTreeMap<TriggerSlot, TriggerRuntime>` to store speedrun triggers. Since `tick_splits` runs every frame and iterates over all splits, it was performing multiple O(log N) lookups per frame (`self.triggers.get_mut(&TriggerSlot::Split(idx))`).
+**Action:** Replaced the `BTreeMap` with direct fields (`start_trigger`, `end_trigger`, `pause_trigger`, `resume_trigger`, and `split_triggers: Vec<TriggerRuntime>`). This eliminates all map lookups on the hot path, achieving a zero-cost abstraction for trigger evaluation without fighting the borrow checker.

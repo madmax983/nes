@@ -27,7 +27,7 @@
 //! * **The Manager ([`crate::rta::RtaManager`]):** The active state machine that relentlessly enforces the profile rules frame-by-frame.
 //! * **Calibration ([`crate::rta::CalibrationRecorder`]):** The automated drafting tool that hallucinates new profiles by statistically analyzing a user's manual splits.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -509,15 +509,6 @@ pub enum RtaSessionState {
     InvalidPractice,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum TriggerSlot {
-    Start,
-    Pause,
-    Resume,
-    End,
-    Split(usize),
-}
-
 #[derive(Debug, Clone)]
 struct TriggerRuntime {
     rule: TriggerRule,
@@ -760,7 +751,11 @@ pub struct RtaManager {
     invalidation_reasons: BTreeSet<String>,
     split_counter: u64,
     split_events: Vec<SplitEvent>,
-    triggers: BTreeMap<TriggerSlot, TriggerRuntime>,
+    start_trigger: TriggerRuntime,
+    end_trigger: TriggerRuntime,
+    pause_trigger: Option<TriggerRuntime>,
+    resume_trigger: Option<TriggerRuntime>,
+    split_triggers: Vec<TriggerRuntime>,
     input_log: Vec<InputLogFrame>,
     runs_dir: PathBuf,
     artifacts_written: Option<RunArtifactPaths>,
@@ -795,24 +790,21 @@ impl RtaManager {
         runs_dir: PathBuf,
         calibration: Option<CalibrationRecorder>,
     ) -> Self {
-        let mut triggers = BTreeMap::<TriggerSlot, TriggerRuntime>::new();
-        triggers.insert(
-            TriggerSlot::Start,
-            TriggerRuntime::new(profile.start.clone()),
-        );
-        triggers.insert(TriggerSlot::End, TriggerRuntime::new(profile.end.clone()));
-        if let Some(rule) = profile.pause.clone() {
-            triggers.insert(TriggerSlot::Pause, TriggerRuntime::new(rule));
-        }
-        if let Some(rule) = profile.resume.clone() {
-            triggers.insert(TriggerSlot::Resume, TriggerRuntime::new(rule));
-        }
-        for (idx, split) in profile.splits.iter().enumerate() {
-            triggers.insert(
-                TriggerSlot::Split(idx),
-                TriggerRuntime::new(split.trigger.clone()),
-            );
-        }
+        let start_trigger = TriggerRuntime::new(profile.start.clone());
+        let end_trigger = TriggerRuntime::new(profile.end.clone());
+        let pause_trigger = profile
+            .pause
+            .as_ref()
+            .map(|rule| TriggerRuntime::new(rule.clone()));
+        let resume_trigger = profile
+            .resume
+            .as_ref()
+            .map(|rule| TriggerRuntime::new(rule.clone()));
+        let split_triggers = profile
+            .splits
+            .iter()
+            .map(|split| TriggerRuntime::new(split.trigger.clone()))
+            .collect();
 
         Self {
             profile,
@@ -826,7 +818,11 @@ impl RtaManager {
             invalidation_reasons: BTreeSet::new(),
             split_counter: 0,
             split_events: Vec::new(),
-            triggers,
+            start_trigger,
+            end_trigger,
+            pause_trigger,
+            resume_trigger,
+            split_triggers,
             input_log: Vec::new(),
             runs_dir,
             artifacts_written: None,
@@ -1084,9 +1080,7 @@ impl RtaManager {
     where
         F: FnMut(u16) -> u8,
     {
-        if self.state == RtaSessionState::Armed
-            && self.trigger_fired(TriggerSlot::Start, &mut read_u8)
-        {
+        if self.state == RtaSessionState::Armed && self.start_trigger.evaluate(&mut read_u8) {
             self.state = RtaSessionState::Running;
             self.start_instant = Some(now);
             self.pause_started_at = None;
@@ -1106,7 +1100,8 @@ impl RtaManager {
     {
         let is_paused = self.pause_started_at.is_some();
         if is_paused {
-            if self.trigger_fired(TriggerSlot::Resume, &mut read_u8)
+            if let Some(resume_trigger) = self.resume_trigger.as_mut()
+                && resume_trigger.evaluate(&mut read_u8)
                 && let Some(paused_at) = self.pause_started_at.take()
             {
                 self.paused_accumulated = self
@@ -1114,7 +1109,9 @@ impl RtaManager {
                     .saturating_add(now.saturating_duration_since(paused_at));
                 events.push(RtaEvent::Resumed);
             }
-        } else if self.trigger_fired(TriggerSlot::Pause, &mut read_u8) {
+        } else if let Some(pause_trigger) = self.pause_trigger.as_mut()
+            && pause_trigger.evaluate(&mut read_u8)
+        {
             self.pause_started_at = Some(now);
             events.push(RtaEvent::Paused);
         }
@@ -1131,7 +1128,10 @@ impl RtaManager {
         F: FnMut(u16) -> u8,
     {
         for idx in 0..self.profile.splits.len() {
-            if self.trigger_fired(TriggerSlot::Split(idx), &mut read_u8) {
+            let Some(trigger) = self.split_triggers.get_mut(idx) else {
+                continue;
+            };
+            if trigger.evaluate(&mut read_u8) {
                 let split_name = self.profile.splits[idx].name.clone();
                 let event = self.push_split(split_name, SplitSource::Automatic, frame, now);
                 events.push(RtaEvent::Split(event));
@@ -1143,7 +1143,7 @@ impl RtaManager {
     where
         F: FnMut(u16) -> u8,
     {
-        if self.trigger_fired(TriggerSlot::End, &mut read_u8) {
+        if self.end_trigger.evaluate(&mut read_u8) {
             self.state = RtaSessionState::Finished;
             self.finish_frame = Some(frame);
             self.elapsed_at_finish = Some(self.elapsed(now));
@@ -1151,16 +1151,6 @@ impl RtaManager {
                 self.elapsed_at_finish.unwrap_or_default(),
             ));
         }
-    }
-
-    fn trigger_fired<F>(&mut self, slot: TriggerSlot, mut read_u8: F) -> bool
-    where
-        F: FnMut(u16) -> u8,
-    {
-        let Some(runtime) = self.triggers.get_mut(&slot) else {
-            return false;
-        };
-        runtime.evaluate(&mut read_u8)
     }
 
     /// Acts as the strict referee, penalizing actions that compromise the run's legitimacy.
