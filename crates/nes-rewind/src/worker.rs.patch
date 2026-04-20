@@ -1,0 +1,14 @@
+--- crates/nes-rewind/src/worker.rs
++++ crates/nes-rewind/src/worker.rs
+@@ -461,8 +461,8 @@
+         let (_dummy_reply_tx, dummy_rx) = std::sync::mpsc::channel();
+         let (dummy_work_tx, dummy_work_rx) = std::sync::mpsc::sync_channel(1);
+
+-        // Replace BOTH rx and tx to avoid panicking the worker thread when the dummy sender goes out of scope or the actual channel closes.
+-        tm.rx = dummy_rx;
+-        let old_tx = std::mem::replace(&mut tm.tx, dummy_work_tx);
++        // We don't replace rx so the worker thread doesn't panic when we drop old_tx.
++        // We just replace tx so our messages don't reach it.
++        // let old_tx = std::mem::replace(&mut tm.tx, dummy_work_tx);
+
+         // This call will time out waiting for the dummy_rx
