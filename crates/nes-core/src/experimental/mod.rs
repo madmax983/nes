@@ -24,6 +24,8 @@ pub mod memory_visualizer;
 pub mod nametable_viewer;
 /// Performs spatial queries against Object Attribute Memory (OAM).
 pub mod oam_spatial_query;
+/// Mashup mono audio with OAM to create pseudo-stereo spatial audio.
+pub mod spatial_audio;
 /// Extracts sprite graphical data from memory for inspection.
 pub mod sprite_extractor;
 /// Applies color palette themes to the emulator output.
