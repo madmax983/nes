@@ -28,7 +28,10 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() < 2 || args.len() > 5 {
-        return Err(format!("{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]", "Error:".with(Color::Red).bold()));
+        return Err(format!(
+            "{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
+            "Error:".with(Color::Red).bold()
+        ));
     }
 
     let profile_path = PathBuf::from(&args[1]);
