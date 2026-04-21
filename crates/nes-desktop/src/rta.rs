@@ -1061,7 +1061,9 @@ impl RtaManager {
             calibration.record_frame(frame, &mut read_u8);
         }
 
-        let mut events = Vec::<RtaEvent>::new();
+        // Avoids `Vec::new()` without capacity on the hot path (called every frame).
+        // RTA events per frame rarely exceed 2.
+        let mut events = Vec::<RtaEvent>::with_capacity(2);
 
         self.tick_start(now, &mut read_u8, &mut events);
 
