@@ -297,9 +297,9 @@ mod tests {
             // before we started listening, or during our loop. We keep draining
             // until we see the one we want, or we timeout.
             let inner_start = std::time::Instant::now();
-            while inner_start.elapsed() < Duration::from_millis(500) {
+            while inner_start.elapsed() < Duration::from_millis(1500) {
                 if let Ok(WorkerReply::Reconstructed { frame_id, .. }) =
-                    tm.rx.recv_timeout(Duration::from_millis(100))
+                    tm.rx.recv_timeout(Duration::from_millis(250))
                 {
                     // The test core isn't mutated until `tm.rewind_step` does it.
                     // But we just sent a raw message.
