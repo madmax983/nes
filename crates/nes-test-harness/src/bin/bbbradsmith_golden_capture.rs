@@ -153,7 +153,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     let mut written = 0_usize;
     let mut skipped_mapper = 0_usize;
     let mut skipped_existing = 0_usize;
-    let mut rows: Vec<RowData> = Vec::new();
+    let mut rows: Vec<RowData> = Vec::with_capacity(rom_paths.len());
 
     for rom_path in rom_paths {
         let rom_name = rom_path
@@ -259,7 +259,7 @@ fn load_config(path: Option<&Path>) -> Result<NesConfig, String> {
 }
 
 fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut roms = Vec::new();
+    let mut roms = Vec::with_capacity(32);
     for entry in fs::read_dir(suite_dir).map_err(|err| {
         format!(
             "failed to read suite directory '{}': {err}",

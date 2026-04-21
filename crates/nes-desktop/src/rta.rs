@@ -476,16 +476,14 @@ pub fn select_profile(
     let Some(first_match) = match_iter.next() else {
         return Err(format!(
             "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
-            format_profile_names(profiles.iter())
+            format_profile_names(profiles)
         ));
     };
 
     if let Some(second_match) = match_iter.next() {
-        let conflict = format_profile_names(
-            std::iter::once(first_match)
-                .chain(std::iter::once(second_match))
-                .chain(match_iter),
-        );
+        let mut conflict_profiles = vec![first_match.clone(), second_match.clone()];
+        conflict_profiles.extend(match_iter.cloned());
+        let conflict = format_profile_names(&conflict_profiles);
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
@@ -576,9 +574,10 @@ impl TriggerRuntime {
 
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
 /// a String and joining manually.
-fn format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String {
-    let mut names = String::new();
-    for (i, profile) in profiles.enumerate() {
+fn format_profile_names(profiles: &[LoadedProfile]) -> String {
+    let len = profiles.iter().map(|p| p.profile.id.len() + 2).sum::<usize>();
+    let mut names = String::with_capacity(len);
+    for (i, profile) in profiles.iter().enumerate() {
         if i > 0 {
             names.push_str(", ");
         }
@@ -1219,14 +1218,19 @@ impl RtaManager {
         now: Instant,
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
-        let event = SplitEvent {
+        let elapsed_ms = self.elapsed(now).as_millis();
+        self.split_events.push(SplitEvent {
+            name: name.clone(),
+            source,
+            frame,
+            elapsed_ms,
+        });
+        SplitEvent {
             name,
             source,
             frame,
-            elapsed_ms: self.elapsed(now).as_millis(),
-        };
-        self.split_events.push(event.clone());
-        event
+            elapsed_ms,
+        }
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
