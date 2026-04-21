@@ -6,3 +6,6 @@ coverage:
         threshold: 0.1% # allow up to 0.1% drop
 ignore:
   - "docs/**/*"
+    patch:
+      default:
+        target: 40%
