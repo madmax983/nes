@@ -80,7 +80,7 @@ pub fn collect_apu_register_writes(
     core: &mut NesCore,
     cpu_steps: u32,
 ) -> Result<Vec<ApuWriteEvent>, CoreError> {
-    let mut writes = Vec::new();
+    let mut writes = Vec::with_capacity(cpu_steps as usize / 16);
     for _ in 0..cpu_steps {
         core.execute(Command::StepCpu)?;
         let cpu_cycle = core.total_cycles();
@@ -129,7 +129,7 @@ pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
 /// assert_eq!(audio.len(), nes_core::AUDIO_CHUNK_SAMPLES * 2);
 /// ```
 pub fn collect_audio_for_frames(core: &mut NesCore, frames: u32) -> Result<Vec<i16>, CoreError> {
-    let mut samples = Vec::new();
+    let mut samples = Vec::with_capacity((frames as usize) * nes_core::AUDIO_CHUNK_SAMPLES);
     for _ in 0..frames {
         core.execute(Command::StepFrame)?;
         samples.extend(core.audio_chunk_i16());
