@@ -14,7 +14,7 @@ use nes_ai::{
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
+        eprintln!("\n{err}");
         std::process::exit(1);
     }
 }
@@ -28,10 +28,10 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() < 2 || args.len() > 5 {
-        eprintln!(
-            "Usage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]"
-        );
-        std::process::exit(1);
+        return Err(format!(
+            "{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
+            "Error:".with(Color::Red).bold()
+        ));
     }
 
     let profile_path = PathBuf::from(&args[1]);
