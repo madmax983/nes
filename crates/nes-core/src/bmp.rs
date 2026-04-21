@@ -36,6 +36,15 @@
 /// assert_eq!(&bmp_bytes[0..2], b"BM");
 /// ```
 pub fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    let expected_len = width
+        .checked_mul(height)
+        .and_then(|px| px.checked_mul(4))
+        .ok_or_else(|| "bmp dimensions overflow".to_owned())?;
+
+    if rgba.len() != expected_len {
+        return Err("rgba buffer length does not match dimensions".to_owned());
+    }
+
     let row_bytes = width
         .checked_mul(3)
         .ok_or_else(|| "bmp row size overflow".to_owned())?;
@@ -160,5 +169,11 @@ mod tests {
                 30, 20, 10, 60, 50, 40, 90, 80, 70, 0, 0, 0, // row + 3 bytes padding
             ]
         );
+    }
+
+    #[test]
+    fn encode_bmp_returns_error_on_buffer_length_mismatch() {
+        let err = encode_bmp(2, 1, &[1, 2, 3, 255]).unwrap_err();
+        assert_eq!(err, "rgba buffer length does not match dimensions");
     }
 }
