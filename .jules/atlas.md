@@ -18,3 +18,7 @@
 **Extract Constants from api.rs**
 **Tangle:** A circular dependency existed in `nes-core` where `apu.rs` and `ppu.rs` (internal modules) imported domain constants (`FRAME_WIDTH`, `AUDIO_SAMPLE_RATE`, etc.) from the public facade module `api.rs`.
 **Blueprint:** Extracted the domain constants into a new internal `constants.rs` module, breaking the circular dependency while continuing to re-export the constants via `lib.rs` for external consumers.
+
+**Extract AppContext from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` contained the `AppContext` struct which held references to various application components like `NesCore`, `Window`, `OverlayModel`, etc., adding bloat to an already large file.
+**Blueprint:** Extracted the `AppContext` struct into a new `crates/nes-desktop/src/app_context.rs` internal module, reducing `main.rs` bloat and improving domain boundaries.

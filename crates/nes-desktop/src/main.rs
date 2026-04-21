@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "nova")]
 mod auto_player;
+pub(crate) mod app_context;
 pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
@@ -16,6 +17,7 @@ mod netplay;
 pub(crate) mod session;
 use crate::config::*;
 use crate::session::*;
+use crate::app_context::AppContext;
 
 use crate::gamepad::*;
 use crate::input::*;
@@ -211,23 +213,6 @@ fn reconcile_core_pause_with_overlay(core: &mut NesCore, overlay_open: bool) -> 
     })
 }
 
-struct AppContext<'a> {
-    core: &'a mut NesCore,
-    session: &'a mut LoadedRomSession,
-    session_cheats: &'a mut SessionCheats,
-    overlay: &'a mut OverlayModel,
-    rollback_enabled: bool,
-    runtime: &'a RuntimeConfig,
-    audio_output: Option<&'a AudioOutput>,
-    time_machine: &'a mut TimeMachine,
-    rewind_held: &'a mut bool,
-    metrics: &'a mut PerfMetrics,
-    keyboard_bits: u8,
-    gamepad_bits: &'a mut [u8; 2],
-    window: &'a Window,
-    rta_manager: &'a mut Option<RtaManager>,
-    frame_index: u64,
-}
 
 fn dispatch_app_action(
     action: AppAction,
