@@ -333,7 +333,7 @@ fn handle_tools_call(
     Ok(Some(response))
 }
 
-fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
     loop {
         let mut line = String::new();
