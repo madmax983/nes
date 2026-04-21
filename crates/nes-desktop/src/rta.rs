@@ -575,7 +575,10 @@ impl TriggerRuntime {
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
 /// a String and joining manually.
 fn format_profile_names(profiles: &[LoadedProfile]) -> String {
-    let len = profiles.iter().map(|p| p.profile.id.len() + 2).sum::<usize>();
+    let len = profiles
+        .iter()
+        .map(|p| p.profile.id.len() + 2)
+        .sum::<usize>();
     let mut names = String::with_capacity(len);
     for (i, profile) in profiles.iter().enumerate() {
         if i > 0 {
