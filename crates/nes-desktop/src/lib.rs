@@ -4,8 +4,6 @@
 //! desktop inputs (keyboard, gamepads) to emulator actions and manages the
 //! audio/video rendering runtime adapter.
 
-#[cfg(feature = "mcp-host")]
-pub mod mcp_host;
 
 /// Command abstraction representing specific desktop user actions.
 pub mod actions;
@@ -25,3 +23,6 @@ pub mod overlay;
 pub mod rta;
 /// Live runtime cheat code manager.
 pub mod session_cheats;
+
+#[cfg(feature = "mcp-host")]
+pub mod mcp_host;
