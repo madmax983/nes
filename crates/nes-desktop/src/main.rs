@@ -10,7 +10,6 @@ pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
 #[cfg(feature = "mcp-host")]
-mod mcp_host;
 pub(crate) mod metrics;
 mod netplay;
 pub(crate) mod session;
@@ -48,7 +47,7 @@ use winit::window::{Window, WindowBuilder};
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
-use crate::mcp_host::McpHost;
+use nes_desktop::mcp_host::McpHost;
 use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
