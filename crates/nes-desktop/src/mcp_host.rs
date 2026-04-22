@@ -335,8 +335,11 @@ fn handle_tools_call(
 
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
+    let mut line = String::new();
+
     loop {
-        let mut line = String::new();
+        line.clear();
+
         let read = reader
             .read_line(&mut line)
             .map_err(|err| format!("failed reading header line: {err}"))?;
