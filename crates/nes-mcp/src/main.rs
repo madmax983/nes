@@ -108,7 +108,7 @@ fn run() -> Result<(), McpError> {
     ]);
 
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
-    eprintln!("{table}\n");
+    eprintln!("\n{table}");
 
     while let Some(payload) = read_stdio_message(&mut reader)? {
         let Some(response) = handle_message(&mut state, &payload) else {
@@ -277,8 +277,11 @@ fn handle_tools_call(
 
 fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpError> {
     let mut content_length = None::<usize>;
+    let mut line = String::new();
+
     loop {
-        let mut line = String::new();
+        line.clear();
+
         let read = reader
             .read_line(&mut line)
             .map_err(|err| McpError::Protocol(format!("failed reading header line: {err}")))?;

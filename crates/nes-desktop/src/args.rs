@@ -581,5 +581,14 @@ mod tests {
         let parsed = parse_runtime_args_with_timeout(args).expect("parse args");
         assert!(parsed.auto_player_enabled);
         assert_eq!(parsed.rom_path.as_deref(), Some("game.nes"));
+
+        let args2 = vec!["--auto-player".to_owned(), "--mcp-host".to_owned()];
+        let parsed2 = parse_runtime_args_with_timeout(args2).expect("parse args");
+        assert!(parsed2.auto_player_enabled);
+        assert!(parsed2.mcp_enabled);
+
+        let err = parse_runtime_args_with_timeout(vec!["--auto-playe".to_owned()])
+            .expect_err("should reject invalid flag");
+        assert!(err.contains("unknown flag"));
     }
 }
