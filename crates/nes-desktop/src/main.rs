@@ -43,11 +43,12 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoopBuilder};
 use winit::window::{Window, WindowBuilder};
 
+#[cfg(feature = "mcp-host")]
+use nes_desktop::mcp_host::McpHost;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
-use nes_desktop::mcp_host::McpHost;
 use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
