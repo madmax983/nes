@@ -37,3 +37,7 @@
 **[Extract encode_ppm into nes-core/ppm]
 **Learning:** Found duplicate implementations of `encode_ppm` across `nes-desktop` and `nes-mcp`. This logic is not directly tied to those layers but is a core utility that should be tested and reused across the system. It lacked sufficient validation against bounds and panics.
 **Action:** Extracted `encode_ppm` to a standalone, fully-tested `nes_core::ppm` module, removing duplication across crates. Replaced the `unwrap()` in size calculations with checked arithmetic to return proper IO errors instead of panicking on DoS inputs.
+
+**Refactoring DispatchOutput JSON serialization**
+**Learning:** Found a massive 150-line `dispatch_output_value` match statement manually converting an enum into JSON values with identical structure.
+**Action:** Replaced manual `json!` matching with `#[derive(serde::Serialize)]` on the `DispatchOutput` enum using `#[serde(tag = "kind", rename_all = "snake_case")]` to automatically convert it, reducing lines and fragility.

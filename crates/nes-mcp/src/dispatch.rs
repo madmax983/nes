@@ -55,7 +55,8 @@ pub type ToolParams = BTreeMap<String, String>;
 ///     status: 0x24,
 /// };
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DispatchOutput {
     /// Action completed successfully with no return data.
     Ack,
