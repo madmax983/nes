@@ -690,7 +690,7 @@ fn run() -> Result<(), String> {
     let table = build_startup_table(&runtime, &session, &step_mode, rta_manager.as_ref());
 
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
-    println!("{table}\n");
+    println!("\n{table}");
     if cfg!(debug_assertions) {
         eprintln!(
             "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
