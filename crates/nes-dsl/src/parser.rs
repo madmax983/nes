@@ -82,9 +82,10 @@ pub(crate) fn normalize_symbol(symbol: &str) -> String {
 }
 
 pub(crate) fn validate_symbol(symbol: &str) -> Result<(), String> {
-    let Some(first) = symbol.chars().next() else {
+    if symbol.is_empty() {
         return Err("symbol cannot be empty".to_owned());
-    };
+    }
+    let first = symbol.chars().next().unwrap();
     if !first.is_ascii_alphabetic() && first != '_' {
         return Err(format!("symbol '{symbol}' must start with letter or underscore"));
     }

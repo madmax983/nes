@@ -208,7 +208,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     let _ = write!(stdout, "\r\x1B[2K");
     let _ = stdout.flush();
 
-    let _ = writeln!(stdout, "\n{}", build_summary_table(rows));
+    let _ = writeln!(stdout, "{}", build_summary_table(rows));
     let _ = writeln!(
         stdout,
         "done: written={} skipped_mapper={} skipped_existing={}",

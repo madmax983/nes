@@ -10,6 +10,7 @@ pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
 #[cfg(feature = "mcp-host")]
+mod mcp_host;
 pub(crate) mod metrics;
 mod netplay;
 pub(crate) mod session;
@@ -43,12 +44,11 @@ use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoopBuilder};
 use winit::window::{Window, WindowBuilder};
 
-#[cfg(feature = "mcp-host")]
-use nes_desktop::mcp_host::McpHost;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
 #[cfg(feature = "mcp-host")]
+use crate::mcp_host::McpHost;
 use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
@@ -690,7 +690,7 @@ fn run() -> Result<(), String> {
     let table = build_startup_table(&runtime, &session, &step_mode, rta_manager.as_ref());
 
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
-    println!("\n{table}");
+    println!("{table}\n");
     if cfg!(debug_assertions) {
         eprintln!(
             "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
