@@ -471,6 +471,12 @@ mod tests {
         assert_eq!(result, None);
         assert_eq!(tm.state(), TimeMachineState::Exhausted);
 
+        // Prevent dummy_work_rx from being dropped before we are ready
+        // otherwise the worker thread might panic if it tries to reply
+        // while we are swapping channels back.
+        // Also wait a tiny bit to make sure it times out properly
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
         // Restore tx to allow graceful shutdown
         tm.tx = old_tx;
 
