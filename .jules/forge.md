@@ -44,3 +44,6 @@
 **[Refactoring unwrap_or(Value::Null) in nes-desktop/src/mcp_host.rs]**
 **Learning:** Found an instance of `unwrap_or(Value::Null)`. This violates clippy and idiomatic Rust guidelines because `Value::Null` is the default for `serde_json::Value`.
 **Action:** Use `.unwrap_or_default()` instead of explicitly providing the default value like `.unwrap_or(serde_json::Value::Null)`.
+**[Refactoring build_startup_table boilerplate in nes-desktop and nes-relay]**
+**Learning:** Found repetitive and verbose UI-building patterns `table.add_row(vec![Cell::new(key), Cell::new(val).fg(color)])` across `build_startup_table` functions in both `nes-desktop` and `nes-relay` which unnecessarily expanded function size and reduced readability.
+**Action:** Created local helper closures (`let mut add_row`) to capture the mutable reference to the `Table` struct and handle formatting constraints. Using `.to_string()` and `.clone()` on static inputs during application startup correctly prioritizes declarative DRY design and ease of maintenance without changing any runtime characteristics.
