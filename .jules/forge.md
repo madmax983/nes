@@ -37,3 +37,10 @@
 **[Extract encode_ppm into nes-core/ppm]
 **Learning:** Found duplicate implementations of `encode_ppm` across `nes-desktop` and `nes-mcp`. This logic is not directly tied to those layers but is a core utility that should be tested and reused across the system. It lacked sufficient validation against bounds and panics.
 **Action:** Extracted `encode_ppm` to a standalone, fully-tested `nes_core::ppm` module, removing duplication across crates. Replaced the `unwrap()` in size calculations with checked arithmetic to return proper IO errors instead of panicking on DoS inputs.
+**[Refactoring unwrap in nes-dsl/src/parser.rs]**
+**Learning:** Found an `is_empty()` check coupled with a subsequent `.unwrap()` on the same structure. This is considered an anti-pattern as it couples two lines when one operation could do both and leaves the `unwrap` lying around.
+**Action:** Replace manual `.is_empty()` checks paired with `.unwrap()` on collections with `if let` or `let Some(...) = ... else { ... }` guard clauses to safely unwrap elements and improve readability.
+
+**[Refactoring unwrap_or(Value::Null) in nes-desktop/src/mcp_host.rs]**
+**Learning:** Found an instance of `unwrap_or(Value::Null)`. This violates clippy and idiomatic Rust guidelines because `Value::Null` is the default for `serde_json::Value`.
+**Action:** Use `.unwrap_or_default()` instead of explicitly providing the default value like `.unwrap_or(serde_json::Value::Null)`.

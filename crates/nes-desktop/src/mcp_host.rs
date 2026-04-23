@@ -193,7 +193,7 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
     // so we can consume `id` directly instead of allocating a new `Value` via `.clone()`.
     let id = request.id;
     let is_notification = id.is_none();
-    let response_id = id.unwrap_or(Value::Null);
+    let response_id = id.unwrap_or_default();
 
     if request.jsonrpc != JSONRPC_VERSION {
         if is_notification {
@@ -333,10 +333,13 @@ fn handle_tools_call(
     Ok(Some(response))
 }
 
-fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
+    let mut line = String::new();
+
     loop {
-        let mut line = String::new();
+        line.clear();
+
         let read = reader
             .read_line(&mut line)
             .map_err(|err| format!("failed reading header line: {err}"))?;

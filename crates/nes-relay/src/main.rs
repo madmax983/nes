@@ -142,7 +142,7 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("failed to bind {}: {err}", args.bind_addr))?;
 
     println!("{}", "nes-relay".with(Color::Cyan).bold());
-    println!("{}\n", build_startup_table(&args));
+    println!("\n{}", build_startup_table(&args));
 
     let state = Arc::new(Mutex::new(RelayState::default()));
     let net_sim = Arc::new(RelayNetSim::new(args.link));

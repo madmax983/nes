@@ -55,3 +55,13 @@ output state lock poisoned
 ```
 **Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_audio_dos -- --ignored`.
 **Comment:** A simple panic in the audio publishing closure completely destroys the global audio metadata state because the lock is poisoned. The whole application crashes unrecoverably.
+
+## 2023-10-25 - [MCP Host OOM]
+🧨 **The Trigger:** Input string `Content-Length: 18446744073709551615\r\n\r\n` caused buffer overflow via capacity overflow panic.
+📉 **The Stack Trace:**
+```
+thread 'havoc_mcp_host_oom' panicked at library/alloc/src/raw_vec/mod.rs:28:5:
+capacity overflow
+```
+🧪 **Reproduction:** Run `cargo test --package nes-desktop --test havoc_oom --features mcp-host`.
+😈 **Comment:** You assumed `Content-Length` could be trusted to pre-allocate an unbounded buffer. You were wrong.

@@ -27,7 +27,7 @@
 //! * **The Manager ([`crate::rta::RtaManager`]):** The active state machine that relentlessly enforces the profile rules frame-by-frame.
 //! * **Calibration ([`crate::rta::CalibrationRecorder`]):** The automated drafting tool that hallucinates new profiles by statistically analyzing a user's manual splits.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -762,7 +762,10 @@ pub struct RtaManager {
     invalidation_reasons: BTreeSet<String>,
     split_counter: u64,
     split_events: Vec<SplitEvent>,
-    triggers: BTreeMap<TriggerSlot, TriggerRuntime>,
+    /// **⚡ Bolt Optimization:** Replaced `BTreeMap` with `Vec` to eliminate memory allocation
+    /// overhead during traversal on the hot path (evaluating triggers every frame). Since the number
+    /// of triggers is small, contiguous memory scanning is significantly faster than node traversal.
+    triggers: Vec<(TriggerSlot, TriggerRuntime)>,
     input_log: Vec<InputLogFrame>,
     runs_dir: PathBuf,
     artifacts_written: Option<RunArtifactPaths>,
@@ -797,23 +800,23 @@ impl RtaManager {
         runs_dir: PathBuf,
         calibration: Option<CalibrationRecorder>,
     ) -> Self {
-        let mut triggers = BTreeMap::<TriggerSlot, TriggerRuntime>::new();
-        triggers.insert(
+        let mut triggers = Vec::<(TriggerSlot, TriggerRuntime)>::new();
+        triggers.push((
             TriggerSlot::Start,
             TriggerRuntime::new(profile.start.clone()),
-        );
-        triggers.insert(TriggerSlot::End, TriggerRuntime::new(profile.end.clone()));
+        ));
+        triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end.clone())));
         if let Some(rule) = profile.pause.clone() {
-            triggers.insert(TriggerSlot::Pause, TriggerRuntime::new(rule));
+            triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule)));
         }
         if let Some(rule) = profile.resume.clone() {
-            triggers.insert(TriggerSlot::Resume, TriggerRuntime::new(rule));
+            triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule)));
         }
         for (idx, split) in profile.splits.iter().enumerate() {
-            triggers.insert(
+            triggers.push((
                 TriggerSlot::Split(idx),
                 TriggerRuntime::new(split.trigger.clone()),
-            );
+            ));
         }
 
         Self {
@@ -1161,7 +1164,11 @@ impl RtaManager {
     where
         F: FnMut(u16) -> u8,
     {
-        let Some(runtime) = self.triggers.get_mut(&slot) else {
+        let Some(runtime) = self
+            .triggers
+            .iter_mut()
+            .find_map(|(s, r)| if *s == slot { Some(r) } else { None })
+        else {
             return false;
         };
         runtime.evaluate(&mut read_u8)
