@@ -65,3 +65,8 @@ capacity overflow
 ```
 🧪 **Reproduction:** Run `cargo test --package nes-desktop --test havoc_oom --features mcp-host`.
 😈 **Comment:** You assumed `Content-Length` could be trusted to pre-allocate an unbounded buffer. You were wrong.
+## YYYY-MM-DD - MCP Host OOM Vulnerability
+**The Target:** `nes-desktop::mcp_host::read_framed_message`
+**The Trigger:** Sending a JSON-RPC HTTP header with an absurdly large `Content-Length` (e.g., `18446744073709551615`).
+**The Result:** The host blindly trusts the header and attempts to allocate an unconstrained `vec![0_u8; len]`. This results in an immediate Out-Of-Memory panic (`capacity overflow`), crashing the entire desktop application.
+**The Fix (Not Mine):** Someone needs to clamp `len` to a reasonable maximum (e.g., a few MBs) or use a capped stream reader.
