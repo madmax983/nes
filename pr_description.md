@@ -1,14 +1,7 @@
-🚮 Smell:
-- `validate_symbol` checked `.is_empty()` then manually `.unwrap()`'d the first char, an unsafe/ugly pattern.
-- `mcp_host.rs` explicitly used `.unwrap_or(Value::Null)` instead of the idiomatic `.unwrap_or_default()`.
+💡 What: Hoisted the `String::new()` buffer allocation outside the continuous `reader_loop` inside `crates/nes-desktop/src/netplay.rs` and replaced it with `line.clear()` inside the loop.
 
-✨ Solution:
-- Replaced the logic in `nes-dsl/src/parser.rs` with a single `let Some(...) = ... else { ... }` guard clause.
-- Replaced `.unwrap_or(Value::Null)` with `.unwrap_or_default()` in `nes-desktop/src/mcp_host.rs`.
+🎯 Why: To eliminate an unnecessary heap allocation per line when reading incoming payload messages over the network during an active netplay session. Calling `.clear()` allows the string to retain its pre-allocated capacity across loop iterations.
 
-🧼 Benefit:
-- Idiomatic, strictly typed without panicking edge-cases hidden behind `unwrap`.
-- Cleaner, flatter function logic in both modules.
+📊 Impact: Reduces heap allocations by 1 for every received netplay message (60 times a second per active connection).
 
-🛡️ Verification:
-- Ran `cargo check`, `cargo fmt`, `cargo clippy`, and `cargo test`. All passed. No runtime logic was modified.
+🔬 Measurement: Compile and observe identical functionality during netplay tests (`cargo test -p nes-desktop`). Run performance profiling against a live session.

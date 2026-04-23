@@ -7,3 +7,7 @@
 **[Eliminating Header Buffer Allocations]
 **Learning:** [When parsing line-based protocols (like MCP/JSON-RPC over stdio or TCP streams) in a loop, declaring `let mut line = String::new();` inside the loop causes a heap allocation for every single header line read.]
 **Action:** [Hoist the `String` allocation outside the reading loop and call `line.clear()` before each `.read_line()` call. This allows `read_line` to safely reuse the existing buffer capacity, eliminating per-header-line allocations entirely.]
+
+**Hoisting Strings out of IO Loops**
+**Learning:** `BufRead::read_line` appends to the provided `String`. If you declare `let mut line = String::new();` inside a read loop, you will trigger a heap allocation for every line read from the network or file.
+**Action:** Always hoist `String::new()` declarations outside of `loop` / `while` blocks that read streams, and call `.clear()` at the top of the loop body to reuse the existing buffer's capacity without allocating.
