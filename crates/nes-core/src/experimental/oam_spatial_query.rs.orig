@@ -82,14 +82,11 @@ impl OamSpatialQuery {
     /// Returns a list of sprites that overlap the given rectangle.
     #[must_use]
     pub fn query_rect(&self, x: u8, y: u8, w: u8, h: u8) -> Vec<OamSprite> {
-        // ⚡ Bolt Optimization: Pre-allocate Vector to avoid heap reallocation overhead during collect
-        let mut result = Vec::with_capacity(self.sprites.len());
-        for s in &self.sprites {
-            if s.overlaps(x, y, w, h) {
-                result.push(*s);
-            }
-        }
-        result
+        self.sprites
+            .iter()
+            .copied()
+            .filter(|s| s.overlaps(x, y, w, h))
+            .collect()
     }
 
     /// Returns all extracted sprites.
