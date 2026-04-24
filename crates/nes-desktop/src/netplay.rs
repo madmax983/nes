@@ -267,8 +267,13 @@ fn writer_loop(
 
 fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), String> {
     let mut reader = BufReader::new(stream);
+
+    // **⚡ Bolt Optimization:** Hoisting `String::new()` outside the network read loop
+    // prevents 60 heap allocations per second (netplay tick rate) by reusing the same buffer capacity.
+    let mut line = String::new();
+
     loop {
-        let mut line = String::new();
+        line.clear();
         let bytes = reader
             .read_line(&mut line)
             .map_err(|err| format!("failed to read relay message: {err}"))?;
