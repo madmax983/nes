@@ -751,7 +751,8 @@ mod tests {
         bad_client.write_all(b"not json\n").expect("write garbage");
         let mut bad_reader = BufReader::new(bad_server);
         let mut line = String::new();
-        let err = read_client_message(&mut bad_reader, &mut line).expect_err("invalid json should fail");
+        let err =
+            read_client_message(&mut bad_reader, &mut line).expect_err("invalid json should fail");
         assert!(err.contains("failed to parse client message"));
     }
 
