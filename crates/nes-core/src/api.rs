@@ -2202,3 +2202,158 @@ mod tests_rom_loader_internal {
         ));
     }
 }
+
+#[cfg(test)]
+mod tests_mapper_delta {
+    use super::*;
+    use crate::rom::NametableMirroring;
+
+    #[test]
+    fn test_mapper_deltas_for_all_variants() {
+        let nrom = Nrom::from_prg_rom(vec![0; 16384]);
+        let uxrom1 = Uxrom::from_prg_rom(vec![0; 32768]);
+        let mut uxrom2 = uxrom1.clone();
+        uxrom2.write_prg(0x8000, 1);
+        let mmc1_1 = Mmc1::from_prg_rom(vec![0; 32768], 0);
+        let mut mmc1_2 = mmc1_1.clone();
+        mmc1_2.write_prg(0x8000, 1); // shift count = 1
+        let cnrom1 = Cnrom::from_prg_chr(vec![0; 16384], vec![0; 16384]);
+        let mut cnrom2 = cnrom1.clone();
+        cnrom2.write_prg(0x8000, 1);
+        let axrom1 = Axrom::from_prg_rom(vec![0; 65536]);
+        let mut axrom2 = axrom1.clone();
+        axrom2.write_prg(0x8000, 1);
+        let gxrom1 = Gxrom::from_prg_chr(vec![0; 32768], vec![0; 16384]);
+        let mut gxrom2 = gxrom1.clone();
+        gxrom2.write_prg(0x8000, 1);
+        let mmc3_1 =
+            Mmc3::from_prg_chr(vec![0; 65536], vec![0; 16384], NametableMirroring::Vertical);
+        let mut mmc3_2 = mmc3_1.clone();
+        mmc3_2.write_prg(0x8000, 1); // Bank select to force a state delta
+
+        // Test delta_to and apply_delta for Nrom
+        let m_nrom1 = LoadedMapper::Nrom(nrom.clone());
+        let m_nrom2 = LoadedMapper::Nrom(nrom.clone());
+        assert!(m_nrom1.delta_to(&m_nrom2).is_none());
+        assert!(m_nrom1.snapshot_delta().is_none());
+        // test apply_delta Replace panic condition?
+        // We can't easily test apply_delta panic because it uses debug_assert.
+        let m_nrom1 = LoadedMapper::Nrom(nrom.clone());
+        let m_mmc3_temp = LoadedMapper::Mmc3(mmc3_1.clone());
+        let delta = m_nrom1.delta_to(&m_mmc3_temp).unwrap();
+        // Instead of apply_delta which asserts, just verify delta_to is Replace
+        assert!(matches!(delta.kind, MapperDeltaKind::Replace(_)));
+
+        // Test Uxrom
+        let mut m_uxrom1 = LoadedMapper::Uxrom(uxrom1);
+        let m_uxrom2 = LoadedMapper::Uxrom(uxrom2);
+        let delta = m_uxrom1.delta_to(&m_uxrom2).unwrap();
+        m_uxrom1.apply_delta(&delta, &[0; 8192]);
+        assert!(m_uxrom1.snapshot_delta().is_some());
+
+        if let LoadedMapper::Uxrom(m) = &m_uxrom1 {
+            assert_eq!(
+                m.state(),
+                if let LoadedMapper::Uxrom(m2) = &m_uxrom2 {
+                    m2.state()
+                } else {
+                    unreachable!()
+                }
+            );
+        }
+
+        // Test Mmc1
+        let mut m_mmc1_1 = LoadedMapper::Mmc1(mmc1_1);
+        let m_mmc1_2 = LoadedMapper::Mmc1(mmc1_2);
+        let delta = m_mmc1_1.delta_to(&m_mmc1_2).unwrap();
+        m_mmc1_1.apply_delta(&delta, &[0; 8192]);
+        assert!(m_mmc1_1.snapshot_delta().is_some());
+
+        if let LoadedMapper::Mmc1(m) = &m_mmc1_1 {
+            assert_eq!(
+                m.state(),
+                if let LoadedMapper::Mmc1(m2) = &m_mmc1_2 {
+                    m2.state()
+                } else {
+                    unreachable!()
+                }
+            );
+        }
+
+        // Test Cnrom
+        let mut m_cnrom1 = LoadedMapper::Cnrom(cnrom1);
+        let m_cnrom2 = LoadedMapper::Cnrom(cnrom2);
+        let delta = m_cnrom1.delta_to(&m_cnrom2).unwrap();
+        m_cnrom1.apply_delta(&delta, &[0; 8192]);
+        assert!(m_cnrom1.snapshot_delta().is_some());
+
+        if let LoadedMapper::Cnrom(m) = &m_cnrom1 {
+            assert_eq!(
+                m.state(),
+                if let LoadedMapper::Cnrom(m2) = &m_cnrom2 {
+                    m2.state()
+                } else {
+                    unreachable!()
+                }
+            );
+        }
+
+        // Test Axrom
+        let mut m_axrom1 = LoadedMapper::Axrom(axrom1);
+        let m_axrom2 = LoadedMapper::Axrom(axrom2);
+        let delta = m_axrom1.delta_to(&m_axrom2).unwrap();
+        m_axrom1.apply_delta(&delta, &[0; 8192]);
+        assert!(m_axrom1.snapshot_delta().is_some());
+
+        if let LoadedMapper::Axrom(m) = &m_axrom1 {
+            assert_eq!(
+                m.state(),
+                if let LoadedMapper::Axrom(m2) = &m_axrom2 {
+                    m2.state()
+                } else {
+                    unreachable!()
+                }
+            );
+        }
+
+        // Test Gxrom
+        let mut m_gxrom1 = LoadedMapper::Gxrom(gxrom1);
+        let m_gxrom2 = LoadedMapper::Gxrom(gxrom2);
+        let delta = m_gxrom1.delta_to(&m_gxrom2).unwrap();
+        m_gxrom1.apply_delta(&delta, &[0; 8192]);
+        assert!(m_gxrom1.snapshot_delta().is_some());
+
+        if let LoadedMapper::Gxrom(m) = &m_gxrom1 {
+            assert_eq!(
+                m.state(),
+                if let LoadedMapper::Gxrom(m2) = &m_gxrom2 {
+                    m2.state()
+                } else {
+                    unreachable!()
+                }
+            );
+        }
+
+        // Test Mmc3
+        let mut m_mmc3_1 = LoadedMapper::Mmc3(mmc3_1);
+        let m_mmc3_2 = LoadedMapper::Mmc3(mmc3_2);
+        let delta = m_mmc3_1.delta_to(&m_mmc3_2).unwrap();
+        m_mmc3_1.apply_delta(&delta, &[0; 8192]);
+        assert!(m_mmc3_1.snapshot_delta().is_some());
+
+        if let LoadedMapper::Mmc3(m) = &m_mmc3_1 {
+            assert_eq!(
+                m.state(),
+                if let LoadedMapper::Mmc3(m2) = &m_mmc3_2 {
+                    m2.state()
+                } else {
+                    unreachable!()
+                }
+            );
+        }
+
+        // Test replace
+        let delta = m_nrom1.delta_to(&m_mmc3_1).unwrap();
+        assert!(matches!(delta.kind, MapperDeltaKind::Replace(_)));
+    }
+}
