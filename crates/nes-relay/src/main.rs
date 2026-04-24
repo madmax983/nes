@@ -204,7 +204,8 @@ fn handle_client(
         }
     });
 
-    let join = read_client_message(&mut reader)?
+    let mut line = String::new();
+    let join = read_client_message(&mut reader, &mut line)?
         .ok_or_else(|| "client disconnected before join".to_owned())?;
     let (room, player) = if let ClientMessage::Join { room, player } = join {
         if !matches!(player, 1 | 2) {
@@ -244,7 +245,7 @@ fn handle_client(
         });
     }
 
-    while let Some(message) = read_client_message(&mut reader)? {
+    while let Some(message) = read_client_message(&mut reader, &mut line)? {
         match message {
             ClientMessage::Join { .. } => {
                 let _ = tx_out.send(ServerMessage::Error {
@@ -287,10 +288,19 @@ fn handle_client(
     Ok(())
 }
 
-fn read_client_message(reader: &mut BufReader<TcpStream>) -> Result<Option<ClientMessage>, String> {
-    let mut line = String::new();
+/// Reads a line from the given reader and parses it as a `ClientMessage`.
+///
+/// **Performance optimization:** Accepts a mutable reference to an existing
+/// `String` buffer (`line`) instead of allocating a new one internally. This
+/// allows the caller to hoist the allocation outside of hot loops, avoiding
+/// costly heap allocations per message.
+fn read_client_message(
+    reader: &mut BufReader<TcpStream>,
+    line: &mut String,
+) -> Result<Option<ClientMessage>, String> {
+    line.clear();
     let bytes_read = reader
-        .read_line(&mut line)
+        .read_line(line)
         .map_err(|err| format!("failed to read socket line: {err}"))?;
     if bytes_read == 0 {
         return Ok(None);
@@ -731,18 +741,21 @@ mod tests {
             .shutdown(Shutdown::Write)
             .expect("shutdown write half");
         let mut reader = BufReader::new(server);
-        let parsed = read_client_message(&mut reader)
+        let mut line = String::new();
+        let parsed = read_client_message(&mut reader, &mut line)
             .expect("parse message")
             .expect("message present");
         assert_eq!(parsed, ClientMessage::Ping { nonce: 42 });
 
-        let eof = read_client_message(&mut reader).expect("eof read should succeed");
+        let eof = read_client_message(&mut reader, &mut line).expect("eof read should succeed");
         assert!(eof.is_none());
 
         let (mut bad_client, bad_server) = connected_pair();
         bad_client.write_all(b"not json\n").expect("write garbage");
         let mut bad_reader = BufReader::new(bad_server);
-        let err = read_client_message(&mut bad_reader).expect_err("invalid json should fail");
+        let mut bad_line = String::new();
+        let err = read_client_message(&mut bad_reader, &mut bad_line)
+            .expect_err("invalid json should fail");
         assert!(err.contains("failed to parse client message"));
     }
 

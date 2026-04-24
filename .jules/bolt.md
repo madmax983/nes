@@ -7,3 +7,6 @@
 **[Eliminating Header Buffer Allocations]
 **Learning:** [When parsing line-based protocols (like MCP/JSON-RPC over stdio or TCP streams) in a loop, declaring `let mut line = String::new();` inside the loop causes a heap allocation for every single header line read.]
 **Action:** [Hoist the `String` allocation outside the reading loop and call `line.clear()` before each `.read_line()` call. This allows `read_line` to safely reuse the existing buffer capacity, eliminating per-header-line allocations entirely.]
+## 2024-04-24 - Hoisting String allocations out of reader loops
+**Learning:** Network streams reading lines inside a `loop` or `while let` with `let mut line = String::new();` results in a new heap allocation for every message. `clippy` does not automatically flag these as unnecessary allocations in IO loops.
+**Action:** Always pre-allocate the `String` outside the loop, pass `&mut line` to reading functions, and use `line.clear()` inside the loop to reuse the buffer.

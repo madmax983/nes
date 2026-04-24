@@ -267,8 +267,11 @@ fn writer_loop(
 
 fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), String> {
     let mut reader = BufReader::new(stream);
+    // **Performance optimization:** Hoist `String::new()` out of the loop
+    // to avoid allocating on the heap for every single network message.
+    let mut line = String::new();
     loop {
-        let mut line = String::new();
+        line.clear();
         let bytes = reader
             .read_line(&mut line)
             .map_err(|err| format!("failed to read relay message: {err}"))?;
