@@ -336,4 +336,20 @@ pub(crate) mod tests {
         let saw_silence = (0..600).any(|_| queue_rx.next() == Some(0.0));
         assert!(saw_silence, "stop should silence the queued source");
     }
+
+    #[test]
+    #[should_panic(expected = "fake audio state lock should not poison")]
+    #[ignore = "Havoc Mutex Poison Attack"]
+    fn havoc_test_fake_audio_sink_poison() {
+        let (sink, state) = FakeAudioSink::with_len(0);
+
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = state.lock().unwrap();
+            panic!("Havoc closure panic");
+        });
+
+        // The state lock is now poisoned.
+        // This will panic when it tries to lock the state.
+        sink.queue_len();
+    }
 }

@@ -70,3 +70,9 @@ capacity overflow
 **The Trigger:** Sending a JSON-RPC HTTP header with an absurdly large `Content-Length` (e.g., `18446744073709551615`).
 **The Result:** The host blindly trusts the header and attempts to allocate an unconstrained `vec![0_u8; len]`. This results in an immediate Out-Of-Memory panic (`capacity overflow`), crashing the entire desktop application.
 **The Fix (Not Mine):** Someone needs to clamp `len` to a reasonable maximum (e.g., a few MBs) or use a capped stream reader.
+
+## 2024-05-24 - [Havoc Mutex Poison Attack on FakeAudioSink]
+**The Trigger:** A panic inside the `state.lock()` block in tests.
+**The Stack Trace:** `panic!("Havoc closure panic");`
+**Reproduction:** Run `cargo test -p nes-desktop havoc_test_fake_audio_sink_poison -- --ignored`.
+**Comment:** You assumed the audio state lock would never be poisoned in the test harness. You were wrong.
