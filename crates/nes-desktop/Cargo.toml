@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = []
+default = ["mcp-host"]
 mcp-host = ["dep:nes-mcp"]
 nova = ["dep:rand"]
 
