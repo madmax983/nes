@@ -14,7 +14,12 @@ use serde_json::{Map, Value, json};
 
 use crate::{DispatchOutput, ToolParams};
 
+/// The standard JSON-RPC version required for all protocol messages.
 pub const JSONRPC_VERSION: &str = "2.0";
+
+/// The default protocol version specifying the semantic format of MCP interactions.
+///
+/// This version string is used during initialization to ensure client/server compatibility.
 pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 
 /// A JSON-RPC 2.0 request sent from the MCP client.
@@ -205,6 +210,22 @@ pub fn json_arg_to_string(value: Value) -> String {
     }
 }
 
+/// Converts a [`DispatchOutput`] result into a serialized JSON representation.
+///
+/// This function maps the internal emulator results (e.g., cycle counts, framebuffer bytes)
+/// into a standard JSON value payload for returning to the MCP client.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::DispatchOutput;
+/// use nes_mcp::protocol::dispatch_output_value;
+/// use serde_json::json;
+///
+/// let output = DispatchOutput::Ack;
+/// let json_val = dispatch_output_value(output);
+/// assert_eq!(json_val, json!({ "kind": "ack" }));
+/// ```
 #[must_use]
 pub fn dispatch_output_value(output: DispatchOutput) -> Value {
     match output {
@@ -356,6 +377,24 @@ pub fn dispatch_output_value(output: DispatchOutput) -> Value {
     }
 }
 
+/// Returns the expected JSON Schema for a given tool's input parameters.
+///
+/// This provides structural validation information to the MCP client, describing
+/// the required and optional arguments for any dynamically registered tool.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::protocol::tool_input_schema;
+/// use serde_json::json;
+///
+/// let schema = tool_input_schema("reset");
+/// assert_eq!(schema, json!({
+///     "type": "object",
+///     "properties": {},
+///     "additionalProperties": false
+/// }));
+/// ```
 #[must_use]
 pub fn tool_input_schema(tool_name: &str) -> Value {
     match tool_name {
@@ -477,6 +516,22 @@ pub fn tool_input_schema(tool_name: &str) -> Value {
     }
 }
 
+/// Constructs a successful JSON-RPC 2.0 response message.
+///
+/// Wraps the execution output in the standard JSON-RPC envelope, tying it
+/// back to the original request using the provided `id`.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::protocol::jsonrpc_result;
+/// use serde_json::json;
+///
+/// let res = jsonrpc_result(json!(42), json!({ "status": "ok" }));
+/// assert_eq!(res["jsonrpc"], "2.0");
+/// assert_eq!(res["id"], 42);
+/// assert_eq!(res["result"]["status"], "ok");
+/// ```
 #[must_use]
 pub fn jsonrpc_result(id: Value, result: Value) -> Value {
     json!({
@@ -486,6 +541,23 @@ pub fn jsonrpc_result(id: Value, result: Value) -> Value {
     })
 }
 
+/// Constructs a failed JSON-RPC 2.0 error message.
+///
+/// Wraps the internal `RpcError` in the standard JSON-RPC envelope, tying it
+/// back to the original request using the provided `id`.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_mcp::protocol::{jsonrpc_error, RpcError};
+/// use serde_json::json;
+///
+/// let error = RpcError::invalid_params("missing arguments");
+/// let res = jsonrpc_error(json!(99), error);
+/// assert_eq!(res["jsonrpc"], "2.0");
+/// assert_eq!(res["id"], 99);
+/// assert_eq!(res["error"]["code"], -32602);
+/// ```
 #[must_use]
 pub fn jsonrpc_error(id: Value, err: RpcError) -> Value {
     json!({

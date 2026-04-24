@@ -22,3 +22,9 @@
 ## 2025-06-18 - Missing serde Module Docs
 **Confusion:** Internal helper modules for `serde` sequence iteration (like `serde_iter` in `nes-desktop`) often lack documentation because they are seen as implementation details. However, without docs, users don't understand how `serialize` treats iterators when compiling with strict warnings or viewing internal docs.
 **Clarification:** Added explicit module-level and function-level `///` docs to `serde_iter::serialize` explaining the `Serializer::collect_seq` bridging behavior, along with an executable `## Examples` doctest that asserts the JSON output. Made the module `pub` so doctests can access it properly.
+## 2025-06-18 - Missing serde Module Docs
+**Confusion:** Internal helper modules for `serde` sequence iteration (like `serde_iter` in `nes-desktop`) often lack documentation because they are seen as implementation details. However, without docs, users don't understand how `serialize` treats iterators when compiling with strict warnings or viewing internal docs.
+**Clarification:** Added explicit module-level and function-level `///` docs to `serde_iter::serialize` explaining the `Serializer::collect_seq` bridging behavior, along with an executable `## Examples` doctest that asserts the JSON output. Made the module `pub` so doctests can access it properly.
+## 2025-06-18 - RpcRequest documentation missing
+**Confusion:** Running `cargo doc` with strict warnings raised missing documentation for protocol functions.
+**Clarification:** Added thorough `///` comments containing `## Examples` sections to all protocol methods in `protocol.rs`, providing executable context to developers using the MCP protocols.
