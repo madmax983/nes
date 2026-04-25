@@ -1,0 +1,37 @@
+--- crates/nes-mcp/src/output.rs
++++ crates/nes-mcp/src/output.rs
+@@ -265,7 +265,7 @@
+ ///
+ /// ```
+ /// use nes_mcp::{frame_chunk, publish_frame_with};
+ ///
+ /// publish_frame_with(256, 240, |buf| { /* fill buffer */ });
+-/// let chunk = frame_chunk(1).unwrap();
++/// let chunk = frame_chunk(1).expect("failed");
+ /// assert_eq!(chunk.seq, 1);
+ /// ```
+ pub fn frame_chunk(requested_seq: u64) -> Option<FrameChunk> {
+@@ -291,7 +291,7 @@
+ /// ```
+ /// use nes_mcp::{audio_chunk, publish_audio};
+ ///
+ /// publish_audio(&[0.0; 100]);
+-/// let chunk = audio_chunk(1).unwrap();
++/// let chunk = audio_chunk(1).expect("failed");
+ /// assert_eq!(chunk.seq, 1);
+ /// ```
+ pub fn audio_chunk(requested_seq: u64) -> Option<AudioChunk> {
+@@ -422,11 +422,11 @@
+         assert_eq!(meta.frame_seq, 10);
+         assert_eq!(meta.audio_seq, 5);
+
+-        let chunk = frame_chunk(meta.frame_seq).unwrap();
++        let chunk = frame_chunk(meta.frame_seq).expect("failed");
+         assert_eq!(chunk.seq, 10);
+         assert_eq!(chunk.rgba.len(), 256 * 240 * 4);
+
+-        let chunk = audio_chunk(meta.audio_seq).unwrap();
++        let chunk = audio_chunk(meta.audio_seq).expect("failed");
+         assert_eq!(chunk.seq, 5);
+         assert_eq!(chunk.samples.len(), 100);
+     }

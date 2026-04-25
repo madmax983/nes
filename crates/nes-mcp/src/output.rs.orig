@@ -413,22 +413,6 @@ mod tests {
     }
 
     #[test]
-    fn should_resize_memory_when_publishing_audio_with_closure_if_length_differs() {
-        publish_audio(vec![0; 100]);
-        publish_audio_with(200, |samples| {
-            assert_eq!(samples.len(), 200);
-        });
-    }
-
-    #[test]
-    fn should_resize_memory_when_publishing_frame_with_closure_if_length_differs() {
-        publish_frame(256, 240, vec![0; 256 * 240 * 4]);
-        publish_frame_with(128, 120, |rgba| {
-            assert_eq!(rgba.len(), 128 * 120 * 4);
-        });
-    }
-
-    #[test]
     fn should_reuse_memory_when_publishing_frame_with_closure() {
         let _guard = reset_output_state_for_test();
         let initial_meta = latest_output_metadata();

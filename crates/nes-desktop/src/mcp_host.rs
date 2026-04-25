@@ -362,6 +362,12 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
     }
 
     let len = content_length.ok_or_else(|| "missing Content-Length header".to_owned())?;
+    const MAX_PAYLOAD_SIZE: usize = 10 * 1024 * 1024; // 10 MB
+    if len > MAX_PAYLOAD_SIZE {
+        return Err(format!(
+            "capacity overflow: Content-Length {len} exceeds maximum allowed size of {MAX_PAYLOAD_SIZE} bytes"
+        ));
+    }
     let mut payload = vec![0_u8; len];
     reader
         .read_exact(&mut payload)
