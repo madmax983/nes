@@ -6,6 +6,8 @@
 //! gated behind the `nova` feature flag to keep the base emulator footprint small
 //! and ensure that core accuracy isn't impacted by experimental R&D.
 
+/// Tracks memory conditions to unlock achievements during gameplay.
+pub mod achievement_tracker;
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
 /// Utility for discovering cheat codes by monitoring RAM changes.
