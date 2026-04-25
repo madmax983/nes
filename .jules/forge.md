@@ -44,3 +44,7 @@
 **[Refactoring unwrap_or(Value::Null) in nes-desktop/src/mcp_host.rs]**
 **Learning:** Found an instance of `unwrap_or(Value::Null)`. This violates clippy and idiomatic Rust guidelines because `Value::Null` is the default for `serde_json::Value`.
 **Action:** Use `.unwrap_or_default()` instead of explicitly providing the default value like `.unwrap_or(serde_json::Value::Null)`.
+
+**Extract String::new() out of I/O read loops**
+**Learning:** Found instances where `let mut line = String::new();` was declared inside a `loop` or a `while` loop parsing text over `TcpStream`. This causes an unnecessary allocation and deallocation on every single network message.
+**Action:** Hoisted the `String::new()` declaration out of the loops (or passed it down via `&mut String`) and called `.clear()` inside the loop instead. This reuses the same buffer allocation without changing runtime logic, improving network throughput handling efficiency.
