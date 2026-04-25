@@ -44,3 +44,7 @@
 **[Refactoring unwrap_or(Value::Null) in nes-desktop/src/mcp_host.rs]**
 **Learning:** Found an instance of `unwrap_or(Value::Null)`. This violates clippy and idiomatic Rust guidelines because `Value::Null` is the default for `serde_json::Value`.
 **Action:** Use `.unwrap_or_default()` instead of explicitly providing the default value like `.unwrap_or(serde_json::Value::Null)`.
+
+**[Extract reset_playback_state into AppContext]
+**Learning:** Found repetitive blocks (7 lines long) across multiple variants in `execute_app_action` (like `AppAction::OpenRom`, `AppAction::LoadSlot`, `AppAction::Reset`) that reset the rewind holding state, time machine buffer, and performance metrics tracking.
+**Action:** Centralized this logic into an implementation block `impl<'a> AppContext<'a> { fn reset_playback_state(&mut self) { ... } }`, increasing DRY-ness and reducing visual clutter in the main application loop match statement.
