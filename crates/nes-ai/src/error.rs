@@ -3,46 +3,71 @@ use std::path::PathBuf;
 use burn_core::record::RecorderError;
 use thiserror::Error;
 
+/// Error types emitted by the AI training and evaluation pipeline.
 #[derive(Debug, Error)]
 pub enum AiError {
+    /// An operation was attempted that is not supported by the current environment or profile.
     #[error("unsupported operation: {0}")]
     Unsupported(&'static str),
+    /// Failed to create the directory hierarchy for storing environment snapshots.
     #[error("failed to create snapshot directory '{path}': {source}")]
     SnapshotDirCreate {
+        /// The path that could not be created.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
+    /// Failed to serialize the snapshot bundle into JSON format.
     #[error("failed to serialize snapshot bundle: {source}")]
     SnapshotSerialize {
+        /// The underlying serialization error.
         #[source]
         source: serde_json::Error,
     },
+    /// Failed to write the serialized snapshot bundle to disk.
     #[error("failed to write snapshot bundle '{path}': {source}")]
     SnapshotWrite {
+        /// The destination path.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
+    /// Failed to read the snapshot bundle from disk.
     #[error(
         "failed to read snapshot bundle '{path}': {source}\nHint: Ensure the file exists or check the profile configuration."
     )]
     SnapshotRead {
+        /// The path that could not be read.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
+    /// Failed to parse the snapshot bundle JSON data.
     #[error("failed to parse snapshot bundle '{path}': {source}")]
     SnapshotParse {
+        /// The path of the corrupted snapshot file.
         path: PathBuf,
+        /// The underlying JSON parsing error.
         #[source]
         source: serde_json::Error,
     },
+    /// The loaded snapshot has an incompatible version number.
     #[error("unsupported snapshot bundle version: expected {expected}, found {found}")]
-    SnapshotVersionMismatch { expected: u32, found: u32 },
+    SnapshotVersionMismatch {
+        /// The expected version number.
+        expected: u32,
+        /// The version number found in the file.
+        found: u32
+    },
+    /// Failed to create the directory for storing AI model artifacts.
     #[error("failed to create artifact directory '{path}': {source}")]
     ArtifactDirCreate {
+        /// The path of the directory that failed creation.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },

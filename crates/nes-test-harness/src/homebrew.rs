@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Returns the absolute path where the default homebrew ROM should be located within the repository.
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

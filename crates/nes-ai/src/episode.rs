@@ -5,29 +5,42 @@ use serde::Serialize;
 
 use crate::error::AiError;
 
+/// Standard metadata collected over the lifetime of a single training episode.
 #[derive(Debug, Clone, Serialize)]
 pub struct EpisodeMetadata {
+    /// The profile this episode was evaluated under.
     pub profile_id: String,
+    /// The unique identifier of the starting state snapshot.
     pub snapshot_id: String,
+    /// The SHA-256 hash of the ROM.
     pub rom_hash: String,
+    /// The total accumulated reward (return).
     pub total_reward: f32,
+    /// Total number of emulator frames elapsed.
     pub episode_frames: u64,
+    /// A structural hash of the emulator's final state.
     pub final_state_hash: u64,
 }
 
+/// Contains the paths to the artifacts generated during an evaluation episode.
 #[derive(Debug, Clone)]
 pub struct EpisodeArtifactPaths {
+    /// The path to the saved TAS input replay movie.
     pub tas_json_path: PathBuf,
+    /// The path to the saved episode metadata JSON file.
     pub run_json_path: PathBuf,
+    /// The path to the saved macro text file (if exported).
     pub macro_txt_path: Option<PathBuf>,
 }
 
+/// A utility for writing episode recording artifacts to disk.
 #[derive(Debug, Clone)]
 pub struct EpisodeArtifactWriter {
     output_dir: PathBuf,
 }
 
 impl EpisodeArtifactWriter {
+    /// Binds the writer to a specific output directory.
     #[must_use]
     pub fn new(output_dir: PathBuf) -> Self {
         Self { output_dir }

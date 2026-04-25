@@ -34,27 +34,42 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// Represents a single write operation to an APU register during execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
+    /// The exact cycle count at which the write occurred.
     pub cpu_cycle: u64,
+    /// The memory address written to (e.g., $4000).
     pub addr: u16,
+    /// The 8-bit value written.
     pub value: u8,
 }
 
+/// Statistical metrics extracted from a captured audio buffer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
+    /// The total number of audio samples.
     pub sample_count: usize,
+    /// Root Mean Square (RMS) volume of the audio.
     pub rms: f64,
+    /// Maximum absolute amplitude reached.
     pub peak: i16,
+    /// The average displacement from zero.
     pub dc_offset: f64,
+    /// The fraction of samples reaching maximum amplitude bounds.
     pub clipping_ratio: f64,
 }
 
+/// Metrics comparing an emulator-generated waveform against a golden output.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
+    /// The length of the comparison window.
     pub samples_compared: usize,
+    /// The Pearson correlation coefficient [-1.0, 1.0].
     pub correlation: f64,
+    /// The ratio of RMS volume between the streams.
     pub rms_ratio: f64,
+    /// Mean absolute difference across frequency bins in the FFT spectrum.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -97,6 +112,9 @@ pub fn collect_apu_register_writes(
     Ok(writes)
 }
 
+/// Computes a fast deterministic hash of an APU write sequence.
+///
+/// Uses FNV-1a to turn the sequence into a single 64-bit fingerprint for test assertions.
 #[must_use]
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -177,6 +195,9 @@ pub fn capture_audio_window(
         .map_err(|err| format!("audio capture failed after warmup: {err}"))
 }
 
+/// Computes a fast deterministic hash of an audio waveform.
+///
+/// Uses FNV-1a to turn the sequence into a single 64-bit fingerprint for test assertions.
 #[must_use]
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -187,6 +208,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
     hash
 }
 
+/// Calculates basic audio statistics (RMS, peak, clipping) for an audio stream.
 #[must_use]
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
@@ -225,6 +247,9 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
     }
 }
 
+/// Extracts the RMS volume envelope from an audio stream.
+///
+/// Divides the stream into chunks of `window_samples` and computes the RMS volume of each chunk.
 #[must_use]
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
@@ -327,6 +352,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     Ok(samples)
 }
 
+/// Compares two audio waveforms returning metrics for correlation and frequency drift.
 #[must_use]
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
@@ -372,6 +398,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
     }
 }
 
+/// Computes a basic discrete fourier transform of an audio segment returning magnitudes in decibels.
 #[must_use]
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
@@ -414,6 +441,8 @@ fn hann_window(idx: usize, len: usize) -> f64 {
     0.5 - 0.5 * phase.cos()
 }
 
+/// Parses the iNES header of a ROM file to determine its memory mapper ID.
+/// Returns `None` if the header is missing or malformed.
 #[must_use]
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
@@ -431,6 +460,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     }
 }
 
+/// Returns true if the core supports the given mapper ID.
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)

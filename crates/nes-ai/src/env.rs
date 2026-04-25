@@ -17,25 +17,38 @@ use crate::{
     snapshot::{SnapshotBundle, load_snapshot_bundle, sha256_hex},
 };
 
+/// Data returned when the environment is advanced by one action step.
 #[derive(Debug, Clone)]
 pub struct StepOutput<F> {
+    /// Observations or features produced by the step.
     pub features: F,
+    /// Detailed breakdown of the reward components.
     pub reward: RewardBreakdown,
+    /// True if the episode has reached a terminal state (e.g. death or win).
     pub done: bool,
 }
 
+/// A bundled snapshot of the visual inputs provided to the neural network.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObservationSnapshot {
+    /// Number of sequential frames in this snapshot.
     pub frame_stack: usize,
+    /// Width of each frame in pixels.
     pub width: usize,
+    /// Height of each frame in pixels.
     pub height: usize,
+    /// Flattened 1D array of pixel data across all frames.
     pub frames: Vec<f32>,
+    /// Any additional numerical features extracted from memory.
     pub features: Vec<f32>,
 }
 
+/// Output structure used internally during control actions before observation processing.
 #[derive(Debug, Clone)]
 pub struct ControlStepOutput {
+    /// Broken down components of the reward function.
     pub reward: RewardBreakdown,
+    /// Whether the terminal conditions of the environment were met.
     pub done: bool,
 }
 
@@ -68,6 +81,7 @@ where
     P: TaskProfile,
     P::Features: RewardFeatures,
 {
+    /// Internal constructor used after generic parameter resolution.
     #[must_use]
     pub fn new(profile: P, snapshot: SnapshotBundle) -> Self {
         let cfg = profile.config().clone();
@@ -199,6 +213,7 @@ where
     /// # }
     /// ```
     #[must_use]
+    /// Returns a shared reference to the underlying `NesCore`.
     pub fn core(&self) -> &NesCore {
         &self.core
     }
@@ -221,6 +236,7 @@ where
     /// # Ok(())
     /// # }
     /// ```
+    /// Returns a mutable reference to the underlying `NesCore`.
     pub fn core_mut(&mut self) -> &mut NesCore {
         &mut self.core
     }
@@ -245,11 +261,13 @@ where
         })
     }
 
+    /// Exposes the TAS recording constructed during the current episode.
     #[must_use]
     pub fn recorded_movie(&self) -> &nes_core::tas::TasMovie {
         self.recorder.movie()
     }
 
+    /// Constructs the final episode metadata struct by aggregating internal tracking stats.
     #[must_use]
     pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         EpisodeMetadata {
@@ -280,6 +298,7 @@ impl ProfileEnv<SmbProfile> {
     }
 }
 
+/// Standard alias for the `ProfileEnv` specialized to Super Mario Bros.
 pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 
 /// Type-erased wrapper for concrete environment specializations like SMB.
@@ -288,7 +307,9 @@ pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 /// exists to hide that complexity behind a single enum, making it trivial to pass
 /// "some control environment" across thread bounds without dealing with `Box<dyn Any>`
 /// trait object headaches.
+/// Exposes the specific environment implementations supported by the AI pipeline.
 pub enum AnyControlEnv {
+    /// Environment tuned for Super Mario Bros using the `SmbProfile`.
     Smb(Box<SmbControlEnv>),
 }
 
@@ -346,6 +367,7 @@ impl AnyControlEnv {
         }
     }
 
+    /// Retrieves a reference to the active TAS recording.
     #[must_use]
     pub fn recorded_movie(&self) -> &TasMovie {
         match self {
@@ -353,6 +375,7 @@ impl AnyControlEnv {
         }
     }
 
+    /// Constructs the final episode metadata struct by aggregating internal tracking stats.
     #[must_use]
     pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         match self {

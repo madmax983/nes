@@ -4,31 +4,46 @@ use serde::{Deserialize, Deserializer, de::Error as _};
 
 use crate::error::AiError;
 
+/// Minimum valid dimension for observation pixel tensors.
+/// Prevent configurations from scaling inputs down so far that the network cannot identify objects.
 pub const MIN_OBSERVATION_DIM: usize = 20;
 
+/// Identifies a specific NES game targeted for reinforcement learning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GameProfileId {
+    /// Super Mario Bros (NTSC version).
     #[default]
     Smb,
 }
 
+/// Core parameters governing how the environment is configured and stepped during training.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AiProfileConfig {
+    /// The target game for this profile.
     #[serde(default)]
     pub game: GameProfileId,
+    /// A unique string identifier for this profile configuration.
     pub id: String,
+    /// Path to the ROM file required to boot the environment.
     pub rom_path: PathBuf,
+    /// Path to a JSON snapshot used to inject the initial memory state.
     pub snapshot_path: PathBuf,
+    /// Path to a TAS recording used to step the environment to a specific start state.
     pub bootstrap_tas_path: PathBuf,
+    /// Number of consecutive observations to stack together as input.
     #[serde(deserialize_with = "deserialize_positive_usize")]
     pub frame_stack: usize,
+    /// Number of emulator frames to advance per action step.
     #[serde(deserialize_with = "deserialize_positive_u32")]
     pub frame_skip: u32,
+    /// Hard limit on the number of frames allowed before truncating an episode.
     #[serde(deserialize_with = "deserialize_positive_u32")]
     pub max_episode_frames: u32,
+    /// Configuration for downscaling the visual observation tensor.
     pub observation: ObservationConfig,
+    /// Weights and parameters governing the reward signal.
     pub reward: RewardConfig,
 }
 
@@ -49,11 +64,14 @@ impl AiProfileConfig {
     }
 }
 
+/// Defines how the raw 256x240 NES framebuffer is processed into a model input.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObservationConfig {
+    /// The target width in pixels.
     #[serde(deserialize_with = "deserialize_observation_dim")]
     pub width: usize,
+    /// The target height in pixels.
     #[serde(deserialize_with = "deserialize_observation_dim")]
     pub height: usize,
 }
@@ -68,13 +86,19 @@ impl ObservationConfig {
     }
 }
 
+/// Contains coefficients and thresholds used to shape the reinforcement learning reward.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RewardConfig {
+    /// Scalar reward applied per unit of progress.
     pub forward_progress: f32,
+    /// Flat scalar reward applied on every frame the agent survives.
     pub alive_bonus: f32,
+    /// Flat scalar penalty applied when the agent triggers the stall condition.
     pub stall_penalty: f32,
+    /// Flat scalar penalty applied when the agent dies.
     pub death_penalty: f32,
+    /// Consecutive frames with no progress required to trigger the stall penalty.
     #[serde(deserialize_with = "deserialize_positive_u32")]
     pub stall_frames: u32,
 }
