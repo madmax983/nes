@@ -169,7 +169,8 @@ fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Res
             .map_err(|err| format!("failed to clone client socket: {err}"))?,
     );
 
-    while let Some(payload) = read_framed_message(&mut reader)? {
+    let mut line = String::new();
+    while let Some(payload) = read_framed_message(&mut reader, &mut line)? {
         let Some(response) = handle_message(&payload, request_tx) else {
             continue;
         };
@@ -333,15 +334,17 @@ fn handle_tools_call(
     Ok(Some(response))
 }
 
-pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+pub fn read_framed_message(
+    reader: &mut impl BufRead,
+    line: &mut String,
+) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
-    let mut line = String::new();
 
     loop {
         line.clear();
 
         let read = reader
-            .read_line(&mut line)
+            .read_line(line)
             .map_err(|err| format!("failed reading header line: {err}"))?;
         if read == 0 {
             if content_length.is_none() {
@@ -410,7 +413,8 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             host.drain(core);
-            match read_framed_message(reader) {
+            let mut line = String::new();
+            match read_framed_message(reader, &mut line) {
                 Ok(Some(payload)) => return payload,
                 Ok(None) => panic!("{context}: connection closed before response"),
                 Err(err) if Instant::now() < deadline && is_retryable_read_error(&err) => {
@@ -549,15 +553,17 @@ mod tests {
         write_framed_message(&mut wire, &value).expect("framed write should succeed");
 
         let mut reader = BufReader::new(Cursor::new(wire));
-        let payload = read_framed_message(&mut reader)
+        let mut line = String::new();
+        let payload = read_framed_message(&mut reader, &mut line)
             .expect("framed read should succeed")
             .expect("payload should exist");
         let parsed: Value = serde_json::from_slice(&payload).expect("payload JSON should decode");
         assert_eq!(parsed, value);
 
         let mut bad_reader = BufReader::new(Cursor::new(b"{}\r\n\r\n".to_vec()));
-        let err =
-            read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
+        let mut line = String::new();
+        let err = read_framed_message(&mut bad_reader, &mut line)
+            .expect_err("missing Content-Length should fail");
         assert!(err.contains("missing Content-Length"));
     }
 
@@ -586,7 +592,8 @@ mod tests {
             "method": "ping"
         });
         write_framed_message(&mut stream, &ping_request).expect("write ping");
-        let ping_payload = read_framed_message(&mut reader)
+        let mut line = String::new();
+        let ping_payload = read_framed_message(&mut reader, &mut line)
             .expect("read ping response")
             .expect("ping payload");
         let ping_response: Value =
@@ -600,7 +607,8 @@ mod tests {
             "method": "tools/list"
         });
         write_framed_message(&mut stream, &tools_list_request).expect("write tools/list");
-        let list_payload = read_framed_message(&mut reader)
+        let mut line = String::new();
+        let list_payload = read_framed_message(&mut reader, &mut line)
             .expect("read tools/list response")
             .expect("tools/list payload");
         let list_response: Value =

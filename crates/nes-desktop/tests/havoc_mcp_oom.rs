@@ -10,5 +10,6 @@ fn havoc_mcp_content_length_oom() {
     let mut cursor = Cursor::new(payload);
 
     // This will panic on `vec![0_u8; len]`
-    let _ = read_framed_message(&mut cursor);
+    let mut line = String::new();
+    let _ = read_framed_message(&mut cursor, &mut line);
 }

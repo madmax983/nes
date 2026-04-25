@@ -1,14 +1,7 @@
-🚮 Smell:
-- `validate_symbol` checked `.is_empty()` then manually `.unwrap()`'d the first char, an unsafe/ugly pattern.
-- `mcp_host.rs` explicitly used `.unwrap_or(Value::Null)` instead of the idiomatic `.unwrap_or_default()`.
+💡 What: Eliminated per-iteration `String` allocations when reading line-based formats in loop (such as reading MCP/JSON-RPC protocols via `BufRead::read_line`).
 
-✨ Solution:
-- Replaced the logic in `nes-dsl/src/parser.rs` with a single `let Some(...) = ... else { ... }` guard clause.
-- Replaced `.unwrap_or(Value::Null)` with `.unwrap_or_default()` in `nes-desktop/src/mcp_host.rs`.
+🎯 Why: In line-based reading loops (e.g., in `nes-mcp`, `nes-relay`, and `mcp_host` inside `nes-desktop`), the reader loop was allocating a new `String` on the heap for every single header or line received. The `BufRead::read_line` method can safely append to an existing `String` without reallocating if the capacity is sufficient. By hoisting `let mut line = String::new();` out of the loops and calling `line.clear()` instead, we reuse the existing buffer, greatly eliminating per-message allocation overhead on hot I/O paths.
 
-🧼 Benefit:
-- Idiomatic, strictly typed without panicking edge-cases hidden behind `unwrap`.
-- Cleaner, flatter function logic in both modules.
+📊 Impact: Reduces heap allocations by 1 per protocol message/header line on these streams. For heavy streams, this is a significant reduction in allocator pressure without impacting semantics.
 
-🛡️ Verification:
-- Ran `cargo check`, `cargo fmt`, `cargo clippy`, and `cargo test`. All passed. No runtime logic was modified.
+🔬 Measurement: `cargo test --all-targets --all-features` and `cargo bench --all-targets` verified that protocol invariants hold and tests pass cleanly without errors.

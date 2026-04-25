@@ -8,5 +8,6 @@ fn havoc_mcp_host_oom() {
     // usize::MAX string representation
     let input = b"Content-Length: 18446744073709551615\r\n\r\n";
     let mut reader = BufReader::new(&input[..]);
-    let _ = read_framed_message(&mut reader);
+    let mut line = String::new();
+    let _ = read_framed_message(&mut reader, &mut line);
 }
