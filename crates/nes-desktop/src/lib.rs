@@ -21,6 +21,8 @@ pub mod manual_state;
 pub mod menu;
 /// Diagnostic overlay rendering tools.
 pub mod overlay;
+/// Netplay client logic and state management.
+pub mod netplay;
 /// Real-Time Attack (speedrunning) utilities. Because playing the game isn't enough; you must scientifically measure how fast you can do it.
 pub mod rta;
 /// Live runtime cheat code manager.

@@ -18,3 +18,6 @@
 **Extract Constants from api.rs**
 **Tangle:** A circular dependency existed in `nes-core` where `apu.rs` and `ppu.rs` (internal modules) imported domain constants (`FRAME_WIDTH`, `AUDIO_SAMPLE_RATE`, etc.) from the public facade module `api.rs`.
 **Blueprint:** Extracted the domain constants into a new internal `constants.rs` module, breaking the circular dependency while continuing to re-export the constants via `lib.rs` for external consumers.
+**Extract netplay from binary to library module**
+**Tangle:** `netplay` was a hidden submodule of the binary (`main.rs`), breaking domain boundaries and making it hard to test or expose its types to other library modules without circular imports.
+**Blueprint:** Extracted `netplay.rs` into the `nes_desktop` library module (`lib.rs` -> `pub mod netplay;`) and updated `main.rs` (and other modules) to use it via the public API `nes_desktop::netplay`.

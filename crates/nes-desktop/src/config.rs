@@ -6,7 +6,7 @@ use nes_config::{
     parse_config_path_arg,
 };
 
-use crate::netplay::NetplayRuntimeConfig;
+use nes_desktop::netplay::NetplayRuntimeConfig;
 use nes_desktop::args::parse_runtime_args;
 use nes_desktop::rta::{DEFAULT_RTA_PROFILES_DIR, DEFAULT_RTA_RUNS_DIR, RtaRuntimeConfig};
 
