@@ -447,6 +447,67 @@ mod tests {
     }
 
     #[test]
+    fn ppu_timing_change_single_field() {
+        let before = make_snapshot();
+
+        let mut after = before.clone();
+        after.ppu.scanline = before.ppu.scanline.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+
+        let mut after = before.clone();
+        after.ppu.dot = before.ppu.dot.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+
+        let mut after = before.clone();
+        after.ppu.frame_counter = before.ppu.frame_counter.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+
+        let mut after = before.clone();
+        after.ppu.odd_frame = !before.ppu.odd_frame;
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_change_single_fields() {
+        let before = make_snapshot();
+
+        let mut after = before.clone();
+        after.ppu.vram_addr = before.ppu.vram_addr.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.temp_addr = before.ppu.temp_addr.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.fine_x = before.ppu.fine_x.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.write_toggle = !before.ppu.write_toggle;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.scroll_x = before.ppu.scroll_x.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.scroll_y = before.ppu.scroll_y.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.read_buffer = before.ppu.read_buffer.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.render_scroll_x = before.ppu.render_scroll_x.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.render_ctrl = before.ppu.render_ctrl.wrapping_add(1);
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+    }
+    #[test]
     fn identical_snapshots_all_none() {
         let snap = make_snapshot();
         let fd = FieldDelta::compute(&snap, &snap);

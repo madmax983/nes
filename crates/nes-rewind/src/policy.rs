@@ -77,6 +77,44 @@ mod tests {
     }
 
     #[test]
+    fn ema_calculation_logic() {
+        let mut p = policy();
+
+        assert_eq!(p.ema_step(100), 12);
+
+        p.rolling_avg = 1000;
+        assert_eq!(p.ema_step(500), 937);
+    }
+
+    #[test]
+    fn spike_threshold_boundary() {
+        let mut p = KeyframePolicy::new(60, 2048);
+        p.rolling_avg = 100;
+
+        assert!(!p.should_promote(2048)); // frames_since_keyframe=1
+
+        p.frames_since_keyframe = 0; // reset
+        p.rolling_avg = 100;
+        assert!(p.should_promote(2049)); // promotes! frames_since_keyframe becomes 0
+
+        let mut p2 = KeyframePolicy::new(60, 2048);
+        p2.rolling_avg = 1000;
+
+        // Let's test x = 4200:
+        // ema = 4200 * 32 / 256 + 875 = 525 + 875 = 1400.
+        // 1400 * 3 = 4200.
+        // 4200 > 4200 is False.
+        assert!(!p2.should_promote(4200));
+
+        p2.frames_since_keyframe = 0; // reset
+        p2.rolling_avg = 1000;
+        // 4207
+        // ema = 4207 * 32 / 256 + 875 = 525 + 875 = 1400.
+        // 1400 * 3 = 4200.
+        // 4207 > 4200 is True.
+        assert!(p2.should_promote(4207));
+    }
+    #[test]
     fn forces_keyframe_at_base_interval() {
         let mut p = policy();
         for _ in 0..59 {
