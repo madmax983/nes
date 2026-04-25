@@ -705,16 +705,17 @@ fn run() -> Result<(), String> {
     ]);
 
     let mut add_startup_row = |name: &str, status: &str, color: TableColor| {
-        startup_table.add_row(vec![
-            Cell::new(name),
-            Cell::new(status).fg(color),
-        ]);
+        startup_table.add_row(vec![Cell::new(name), Cell::new(status).fg(color)]);
     };
 
     #[cfg(feature = "mcp-host")]
     let mcp_host = if runtime.mcp_enabled {
         let host = McpHost::start(&runtime.mcp_bind_addr)?;
-        add_startup_row("MCP Host", &format!("tcp://{}", host.bind_addr()), TableColor::Green);
+        add_startup_row(
+            "MCP Host",
+            &format!("tcp://{}", host.bind_addr()),
+            TableColor::Green,
+        );
         Some(host)
     } else {
         None
@@ -785,7 +786,11 @@ fn run() -> Result<(), String> {
             Some(state)
         }
         Err(err) => {
-            add_startup_row("Gamepad Support", &format!("Unavailable: {}", err), TableColor::Yellow);
+            add_startup_row(
+                "Gamepad Support",
+                &format!("Unavailable: {}", err),
+                TableColor::Yellow,
+            );
             None
         }
     };
@@ -799,9 +804,17 @@ fn run() -> Result<(), String> {
         for (player, slot) in active_gamepads.iter_mut().enumerate() {
             *slot = connected.get(player).copied();
             if let Some(gamepad_id) = *slot {
-                add_startup_row(&format!("Gamepad P{}", player + 1), gilrs_state.gamepad(gamepad_id).name(), TableColor::Green);
+                add_startup_row(
+                    &format!("Gamepad P{}", player + 1),
+                    gilrs_state.gamepad(gamepad_id).name(),
+                    TableColor::Green,
+                );
             } else {
-                add_startup_row(&format!("Gamepad P{}", player + 1), "None", TableColor::DarkGrey);
+                add_startup_row(
+                    &format!("Gamepad P{}", player + 1),
+                    "None",
+                    TableColor::DarkGrey,
+                );
             }
         }
     }
