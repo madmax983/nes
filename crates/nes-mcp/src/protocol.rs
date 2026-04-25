@@ -221,7 +221,6 @@ pub fn json_arg_to_string(value: Value) -> String {
     }
 }
 
-#[must_use]
 /// Converts a core `DispatchOutput` enum into its JSON representation.
 ///
 /// Ensures the resulting object is tagged with a `kind` field corresponding to the variant name,
@@ -388,7 +387,6 @@ pub fn dispatch_output_value(output: DispatchOutput) -> Value {
     }
 }
 
-#[must_use]
 /// Retrieves the JSON schema definition for a specific tool's input parameters.
 ///
 /// This schema is provided to the MCP client (like an LLM) so it knows exactly what arguments
@@ -523,7 +521,6 @@ pub fn tool_input_schema(tool_name: &str) -> Value {
     }
 }
 
-#[must_use]
 /// Wraps a successful JSON-RPC payload in the standard envelope.
 ///
 /// ## Examples
@@ -545,7 +542,6 @@ pub fn jsonrpc_result(id: Value, result: Value) -> Value {
     })
 }
 
-#[must_use]
 /// Wraps an `RpcError` in the standard JSON-RPC error envelope.
 ///
 /// ## Examples

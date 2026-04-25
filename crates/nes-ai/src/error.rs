@@ -60,7 +60,7 @@ pub enum AiError {
         /// The expected version number.
         expected: u32,
         /// The version number found in the file.
-        found: u32
+        found: u32,
     },
     /// Failed to create the directory for storing AI model artifacts.
     #[error("failed to create artifact directory '{path}': {source}")]
