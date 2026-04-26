@@ -31,7 +31,7 @@ const CHR_8K_BYTES: usize = 8 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
 
 /// Represents a standard NES controller button.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, core::hash::Hash)]
 pub enum Button {
     /// A button.
     A,
