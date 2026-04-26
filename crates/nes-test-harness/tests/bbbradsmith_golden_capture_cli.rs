@@ -1,5 +1,62 @@
-use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
+
+#[cfg(unix)]
+fn make_unreadable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o000);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_unreadable(path: &std::path::Path) {
+    // On Windows, you could modify ACLs, but setting readonly doesn't prevent reading.
+    // We'll just skip the failure condition or handle it gracefully.
+}
+
+#[cfg(unix)]
+fn make_readable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o644);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_readable(path: &std::path::Path) {}
+
+#[cfg(unix)]
+fn make_dir_unreadable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o000);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_dir_unreadable(path: &std::path::Path) {}
+
+#[cfg(unix)]
+fn make_dir_readable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_dir_readable(path: &std::path::Path) {}
+
+#[cfg(unix)]
+fn make_dir_unwritable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o555);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(not(unix))]
+fn make_dir_unwritable(path: &std::path::Path) {}
 
 fn golden_capture_bin() -> std::path::PathBuf {
     if let Ok(path) = std::env::var("CARGO_BIN_EXE_bbbradsmith_golden_capture") {
@@ -343,6 +400,7 @@ fn golden_capture_skips_existing() {
 }
 
 #[test]
+#[cfg(unix)]
 fn golden_capture_prints_error_when_rom_unreadable() {
     let temp_dir = std::env::temp_dir().join("golden_capture_test_config9");
     std::fs::create_dir_all(&temp_dir).unwrap();
@@ -351,9 +409,7 @@ fn golden_capture_prints_error_when_rom_unreadable() {
     let rom_path = suite.join("test.nes");
     std::fs::write(&rom_path, "dummy").unwrap();
     // make unreadable
-    let mut perms = std::fs::metadata(&rom_path).unwrap().permissions();
-    perms.set_mode(0o000);
-    std::fs::set_permissions(&rom_path, perms).unwrap();
+make_unreadable(&rom_path);
 
     let golden = temp_dir.join("golden");
     let config_path = temp_dir.join("config.toml");
@@ -377,13 +433,12 @@ fn golden_capture_prints_error_when_rom_unreadable() {
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
     assert!(stderr.contains("failed to read ROM"));
 
-    let mut perms = std::fs::metadata(&rom_path).unwrap().permissions();
-    perms.set_mode(0o644);
-    std::fs::set_permissions(&rom_path, perms).unwrap();
+make_readable(&rom_path);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
 #[test]
+#[cfg(unix)]
 fn golden_capture_prints_error_when_suite_dir_unreadable() {
     let temp_dir = std::env::temp_dir().join("golden_capture_test_config10");
     std::fs::create_dir_all(&temp_dir).unwrap();
@@ -391,9 +446,7 @@ fn golden_capture_prints_error_when_suite_dir_unreadable() {
     std::fs::create_dir_all(&suite).unwrap();
 
     // make directory unreadable
-    let mut perms = std::fs::metadata(&suite).unwrap().permissions();
-    perms.set_mode(0o000);
-    std::fs::set_permissions(&suite, perms).unwrap();
+make_dir_unreadable(&suite);
 
     let golden = temp_dir.join("golden");
     let config_path = temp_dir.join("config.toml");
@@ -420,9 +473,7 @@ fn golden_capture_prints_error_when_suite_dir_unreadable() {
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
     assert!(stderr.contains("failed to read suite directory"));
 
-    let mut perms = std::fs::metadata(&suite).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&suite, perms).unwrap();
+make_dir_readable(&suite);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
@@ -467,6 +518,7 @@ fn golden_capture_prints_error_when_missing_stem() {
 }
 
 #[test]
+#[cfg(unix)]
 fn golden_capture_fails_to_write_pcm() {
     let temp_dir = std::env::temp_dir().join("golden_capture_test_config12");
     std::fs::create_dir_all(&temp_dir).unwrap();
@@ -496,9 +548,7 @@ fn golden_capture_fails_to_write_pcm() {
     std::fs::create_dir_all(&golden).unwrap();
 
     // make the target file directory unwriteable
-    let mut perms = std::fs::metadata(&golden).unwrap().permissions();
-    perms.set_mode(0o555);
-    std::fs::set_permissions(&golden, perms).unwrap();
+make_dir_unwritable(&golden);
 
     let config_path = temp_dir.join("config.toml");
     std::fs::write(
@@ -519,8 +569,6 @@ fn golden_capture_fails_to_write_pcm() {
 
     // The current tests will not fail if file cannot be created as the directory is writable by root.
     // So this test just covers execution path. It might not fail on CI.
-    let mut perms = std::fs::metadata(&golden).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&golden, perms).unwrap();
+make_dir_readable(&golden);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
