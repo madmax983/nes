@@ -183,6 +183,8 @@ fn handle_client(
         .try_clone()
         .map_err(|err| format!("failed to clone stream for writer: {err}"))?;
 
+    let mut line = String::new();
+
     let (tx_out, rx_out) = mpsc::channel::<ServerMessage>();
     thread::spawn(move || {
         for message in rx_out {
@@ -204,7 +206,7 @@ fn handle_client(
         }
     });
 
-    let join = read_client_message(&mut reader)?
+    let join = read_client_message(&mut reader, &mut line)?
         .ok_or_else(|| "client disconnected before join".to_owned())?;
     let (room, player) = if let ClientMessage::Join { room, player } = join {
         if !matches!(player, 1 | 2) {
@@ -244,7 +246,7 @@ fn handle_client(
         });
     }
 
-    while let Some(message) = read_client_message(&mut reader)? {
+    while let Some(message) = read_client_message(&mut reader, &mut line)? {
         match message {
             ClientMessage::Join { .. } => {
                 let _ = tx_out.send(ServerMessage::Error {
@@ -287,10 +289,10 @@ fn handle_client(
     Ok(())
 }
 
-fn read_client_message(reader: &mut BufReader<TcpStream>) -> Result<Option<ClientMessage>, String> {
-    let mut line = String::new();
+fn read_client_message(reader: &mut BufReader<TcpStream>, line: &mut String) -> Result<Option<ClientMessage>, String> {
+    line.clear();
     let bytes_read = reader
-        .read_line(&mut line)
+        .read_line(line)
         .map_err(|err| format!("failed to read socket line: {err}"))?;
     if bytes_read == 0 {
         return Ok(None);
@@ -731,18 +733,19 @@ mod tests {
             .shutdown(Shutdown::Write)
             .expect("shutdown write half");
         let mut reader = BufReader::new(server);
-        let parsed = read_client_message(&mut reader)
+        let mut line = String::new();
+        let parsed = read_client_message(&mut reader, &mut line)
             .expect("parse message")
             .expect("message present");
         assert_eq!(parsed, ClientMessage::Ping { nonce: 42 });
 
-        let eof = read_client_message(&mut reader).expect("eof read should succeed");
+        let eof = read_client_message(&mut reader, &mut line).expect("eof read should succeed");
         assert!(eof.is_none());
 
         let (mut bad_client, bad_server) = connected_pair();
         bad_client.write_all(b"not json\n").expect("write garbage");
         let mut bad_reader = BufReader::new(bad_server);
-        let err = read_client_message(&mut bad_reader).expect_err("invalid json should fail");
+        let err = read_client_message(&mut bad_reader, &mut line).expect_err("invalid json should fail");
         assert!(err.contains("failed to parse client message"));
     }
 
