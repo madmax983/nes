@@ -44,3 +44,6 @@
 **[Refactoring unwrap_or(Value::Null) in nes-desktop/src/mcp_host.rs]**
 **Learning:** Found an instance of `unwrap_or(Value::Null)`. This violates clippy and idiomatic Rust guidelines because `Value::Null` is the default for `serde_json::Value`.
 **Action:** Use `.unwrap_or_default()` instead of explicitly providing the default value like `.unwrap_or(serde_json::Value::Null)`.
+**[Extract reset ephemeral state]
+**Learning:** Found duplicate logic in `crates/nes-desktop/src/main.rs` for `AppAction::OpenRom`, `AppAction::LoadSlot`, and `AppAction::Reset` to reset the time machine, rewind state, audio, and metrics.
+**Action:** Extracted this into `reset_ephemeral_state` taking `&mut AppContext` and reducing repetitive logic and boilerplate.
