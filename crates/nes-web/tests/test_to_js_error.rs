@@ -1,7 +1,7 @@
 #![cfg(target_arch = "wasm32")]
 
-use wasm_bindgen_test::*;
 use nes_web::NesWebEmulator;
+use wasm_bindgen_test::*;
 
 #[wasm_bindgen_test]
 fn test_to_js_error_returns_string() {
