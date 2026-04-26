@@ -474,7 +474,6 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
     }
 }
 
-
 fn reset_ephemeral_state(ctx: &mut AppContext<'_>) {
     if let Some(output) = ctx.audio_output {
         output.clear();
