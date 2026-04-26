@@ -134,7 +134,7 @@ fn handle_message(state: &mut ServerState, payload: &[u8]) -> Option<Value> {
     // so we can consume `id` directly instead of allocating a new `Value` via `.clone()`.
     let id = request.id;
     let is_notification = id.is_none();
-    let response_id = id.unwrap_or(Value::Null);
+    let response_id = id.unwrap_or_default();
 
     if request.jsonrpc != JSONRPC_VERSION {
         if is_notification {
