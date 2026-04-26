@@ -409,7 +409,7 @@ fn golden_capture_prints_error_when_rom_unreadable() {
     let rom_path = suite.join("test.nes");
     std::fs::write(&rom_path, "dummy").unwrap();
     // make unreadable
-make_unreadable(&rom_path);
+    make_unreadable(&rom_path);
 
     let golden = temp_dir.join("golden");
     let config_path = temp_dir.join("config.toml");
@@ -433,7 +433,7 @@ make_unreadable(&rom_path);
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
     assert!(stderr.contains("failed to read ROM"));
 
-make_readable(&rom_path);
+    make_readable(&rom_path);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
@@ -446,7 +446,7 @@ fn golden_capture_prints_error_when_suite_dir_unreadable() {
     std::fs::create_dir_all(&suite).unwrap();
 
     // make directory unreadable
-make_dir_unreadable(&suite);
+    make_dir_unreadable(&suite);
 
     let golden = temp_dir.join("golden");
     let config_path = temp_dir.join("config.toml");
@@ -473,7 +473,7 @@ make_dir_unreadable(&suite);
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
     assert!(stderr.contains("failed to read suite directory"));
 
-make_dir_readable(&suite);
+    make_dir_readable(&suite);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
@@ -548,7 +548,7 @@ fn golden_capture_fails_to_write_pcm() {
     std::fs::create_dir_all(&golden).unwrap();
 
     // make the target file directory unwriteable
-make_dir_unwritable(&golden);
+    make_dir_unwritable(&golden);
 
     let config_path = temp_dir.join("config.toml");
     std::fs::write(
@@ -569,6 +569,6 @@ make_dir_unwritable(&golden);
 
     // The current tests will not fail if file cannot be created as the directory is writable by root.
     // So this test just covers execution path. It might not fail on CI.
-make_dir_readable(&golden);
+    make_dir_readable(&golden);
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
