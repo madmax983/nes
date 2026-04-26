@@ -15,6 +15,8 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 - `crates/nes-relay`: room relay server for internet netplay sessions.
 - `crates/nes-ai`: Burn-based training/eval stack for snapshot-start control tasks with TAS replay artifacts.
 
+> **NOTE:** Any mention of "story_demo" or "NarrativeGenerator" requires building with the `nova` feature enabled (e.g., `--features nova`).
+
 ## v0 Quality Gates
 
 `v0` is considered complete only when all are true:
@@ -65,7 +67,7 @@ RTA mode (speedrunner-focused):
 # Strict RTA mode (auto-select profile by ROM hash)
 cargo run -p nes-desktop --release -- --rta --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes
 
-# Pre-start manual profile override
+# Pre-start manual profile override (make sure the profile exists first: cp ./config/rta/profiles/smb-any.example.toml ./config/rta/profiles/smb-any.toml)
 cargo run -p nes-desktop --release -- --rta --rta-profile smb-any --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes
 
 # Calibration mode -> writes draft profile/report
@@ -161,7 +163,7 @@ cargo run -p nes-ai --bin prepare_smb_control -- `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
 
-# 2. Train from the local profile
+# 2. Train from the local profile (copy the example config first if needed: cp ./config/ai/profiles/smb-control.example.toml ./config/ai/profiles/smb-control.toml)
 cargo run -p nes-ai --bin train_smb_control -- `
   ./config/ai/profiles/smb-control.toml `
   4 `

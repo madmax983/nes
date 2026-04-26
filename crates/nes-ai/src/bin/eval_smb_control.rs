@@ -44,8 +44,12 @@ fn run() -> Result<(), String> {
         .unwrap_or(2);
     let artifact_dir = args.get(4).map(PathBuf::from);
 
-    let profile_str = fs::read_to_string(&profile_path)
-        .map_err(|e| format!("Failed to read profile config: {e}"))?;
+    let profile_str = fs::read_to_string(&profile_path).map_err(|e| {
+        format!(
+            "Failed to read profile config at {}: {e}",
+            profile_path.display()
+        )
+    })?;
     let profile_cfg: AiProfileConfig =
         toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
 
