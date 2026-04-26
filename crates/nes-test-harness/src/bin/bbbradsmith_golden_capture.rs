@@ -94,7 +94,7 @@ fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Col
 fn main() {
     let mut stdout = std::io::stdout();
     if let Err(err) = run(&mut stdout) {
-        eprintln!("\n{}", format!("Error: {err}").with(Color::Red).bold());
+        eprintln!("\n{err}");
         std::process::exit(1);
     }
 }
@@ -106,40 +106,62 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
         std::process::exit(0);
     }
 
-    let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
+    let (config_path, pass_through) = parse_config_path_arg(&raw_args).map_err(|e| {
+        format!(
+            "{} Failed to parse config path argument:\n  {}",
+            "Error:".with(Color::Red).bold(),
+            e
+        )
+    })?;
     let force = pass_through.iter().any(|arg| arg == "--force");
     for arg in &pass_through {
         if arg != "--force" {
             return Err(format!(
-                "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
+                "{} unknown argument '{}'. supported: --config <path>, --config=<path>, --force",
+                "Error:".with(Color::Red).bold(),
+                arg.clone().with(Color::Yellow)
             ));
         }
     }
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite".to_owned()
+        format!(
+            "{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite",
+            "Error:".with(Color::Red).bold()
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output".to_owned()
+        format!(
+            "{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output",
+            "Error:".with(Color::Red).bold()
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
     if !suite_dir_path.is_dir() {
         return Err(format!(
-            "bbbradsmith audio suite directory does not exist or is not a directory: {}",
-            suite_dir_path.display()
+            "{} bbbradsmith audio suite directory does not exist or is not a directory: '{}'",
+            "Error:".with(Color::Red).bold(),
+            suite_dir_path.display().to_string().with(Color::Yellow)
         ));
     }
-    fs::create_dir_all(&golden_dir)
-        .map_err(|err| format!("failed to create golden directory '{golden_dir}': {err}"))?;
+    fs::create_dir_all(&golden_dir).map_err(|err| {
+        format!(
+            "{} failed to create golden directory '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            golden_dir.clone().with(Color::Yellow),
+            err
+        )
+    })?;
 
     let mut rom_paths = collect_suite_roms(suite_dir_path)?;
     rom_paths.sort_unstable_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
     if rom_paths.is_empty() {
         return Err(format!(
-            "no .nes files found in suite directory {}",
-            suite_dir_path.display()
+            "{} no .nes files found in suite directory '{}'",
+            "Error:".with(Color::Red).bold(),
+            suite_dir_path.display().to_string().with(Color::Yellow)
         ));
     }
 
@@ -161,8 +183,14 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             .and_then(|name| name.to_str())
             .unwrap_or("<unknown>")
             .to_owned();
-        let rom_bytes = fs::read(&rom_path)
-            .map_err(|err| format!("failed to read ROM '{}': {err}", rom_path.display()))?;
+        let rom_bytes = fs::read(&rom_path).map_err(|err| {
+            format!(
+                "{} failed to read ROM '{}': {}",
+                "Error:".with(Color::Red).bold(),
+                rom_path.display().to_string().with(Color::Yellow),
+                err
+            )
+        })?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
             print_processing_progress(stdout, &rom_name, Color::Yellow);
@@ -176,8 +204,9 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             .and_then(|name| name.to_str())
             .ok_or_else(|| {
                 format!(
-                    "unable to compute output stem from ROM path '{}'",
-                    rom_path.display()
+                    "{} unable to compute output stem from ROM path '{}'",
+                    "Error:".with(Color::Red).bold(),
+                    rom_path.display().to_string().with(Color::Yellow)
                 )
             })?;
         let output_path = PathBuf::from(&golden_dir).join(format!("{stem}.s16le.pcm"));
@@ -218,7 +247,10 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     );
 
     if written == 0 && skipped_existing == 0 {
-        return Err("no golden files were written".to_owned());
+        return Err(format!(
+            "{} no golden files were written",
+            "Error:".with(Color::Red).bold()
+        ));
     }
     Ok(())
 }
@@ -253,8 +285,24 @@ fn build_summary_table(rows: Vec<RowData>) -> Table {
 
 fn load_config(path: Option<&Path>) -> Result<NesConfig, String> {
     match path {
-        Some(config_path) => NesConfig::load(config_path),
-        None => NesConfig::load_or_default(None),
+        Some(config_path) => NesConfig::load(config_path).map_err(|e| {
+            format!(
+                "{} failed to read config '{}': {}\n{} Check the file path and formatting.",
+                "Error:".with(Color::Red).bold(),
+                config_path.display(),
+                e,
+                "Hint:".with(Color::Cyan).bold()
+            )
+        }),
+        None => NesConfig::load_or_default(None).map_err(|e| {
+            format!(
+                "{} failed to read default config '{}': {}\n{} copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                "Error:".with(Color::Red).bold(),
+                nes_config::DEFAULT_CONFIG_PATH,
+                e,
+                "Hint:".with(Color::Cyan).bold()
+            )
+        }),
     }
 }
 
@@ -262,14 +310,18 @@ fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut roms = Vec::with_capacity(32);
     for entry in fs::read_dir(suite_dir).map_err(|err| {
         format!(
-            "failed to read suite directory '{}': {err}",
-            suite_dir.display()
+            "{} failed to read suite directory '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            suite_dir.display().to_string().with(Color::Yellow),
+            err
         )
     })? {
         let entry = entry.map_err(|err| {
             format!(
-                "failed to inspect directory entry in '{}': {err}",
-                suite_dir.display()
+                "{} failed to inspect directory entry in '{}': {}",
+                "Error:".with(Color::Red).bold(),
+                suite_dir.display().to_string().with(Color::Yellow),
+                err
             )
         })?;
         let path = entry.path();

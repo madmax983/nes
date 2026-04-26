@@ -12,6 +12,24 @@ use nes_ai::{
     trainer::{TrainerConfig, evaluate_smb_control},
 };
 
+fn format_config_read_error(path: &std::path::Path, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the profile config at '{}'.\n{} Ensure the file exists and the path is correct.",
+            "Error:".with(Color::Red).bold(),
+            path.display().to_string().with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read profile config at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            path.display(),
+            err
+        )
+    }
+}
+
 fn main() {
     if let Err(err) = run() {
         eprintln!("\n{err}");
@@ -45,9 +63,14 @@ fn run() -> Result<(), String> {
     let artifact_dir = args.get(4).map(PathBuf::from);
 
     let profile_str = fs::read_to_string(&profile_path)
-        .map_err(|e| format!("Failed to read profile config: {e}"))?;
-    let profile_cfg: AiProfileConfig =
-        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
+        .map_err(|e| format_config_read_error(&profile_path, &e))?;
+    let profile_cfg: AiProfileConfig = toml::from_str(&profile_str).map_err(|e| {
+        format!(
+            "{} Failed to parse profile config:\n{}",
+            "Error:".with(Color::Red).bold(),
+            e
+        )
+    })?;
 
     let trainer_cfg = TrainerConfig {
         artifact_dir: artifact_dir.clone(),
@@ -58,7 +81,13 @@ fn run() -> Result<(), String> {
 
     let summary =
         evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
-            .map_err(|e| format!("Evaluation failed: {e}"))?;
+            .map_err(|e| {
+                format!(
+                    "{} Evaluation failed:\n  {}",
+                    "Error:".with(Color::Red).bold(),
+                    e
+                )
+            })?;
 
     println!(
         "\n{}",
