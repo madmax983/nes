@@ -24,6 +24,8 @@ pub mod memory_visualizer;
 pub mod nametable_viewer;
 /// Performs spatial queries against Object Attribute Memory (OAM).
 pub mod oam_spatial_query;
+/// Maps zone events to controller commands to create an auto-playing bot.
+pub mod spatial_bot;
 /// Extracts sprite graphical data from memory for inspection.
 pub mod sprite_extractor;
 /// Applies color palette themes to the emulator output.
