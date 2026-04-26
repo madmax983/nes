@@ -70,3 +70,9 @@ capacity overflow
 **The Trigger:** Sending a JSON-RPC HTTP header with an absurdly large `Content-Length` (e.g., `18446744073709551615`).
 **The Result:** The host blindly trusts the header and attempts to allocate an unconstrained `vec![0_u8; len]`. This results in an immediate Out-Of-Memory panic (`capacity overflow`), crashing the entire desktop application.
 **The Fix (Not Mine):** Someone needs to clamp `len` to a reasonable maximum (e.g., a few MBs) or use a capped stream reader.
+
+## 2024-04-26 - OOM via load_rom /dev/zero
+**The Trigger:** `{"rom_path": "/dev/zero"}` provided to the `load_rom` MCP tool.
+**The Stack Trace:** (Process sent SIGKILL due to Out of Memory)
+**Reproduction:** Run `cargo test -p nes-mcp --test havoc_load_rom_oom -- --ignored`
+**Comment:** You assumed users would only pass valid files. You were wrong.
