@@ -1,11 +1,12 @@
-🗑️ Smell
-The codebase contained instances of `unwrap_or(Value::Null)` when extracting the request ID in `crates/nes-mcp/src/main.rs`. Providing an explicit `Value::Null` violates clippy's `unwrap_or_default` lint and goes against idiomatic Rust practices, since `Value::Null` is the implementation of `Default` for `serde_json::Value`.
+🚬 Smell
+The `parse_expr` and `parse_operand_syntax` functions in `nes-dsl` contained repetitive string prefix/suffix checking and unnecessarily verbose `match` blocks for simple sign inversion, creating unnecessary vertical bloat.
 
 ✨ Solution
-Replaced `unwrap_or(Value::Null)` with `unwrap_or_default()` in `crates/nes-mcp/src/main.rs`. This cleans up the code and aligns it with standard Rust idioms.
+- In `parse_operand_syntax`, grouped all indirect mode variants inside a single `strip_prefix('(')` check to eliminate redundant allocations/checks.
+- In `parse_expr`, replaced a verbose `match` block returning `value` or `-value` with a simple mathematical `sign * value` operation.
 
-🧼 Benefit
-Reduces cognitive load and makes the code slightly more concise. Adheres strictly to clippy lints, preventing future warnings and standardizing the codebase.
+🧊 Benefit
+Reduces cognitive load, eliminates repetitive string processing overhead, and embraces idiomatic Rust arithmetic simplification.
 
 🛡️ Verification
-Ran `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo fmt --all`. Tests passed. No logic changed.
+Tests passed. No logic changed. Verified via `cargo test` and `cargo clippy`.

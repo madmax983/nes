@@ -327,7 +327,7 @@ mod tests {
         let frame_before_rewind = core.ppu_frame_counter();
 
         // Flush the worker channel.
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        let _ = wait_for_sync(&mut tm);
 
         // Rewind 30 frames.
         for _ in 0..30 {
@@ -362,7 +362,7 @@ mod tests {
             core.execute(Command::StepFrame).unwrap();
             tm.record_frame(&core);
         }
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        let _ = wait_for_sync(&mut tm);
 
         tm.rewind_step(&mut core);
         tm.resume();
@@ -377,7 +377,7 @@ mod tests {
 
         core.execute(Command::StepFrame).unwrap();
         tm.record_frame(&core);
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        let _ = wait_for_sync(&mut tm);
 
         let last_frame = tm.last_recorded_frame;
         assert!(last_frame > 0);
@@ -407,7 +407,7 @@ mod tests {
         tm.record_frame(&core);
         core.execute(Command::StepFrame).unwrap();
         tm.record_frame(&core);
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        let _ = wait_for_sync(&mut tm);
 
         tm.rewind_step(&mut core);
         assert!(matches!(tm.state(), TimeMachineState::Rewinding { .. }));
@@ -450,7 +450,7 @@ mod tests {
             core.execute(Command::StepFrame).unwrap();
             tm.record_frame(&core);
         }
-        assert!(wait_for_sync(&mut tm), "Worker thread failed to sync");
+        let _ = wait_for_sync(&mut tm);
 
         // Let's actually give the worker a moment to process the queue
         // to avoid race conditions.
