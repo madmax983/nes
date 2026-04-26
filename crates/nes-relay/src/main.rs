@@ -289,7 +289,10 @@ fn handle_client(
     Ok(())
 }
 
-fn read_client_message(reader: &mut BufReader<TcpStream>, line: &mut String) -> Result<Option<ClientMessage>, String> {
+fn read_client_message(
+    reader: &mut BufReader<TcpStream>,
+    line: &mut String,
+) -> Result<Option<ClientMessage>, String> {
     line.clear();
     let bytes_read = reader
         .read_line(line)
@@ -745,7 +748,8 @@ mod tests {
         let (mut bad_client, bad_server) = connected_pair();
         bad_client.write_all(b"not json\n").expect("write garbage");
         let mut bad_reader = BufReader::new(bad_server);
-        let err = read_client_message(&mut bad_reader, &mut line).expect_err("invalid json should fail");
+        let err =
+            read_client_message(&mut bad_reader, &mut line).expect_err("invalid json should fail");
         assert!(err.contains("failed to parse client message"));
     }
 
