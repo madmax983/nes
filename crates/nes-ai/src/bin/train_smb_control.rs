@@ -86,14 +86,13 @@ fn run() -> Result<(), String> {
 
     println!("{}", "Training AI Profile...".with(Color::Cyan).bold());
 
-    let summary = train_smb_control(&profile_cfg, &trainer_cfg, episodes)
-        .map_err(|e| {
-            format!(
-                "{} Training failed:\n  {}",
-                "Error:".with(Color::Red).bold(),
-                e
-            )
-        })?;
+    let summary = train_smb_control(&profile_cfg, &trainer_cfg, episodes).map_err(|e| {
+        format!(
+            "{} Training failed:\n  {}",
+            "Error:".with(Color::Red).bold(),
+            e
+        )
+    })?;
 
     println!(
         "\n{}",
