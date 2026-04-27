@@ -16,3 +16,7 @@
 **[Optimized String Allocations in IO Loops]**
 **Learning:** Found loops doing `let mut line = String::new();` inside before a `read_line`, allocating continuously instead of reusing capacity.
 **Action:** Hoisted the string allocation outside the loops and called `.clear()` to reuse the memory, ensuring zero allocations in the hot read loops.
+
+## 2024-04-27 - [Avoid String clones in RTA DraftCandidate]
+**Learning:** Avoid unnecessary `.clone()`s of `String` during serialization workflows.
+**Action:** Used `&'a str` in structs purely meant for serialization like `DraftCandidate` and `DraftReport` instead of cloning `String` on every candidate instantiation in hot-ish parsing paths. Also optimized `push_split` by constructing the `SplitEvent` structure and then pushing it to the vector without cloning the original string name argument.

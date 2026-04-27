@@ -1475,19 +1475,19 @@ fn sanitize_id_for_filename(id: &str) -> String {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct DraftCandidate {
-    split_name: String,
+struct DraftCandidate<'a> {
+    split_name: &'a str,
     address: u16,
     value: u8,
     confidence: f32,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct DraftReport {
-    profile_id: String,
+struct DraftReport<'a> {
+    profile_id: &'a str,
     source_split_count: usize,
     source_frame_count: usize,
-    candidates: Vec<DraftCandidate>,
+    candidates: Vec<DraftCandidate<'a>>,
 }
 
 #[derive(Debug, Clone)]
@@ -1648,7 +1648,7 @@ impl CalibrationRecorder {
         })
     }
 
-    fn build_draft_profile(&self, rom_hash: &str, candidates: &[DraftCandidate]) -> RtaProfile {
+    fn build_draft_profile(&self, rom_hash: &str, candidates: &[DraftCandidate<'_>]) -> RtaProfile {
         let start_rule = candidates
             .first()
             .map(|candidate| TriggerRule {
@@ -1687,7 +1687,7 @@ impl CalibrationRecorder {
             splits: candidates
                 .iter()
                 .map(|candidate| SplitRule {
-                    name: candidate.split_name.clone(),
+                    name: candidate.split_name.to_owned(),
                     trigger: TriggerRule {
                         address: candidate.address,
                         value: u32::from(candidate.value),
@@ -1701,10 +1701,10 @@ impl CalibrationRecorder {
     fn write_draft_report(
         &self,
         profiles_dir: &Path,
-        candidates: Vec<DraftCandidate>,
+        candidates: Vec<DraftCandidate<'_>>,
     ) -> Result<PathBuf, String> {
         let report = DraftReport {
-            profile_id: self.profile_id.clone(),
+            profile_id: &self.profile_id,
             source_split_count: self.splits.len(),
             source_frame_count: self.frames.len(),
             candidates,
@@ -1721,8 +1721,8 @@ impl CalibrationRecorder {
         Ok(report_path)
     }
 
-    fn infer_candidates(&self) -> Vec<DraftCandidate> {
-        let mut out = Vec::<DraftCandidate>::new();
+    fn infer_candidates(&self) -> Vec<DraftCandidate<'_>> {
+        let mut out = Vec::<DraftCandidate<'_>>::new();
         for split in &self.splits {
             let Some(index) = self
                 .frames
@@ -1756,7 +1756,7 @@ impl CalibrationRecorder {
             }
             if let Some((address, value, confidence)) = selected {
                 out.push(DraftCandidate {
-                    split_name: split.name.clone(),
+                    split_name: &split.name,
                     address: address as u16,
                     value,
                     confidence,
