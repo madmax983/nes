@@ -14,6 +14,8 @@ pub mod cheat_finder;
 pub mod event_tracker;
 /// Visualizes the flow of CPU instructions and call graphs.
 pub mod execution_graph;
+/// Draws visual bounding boxes over OAM sprites on the framebuffer.
+pub mod hitbox_visualizer;
 /// Identifies the most frequently executed CPU instructions.
 pub mod hotspot_profiler;
 /// Generates a visual heatmap of accessed memory regions.
