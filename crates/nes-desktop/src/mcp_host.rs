@@ -333,6 +333,22 @@ fn handle_tools_call(
     Ok(Some(response))
 }
 
+/// Reads an MCP framed message from the given buffered reader stream.
+///
+/// This reads standard MCP headers (e.g. `Content-Length`), followed by an empty line,
+/// and then reads the exact number of bytes specified by the length into a buffer.
+/// If EOF is reached before a message is found, it returns `Ok(None)`.
+///
+/// # Examples
+///
+/// ```
+/// # use nes_desktop::mcp_host::read_framed_message;
+/// # use std::io::Cursor;
+/// let data = b"Content-Length: 13\r\n\r\n{\"key\":\"val\"}";
+/// let mut reader = Cursor::new(data);
+/// let result = read_framed_message(&mut reader).unwrap();
+/// assert_eq!(result.unwrap(), b"{\"key\":\"val\"}");
+/// ```
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
     let mut line = String::new();
