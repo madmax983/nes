@@ -9,7 +9,10 @@ fn havoc_mcp_host_oom() {
     let mut reader = BufReader::new(&input[..]);
     let result = read_framed_message(&mut reader);
 
-    assert!(result.is_err(), "Expected reading an oversized content-length to result in an error");
+    assert!(
+        result.is_err(),
+        "Expected reading an oversized content-length to result in an error"
+    );
     assert!(
         result.unwrap_err().contains("exceeds maximum allowed size"),
         "Error message did not contain expected capacity limit text."
