@@ -187,10 +187,9 @@ impl Assembler {
             return Ok(*addr);
         }
         if required {
-            Err(DslError::MissingResetVector)
-        } else {
-            Ok(self.config.default_org)
+            return Err(DslError::MissingResetVector);
         }
+        Ok(self.config.default_org)
     }
 
     fn resolve_expr(&self, expr: &Expr) -> Result<i64, DslError> {

@@ -236,9 +236,11 @@ fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, 
         if let Some(inner) = inner.strip_suffix(",X)") {
             return Ok(OperandSyntax::IndirectX(parse_expr(inner.trim(), line_no)?));
         }
+
         if let Some(inner) = inner.strip_suffix("),Y") {
             return Ok(OperandSyntax::IndirectY(parse_expr(inner.trim(), line_no)?));
         }
+
         if let Some(inner) = inner.strip_suffix(')') {
             return Ok(OperandSyntax::Indirect(parse_expr(inner.trim(), line_no)?));
         }
@@ -250,6 +252,7 @@ fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, 
             line_no,
         )?));
     }
+
     if let Some(prefix) = operand.strip_suffix(",Y") {
         return Ok(OperandSyntax::AbsoluteY(parse_expr(
             prefix.trim(),
@@ -406,10 +409,9 @@ impl Assembler {
             return Ok(*addr);
         }
         if required {
-            Err(DslError::MissingResetVector)
-        } else {
-            Ok(self.config.default_org)
+            return Err(DslError::MissingResetVector);
         }
+        Ok(self.config.default_org)
     }
 
     fn resolve_expr(&self, expr: &Expr) -> Result<i64, DslError> {
@@ -1137,13 +1139,12 @@ fn split_leading_label(line: &str) -> Option<(&str, &str)> {
 
 fn split_head(line: &str) -> (&str, &str) {
     let trimmed = line.trim_start();
-    if let Some(split) = trimmed.find(char::is_whitespace) {
-        let head = &trimmed[..split];
-        let rest = &trimmed[split..];
-        (head, rest)
-    } else {
-        (trimmed, "")
-    }
+    let Some(split) = trimmed.find(char::is_whitespace) else {
+        return (trimmed, "");
+    };
+    let head = &trimmed[..split];
+    let rest = &trimmed[split..];
+    (head, rest)
 }
 
 fn parse_const_assignment(input: &str, line_no: usize) -> Result<(&str, &str), DslError> {
