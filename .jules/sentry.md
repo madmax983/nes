@@ -9,3 +9,7 @@
 ## 2024-05-24 - [MemoryHeatmap Test Coverage]
 **Finding:** Uncovered code in `MemoryHeatmap::new` was resolved by adding initialization tests using default parameters and verifying correct sizing of the heap allocations.
 **Action:** Always verify `new()` implementations on experimental visualizers and ensure initialization defaults behave exactly as documented. Ensure coverage is maintained on utility/experimental tools as regressions there often signal core breakage later on.
+
+## 2024-05-27 - [MCP Content-Length Capacity Overflow]
+**Learning:** `std::vec::Vec::with_capacity` or `vec![0_u8; len]` calls where `len` is derived from an untrusted client stream header (like `Content-Length`) can easily trigger process-terminating Out-Of-Memory/capacity overflow panics if not bounded.
+**Action:** When inspecting IO/stream parsers, actively look for allocations that map 1:1 with unvalidated incoming lengths. Establish `MAX_PAYLOAD_SIZE` ceilings and test with excessively large payloads to ensure gracefully handled `Err` results rather than `panic`.
