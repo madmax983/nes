@@ -122,7 +122,7 @@ pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> Str
         format!(
             "{} Failed to read ROM at '{}': {}",
             "Error:".with(Color::Red).bold(),
-            rom_path,
+            rom_path.with(Color::Yellow),
             err
         )
     }

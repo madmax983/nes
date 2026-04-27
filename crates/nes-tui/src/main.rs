@@ -226,12 +226,7 @@ struct TuiRuntime {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!(
-            "\n{}",
-            format!("Error: {err}")
-                .with(crossterm::style::Color::Red)
-                .bold()
-        );
+        eprintln!("\n{}", err);
     }
 }
 
@@ -866,9 +861,9 @@ fn resolve_rom_path() -> Result<(String, Option<PathBuf>, TuiCliOptions), String
         .or_else(|| config.desktop.rom_path.clone())
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
-            format!(
-                "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
-            )
+            format!("{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}.",
+                "Error:".with(crossterm::style::Color::Red).bold(),
+                "Hint:".with(crossterm::style::Color::Cyan).bold())
         })?;
     Ok((rom_path, loaded_config_path, cli_options))
 }
@@ -930,7 +925,7 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
         format!(
             "{} Failed to read ROM at '{}': {}",
             "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path,
+            rom_path.with(crossterm::style::Color::Yellow),
             err
         )
     }

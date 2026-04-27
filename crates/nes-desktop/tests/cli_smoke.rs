@@ -40,5 +40,5 @@ fn nes_desktop_invalid_rom_permissions_prints_styled_error() {
 
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
     assert!(stderr.contains("Failed to read ROM at"));
-    assert!(stderr.contains("'.'"));
+    assert!(stderr.contains('.'));
 }
