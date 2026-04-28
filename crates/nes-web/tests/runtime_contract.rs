@@ -245,3 +245,14 @@ fn execute_commands_propagate_properly() {
     let unmapped = runtime.dispatch_dom_key("KeyQ", true).unwrap();
     assert!(!unmapped);
 }
+#[test]
+fn default_for_nes_web_emulator_delegates_to_new() {
+    let _emu = nes_web::NesWebEmulator::default();
+}
+#[test]
+fn parse_button_returns_error_for_unknown_button() {
+    let mut runtime = nes_web::WebRuntime::new();
+    let res = runtime.press_button("Unknown");
+    assert!(res.is_err());
+    assert!(res.unwrap_err().contains("unknown button"));
+}

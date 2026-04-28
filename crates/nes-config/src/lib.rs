@@ -344,6 +344,11 @@ room = "arena"
     }
 
     #[test]
+    fn load_or_default_falls_back_when_path_is_none() {
+        let result = NesConfig::load_or_default(None);
+        assert!(result.is_ok());
+    }
+    #[test]
     fn load_or_default_uses_provided_path_when_present() {
         let path = write_temp_config(
             r#"

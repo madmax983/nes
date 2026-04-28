@@ -1228,4 +1228,34 @@ mod tests {
         assert_eq!(dmc.bytes_remaining, 0);
         assert!(dmc.irq_pending, "finishing the sample should latch DMC IRQ");
     }
+
+    #[test]
+    fn apu_reset_delegates_to_new() {
+        let mut apu = Apu::new();
+        // Mutate some state
+        apu.cpu_cycles = 12345;
+        apu.reset();
+
+        // Assert state is back to new
+        let default_apu = Apu::new();
+        assert_eq!(
+            apu.cpu_cycles, default_apu.cpu_cycles,
+            "Reset should clear cpu_cycles"
+        );
+    }
+
+    #[test]
+    fn apu_snapshot_roundtrip() {
+        let mut apu = Apu::new();
+        apu.cpu_cycles = 42069;
+
+        let snapshot = apu.snapshot();
+        let mut restored_apu = Apu::new();
+        restored_apu.restore(snapshot);
+
+        assert_eq!(
+            restored_apu.cpu_cycles, 42069,
+            "Restore should restore cpu_cycles"
+        );
+    }
 }

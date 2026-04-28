@@ -1896,6 +1896,16 @@ mod tests {
     }
 
     #[test]
+    fn command_set_controller_state_updates_bits() {
+        let mut core = NesCore::new();
+        core.execute(Command::SetControllerState(0b10101010))
+            .unwrap();
+        assert_eq!(core.controller_bits(), 0b10101010);
+        core.execute(Command::SetController2State(0b01010101))
+            .unwrap();
+        assert_eq!(core.controller2_bits(), 0b01010101);
+    }
+    #[test]
     fn command_release_button_clears_controller_bit() {
         let mut core = NesCore::new();
         core.execute(Command::PressButton(Button::A)).unwrap();
@@ -2018,6 +2028,12 @@ mod tests {
         assert!(core.mapper.is_none());
     }
 
+    #[test]
+    fn test_core_query_emulator_state() {
+        let core = NesCore::new();
+        let res = core.query(CoreQuery::EmulatorState);
+        assert!(matches!(res, QueryResult::EmulatorState(_)));
+    }
     #[test]
     fn test_core_query_fps_and_frame() {
         let core = NesCore::new();
