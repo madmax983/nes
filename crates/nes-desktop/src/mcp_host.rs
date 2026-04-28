@@ -333,6 +333,29 @@ fn handle_tools_call(
     Ok(Some(response))
 }
 
+/// Reads a framed JSON-RPC message from a `BufRead` stream.
+///
+/// This parses HTTP-style headers, looking specifically for the `Content-Length` header
+/// to determine the exact byte size of the subsequent JSON payload. It stops reading
+/// headers when it encounters an empty line (`\r\n` or `\n`), then reads exactly the
+/// specified number of bytes.
+///
+/// Returns `Ok(Some(Vec<u8>))` containing the raw JSON bytes, `Ok(None)` if the stream
+/// cleanly reaches EOF before any headers are sent, or an `Err(String)` if the format is invalid.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+/// use nes_desktop::mcp_host::read_framed_message;
+///
+/// // Notice the payload `{"key":"val"}` is exactly 13 bytes long.
+/// let stream = b"Content-Length: 13\r\n\r\n{\"key\":\"val\"}";
+/// let mut cursor = Cursor::new(stream);
+///
+/// let payload = read_framed_message(&mut cursor).unwrap().unwrap();
+/// assert_eq!(payload, b"{\"key\":\"val\"}");
+/// ```
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
     let mut line = String::new();

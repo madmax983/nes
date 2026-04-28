@@ -34,6 +34,21 @@ impl SpatialBot {
         }
     }
 
+    /// Adds a new automation rule mapping a screen zone to a button press.
+    ///
+    /// When a sprite enters the zone identified by `zone_id` (tracked by a `ZoneTracker`),
+    /// the bot will emit a command to press the specified `button` for `duration_frames`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::experimental::spatial_bot::SpatialBot;
+    /// use nes_core::Button;
+    ///
+    /// let mut bot = SpatialBot::new();
+    /// // When a sprite enters zone 1, press the 'A' button for 10 frames
+    /// bot.add_rule(1, Button::A, 10);
+    /// ```
     pub fn add_rule(&mut self, zone_id: usize, button: Button, duration_frames: u32) {
         self.rules.push(BotRule {
             zone_id,
@@ -42,6 +57,30 @@ impl SpatialBot {
         });
     }
 
+    /// Evaluates the current zone tracker state against the bot's rules, emitting commands.
+    ///
+    /// This should be called once per frame after updating the `ZoneTracker`.
+    /// The bot will inspect new zone entry events, start pressing the configured buttons,
+    /// keep track of how long they have been held, and emit release commands when
+    /// the duration expires.
+    ///
+    /// Returns a list of `Command` objects representing the button presses and releases
+    /// to be executed on the emulator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::experimental::spatial_bot::SpatialBot;
+    /// use nes_core::experimental::zone_tracker::ZoneTracker;
+    /// use nes_core::Button;
+    ///
+    /// let mut tracker = ZoneTracker::new();
+    /// let mut bot = SpatialBot::new();
+    /// bot.add_rule(1, Button::A, 5);
+    ///
+    /// // Evaluate tracker events
+    /// let commands = bot.evaluate(&tracker);
+    /// ```
     pub fn evaluate(&mut self, tracker: &ZoneTracker) -> Vec<Command> {
         let mut commands = Vec::new();
 
