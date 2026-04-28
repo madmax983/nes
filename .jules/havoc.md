@@ -76,3 +76,13 @@ capacity overflow
 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory)
 **Reproduction:** Run `cargo test -p nes-mcp --test havoc_load_rom_oom -- --ignored`
 **Comment:** You assumed users would only pass valid files. You were wrong.
+
+## YYYY-MM-DD - MCP Host Slowloris DoS Vulnerability
+🧨 **The Trigger:** A client connects to the MCP Host JSON-RPC port but only sends a partial header (e.g. `Content-Length: 100\r\n\r\n`), and holds the TCP socket open indefinitely without completing the payload.
+📉 **The Stack Trace:**
+```
+thread 'havoc_mcp_host_slowloris' panicked at crates/nes-desktop/tests/havoc_mcp_host_slowloris.rs:37:60:
+timeout
+```
+🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_mcp_host_slowloris --all-features -- --ignored`
+😈 **Comment:** You assumed `handle_client` would read instantly or you should handle concurrency. You blocked the single `TcpListener::incoming()` loop. You were wrong.
