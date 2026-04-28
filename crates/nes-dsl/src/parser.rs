@@ -50,13 +50,12 @@ pub(crate) fn split_leading_label(line: &str) -> Option<(&str, &str)> {
 
 pub(crate) fn split_head(line: &str) -> (&str, &str) {
     let trimmed = line.trim_start();
-    if let Some(split) = trimmed.find(char::is_whitespace) {
-        let head = &trimmed[..split];
-        let rest = &trimmed[split..];
-        (head, rest)
-    } else {
-        (trimmed, "")
-    }
+    let Some(split) = trimmed.find(char::is_whitespace) else {
+        return (trimmed, "");
+    };
+    let head = &trimmed[..split];
+    let rest = &trimmed[split..];
+    (head, rest)
 }
 
 pub(crate) fn parse_const_assignment(input: &str, line_no: usize) -> Result<(&str, &str), DslError> {
@@ -250,20 +249,12 @@ pub(crate) fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<Oper
     }
 
     if let Some(prefix) = operand.strip_suffix(",X") {
-        return Ok(OperandSyntax::AbsoluteX(parse_expr(
-            prefix.trim(),
-            line_no,
-        )?));
-    }
-    if let Some(prefix) = operand.strip_suffix(",Y") {
-        return Ok(OperandSyntax::AbsoluteY(parse_expr(
-            prefix.trim(),
-            line_no,
-        )?));
+        return Ok(OperandSyntax::AbsoluteX(parse_expr(prefix.trim(), line_no)?));
     }
 
-    Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(
-        operand.trim(),
-        line_no,
-    )?))
+    if let Some(prefix) = operand.strip_suffix(",Y") {
+        return Ok(OperandSyntax::AbsoluteY(parse_expr(prefix.trim(), line_no)?));
+    }
+
+    Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(operand.trim(), line_no)?))
 }
