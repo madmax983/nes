@@ -800,7 +800,9 @@ impl RtaManager {
         runs_dir: PathBuf,
         calibration: Option<CalibrationRecorder>,
     ) -> Self {
-        let mut triggers = Vec::<(TriggerSlot, TriggerRuntime)>::new();
+        let mut triggers = Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(
+            4 + profile.splits.len(),
+        );
         triggers.push((
             TriggerSlot::Start,
             TriggerRuntime::new(profile.start.clone()),
@@ -819,6 +821,7 @@ impl RtaManager {
             ));
         }
 
+        let split_events = Vec::with_capacity(profile.splits.len());
         Self {
             profile,
             rom_hash,
@@ -830,7 +833,7 @@ impl RtaManager {
             finish_frame: None,
             invalidation_reasons: BTreeSet::new(),
             split_counter: 0,
-            split_events: Vec::new(),
+            split_events,
             triggers,
             input_log: Vec::new(),
             runs_dir,
