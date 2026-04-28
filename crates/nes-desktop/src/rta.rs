@@ -800,9 +800,8 @@ impl RtaManager {
         runs_dir: PathBuf,
         calibration: Option<CalibrationRecorder>,
     ) -> Self {
-        let mut triggers = Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(
-            4 + profile.splits.len(),
-        );
+        let mut triggers =
+            Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(4 + profile.splits.len());
         triggers.push((
             TriggerSlot::Start,
             TriggerRuntime::new(profile.start.clone()),
