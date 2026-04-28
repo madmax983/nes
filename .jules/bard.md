@@ -22,3 +22,7 @@
 ## 2025-06-18 - Missing serde Module Docs
 **Confusion:** Internal helper modules for `serde` sequence iteration (like `serde_iter` in `nes-desktop`) often lack documentation because they are seen as implementation details. However, without docs, users don't understand how `serialize` treats iterators when compiling with strict warnings or viewing internal docs.
 **Clarification:** Added explicit module-level and function-level `///` docs to `serde_iter::serialize` explaining the `Serializer::collect_seq` bridging behavior, along with an executable `## Examples` doctest that asserts the JSON output. Made the module `pub` so doctests can access it properly.
+
+## 2024-04-27 - Documented Missing Core and Desktop Functions
+**Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
+**Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.

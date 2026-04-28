@@ -34,6 +34,21 @@ impl SpatialBot {
         }
     }
 
+    /// Adds a new reaction rule to the bot.
+    ///
+    /// When the bot detects an event in the specified `zone_id`, it will press the given `button`
+    /// and hold it for `duration_frames`. If the event triggers while the button is already being
+    /// held, the duration is refreshed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// # use nes_core::Button;
+    /// let mut bot = SpatialBot::new();
+    /// // When an entity enters zone 1, hold the A button for 10 frames.
+    /// bot.add_rule(1, Button::A, 10);
+    /// ```
     pub fn add_rule(&mut self, zone_id: usize, button: Button, duration_frames: u32) {
         self.rules.push(BotRule {
             zone_id,
@@ -42,6 +57,29 @@ impl SpatialBot {
         });
     }
 
+    /// Evaluates the current zone events and generates corresponding controller commands.
+    ///
+    /// This method checks the provided `ZoneTracker` for any active events. If an event
+    /// matches a configured rule, the corresponding button is pressed, and its hold
+    /// duration is updated. Buttons whose hold duration has expired are released.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// # use nes_core::experimental::zone_tracker::ZoneTracker;
+    /// # use nes_core::{Button, Command};
+    /// let mut bot = SpatialBot::new();
+    /// bot.add_rule(1, Button::A, 2);
+    ///
+    /// let mut tracker = ZoneTracker::new();
+    /// // Simulate an event occurring in zone 1
+    /// tracker.add_zone(1, 0, 0, 10, 10);
+    /// // In reality, you'd run `tracker.track(&core)` here.
+    ///
+    /// // Without any actual events, evaluate will return nothing
+    /// let commands = bot.evaluate(&tracker);
+    /// ```
     pub fn evaluate(&mut self, tracker: &ZoneTracker) -> Vec<Command> {
         let mut commands = Vec::new();
 
