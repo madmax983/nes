@@ -133,6 +133,11 @@ pub fn build_native_menu(slot_count: u8) -> DesktopMenu {
         AppAction::OpenCheats,
         "Cheats...",
     )));
+    #[cfg(feature = "nova")]
+    emulation_entries.push(DesktopMenuEntry::Item(item(
+        AppAction::ToggleDebugger,
+        "Debug Mode",
+    )));
     emulation_entries.extend(slot_entries(AppAction::SaveSlot, "Save Slot", slot_count));
     emulation_entries.extend(slot_entries(AppAction::LoadSlot, "Load Slot", slot_count));
     emulation_entries.push(DesktopMenuEntry::Separator);
@@ -197,6 +202,7 @@ pub fn action_is_enabled_for_runtime(action: AppAction, rollback_enabled: bool) 
             action,
             AppAction::OpenRom
                 | AppAction::OpenCheats
+                | AppAction::ToggleDebugger
                 | AppAction::SaveSlot(_)
                 | AppAction::LoadSlot(_)
         ))

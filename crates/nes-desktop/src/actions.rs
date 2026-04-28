@@ -2,6 +2,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppAction {
     ToggleOverlay,
+    ToggleDebugger,
     Resume,
     OpenRom,
     OpenCheats,
@@ -16,6 +17,7 @@ pub enum AppAction {
 pub fn menu_id_for_action(action: AppAction) -> String {
     match action {
         AppAction::ToggleOverlay => "overlay.toggle".to_owned(),
+        AppAction::ToggleDebugger => "overlay.debugger".to_owned(),
         AppAction::Resume => "emulation.resume".to_owned(),
         AppAction::OpenRom => "file.open_rom".to_owned(),
         AppAction::OpenCheats => "emulation.cheats".to_owned(),
@@ -31,6 +33,7 @@ pub fn menu_id_for_action(action: AppAction) -> String {
 pub fn action_from_menu_id(id: &str) -> Option<AppAction> {
     match id {
         "overlay.toggle" => Some(AppAction::ToggleOverlay),
+        "overlay.debugger" => Some(AppAction::ToggleDebugger),
         "emulation.resume" => Some(AppAction::Resume),
         "file.open_rom" => Some(AppAction::OpenRom),
         "emulation.cheats" => Some(AppAction::OpenCheats),
@@ -56,6 +59,7 @@ mod tests {
     fn menu_ids_roundtrip_common_actions_and_slots() {
         let actions = [
             AppAction::ToggleOverlay,
+            AppAction::ToggleDebugger,
             AppAction::Resume,
             AppAction::OpenRom,
             AppAction::OpenCheats,

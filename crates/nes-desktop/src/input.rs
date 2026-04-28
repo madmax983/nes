@@ -29,8 +29,15 @@ pub(crate) enum KeyboardDecision {
     SetRewindHeld(bool),
     RtaManualSplit,
     RtaFinish,
-    UpdateKeyboardBits { mask: u8, pressed: bool },
+    UpdateKeyboardBits {
+        mask: u8,
+        pressed: bool,
+    },
     ExecuteCore(Command),
+    #[cfg(feature = "nova")]
+    DebuggerStepCpu,
+    #[cfg(feature = "nova")]
+    DebuggerStepFrame,
     Noop,
 }
 
@@ -48,6 +55,8 @@ pub struct KeyboardInputMode {
     pub rollback_enabled: bool,
     pub rta_enabled: bool,
     pub rta_calibrate: bool,
+    #[cfg(feature = "nova")]
+    pub debugger_open: bool,
 }
 
 #[must_use]
@@ -111,6 +120,14 @@ pub(crate) fn classify_keyboard_input(
     }
     if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
         return KeyboardDecision::RtaFinish;
+    }
+    #[cfg(feature = "nova")]
+    if mode.debugger_open && pressed && key == VirtualKeyCode::I {
+        return KeyboardDecision::DebuggerStepCpu;
+    }
+    #[cfg(feature = "nova")]
+    if mode.debugger_open && pressed && key == VirtualKeyCode::E {
+        return KeyboardDecision::DebuggerStepFrame;
     }
 
     let Some(key_code) = map_virtual_keycode(key) else {
@@ -216,6 +233,8 @@ mod tests {
             rollback_enabled: false,
             rta_enabled: false,
             rta_calibrate: false,
+            #[cfg(feature = "nova")]
+            debugger_open: false,
         };
 
         assert_eq!(

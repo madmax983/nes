@@ -16,6 +16,9 @@ pub(crate) mod session;
 use crate::config::*;
 use crate::session::*;
 
+#[cfg(feature = "nova")]
+pub(crate) mod debugger;
+
 use crate::gamepad::*;
 use crate::input::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
@@ -146,6 +149,8 @@ fn menu_action_enabled(
         AppAction::OpenCheats => !rollback_enabled && !rta_active,
         AppAction::SaveSlot(_) | AppAction::LoadSlot(_) => !rollback_enabled,
         AppAction::ToggleOverlay | AppAction::Reset | AppAction::Quit => true,
+        #[cfg(feature = "nova")]
+        AppAction::ToggleDebugger => true,
     }
 }
 
@@ -227,6 +232,8 @@ struct AppContext<'a> {
     window: &'a Window,
     rta_manager: &'a mut Option<RtaManager>,
     frame_index: u64,
+    #[cfg(feature = "nova")]
+    debugger: &'a mut crate::debugger::CpuDebugger,
 }
 
 fn dispatch_app_action(
@@ -363,6 +370,29 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
                 ctx.window,
                 ctx.session,
             )?;
+            Ok(false)
+        }
+        #[cfg(feature = "nova")]
+        AppAction::ToggleDebugger => {
+            if ctx.debugger.toggle() {
+                ctx.core
+                    .execute(Command::Pause)
+                    .expect("pause should succeed");
+                if ctx.overlay.is_open() {
+                    set_overlay_open(
+                        ctx.overlay,
+                        false,
+                        ctx.core,
+                        ctx.audio_output,
+                        ctx.window,
+                        ctx.session,
+                    )?;
+                }
+            } else {
+                ctx.core
+                    .execute(Command::Resume)
+                    .expect("resume should succeed");
+            }
             Ok(false)
         }
         AppAction::OpenCheats => {
@@ -802,6 +832,8 @@ fn run() -> Result<(), String> {
     let mut time_machine = TimeMachine::new(TimeMachineConfig::default());
     let mut rewind_held = false;
     let mut overlay = OverlayModel::new(SAVE_SLOT_COUNT);
+    #[cfg(feature = "nova")]
+    let mut debugger = crate::debugger::CpuDebugger::new();
     sync_native_menu_state(
         &desktop_menu,
         overlay.is_open(),
@@ -834,6 +866,8 @@ fn run() -> Result<(), String> {
                 window: &window,
                 rta_manager: &mut rta_manager,
                 frame_index,
+                #[cfg(feature = "nova")]
+                debugger: &mut debugger,
             }
         };
     }
@@ -877,6 +911,8 @@ fn run() -> Result<(), String> {
                     rollback_enabled: rollback.is_some(),
                     rta_enabled: rta_manager.is_some(),
                     rta_calibrate: rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
+                    #[cfg(feature = "nova")]
+                    debugger_open: debugger.is_open(),
                 };
 
                 match classify_keyboard_input(key, pressed, mode) {
@@ -954,6 +990,14 @@ fn run() -> Result<(), String> {
                         }
                     }
                     KeyboardDecision::Noop => {}
+            #[cfg(feature = "nova")]
+            KeyboardDecision::DebuggerStepCpu => {
+                core.execute(Command::StepCpu).expect("step cpu should succeed");
+            }
+            #[cfg(feature = "nova")]
+            KeyboardDecision::DebuggerStepFrame => {
+                core.execute(Command::StepFrame).expect("step frame should succeed");
+            }
                 }
             }
             WindowEventDecision::Resized { width, height } => {
@@ -1271,6 +1315,9 @@ fn run() -> Result<(), String> {
             let render_start = Instant::now();
             core.fill_framebuffer_rgba(&mut frame_rgba);
             pixels.frame_mut().copy_from_slice(&frame_rgba);
+            #[cfg(feature = "nova")]
+            debugger.draw_debugger(&core, pixels.frame_mut(), FRAME_WIDTH);
+
             if overlay.is_open() {
                 draw_overlay(
                     pixels.frame_mut(),

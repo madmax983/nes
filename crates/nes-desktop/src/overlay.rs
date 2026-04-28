@@ -34,6 +34,8 @@ pub enum MainMenuSelection {
     Resume,
     OpenRom,
     OpenCheats,
+    #[cfg(feature = "nova")]
+    ToggleDebugger,
     SaveSlot(u8),
     LoadSlot(u8),
     Reset,
@@ -112,6 +114,8 @@ impl OverlayModel {
         main_entries.push(MainMenuSelection::Resume);
         main_entries.push(MainMenuSelection::OpenRom);
         main_entries.push(MainMenuSelection::OpenCheats);
+        #[cfg(feature = "nova")]
+        main_entries.push(MainMenuSelection::ToggleDebugger);
         for slot in 1..=capped_slot_count {
             main_entries.push(MainMenuSelection::SaveSlot(slot));
         }
@@ -388,6 +392,8 @@ impl OverlayModel {
             MainMenuSelection::Resume => AppAction::Resume,
             MainMenuSelection::OpenRom => AppAction::OpenRom,
             MainMenuSelection::OpenCheats => AppAction::OpenCheats,
+            #[cfg(feature = "nova")]
+            MainMenuSelection::ToggleDebugger => AppAction::ToggleDebugger,
             MainMenuSelection::SaveSlot(slot) => AppAction::SaveSlot(slot),
             MainMenuSelection::LoadSlot(slot) => AppAction::LoadSlot(slot),
             MainMenuSelection::Reset => AppAction::Reset,
@@ -415,6 +421,8 @@ impl OverlayModel {
             | MainMenuSelection::OpenCheats
             | MainMenuSelection::Reset
             | MainMenuSelection::Quit => {}
+            #[cfg(feature = "nova")]
+            MainMenuSelection::ToggleDebugger => {}
         }
     }
 }
@@ -752,6 +760,8 @@ fn main_entry_label(
         MainMenuSelection::Resume => out.push_str("Resume"),
         MainMenuSelection::OpenRom => out.push_str("Open ROM..."),
         MainMenuSelection::OpenCheats => out.push_str("Cheats..."),
+        #[cfg(feature = "nova")]
+        MainMenuSelection::ToggleDebugger => out.push_str("Debug Mode"),
         MainMenuSelection::SaveSlot(slot) => {
             let _ = write!(out, "Save Slot {slot}: ");
             slot_suffix(slot, &mut slot_summaries, out);
