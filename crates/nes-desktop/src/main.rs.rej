@@ -1,0 +1,12 @@
+--- main.rs
++++ main.rs
+@@ -10,8 +10,8 @@
+ pub(crate) mod config;
+ pub(crate) mod gamepad;
+ pub(crate) mod input;
+-#[cfg(feature = "mcp-host")]
+ pub(crate) mod metrics;
++use crate::metrics::PerfMetrics;
+ mod netplay;
+ pub(crate) mod session;
+ use crate::config::*;

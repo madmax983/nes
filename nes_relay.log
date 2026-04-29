@@ -1,0 +1,20 @@
+   Compiling nes-core v0.1.0 (/app/crates/nes-core)
+   Compiling nes-netplay v0.1.0 (/app/crates/nes-netplay)
+   Compiling nes-relay v0.1.0 (/app/crates/nes-relay)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.56s
+     Running `target/debug/nes-relay --bind '0.0.0.0:4545'`
+[38;5;14m[1mnes-relay[0m
+
+┌──────────────┬──────────────┐
+│ Property     ┆ Value        │
+╞══════════════╪══════════════╡
+│ Bind Address ┆ 0.0.0.0:4545 │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ Latency      ┆ 0ms          │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ Jitter       ┆ 0ms          │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ Packet Loss  ┆ 0%           │
+├╌╌╌╌╌╌╌╌╌╌╌╌╌╌┼╌╌╌╌╌╌╌╌╌╌╌╌╌╌┤
+│ Reorder      ┆ 0%           │
+└──────────────┴──────────────┘
