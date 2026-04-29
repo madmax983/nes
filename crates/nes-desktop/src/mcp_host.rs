@@ -425,6 +425,24 @@ mod tests {
             || lowered.contains("os error 10060")
     }
 
+    #[test]
+    fn test_read_framed_message_payload_size_limit() {
+        let max_payload_size = 10 * 1024 * 1024;
+
+        let exact_limit_header = format!("Content-Length: {}\r\n\r\n", max_payload_size);
+        let mut reader = BufReader::new(Cursor::new(exact_limit_header.as_bytes()));
+        let result = read_framed_message(&mut reader);
+        if let Err(e) = result {
+            assert!(!e.contains("exceeds maximum allowed size"));
+        }
+
+        let exceed_limit_header = format!("Content-Length: {}\r\n\r\n", max_payload_size + 1);
+        let mut reader = BufReader::new(Cursor::new(exceed_limit_header.as_bytes()));
+        let result = read_framed_message(&mut reader);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("exceeds maximum allowed size"));
+    }
+
     fn read_response_with_host_drain(
         host: &McpHost,
         core: &mut NesCore,

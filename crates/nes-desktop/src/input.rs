@@ -154,6 +154,66 @@ pub(crate) fn element_state_pressed(state: ElementState) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_map_virtual_keycode_all_variants() {
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::Right),
+            Some("ArrowRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::S), Some("KeyS"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::A), Some("KeyA"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::RShift),
+            Some("ShiftRight")
+        );
+    }
+
+    #[test]
+    fn test_classify_keyboard_input_rta_finish() {
+        let mode_disabled = KeyboardInputMode {
+            rollback_enabled: false,
+            rta_enabled: false,
+            rta_calibrate: false,
+        };
+        // Not enabled
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, true, mode_disabled),
+            KeyboardDecision::Noop
+        );
+
+        let mode_enabled_no_calibrate = KeyboardInputMode {
+            rollback_enabled: false,
+            rta_enabled: true,
+            rta_calibrate: false,
+        };
+        // Enabled but calibrate false
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, true, mode_enabled_no_calibrate),
+            KeyboardDecision::Noop
+        );
+
+        let mode_enabled_calibrate = KeyboardInputMode {
+            rollback_enabled: false,
+            rta_enabled: true,
+            rta_calibrate: true,
+        };
+        // Enabled and calibrate true, but not pressed
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, false, mode_enabled_calibrate),
+            KeyboardDecision::Noop
+        );
+
+        // Valid
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, true, mode_enabled_calibrate),
+            KeyboardDecision::RtaFinish
+        );
+    }
+
     use nes_core::Button;
     use winit::dpi::PhysicalSize;
     use winit::event::{ElementState, KeyboardInput, WindowEvent};
