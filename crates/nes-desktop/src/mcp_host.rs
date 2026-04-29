@@ -153,9 +153,13 @@ fn run_listener(listener: TcpListener, request_tx: Sender<ToolRequest>, bind_add
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                if let Err(err) = handle_client(stream, &request_tx) {
-                    eprintln!("[mcp-host {bind_addr}] client error: {err}");
-                }
+                let tx_clone = request_tx.clone();
+                let addr_clone = bind_addr.to_owned();
+                thread::spawn(move || {
+                    if let Err(err) = handle_client(stream, &tx_clone) {
+                        eprintln!("[mcp-host {addr_clone}] client error: {err}");
+                    }
+                });
             }
             Err(err) => eprintln!("[mcp-host {bind_addr}] accept failed: {err}"),
         }
