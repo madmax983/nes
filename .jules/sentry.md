@@ -13,3 +13,7 @@
 ## 2024-05-27 - [MCP Content-Length Capacity Overflow]
 **Learning:** `std::vec::Vec::with_capacity` or `vec![0_u8; len]` calls where `len` is derived from an untrusted client stream header (like `Content-Length`) can easily trigger process-terminating Out-Of-Memory/capacity overflow panics if not bounded.
 **Action:** When inspecting IO/stream parsers, actively look for allocations that map 1:1 with unvalidated incoming lengths. Establish `MAX_PAYLOAD_SIZE` ceilings and test with excessively large payloads to ensure gracefully handled `Err` results rather than `panic`.
+
+## 2024-05-27 - [MCP Slowloris DoS Vulnerability]
+**Learning:** A synchronous TCP listener loop that performs blocking reads (or allows infinite idle time) on a client socket is vulnerable to a Slowloris attack, where a single malicious client can tie up the entire server. Simply adding a blanket `read_timeout` to the socket breaks persistent connections (like JSON-RPC/LSP).
+**Action:** Always process client connections concurrently (e.g., using `thread::spawn` or an async runtime) to prevent head-of-line blocking on the listener thread, while preserving the ability for legitimate connections to remain idle safely.
