@@ -20,3 +20,6 @@
 ## 2024-04-27 - [Avoid String clones in RTA DraftCandidate]
 **Learning:** Avoid unnecessary `.clone()`s of `String` during serialization workflows.
 **Action:** Used `&'a str` in structs purely meant for serialization like `DraftCandidate` and `DraftReport` instead of cloning `String` on every candidate instantiation in hot-ish parsing paths. Also optimized `push_split` by constructing the `SplitEvent` structure and then pushing it to the vector without cloning the original string name argument.
+## 2026-04-29 - [Replace eager clone in unwrap_or]
+**Learning:** [Using `.unwrap_or(value.clone())` forces an eager heap allocation regardless of the Option variant.]
+**Action:** [Use `.unwrap_or_else(|| value.clone())` to defer the cloning operation only to when the Option is None.]
