@@ -264,3 +264,22 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod havoc_oom_tests {
+    use super::*;
+    use nes_core::NesCore;
+    use std::path::PathBuf;
+
+    // We ignore this test normally so it doesn't break CI, but we use it to prove OOM vulnerability
+    #[test]
+    #[ignore]
+    fn havoc_session_rom_oom() {
+        let mut core = NesCore::new();
+        let path = PathBuf::from("/dev/zero");
+        let cheats = SessionCheats::default();
+
+        // This will hang and eventually OOM kill the process
+        let _ = load_rom_session(&mut core, &path, &cheats);
+    }
+}

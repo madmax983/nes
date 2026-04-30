@@ -433,3 +433,19 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 }
+
+#[cfg(test)]
+mod havoc_oom_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    // We ignore this test normally so it doesn't break CI, but we use it to prove OOM vulnerability
+    #[test]
+    #[ignore]
+    fn havoc_manual_state_oom() {
+        let path = PathBuf::from("/dev/zero");
+
+        // This will hang and eventually OOM kill the process
+        let _ = read_save_state_file(&path);
+    }
+}

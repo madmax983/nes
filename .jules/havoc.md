@@ -1,5 +1,21 @@
 # Havoc Journal
 
+## 2024-05-18 - The Black Hole of `/dev/zero`
+
+**The Target:** `fs::read` without bounds checking in several places across the system.
+**The Vulnerability:** Out-of-Memory (OOM) SIGKILL triggered by reading an infinite stream like `/dev/zero` or a massive file into memory all at once.
+
+Affected files:
+- `crates/nes-mcp/src/dispatch.rs` (in `parse_rom_payload`)
+- `crates/nes-desktop/src/session.rs` (in `load_rom_session`)
+- `crates/nes-desktop/src/manual_state.rs` (in `read_save_state_file`)
+
+**The Trigger:** Providing `/dev/zero` as the path to `rom_path` in MCP commands, or loading it directly via desktop file pickers.
+**The Stack Trace:** No stack trace, just raw OOM SIGKILL (signal 9) as the kernel reaps the bloated process.
+**Reproduction:** Run `cargo test -p nes-mcp --all-features --lib havoc_oom_tests::havoc_rom_payload_oom -- --ignored`
+**Comment:** "You assumed `fs::read` was safe because 'how big could a ROM be?' You forgot that in Unix, everything is a file, including infinity."
+
+
 ## 2024-04-09 - Mutex Poisoning in MCP
 🧨 **The Trigger:** A thread panics while holding the global `OutputState` Mutex in `nes-mcp`.
 📉 **The Stack Trace:** Subsequent calls to `frame_chunk` crash with `expect("output state lock")` on a poisoned lock.

@@ -1172,3 +1172,19 @@ mod havoc_fuzz_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_oom_tests {
+    use super::*;
+
+    // We ignore this test normally so it doesn't break CI, but we use it to prove OOM vulnerability
+    #[test]
+    #[ignore]
+    fn havoc_rom_payload_oom() {
+        let mut params = ToolParams::new();
+        params.insert("rom_path".to_string(), "/dev/zero".to_string());
+
+        // This will hang and eventually OOM kill the process
+        let _ = parse_rom_payload(&params);
+    }
+}
