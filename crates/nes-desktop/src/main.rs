@@ -531,7 +531,7 @@ fn release_all_buttons(core: &mut NesCore) {
 }
 
 fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
+    if let Some(key_code) = crate::input::map_virtual_keycode(key)
         && let Some(mask) = map_key_event_to_button_bit(key_code)
     {
         *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
@@ -1336,20 +1336,6 @@ fn recommended_input_delay_frames(
     }
 }
 
-fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
-    match key {
-        VirtualKeyCode::Z => Some("KeyZ"),
-        VirtualKeyCode::X => Some("KeyX"),
-        VirtualKeyCode::Return => Some("Enter"),
-        VirtualKeyCode::RShift => Some("ShiftRight"),
-        VirtualKeyCode::Up => Some("ArrowUp"),
-        VirtualKeyCode::Down => Some("ArrowDown"),
-        VirtualKeyCode::Left => Some("ArrowLeft"),
-        VirtualKeyCode::Right => Some("ArrowRight"),
-        _ => None,
-    }
-}
-
 fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Result<(), String> {
     match step_mode {
         StepMode::Frame => core
@@ -1539,7 +1525,7 @@ mod tests {
         apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
         classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
         element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot,
         menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
         recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
         rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
@@ -1622,25 +1608,6 @@ mod tests {
     fn adaptive_delay_returns_min_when_bounds_are_invalid() {
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
-    }
-
-    #[test]
-    fn map_virtual_keycode_maps_all_supported_keys() {
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::RShift),
-            Some("ShiftRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::Right),
-            Some("ArrowRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
     }
 
     #[test]
