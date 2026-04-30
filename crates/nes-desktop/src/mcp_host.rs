@@ -674,9 +674,36 @@ mod tests {
 #[cfg(test)]
 mod coverage_tests {
     use super::*;
+    use std::io::Cursor;
+
     #[test]
     fn test_mcp_host_start() {
         let host = McpHost::start("127.0.0.1:0").unwrap();
         assert!(host.bind_addr().starts_with("127.0.0.1:"));
+    }
+
+    #[test]
+    fn test_mcp_host_payload_size_limit() {
+        // Test exactly at the boundary limit
+        let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024);
+        let mut reader = std::io::BufReader::new(Cursor::new(payload));
+        let result = read_framed_message(&mut reader);
+        assert_eq!(
+            result,
+            Err("failed reading payload body: failed to fill whole buffer".to_owned())
+        );
+
+        // Test one byte over the boundary limit
+        let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024 + 1);
+        let mut reader = std::io::BufReader::new(Cursor::new(payload));
+        let result = read_framed_message(&mut reader);
+        assert_eq!(
+            result,
+            Err(format!(
+                "Content-Length {} exceeds maximum allowed size of {} bytes",
+                10 * 1024 * 1024 + 1,
+                10 * 1024 * 1024
+            ))
+        );
     }
 }
