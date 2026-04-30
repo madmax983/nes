@@ -788,7 +788,12 @@ fn run() -> Result<(), String> {
             Ok(output) => Some(output),
             Err(err) => {
                 eprintln!("{} {}", "Audio Error:".with(Color::Red).bold(), err);
-                eprintln!("{}", "Hint: Continuing without audio output.".with(Color::Cyan).bold());
+                eprintln!(
+                    "{}",
+                    "Hint: Continuing without audio output."
+                        .with(Color::Cyan)
+                        .bold()
+                );
                 None
             }
         }
