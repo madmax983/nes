@@ -3,46 +3,71 @@ use std::path::PathBuf;
 use burn_core::record::RecorderError;
 use thiserror::Error;
 
+/// Represents all possible errors that can occur within the AI training and evaluation pipeline.
 #[derive(Debug, Error)]
 pub enum AiError {
+    /// An operation was requested that is not supported by the current environment or profile.
     #[error("unsupported operation: {0}")]
     Unsupported(&'static str),
+    /// Failed to create the directory structure required for saving experience snapshots.
     #[error("failed to create snapshot directory '{path}': {source}")]
     SnapshotDirCreate {
+        /// The path of the directory that could not be created.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
+    /// Failed to serialize an experience snapshot into a JSON payload.
     #[error("failed to serialize snapshot bundle: {source}")]
     SnapshotSerialize {
+        /// The underlying `serde_json` serialization error.
         #[source]
         source: serde_json::Error,
     },
+    /// Failed to write a serialized experience snapshot to the local disk.
     #[error("failed to write snapshot bundle '{path}': {source}")]
     SnapshotWrite {
+        /// The target path for the snapshot file.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
+    /// Failed to read a serialized experience snapshot from the local disk.
     #[error(
         "failed to read snapshot bundle '{path}': {source}\nHint: Ensure the file exists or check the profile configuration."
     )]
     SnapshotRead {
+        /// The target path of the snapshot file.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
+    /// Failed to parse an experience snapshot JSON payload.
     #[error("failed to parse snapshot bundle '{path}': {source}")]
     SnapshotParse {
+        /// The target path of the snapshot file.
         path: PathBuf,
+        /// The underlying `serde_json` serialization error.
         #[source]
         source: serde_json::Error,
     },
+    /// The experience snapshot version does not match the expected version.
     #[error("unsupported snapshot bundle version: expected {expected}, found {found}")]
-    SnapshotVersionMismatch { expected: u32, found: u32 },
+    SnapshotVersionMismatch {
+        /// The expected version number.
+        expected: u32,
+        /// The version number found in the snapshot file.
+        found: u32
+    },
+    /// Failed to create the directory structure required for saving AI artifacts.
     #[error("failed to create artifact directory '{path}': {source}")]
     ArtifactDirCreate {
+        /// The path of the directory that could not be created.
         path: PathBuf,
+        /// The underlying IO error.
         #[source]
         source: std::io::Error,
     },
