@@ -75,8 +75,25 @@ fn hash_prefix(rom_hash: &str) -> String {
     prefix
 }
 
+fn bounded_read(path: &Path, max_size: usize) -> Result<Vec<u8>, std::io::Error> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut buf = Vec::new();
+    file.by_ref()
+        .take((max_size + 1) as u64)
+        .read_to_end(&mut buf)?;
+    if buf.len() > max_size {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::FileTooLarge,
+            format!("file exceeds maximum size of {} bytes", max_size),
+        ));
+    }
+    Ok(buf)
+}
+
 fn read_save_state_file(path: &Path) -> Result<SaveStateFile, String> {
-    let encoded = fs::read(path)
+    const MAX_SAVE_STATE_SIZE: usize = 100 * 1024 * 1024; // 100 MB limit
+    let encoded = bounded_read(path, MAX_SAVE_STATE_SIZE)
         .map_err(|err| format!("failed to read save-state file '{}': {err}", path.display()))?;
     let payload: SaveStateFile = serde_json::from_slice(&encoded).map_err(|err| {
         format!(

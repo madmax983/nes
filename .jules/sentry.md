@@ -17,3 +17,7 @@
 ## 2024-05-27 - [MCP Slowloris DoS Vulnerability]
 **Learning:** A synchronous TCP listener loop that performs blocking reads (or allows infinite idle time) on a client socket is vulnerable to a Slowloris attack, where a single malicious client can tie up the entire server. Simply adding a blanket `read_timeout` to the socket breaks persistent connections (like JSON-RPC/LSP).
 **Action:** Always process client connections concurrently (e.g., using `thread::spawn` or an async runtime) to prevent head-of-line blocking on the listener thread, while preserving the ability for legitimate connections to remain idle safely.
+
+## 2025-05-27 - [Unbounded Stream Input Vulnerability]
+**Learning:** Functions that parse IO Streams with `std::fs::read` (e.g. `load_state_file`, `load_rom_session`) are vulnerable to Out-Of-Memory (OOM) SIGKILL crashes if they are handed infinite streams like `/dev/zero`. Unbounded `fs::read` will continuously allocate memory until the process is forcefully killed.
+**Action:** When working with file readers where the size is untrusted or unbounded, replace `fs::read` with a `bounded_read` utility using `std::io::Read::take(max_size).read_to_end()` to cap allocations. Assert expected errors in tests to verify this limit, instead of using `#[ignore]` on OOM crashes.

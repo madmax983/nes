@@ -838,9 +838,26 @@ fn parse_integer(raw: &str) -> Result<u64, DispatchError> {
     }
 }
 
+fn bounded_read(path: &str, max_size: usize) -> Result<Vec<u8>, std::io::Error> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut buf = Vec::new();
+    file.by_ref()
+        .take((max_size + 1) as u64)
+        .read_to_end(&mut buf)?;
+    if buf.len() > max_size {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::FileTooLarge,
+            format!("file exceeds maximum size of {} bytes", max_size),
+        ));
+    }
+    Ok(buf)
+}
+
 fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
     if let Some(path) = params.get("rom_path") {
-        return fs::read(path).map_err(|err| {
+        const MAX_ROM_SIZE: usize = 100 * 1024 * 1024; // 100 MB limit
+        return bounded_read(path, MAX_ROM_SIZE).map_err(|err| {
             DispatchError::InvalidParams(format!("unable to read rom_path '{path}': {err}"))
         });
     }

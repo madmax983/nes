@@ -1,6 +1,6 @@
 use crossterm::style::{Color, Stylize};
 use nes_core::{NesCore, RomLoadInfo};
-use std::fs;
+
 use std::path::{Path, PathBuf};
 
 use nes_desktop::manual_state::{
@@ -39,12 +39,29 @@ pub(crate) fn apply_session_cheats(
     apply_runtime_cheat_codes(core, cheats.enabled_codes())
 }
 
+fn bounded_read(path: &Path, max_size: usize) -> Result<Vec<u8>, std::io::Error> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut buf = Vec::new();
+    file.by_ref()
+        .take((max_size + 1) as u64)
+        .read_to_end(&mut buf)?;
+    if buf.len() > max_size {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::FileTooLarge,
+            format!("file exceeds maximum size of {} bytes", max_size),
+        ));
+    }
+    Ok(buf)
+}
+
 pub(crate) fn load_rom_session(
     core: &mut NesCore,
     rom_path: &Path,
     cheats: &SessionCheats,
 ) -> Result<LoadedRomSession, String> {
-    let rom_bytes = fs::read(rom_path)
+    const MAX_ROM_SIZE: usize = 100 * 1024 * 1024; // 100 MB limit
+    let rom_bytes = bounded_read(rom_path, MAX_ROM_SIZE)
         .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
     core.clear_cheat_codes();
     let info = core
