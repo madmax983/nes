@@ -20,3 +20,9 @@
 ## 2024-04-27 - [Avoid String clones in RTA DraftCandidate]
 **Learning:** Avoid unnecessary `.clone()`s of `String` during serialization workflows.
 **Action:** Used `&'a str` in structs purely meant for serialization like `DraftCandidate` and `DraftReport` instead of cloning `String` on every candidate instantiation in hot-ish parsing paths. Also optimized `push_split` by constructing the `SplitEvent` structure and then pushing it to the vector without cloning the original string name argument.
+
+## 2025-06-18 - Eliminated excessive memory allocations via `SplitEvent` cloning
+
+**Learning:** When pushing `SplitEvent` into `Vec`, it cloned its internal strings heavily. A previous optimization passed the values and cloned it inside, but then used an identical clone again. We can optimize it by creating the object, pushing its `.clone()` onto the vec, and then returning the object itself.
+
+**Action:** Removed redundant string allocations inside `push_split`.
