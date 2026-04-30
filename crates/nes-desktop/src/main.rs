@@ -9,7 +9,6 @@ mod auto_player;
 pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
-#[cfg(feature = "mcp-host")]
 pub(crate) mod metrics;
 mod netplay;
 pub(crate) mod session;
@@ -48,7 +47,6 @@ use nes_desktop::mcp_host::McpHost;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
-#[cfg(feature = "mcp-host")]
 use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
@@ -58,7 +56,7 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), err);
     }
 }
 
@@ -758,7 +756,7 @@ fn run() -> Result<(), String> {
             Some(state)
         }
         Err(err) => {
-            eprintln!("Gamepad support unavailable: {err}");
+            eprintln!("{} {}", "Gamepad Error:".with(Color::Red).bold(), err);
             None
         }
     };
@@ -789,13 +787,13 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Continuing without audio output.");
+                eprintln!("{} {}", "Audio Error:".with(Color::Red).bold(), err);
+                eprintln!("{}", "Hint: Continuing without audio output.".with(Color::Cyan).bold());
                 None
             }
         }
     } else {
-        eprintln!("Audio disabled by config.");
+        eprintln!("{}", "Audio disabled by config.".with(Color::DarkGrey));
         None
     };
 
