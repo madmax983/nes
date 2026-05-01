@@ -42,3 +42,8 @@
 **Mutant:** Uncaught mutants in `read_stdio_message` for `MAX_PAYLOAD_SIZE` checking, and missing match arm logic in `handle_tools_call` when parsing tool parameters in `nes-mcp`'s `main.rs`.
 **Diagnosis:** The stdio parser had no bounds checking test covering `MAX_PAYLOAD_SIZE`. Furthermore, the tools dispatcher was completely un-tested on whether valid tool calls accurately passed along arguments. If `arguments` processing were stripped, no tests failed.
 **Kill Shot:** Added `test_stdio_mcp_valid_arguments`, `test_stdio_mcp_invalid_arguments_type`, and `test_stdio_mcp_payload_size_limit` to `crates/nes-mcp/tests/stdio_mcp_tests.rs` to thoroughly cover MCP payload edge cases, invalid tool parameter shapes, and a successful end-to-end tool call over the daemon wrapper. These new tests successfully killed all `read_stdio_message` and `handle_tools_call` argument mutants.
+
+**[EOF Read Loop Timeout]**
+**Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
+**Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
+**Kill Shot:** None. This is documented as an expected limitation.
