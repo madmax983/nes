@@ -64,9 +64,9 @@ impl AudioOscilloscope {
             let pixel_idx = (safe_y * FRAME_WIDTH + x) * 4;
 
             // Draw a bright green pixel for the waveform over whatever was there
-            framebuffer[pixel_idx] = 0;       // R
+            framebuffer[pixel_idx] = 0; // R
             framebuffer[pixel_idx + 1] = 255; // G
-            framebuffer[pixel_idx + 2] = 0;   // B
+            framebuffer[pixel_idx + 2] = 0; // B
             framebuffer[pixel_idx + 3] = 255; // A
         }
     }
@@ -89,9 +89,9 @@ mod tests {
         // Every X pixel along the center Y row should be green
         for x in 0..FRAME_WIDTH {
             let pixel_idx = (center_y * FRAME_WIDTH + x) * 4;
-            assert_eq!(framebuffer[pixel_idx], 0);       // R
+            assert_eq!(framebuffer[pixel_idx], 0); // R
             assert_eq!(framebuffer[pixel_idx + 1], 255); // G
-            assert_eq!(framebuffer[pixel_idx + 2], 0);   // B
+            assert_eq!(framebuffer[pixel_idx + 2], 0); // B
             assert_eq!(framebuffer[pixel_idx + 3], 255); // A
         }
     }
