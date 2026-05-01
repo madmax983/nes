@@ -159,6 +159,28 @@ mod tests {
     use winit::event::{ElementState, KeyboardInput, WindowEvent};
 
     #[test]
+    fn map_virtual_keycode_maps_all_keys() {
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::Right),
+            Some("ArrowRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::S), Some("KeyS"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::A), Some("KeyA"));
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
+        assert_eq!(
+            map_virtual_keycode(VirtualKeyCode::RShift),
+            Some("ShiftRight")
+        );
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::F5), None);
+        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+    }
+
+    #[test]
     fn classify_window_event_maps_window_variants_to_decisions() {
         assert_eq!(
             classify_window_event(&WindowEvent::CloseRequested),
@@ -208,6 +230,71 @@ mod tests {
 
         let ignored = WindowEvent::Focused(true);
         assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
+    }
+
+    #[test]
+    fn classify_keyboard_input_rta_calibrate_conditions() {
+        let base_mode = KeyboardInputMode {
+            rollback_enabled: false,
+            rta_enabled: false,
+            rta_calibrate: false,
+        };
+
+        // All conditions met
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::RtaFinish
+        );
+
+        // rta_enabled is false
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: false,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+
+        // rta_calibrate is false
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: false,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+
+        // pressed is false
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                false,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
     }
 
     #[test]
