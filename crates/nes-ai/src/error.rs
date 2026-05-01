@@ -1,110 +1,144 @@
+//! The Tragedy of Errors: Handling AI Pipeline Failures
+//!
+//! Training an AI is a fragile endeavor. A missing ROM, a corrupted snapshot, or a
+//! mathematically impossible configuration can all bring the agent's universe crashing down.
+//!
+//! This module categorizes every way the training pipeline can fail, ensuring that when
+//! things break, the developer gets a clear story of *why* rather than a cryptic panic.
+
 use std::path::PathBuf;
 
 use burn_core::record::RecorderError;
 use thiserror::Error;
 
+/// The exhaustive list of tragedies that can befall an agent or its environment.
 #[derive(Debug, Error)]
 pub enum AiError {
+    /// An operation that defies the physics of the simulation (e.g., trying to step before resetting).
     #[error("unsupported operation: {0}")]
     Unsupported(&'static str),
+    /// The filesystem refused to grant a home for the agent's memories.
     #[error("failed to create snapshot directory '{path}': {source}")]
     SnapshotDirCreate {
+        /// The path we begged the OS to create.
         path: PathBuf,
+        /// The cold reality of the OS rejection.
         #[source]
         source: std::io::Error,
     },
+    /// The agent's memory was too complex to be captured in JSON.
     #[error("failed to serialize snapshot bundle: {source}")]
     SnapshotSerialize {
+        /// The serialization logic failure.
         #[source]
         source: serde_json::Error,
     },
+    /// The agent's memory was serialized, but the disk refused to hold it.
     #[error("failed to write snapshot bundle '{path}': {source}")]
     SnapshotWrite {
+        /// Where we tried to entomb the data.
         path: PathBuf,
+        /// The physical IO failure.
         #[source]
         source: std::io::Error,
     },
+    /// We tried to resurrect the agent, but the tomb was empty or sealed.
     #[error(
         "failed to read snapshot bundle '{path}': {source}\nHint: Ensure the file exists or check the profile configuration."
     )]
     SnapshotRead {
+        /// Where we expected to find the memory.
         path: PathBuf,
+        /// The reason the read failed.
         #[source]
         source: std::io::Error,
     },
+    /// We resurrected the agent's memory, but it was corrupted madness.
     #[error("failed to parse snapshot bundle '{path}': {source}")]
     SnapshotParse {
+        /// The file containing the corrupted memories.
         path: PathBuf,
+        /// The parsing logic failure.
         #[source]
         source: serde_json::Error,
     },
+    /// The snapshot comes from a timeline (version) we do not understand.
     #[error("unsupported snapshot bundle version: expected {expected}, found {found}")]
-    SnapshotVersionMismatch { expected: u32, found: u32 },
+    SnapshotVersionMismatch {
+        /// The timeline we know.
+        expected: u32,
+        /// The timeline the file belongs to.
+        found: u32,
+    },
+    /// The filesystem refused to grant a directory for the agent's final legacy (artifacts).
     #[error("failed to create artifact directory '{path}': {source}")]
     ArtifactDirCreate {
+        /// The intended resting place for the artifacts.
         path: PathBuf,
+        /// The IO error blocking creation.
         #[source]
         source: std::io::Error,
     },
-    /// Failed to serialize an AI artifact into a JSON payload.
+    /// We failed to translate the agent's final deeds into a readable JSON artifact.
     #[error("failed to serialize {kind}: {source}")]
     ArtifactSerialize {
-        /// The name or category of the artifact being serialized (e.g. "model", "config").
+        /// What we were trying to record (e.g. "tas movie", "episode metadata").
         kind: &'static str,
-        /// The underlying `serde_json` serialization error.
+        /// The serialization error.
         #[source]
         source: serde_json::Error,
     },
-    /// Failed to write a serialized AI artifact to the local disk.
+    /// The agent's deeds were recorded, but the disk refused to accept the final file.
     #[error("failed to write artifact '{path}': {source}")]
     ArtifactWrite {
-        /// The target path for the artifact file.
+        /// The intended file path.
         path: PathBuf,
-        /// The underlying IO error.
+        /// The IO failure.
         #[source]
         source: std::io::Error,
     },
-    /// The provided prefix used for saving multiple sequential checkpoints is invalid.
+    /// The requested name prefix for saving checkpoints contained illegal or dangerous characters.
     #[error("invalid artifact prefix '{prefix}'")]
     ArtifactPrefixInvalid {
-        /// The prefix that triggered the failure.
+        /// The offending prefix string.
         prefix: String,
     },
-    /// The burn framework failed to save the model weights/optimizer state.
+    /// The Burn neural network framework failed to write its synaptic weights to disk.
     #[error("failed to save checkpoint '{path}': {source}")]
     CheckpointSave {
-        /// The destination path of the checkpoint file.
+        /// Where the weights were supposed to go.
         path: PathBuf,
-        /// The underlying recorder error from burn.
+        /// The internal error from Burn's recorder.
         #[source]
         source: RecorderError,
     },
-    /// The burn framework failed to load the model weights/optimizer state from disk.
+    /// The Burn neural network framework failed to read its synaptic weights from disk.
     #[error("failed to load checkpoint '{path}': {source}")]
     CheckpointLoad {
-        /// The target path of the checkpoint file.
+        /// Where we looked for the weights.
         path: PathBuf,
-        /// The underlying recorder error from burn.
+        /// The internal error from Burn's recorder.
         #[source]
         source: RecorderError,
     },
-    /// Failed to read the target NES ROM from disk.
+    /// We could not locate or open the sacred cartridge (ROM) the agent is supposed to inhabit.
     #[error(
         "failed to read ROM '{path}': {source}\nHint: Ensure the ROM file exists and is accessible."
     )]
     RomRead {
-        /// The path of the missing or unreadable ROM file.
+        /// The path we expected the ROM to be at.
         path: PathBuf,
-        /// The underlying IO error.
+        /// The IO error preventing access.
         #[source]
         source: std::io::Error,
     },
-    /// The ROM loaded for training did not match the expected hash.
+    /// The ROM loaded does not perfectly match the universe the snapshot was created in.
+    /// A single mismatched byte could cause a catastrophic butterfly effect.
     #[error("ROM hash mismatch: expected {expected}, found {found}")]
     RomHashMismatch {
-        /// The expected SHA-256 hash required for this training profile.
+        /// The expected cryptographic signature.
         expected: String,
-        /// The actual computed SHA-256 hash of the loaded ROM file.
+        /// The actual signature of the loaded file.
         found: String,
     },
 }

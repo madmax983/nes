@@ -1,3 +1,12 @@
+//! The Matrix: Simulated Environments for AI Agents
+//!
+//! An AI agent does not know what an "NES" is. It only knows that when it provides an
+//! action, the universe replies with an observation and a reward.
+//!
+//! This module wraps the `NesCore` emulator inside a reinforcement learning environment.
+//! It handles the dirty work of downsampling frames, managing frame-skipping, computing
+//! rewards, and recording TAS movies, so the AI can focus purely on learning to win.
+
 use std::fs;
 
 use nes_core::{
@@ -17,25 +26,41 @@ use crate::{
     snapshot::{SnapshotBundle, load_snapshot_bundle, sha256_hex},
 };
 
+/// The universe's reply to an agent's action.
 #[derive(Debug, Clone)]
 pub struct StepOutput<F> {
+    /// The raw, game-specific memory state (e.g., Mario's coordinates, enemy positions).
     pub features: F,
+    /// The score calculated by the reward model, broken down by category.
     pub reward: RewardBreakdown,
+    /// Indicates if the agent died, won, or ran out of time. If true, the simulation must be reset.
     pub done: bool,
 }
 
+/// A frozen glimpse of the world, packaged neatly for a neural network.
+///
+/// This snapshot flattens history (stacked frames) and reality (game features) into
+/// contiguous floating-point buffers, ready to be ingested by Burn tensors.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObservationSnapshot {
+    /// How many sequential glimpses of the world are stacked here.
     pub frame_stack: usize,
+    /// The width of a single downsampled frame.
     pub width: usize,
+    /// The height of a single downsampled frame.
     pub height: usize,
+    /// The visual pixels, crushed into grayscale and flattened.
     pub frames: Vec<f32>,
+    /// The numeric state vectors (like positions or speeds), flattened.
     pub features: Vec<f32>,
 }
 
+/// A stripped-down reply to an agent's action, useful for agnostic evaluation loops.
 #[derive(Debug, Clone)]
 pub struct ControlStepOutput {
+    /// The score calculated by the reward model.
     pub reward: RewardBreakdown,
+    /// Indicates if the simulation has reached a terminal state.
     pub done: bool,
 }
 
@@ -68,6 +93,28 @@ where
     P: TaskProfile,
     P::Features: RewardFeatures,
 {
+    /// Constructs a new, uninitialized sandbox.
+    ///
+    /// The environment is born in limbo. You must call `reset()` to inject the snapshot
+    /// and breathe life into the emulator before asking for observations or taking steps.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,ignore
+    /// // Example ignored in tests due to the complexity of constructing a valid CoreSnapshot from scratch.
+    /// use nes_ai::{env::ProfileEnv, config::AiProfileConfig, snapshot::load_snapshot_bundle};
+    /// use nes_ai::profiles::smb::SmbProfile;
+    ///
+    /// let config = AiProfileConfig { /* ... */ };
+    /// let profile = SmbProfile::new(config.clone());
+    /// let snapshot = load_snapshot_bundle(&config.snapshot_path)?;
+    ///
+    /// // Create the environment
+    /// let mut env = ProfileEnv::new(profile, snapshot);
+    ///
+    /// // The environment must be reset before it can be stepped!
+    /// env.reset()?;
+    /// ```
     #[must_use]
     pub fn new(profile: P, snapshot: SnapshotBundle) -> Self {
         let cfg = profile.config().clone();
@@ -88,11 +135,27 @@ where
         }
     }
 
-    /// Restores the configured snapshot and seeds the frame stack for a new episode.
+    /// Rewinds time to the beginning.
+    ///
+    /// Restores the exact memory snapshot provided during creation, clears the TAS recorder,
+    /// flushes the frame stack, and computes the very first observation for the agent.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = SmbControlEnv::from_config(config)?;
+    /// // Start a new episode.
+    /// let initial_features = env.reset()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`AiError`] if the emulator state cannot be restored.
+    /// Returns [`AiError`] if the emulator core rejects the state payload.
     pub fn reset(&mut self) -> Result<P::Features, AiError> {
         self.core.load_state(&self.snapshot.snapshot);
         self.recorder = TasRecorder::new();
@@ -120,12 +183,33 @@ where
         Ok(features)
     }
 
-    /// Applies one discrete action and advances the emulator by the configured frame skip.
+    /// Commits an action to the universe and fast-forwards time.
+    ///
+    /// The environment holds the requested joypad buttons down and advances the emulator
+    /// by `frame_skip` frames. It then calculates how much progress was made and applies
+    /// the psychological reward (or penalty).
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = SmbControlEnv::from_config(config)?;
+    /// env.reset()?;
+    ///
+    /// // Move right and jump!
+    /// let output = env.step(ControlAction::RightA)?;
+    /// if output.done {
+    ///     println!("The agent met its end.");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`AiError`] if called before [`Self::reset`] or if controller/frame
-    /// commands cannot be executed by the emulator core.
+    /// Returns [`AiError`] if called before [`Self::reset`] or if the episode has already ended.
     pub fn step(&mut self, action: ControlAction) -> Result<StepOutput<P::Features>, AiError> {
         if self.episode_done {
             return Err(AiError::Unsupported("step after episode done"));
@@ -225,11 +309,29 @@ where
         &mut self.core
     }
 
-    /// Returns the current observation as flattened stacked frames and encoded numeric features.
+    /// Gazes into the environment's current state.
+    ///
+    /// Flattens the recent history of visuals and internal game memory into a format
+    /// easily digested by the agent's neural network.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = SmbControlEnv::from_config(config)?;
+    /// env.reset()?;
+    ///
+    /// let vision = env.observation()?;
+    /// assert_eq!(vision.frames.len(), 4 * 84 * 84); // 4 frames stacked
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`AiError::Unsupported`] if called before [`Self::reset`].
+    /// Returns [`AiError::Unsupported`] if called before the environment is initialized via `reset()`.
     pub fn observation(&self) -> Result<ObservationSnapshot, AiError> {
         let features = self
             .last_features
@@ -245,11 +347,49 @@ where
         })
     }
 
+    /// Returns the complete history of inputs from the current episode.
+    ///
+    /// Every twitch of the controller is recorded. When the agent does something brilliant,
+    /// this TAS movie is the proof we save to disk.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = SmbControlEnv::from_config(config)?;
+    /// env.reset()?;
+    /// env.step(ControlAction::RightA)?;
+    ///
+    /// let movie = env.recorded_movie();
+    /// println!("Recorded {} frames", movie.total_frames());
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn recorded_movie(&self) -> &nes_core::tas::TasMovie {
         self.recorder.movie()
     }
 
+    /// Signs the death certificate.
+    ///
+    /// Compiles all terminal metrics (frames survived, total reward, final memory hash)
+    /// into a tidy piece of metadata for telemetry and debugging.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::SmbControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = SmbControlEnv::from_config(config)?;
+    /// env.reset()?;
+    /// let meta = env.finish_episode(42.5);
+    /// println!("Agent scored: {}", meta.total_reward);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         EpisodeMetadata {
@@ -280,6 +420,7 @@ impl ProfileEnv<SmbProfile> {
     }
 }
 
+/// A concrete instance of the AI control environment for Super Mario Bros.
 pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 
 /// Type-erased wrapper for concrete environment specializations like SMB.
@@ -289,11 +430,24 @@ pub type SmbControlEnv = ProfileEnv<SmbProfile>;
 /// "some control environment" across thread bounds without dealing with `Box<dyn Any>`
 /// trait object headaches.
 pub enum AnyControlEnv {
+    /// Environment variant specifically handling Super Mario Bros. logic.
     Smb(Box<SmbControlEnv>),
 }
 
 impl AnyControlEnv {
-    /// Builds the appropriate control environment for the configured game profile.
+    /// Summons the appropriate universe based on the provided configuration.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::AnyControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// let mut env = AnyControlEnv::from_config(config)?;
+    /// env.reset()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
@@ -304,7 +458,19 @@ impl AnyControlEnv {
         }
     }
 
-    /// Resets the current control environment and seeds its observation state.
+    /// Rewinds time to the beginning for the active environment.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::AnyControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = AnyControlEnv::from_config(config)?;
+    /// env.reset()?; // Ready to play!
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
@@ -318,7 +484,21 @@ impl AnyControlEnv {
         }
     }
 
-    /// Applies one control action and returns reward/done state independent of game-specific features.
+    /// Commits an action to the active universe and fast-forwards time.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::AnyControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = AnyControlEnv::from_config(config)?;
+    /// # env.reset()?;
+    /// let step = env.step(ControlAction::RightB)?;
+    /// println!("Score changed by: {}", step.reward.total);
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
@@ -335,7 +515,20 @@ impl AnyControlEnv {
         }
     }
 
-    /// Returns the current observation for the active control environment.
+    /// Gazes into the active environment's current state.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::AnyControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = AnyControlEnv::from_config(config)?;
+    /// # env.reset()?;
+    /// let vision = env.observation()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     ///
     /// # Errors
     ///
@@ -346,6 +539,20 @@ impl AnyControlEnv {
         }
     }
 
+    /// Extracts the recorded TAS input sequence from the active universe.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::AnyControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = AnyControlEnv::from_config(config)?;
+    /// # env.reset()?;
+    /// let movie = env.recorded_movie();
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn recorded_movie(&self) -> &TasMovie {
         match self {
@@ -353,6 +560,20 @@ impl AnyControlEnv {
         }
     }
 
+    /// Signs the death certificate for the active universe, returning metrics.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust,no_run
+    /// # use nes_ai::{env::AnyControlEnv, actions::ControlAction, config::{AiProfileConfig, ObservationConfig, RewardConfig, GameProfileId}, error::AiError};
+    /// # fn main() -> Result<(), AiError> {
+    /// # let config = AiProfileConfig { game: GameProfileId::Smb, id: "test".to_string(), rom_path: std::path::PathBuf::new(), snapshot_path: std::path::PathBuf::new(), bootstrap_tas_path: std::path::PathBuf::new(), frame_stack: 4, frame_skip: 4, max_episode_frames: 100, observation: ObservationConfig { width: 84, height: 84 }, reward: RewardConfig { forward_progress: 1.0, alive_bonus: 0.0, stall_penalty: 0.0, death_penalty: 0.0, stall_frames: 10 } };
+    /// # let mut env = AnyControlEnv::from_config(config)?;
+    /// # env.reset()?;
+    /// let meta = env.finish_episode(0.0);
+    /// # Ok(())
+    /// # }
+    /// ```
     #[must_use]
     pub fn finish_episode(&self, total_reward: f32) -> EpisodeMetadata {
         match self {
