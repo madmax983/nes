@@ -230,6 +230,14 @@ fn main() {
     }
 }
 
+fn extract_rom_name(rom_path: &str) -> String {
+    Path::new(rom_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(std::borrow::ToOwned::to_owned)
+        .unwrap_or_else(|| rom_path.to_owned())
+}
+
 fn run() -> Result<(), String> {
     let (rom_path, loaded_config_path, cli_options) = resolve_rom_path()?;
     let rom_bytes = fs::read(&rom_path).map_err(|err| format_rom_read_error(&rom_path, &err))?;
@@ -238,11 +246,7 @@ fn run() -> Result<(), String> {
     let info = core
         .load_ines_rom(&rom_bytes)
         .map_err(|err| format!("Failed to load ROM: {err}"))?;
-    let rom_name = Path::new(&rom_path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(std::borrow::ToOwned::to_owned)
-        .unwrap_or_else(|| rom_path.clone());
+    let rom_name = extract_rom_name(&rom_path);
     let mut runtime = TuiRuntime {
         core,
         rom_name,
@@ -941,7 +945,7 @@ mod tests {
         handle_runtime_key_event, key_is_pressed, key_pressed_state, make_protocol_state,
         maybe_step_runtime_frame, parse_tui_args, protocol_image_resize, refresh_runtime_fps,
         select_video_backend_kind, should_quit, should_refresh_protocol_frame,
-        should_replace_protocol_state, usage_line, usage_message,
+        should_replace_protocol_state, usage_line, usage_message, extract_rom_name,
     };
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use image::Rgba;
@@ -1203,6 +1207,17 @@ mod tests {
         let viewport = fit_nes_viewport(area).expect("viewport should exist");
         assert_eq!(viewport.area, Rect::new(43, 0, 213, 100));
         assert_eq!(viewport.integer_scale, None);
+    }
+
+    #[test]
+    fn extract_rom_name_returns_filename_when_present() {
+        assert_eq!(extract_rom_name("path/to/game.nes"), "game.nes");
+        assert_eq!(extract_rom_name("game.nes"), "game.nes");
+    }
+
+    #[test]
+    fn extract_rom_name_returns_full_path_when_no_filename_present() {
+        assert_eq!(extract_rom_name("path/to/dir/"), "dir");
     }
 
     #[test]
