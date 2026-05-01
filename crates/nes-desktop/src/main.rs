@@ -1,4 +1,3 @@
-use crate::metrics::PerfMetrics;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -9,11 +8,11 @@ mod auto_player;
 pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
-#[cfg(feature = "mcp-host")]
 pub(crate) mod metrics;
 mod netplay;
 pub(crate) mod session;
 use crate::config::*;
+use crate::metrics::PerfMetrics;
 use crate::session::*;
 
 use crate::gamepad::*;
@@ -48,7 +47,6 @@ use nes_desktop::mcp_host::McpHost;
 #[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 
-#[cfg(feature = "mcp-host")]
 use crate::netplay::{NetplayClient, NetplayRuntimeStats};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
@@ -1333,20 +1331,6 @@ fn recommended_input_delay_frames(
         current_delay_frames - 1
     } else {
         current_delay_frames
-    }
-}
-
-fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
-    match key {
-        VirtualKeyCode::Z => Some("KeyZ"),
-        VirtualKeyCode::X => Some("KeyX"),
-        VirtualKeyCode::Return => Some("Enter"),
-        VirtualKeyCode::RShift => Some("ShiftRight"),
-        VirtualKeyCode::Up => Some("ArrowUp"),
-        VirtualKeyCode::Down => Some("ArrowDown"),
-        VirtualKeyCode::Left => Some("ArrowLeft"),
-        VirtualKeyCode::Right => Some("ArrowRight"),
-        _ => None,
     }
 }
 

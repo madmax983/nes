@@ -1,0 +1,42 @@
+<<<<<<< SEARCH
+use crate::metrics::PerfMetrics;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+use std::time::{Duration, Instant};
+
+#[cfg(feature = "nova")]
+mod auto_player;
+pub(crate) mod config;
+pub(crate) mod gamepad;
+pub(crate) mod input;
+#[cfg(feature = "mcp-host")]
+pub(crate) mod metrics;
+mod netplay;
+pub(crate) mod session;
+use crate::config::*;
+use crate::session::*;
+=======
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+use std::time::{Duration, Instant};
+
+#[cfg(feature = "nova")]
+mod auto_player;
+pub(crate) mod config;
+pub(crate) mod gamepad;
+pub(crate) mod input;
+pub(crate) mod metrics;
+mod netplay;
+pub(crate) mod session;
+use crate::config::*;
+use crate::metrics::PerfMetrics;
+use crate::session::*;
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+#[cfg(feature = "mcp-host")]
+use crate::netplay::{NetplayClient, NetplayRuntimeStats};
+=======
+use crate::netplay::{NetplayClient, NetplayRuntimeStats};
+>>>>>>> REPLACE
