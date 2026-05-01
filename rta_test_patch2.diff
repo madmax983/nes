@@ -1,0 +1,41 @@
+<<<<<<< SEARCH
+    use super::{SplitEvent, SplitSource};
+
+    #[test]
+    fn rta_manager_push_split_records_event_and_increments_counter() {
+        let profile = RtaProfile::default();
+        let mut manager = RtaManager::new(profile);
+        manager.start(0, Instant::now());
+
+        let now = Instant::now();
+        let event = manager.push_split("test_split".to_string(), SplitSource::Manual, 100, now);
+
+        assert_eq!(event.name, "test_split");
+        assert_eq!(event.source, SplitSource::Manual);
+        assert_eq!(event.frame, 100);
+        assert_eq!(manager.split_counter, 1);
+        assert_eq!(manager.split_events.len(), 1);
+        assert_eq!(manager.split_events[0].name, "test_split");
+    }
+=======
+    use super::{SplitSource};
+
+    #[test]
+    fn rta_manager_push_split_records_event_and_increments_counter() {
+        let profile = RtaProfile::default();
+        let runs_dir = unique_temp_dir("push_split");
+        let mut manager = RtaManager::new(profile, "testhash".to_string(), runs_dir, None);
+        manager.state = RtaSessionState::Running;
+        manager.start_instant = Some(Instant::now());
+
+        let now = Instant::now();
+        let event = manager.push_split("test_split".to_string(), SplitSource::Manual, 100, now);
+
+        assert_eq!(event.name, "test_split");
+        assert_eq!(event.source, SplitSource::Manual);
+        assert_eq!(event.frame, 100);
+        assert_eq!(manager.split_counter, 1);
+        assert_eq!(manager.split_events.len(), 1);
+        assert_eq!(manager.split_events[0].name, "test_split");
+    }
+>>>>>>> REPLACE
