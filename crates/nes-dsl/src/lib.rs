@@ -2166,3 +2166,366 @@ mod havoc_build_ines_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_parse_expr_tests {
+    use super::parse_expr;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_expr(source in ".*") {
+            let _ = parse_expr(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_csv_tests {
+    use super::split_csv;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_csv(source in ".*") {
+            let _ = split_csv(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_operand_syntax_tests {
+    use super::parse_operand_syntax;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_operand_syntax(source in ".*") {
+            let _ = parse_operand_syntax(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_const_assignment_tests {
+    use super::parse_const_assignment;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_const_assignment(source in ".*") {
+            let _ = parse_const_assignment(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_strip_comments_tests {
+    use super::strip_comments;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_strip_comments(source in ".*") {
+            let _ = strip_comments(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_leading_label_tests {
+    use super::split_leading_label;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_leading_label(source in ".*") {
+            let _ = split_leading_label(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_head_tests {
+    use super::split_head;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_head(source in ".*") {
+            let _ = split_head(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_build_ines_tests {
+    use super::build_ines_nrom_rom;
+    use crate::RomBuildOptions;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_build_ines(source in ".*") {
+            let _ = build_ines_nrom_rom(&source, &RomBuildOptions::default());
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_expr_tests {
+    use super::parse_expr;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_expr(source in ".*") {
+            let _ = parse_expr(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_csv_tests {
+    use super::split_csv;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_csv(source in ".*") {
+            let _ = split_csv(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_operand_syntax_tests {
+    use super::parse_operand_syntax;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_operand_syntax(source in ".*") {
+            let _ = parse_operand_syntax(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_const_assignment_tests {
+    use super::parse_const_assignment;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_const_assignment(source in ".*") {
+            let _ = parse_const_assignment(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_strip_comments_tests {
+    use super::strip_comments;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_strip_comments(source in ".*") {
+            let _ = strip_comments(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_leading_label_tests {
+    use super::split_leading_label;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_leading_label(source in ".*") {
+            let _ = split_leading_label(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_head_tests {
+    use super::split_head;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_head(source in ".*") {
+            let _ = split_head(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_build_ines_tests {
+    use super::build_ines_nrom_rom;
+    use crate::RomBuildOptions;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_build_ines(source in ".*") {
+            let _ = build_ines_nrom_rom(&source, &RomBuildOptions::default());
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_expr_tests {
+    use super::parse_expr;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_expr(source in ".*") {
+            let _ = parse_expr(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_csv_tests {
+    use super::split_csv;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_csv(source in ".*") {
+            let _ = split_csv(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_operand_syntax_tests {
+    use super::parse_operand_syntax;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_operand_syntax(source in ".*") {
+            let _ = parse_operand_syntax(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_const_assignment_tests {
+    use super::parse_const_assignment;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_const_assignment(source in ".*") {
+            let _ = parse_const_assignment(&source, 1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_strip_comments_tests {
+    use super::strip_comments;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_strip_comments(source in ".*") {
+            let _ = strip_comments(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_leading_label_tests {
+    use super::split_leading_label;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_leading_label(source in ".*") {
+            let _ = split_leading_label(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_split_head_tests {
+    use super::split_head;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_split_head(source in ".*") {
+            let _ = split_head(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_build_ines_tests {
+    use super::build_ines_nrom_rom;
+    use crate::RomBuildOptions;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_build_ines(source in ".*") {
+            let _ = build_ines_nrom_rom(&source, &RomBuildOptions::default());
+        }
+    }
+}

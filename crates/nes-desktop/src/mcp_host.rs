@@ -736,3 +736,18 @@ mod havoc_mcp_host_is_retryable_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_mcp_host_is_retryable_tests {
+    use proptest::prelude::*;
+    use super::is_retryable_read_error;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_is_retryable_read_error(source in ".*") {
+            let _ = is_retryable_read_error(&source);
+        }
+    }
+}

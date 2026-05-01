@@ -2142,3 +2142,33 @@ mod havoc_compare_rom_hashes_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_sanitize_tests {
+    use super::sanitize_id_for_filename;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_sanitize_id_for_filename(source in ".*") {
+            let _ = sanitize_id_for_filename(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_compare_rom_hashes_tests {
+    use super::compare_rom_hashes;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_compare_rom_hashes(a in ".*", b in ".*") {
+            let _ = compare_rom_hashes(&a, &b);
+        }
+    }
+}

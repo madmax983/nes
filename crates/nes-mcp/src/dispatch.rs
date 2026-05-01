@@ -1270,3 +1270,199 @@ mod havoc_parse_hex_bytes_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_parse_integer_tests {
+    use super::parse_integer;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_integer(source in ".*") {
+            let _ = parse_integer(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_required_string_tests {
+    use super::{parse_required_string, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_required_string(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_required_string(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_u8_tests {
+    use super::{parse_u8, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_u8(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_u8(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_u16_tests {
+    use super::{parse_u16, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_u16(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_u16(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_u64_tests {
+    use super::{parse_u64, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_u64(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_u64(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_hex_bytes_tests {
+    use super::parse_hex_bytes;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_hex_bytes(source in ".*") {
+            let _ = parse_hex_bytes(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_integer_tests {
+    use super::parse_integer;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_integer(source in ".*") {
+            let _ = parse_integer(&source);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_required_string_tests {
+    use super::{parse_required_string, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_required_string(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_required_string(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_u8_tests {
+    use super::{parse_u8, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_u8(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_u8(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_u16_tests {
+    use super::{parse_u16, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_u16(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_u16(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_u64_tests {
+    use super::{parse_u64, ToolParams};
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_u64(key in ".*", value in ".*") {
+            let mut params = ToolParams::new();
+            params.insert(key.clone(), value.clone());
+            let _ = parse_u64(&params, &key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_parse_hex_bytes_tests {
+    use super::parse_hex_bytes;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_parse_hex_bytes(source in ".*") {
+            let _ = parse_hex_bytes(&source);
+        }
+    }
+}
