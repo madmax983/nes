@@ -1,0 +1,16 @@
+<<<<<<< SEARCH
+fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
+    match key {
+        VirtualKeyCode::Z => Some("KeyZ"),
+        VirtualKeyCode::X => Some("KeyX"),
+        VirtualKeyCode::Return => Some("Enter"),
+        VirtualKeyCode::RShift => Some("ShiftRight"),
+        VirtualKeyCode::Up => Some("ArrowUp"),
+        VirtualKeyCode::Down => Some("ArrowDown"),
+        VirtualKeyCode::Left => Some("ArrowLeft"),
+        VirtualKeyCode::Right => Some("ArrowRight"),
+        _ => None,
+    }
+}
+=======
+>>>>>>> REPLACE

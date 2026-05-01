@@ -1,0 +1,17 @@
+<<<<<<< SEARCH
+fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
+    if let Some(key_code) = map_virtual_keycode(key)
+        && let Some(mask) = map_key_event_to_button_bit(key_code)
+    {
+        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+    }
+}
+=======
+fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
+    if let Some(key_code) = crate::input::map_virtual_keycode(key)
+        && let Some(mask) = map_key_event_to_button_bit(key_code)
+    {
+        *keyboard_bits = crate::input::update_button_bits(*keyboard_bits, mask, pressed);
+    }
+}
+>>>>>>> REPLACE
