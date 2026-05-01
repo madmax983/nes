@@ -624,7 +624,8 @@ fn run() -> Result<(), String> {
                 Err(err) => {
                     if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
                         eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
+                            "{} [rta] calibration creating profile template '{}' ({err})",
+                            "Info:".with(Color::Blue).bold(),
                             profile_id
                         );
                         RtaProfile {
@@ -678,7 +679,8 @@ fn run() -> Result<(), String> {
     println!("\n{table}");
     if cfg!(debug_assertions) {
         eprintln!(
-            "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
+            "{} Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>",
+            "Warning:".with(Color::Yellow).bold()
         );
     }
 
@@ -756,7 +758,10 @@ fn run() -> Result<(), String> {
             Some(state)
         }
         Err(err) => {
-            eprintln!("Gamepad support unavailable: {err}");
+            eprintln!(
+                "{} Gamepad support unavailable: {err}",
+                "Warning:".with(Color::Yellow).bold()
+            );
             None
         }
     };
@@ -787,13 +792,19 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Continuing without audio output.");
+                eprintln!("{} {err}", "Error:".with(Color::Red).bold());
+                eprintln!(
+                    "{} Continuing without audio output.",
+                    "Hint:".with(Color::Cyan).bold()
+                );
                 None
             }
         }
     } else {
-        eprintln!("Audio disabled by config.");
+        eprintln!(
+            "{} Audio disabled by config.",
+            "Info:".with(Color::Blue).bold()
+        );
         None
     };
 
@@ -918,7 +929,7 @@ fn run() -> Result<(), String> {
                             if let Err(err) =
                                 resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
                             {
-                                eprintln!("Input resync failed: {err}");
+                                eprintln!("{} Input resync failed: {err}", "Error:".with(Color::Red).bold());
                                 *control_flow = ControlFlow::Exit;
                             }
                         }
@@ -947,7 +958,7 @@ fn run() -> Result<(), String> {
                             let _ = rta.mark_forbidden_action(action, frame_index, Instant::now());
                         }
                         if let Err(err) = core.execute(command) {
-                            eprintln!("Input command failed: {err}");
+                            eprintln!("{} Input command failed: {err}", "Error:".with(Color::Red).bold());
                             *control_flow = ControlFlow::Exit;
                         }
                     }
@@ -956,13 +967,13 @@ fn run() -> Result<(), String> {
             }
             WindowEventDecision::Resized { width, height } => {
                 if let Err(err) = pixels.resize_surface(width, height) {
-                    eprintln!("Surface resize failed: {err}");
+                    eprintln!("{} Surface resize failed: {err}", "Error:".with(Color::Red).bold());
                     *control_flow = ControlFlow::Exit;
                 }
             }
             WindowEventDecision::ScaleFactorChanged { width, height } => {
                 if let Err(err) = pixels.resize_surface(width, height) {
-                    eprintln!("Scale-factor resize failed: {err}");
+                    eprintln!("{} Scale-factor resize failed: {err}", "Error:".with(Color::Red).bold());
                     *control_flow = ControlFlow::Exit;
                 }
             }
@@ -1046,7 +1057,7 @@ fn run() -> Result<(), String> {
                             },
                         )
                     {
-                        eprintln!("{err}");
+                        eprintln!("{} {err}", "Error:".with(Color::Red).bold());
                         *control_flow = ControlFlow::Exit;
                         return;
                     }
@@ -1088,7 +1099,7 @@ fn run() -> Result<(), String> {
                 if let Some(client) = netplay_client.as_ref()
                     && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
                 {
-                    eprintln!("Netplay send input failed: {err}");
+                    eprintln!("{} Netplay send input failed: {err}", "Error:".with(Color::Red).bold());
                     *control_flow = ControlFlow::Exit;
                     return;
                 }
@@ -1102,7 +1113,7 @@ fn run() -> Result<(), String> {
                         128,
                     ) && let Err(err) = client.send_ping(nonce)
                     {
-                        eprintln!("Netplay send ping failed: {err}");
+                        eprintln!("{} Netplay send ping failed: {err}", "Error:".with(Color::Red).bold());
                         *control_flow = ControlFlow::Exit;
                         return;
                     }
@@ -1111,7 +1122,7 @@ fn run() -> Result<(), String> {
                         let message = match client.try_recv() {
                             Ok(next) => next,
                             Err(err) => {
-                                eprintln!("Netplay receive failed: {err}");
+                                eprintln!("{} Netplay receive failed: {err}", "Error:".with(Color::Red).bold());
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
@@ -1126,7 +1137,7 @@ fn run() -> Result<(), String> {
                             &mut netplay_stats,
                             &mut netplay_pending_pings,
                         ) {
-                            eprintln!("{err}");
+                            eprintln!("{} {err}", "Error:".with(Color::Red).bold());
                             *control_flow = ControlFlow::Exit;
                             return;
                         }
@@ -1163,7 +1174,7 @@ fn run() -> Result<(), String> {
                         };
                         if should_update_input_delay(target_delay, current_delay) {
                             if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
-                                eprintln!("Netplay adaptive delay update failed: {err}");
+                                eprintln!("{} Netplay adaptive delay update failed: {err}", "Error:".with(Color::Red).bold());
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
@@ -1185,13 +1196,13 @@ fn run() -> Result<(), String> {
                             && let Some(client) = netplay_client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
-                            eprintln!("Netplay send hash failed: {err}");
+                            eprintln!("{} Netplay send hash failed: {err}", "Error:".with(Color::Red).bold());
                             *control_flow = ControlFlow::Exit;
                             return;
                         }
                     }
                     Err(err) => {
-                        eprintln!("Netplay rollback step failed: {err}");
+                        eprintln!("{} Netplay rollback step failed: {err}", "Error:".with(Color::Red).bold());
                         *control_flow = ControlFlow::Exit;
                         return;
                     }
@@ -1199,7 +1210,7 @@ fn run() -> Result<(), String> {
             } else if rewind_held {
                 time_machine.rewind_step(&mut core);
             } else if let Err(err) = advance_core_for_host_frame(&mut core, step_mode) {
-                eprintln!("CPU halted at PC ${:04X}: {err}", core.cpu_pc());
+                eprintln!("{} CPU halted at PC ${:04X}: {err}", "Error:".with(Color::Red).bold(), core.cpu_pc());
                 *control_flow = ControlFlow::Exit;
                 return;
             } else {
@@ -1221,13 +1232,13 @@ fn run() -> Result<(), String> {
                     .any(|event| matches!(event, RtaEvent::Finished(_)))
                 {
                     if let Err(err) = rta.write_artifacts_if_finished() {
-                        eprintln!("RTA artifact write failed: {err}");
+                        eprintln!("{} RTA artifact write failed: {err}", "Error:".with(Color::Red).bold());
                     }
                     if let Some(rta_config) = runtime.rta.as_ref()
                         && rta.is_calibrating()
                         && let Err(err) = rta.write_calibration_draft(&rta_config.profiles_dir)
                     {
-                        eprintln!("RTA calibration draft write failed: {err}");
+                        eprintln!("{} RTA calibration draft write failed: {err}", "Error:".with(Color::Red).bold());
                     }
                 }
             }
@@ -1288,12 +1299,12 @@ fn run() -> Result<(), String> {
             {
                 let path = capture_path_for_frame(&config.path_template, frame_index);
                 if let Err(err) = write_frame_ppm(&path, &frame_rgba) {
-                    eprintln!("Frame capture failed at frame {frame_index}: {err}");
+                    eprintln!("{} Frame capture failed at frame {frame_index}: {err}", "Error:".with(Color::Red).bold());
                 }
             }
 
             if let Err(err) = pixels.render() {
-                eprintln!("Render failed: {err}");
+                eprintln!("{} Render failed: {err}", "Error:".with(Color::Red).bold());
                 *control_flow = ControlFlow::Exit;
                 return;
             }

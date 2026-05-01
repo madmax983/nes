@@ -1,3 +1,4 @@
+use crossterm::style::{Color, Stylize};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -420,7 +421,8 @@ pub fn handle_netplay_server_message(
                 let ingest = rollback_engine.ingest_remote_input(frame, bits);
                 if ingest.rollback_queued {
                     eprintln!(
-                        "[netplay] queued rollback from frame {} due to late remote input",
+                        "{} [netplay] queued rollback from frame {} due to late remote input",
+                        "Info:".with(Color::Blue).bold(),
                         frame
                     );
                 }
@@ -436,8 +438,10 @@ pub fn handle_netplay_server_message(
                     nes_netplay::HashComparison::Match => {}
                     nes_netplay::HashComparison::Mismatch => {
                         eprintln!(
-                            "[netplay] desync detected at frame {} (remote hash {:016X})",
-                            frame, state_hash
+                            "{} [netplay] desync detected at frame {} (remote hash {:016X})",
+                            "Warning:".with(Color::Yellow).bold(),
+                            frame,
+                            state_hash
                         );
                         if let Some(stats) = netplay_stats.as_mut() {
                             stats.observe_desync();

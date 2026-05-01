@@ -12,6 +12,7 @@
 //! The main thread must regularly call `McpHost::drain` to apply these queued
 //! commands to the emulator state.
 
+use crossterm::style::{Color, Stylize};
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -157,11 +158,17 @@ fn run_listener(listener: TcpListener, request_tx: Sender<ToolRequest>, bind_add
                 let addr_clone = bind_addr.to_owned();
                 thread::spawn(move || {
                     if let Err(err) = handle_client(stream, &tx_clone) {
-                        eprintln!("[mcp-host {addr_clone}] client error: {err}");
+                        eprintln!(
+                            "{} [mcp-host {addr_clone}] client error: {err}",
+                            "Error:".with(Color::Red).bold()
+                        );
                     }
                 });
             }
-            Err(err) => eprintln!("[mcp-host {bind_addr}] accept failed: {err}"),
+            Err(err) => eprintln!(
+                "{} [mcp-host {bind_addr}] accept failed: {err}",
+                "Error:".with(Color::Red).bold()
+            ),
         }
     }
 }
