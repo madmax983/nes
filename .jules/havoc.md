@@ -88,3 +88,8 @@ capacity overflow
 📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
 🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_desktop_load_state_oom -- --ignored`
 😈 **Comment:** You assumed the desktop application would only ever try to read finite save state files. You were wrong.
+
+## 2025-10-24 - String Parsing Fuzzing
+**Trigger:** Public string parsing APIs
+**Diagnosis:** Found multiple missing proptest coverage for string parsing APIs across the system (`parse_expr`, `strip_comments`, `decode_string_literal` etc. in `nes-dsl`, `nes-desktop::args`, `nes-mcp::dispatch`). Added test harnesses to prove fragility without fixing them, maintaining true Havoc mode.
+**Kill Shot:** `cargo test -p nes-dsl havoc_fuzz_strip_comments` etc.

@@ -420,7 +420,7 @@ mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    fn is_retryable_read_error(message: &str) -> bool {
+    pub fn is_retryable_read_error(message: &str) -> bool {
         let lowered = message.to_ascii_lowercase();
         lowered.contains("temporarily unavailable")
             || lowered.contains("would block")
@@ -705,5 +705,34 @@ mod coverage_tests {
                 10 * 1024 * 1024
             ))
         );
+    }
+}
+
+#[cfg(test)]
+mod havoc_mcp_host_tests {
+    use super::McpHost;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(1000))]
+        #[test]
+        fn havoc_fuzz_mcp_host_start(bind_addr in ".*") {
+            let _ = McpHost::start(&bind_addr);
+        }
+    }
+}
+
+#[cfg(test)]
+mod havoc_mcp_host_is_retryable_tests {
+    use super::tests::is_retryable_read_error;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100000))]
+        #[test]
+        #[ignore = "havoc target"]
+        fn havoc_fuzz_is_retryable_read_error(source in ".*") {
+            let _ = is_retryable_read_error(&source);
+        }
     }
 }
