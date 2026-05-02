@@ -381,6 +381,39 @@ mod tests {
             classify_keyboard_input(VirtualKeyCode::F5, false, base_mode),
             KeyboardDecision::Noop
         );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F5,
+                true,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::ManualSaveState
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F5,
+                false,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F5,
+                false,
+                KeyboardInputMode {
+                    rollback_enabled: false,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
     }
 
     #[test]
