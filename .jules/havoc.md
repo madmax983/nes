@@ -88,3 +88,27 @@ capacity overflow
 📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
 🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_desktop_load_state_oom -- --ignored`
 😈 **Comment:** You assumed the desktop application would only ever try to read finite save state files. You were wrong.
+
+## YYYY-MM-DD - Desktop RTA Profiles OOM via /dev/zero
+🧨 **The Trigger:** `Path::new("/dev/zero")` provided to `rta::load_profiles` which iterates files and reads them via `std::fs::read_to_string`.
+📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
+🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_rta_profiles_oom -- --ignored`
+😈 **Comment:** You assumed RTA profiles would only ever be finite files. You were wrong.
+
+## YYYY-MM-DD - Desktop Session OOM via /dev/zero
+🧨 **The Trigger:** `Path::new("/dev/zero")` provided to the `load_rom_session` or similar functions that use `std::fs::read`.
+📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
+🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_desktop_load_rom_oom -- --ignored`
+😈 **Comment:** You assumed the desktop application would only ever try to read finite files. You were wrong.
+
+## YYYY-MM-DD - Desktop MCP Host Content-Length OOM
+🧨 **The Trigger:** A malicious payload with an impossibly large `Content-Length` of `18446744073709551615`.
+📉 **The Stack Trace:** `thread 'havoc_mcp_content_length_oom' panicked at library/alloc/src/raw_vec/mod.rs:28:5: capacity overflow`
+🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_mcp_content_length_oom -- --ignored`
+😈 **Comment:** You assumed `Content-Length` could be trusted to pre-allocate an unbounded buffer. You were wrong.
+
+## YYYY-MM-DD - Desktop MCP Host Slowloris DoS
+🧨 **The Trigger:** A malicious actor sending a valid `Content-Length` header but only a partial payload and leaving the connection open.
+📉 **The Stack Trace:** (Test assertions show a second client being delayed or failing).
+🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_mcp_slowloris_dos -- --ignored`
+😈 **Comment:** You assumed every connected client would send their payload promptly. You were wrong.
