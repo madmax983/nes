@@ -1592,6 +1592,22 @@ impl NesCore {
         self.mapper.as_ref().is_some_and(LoadedMapper::irq_pending)
     }
 
+    fn step_hardware_cycle(&mut self) -> Option<DmcDmaRequest> {
+        let dmc_request = self.apu.step_cpu_cycle(self.paused);
+        for _ in 0..3 {
+            self.ppu.step_dot();
+            if let Some(mapper) = self.mapper.as_mut() {
+                mapper.on_ppu_dot(
+                    self.ppu.scanline(),
+                    self.ppu.dot(),
+                    self.ppu.rendering_enabled_for_mapper_irq(),
+                    self.ppu.ctrl(),
+                );
+            }
+        }
+        dmc_request
+    }
+
     fn advance_hardware_cycles(&mut self, cycles: u64) {
         // Batch-advance scheduler accounting counters once for the whole burst.
         // The counters are not observed mid-loop, so this is equivalent to N
@@ -1600,18 +1616,7 @@ impl NesCore {
         self.scheduler.advance_by(cycles);
 
         for _ in 0..cycles {
-            let dmc_request = self.apu.step_cpu_cycle(self.paused);
-            for _ in 0..3 {
-                self.ppu.step_dot();
-                if let Some(mapper) = self.mapper.as_mut() {
-                    mapper.on_ppu_dot(
-                        self.ppu.scanline(),
-                        self.ppu.dot(),
-                        self.ppu.rendering_enabled_for_mapper_irq(),
-                        self.ppu.ctrl(),
-                    );
-                }
-            }
+            let dmc_request = self.step_hardware_cycle();
             if let Some(request) = dmc_request {
                 self.apply_dmc_dma_request(request);
             }
@@ -1624,18 +1629,9 @@ impl NesCore {
         for _ in 0..request.stall_cycles {
             self.scheduler.step_cpu_cycle();
             self.scheduler.step_apu_cycle();
-            let dmc_request = self.apu.step_cpu_cycle(self.paused);
+            let dmc_request = self.step_hardware_cycle();
             for _ in 0..3 {
                 self.scheduler.step_ppu_cycle();
-                self.ppu.step_dot();
-                if let Some(mapper) = self.mapper.as_mut() {
-                    mapper.on_ppu_dot(
-                        self.ppu.scanline(),
-                        self.ppu.dot(),
-                        self.ppu.rendering_enabled_for_mapper_irq(),
-                        self.ppu.ctrl(),
-                    );
-                }
             }
             if let Some(chained) = dmc_request {
                 let byte = self.cpu.read_byte(chained.addr);

@@ -1,12 +1,7 @@
-🚬 Smell
-The `parse_expr` and `parse_operand_syntax` functions in `nes-dsl` contained repetitive string prefix/suffix checking and unnecessarily verbose `match` blocks for simple sign inversion, creating unnecessary vertical bloat.
+🚮 Smell: The `advance_hardware_cycles` and `apply_dmc_dma_request` methods in `crates/nes-core/src/api.rs` both duplicated the exact same nested loop logic for advancing the PPU dot 3 times per APU/CPU cycle and applying mapper IRQ checks.
 
-✨ Solution
-- In `parse_operand_syntax`, grouped all indirect mode variants inside a single `strip_prefix('(')` check to eliminate redundant allocations/checks.
-- In `parse_expr`, replaced a verbose `match` block returning `value` or `-value` with a simple mathematical `sign * value` operation.
+✨ Solution: Extracted this inner hardware synchronization loop into a shared helper `step_hardware_cycle`, flattening the DMA and batch-cycle loops and completely eliminating the duplicated mapper dot logic.
 
-🧊 Benefit
-Reduces cognitive load, eliminates repetitive string processing overhead, and embraces idiomatic Rust arithmetic simplification.
+🧼 Benefit: Dramatically improves readability, strictly adheres to DRY without adding overhead, and reduces the chance of future DMA stall bugs going out of sync with normal execution.
 
-🛡️ Verification
-Tests passed. No logic changed. Verified via `cargo test` and `cargo clippy`.
+🛡️ Verification: Tests passed. No logic changed.

@@ -1,17 +1,60 @@
 <<<<<<< SEARCH
-fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
-        && let Some(mask) = map_key_event_to_button_bit(key_code)
-    {
-        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+    fn apply_dmc_dma_request(&mut self, request: DmcDmaRequest) {
+        let sample = self.cpu.read_byte(request.addr);
+        self.apu.load_dmc_sample(sample);
+        for _ in 0..request.stall_cycles {
+            self.scheduler.step_cpu_cycle();
+            self.scheduler.step_apu_cycle();
+            let dmc_request = self.apu.step_cpu_cycle(self.paused);
+            for _ in 0..3 {
+                self.scheduler.step_ppu_cycle();
+                self.ppu.step_dot();
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.on_ppu_dot(
+                        self.ppu.scanline(),
+                        self.ppu.dot(),
+                        self.ppu.rendering_enabled_for_mapper_irq(),
+                        self.ppu.ctrl(),
+                    );
+                }
+            }
+            if let Some(chained) = dmc_request {
+                let byte = self.cpu.read_byte(chained.addr);
+                self.apu.load_dmc_sample(byte);
+            }
+        }
     }
-}
 =======
-fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = crate::input::map_virtual_keycode(key)
-        && let Some(mask) = map_key_event_to_button_bit(key_code)
-    {
-        *keyboard_bits = crate::input::update_button_bits(*keyboard_bits, mask, pressed);
+    fn step_hardware_cycle(&mut self) -> Option<DmcDmaRequest> {
+        let dmc_request = self.apu.step_cpu_cycle(self.paused);
+        for _ in 0..3 {
+            self.ppu.step_dot();
+            if let Some(mapper) = self.mapper.as_mut() {
+                mapper.on_ppu_dot(
+                    self.ppu.scanline(),
+                    self.ppu.dot(),
+                    self.ppu.rendering_enabled_for_mapper_irq(),
+                    self.ppu.ctrl(),
+                );
+            }
+        }
+        dmc_request
     }
-}
+
+    fn apply_dmc_dma_request(&mut self, request: DmcDmaRequest) {
+        let sample = self.cpu.read_byte(request.addr);
+        self.apu.load_dmc_sample(sample);
+        for _ in 0..request.stall_cycles {
+            self.scheduler.step_cpu_cycle();
+            self.scheduler.step_apu_cycle();
+            let dmc_request = self.step_hardware_cycle();
+            for _ in 0..3 {
+                self.scheduler.step_ppu_cycle();
+            }
+            if let Some(chained) = dmc_request {
+                let byte = self.cpu.read_byte(chained.addr);
+                self.apu.load_dmc_sample(byte);
+            }
+        }
+    }
 >>>>>>> REPLACE

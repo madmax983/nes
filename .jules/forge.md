@@ -47,3 +47,7 @@
 **[Extract reset ephemeral state]
 **Learning:** Found duplicate logic in `crates/nes-desktop/src/main.rs` for `AppAction::OpenRom`, `AppAction::LoadSlot`, and `AppAction::Reset` to reset the time machine, rewind state, audio, and metrics.
 **Action:** Extracted this into `reset_ephemeral_state` taking `&mut AppContext` and reducing repetitive logic and boilerplate.
+
+**[Extract step_hardware_cycle from NesCore in api.rs]
+**Learning:** Found heavily duplicated PPU dot and mapper synchronization loops inside `advance_hardware_cycles` and `apply_dmc_dma_request` in `api.rs`.
+**Action:** Extracted the 3-dot PPU loop and the APU cycle step into a `step_hardware_cycle` helper, eliminating the duplication and making the DMA stall loop much cleaner.
