@@ -102,7 +102,10 @@ fn main() {
 fn run(stdout: &mut impl Write) -> Result<(), String> {
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
     if raw_args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        println!("{} bbbradsmith_golden_capture [--config <path>] [--force]", "Usage:".with(Color::Cyan).bold());
+        println!(
+            "{} bbbradsmith_golden_capture [--config <path>] [--force]",
+            "Usage:".with(Color::Cyan).bold()
+        );
         std::process::exit(0);
     }
 
@@ -122,10 +125,16 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        format!("{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite", "Error:".with(Color::Red).bold())
+        format!(
+            "{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite",
+            "Error:".with(Color::Red).bold()
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        format!("{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output", "Error:".with(Color::Red).bold())
+        format!(
+            "{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output",
+            "Error:".with(Color::Red).bold()
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
@@ -136,8 +145,12 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             suite_dir_path.display()
         ));
     }
-    fs::create_dir_all(&golden_dir)
-        .map_err(|err| format!("{} failed to create golden directory '{golden_dir}': {err}", "Error:".with(Color::Red).bold()))?;
+    fs::create_dir_all(&golden_dir).map_err(|err| {
+        format!(
+            "{} failed to create golden directory '{golden_dir}': {err}",
+            "Error:".with(Color::Red).bold()
+        )
+    })?;
 
     let mut rom_paths = collect_suite_roms(suite_dir_path)?;
     rom_paths.sort_unstable_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
@@ -167,8 +180,13 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             .and_then(|name| name.to_str())
             .unwrap_or("<unknown>")
             .to_owned();
-        let rom_bytes = fs::read(&rom_path)
-            .map_err(|err| format!("{} failed to read ROM '{}': {err}", "Error:".with(Color::Red).bold(), rom_path.display()))?;
+        let rom_bytes = fs::read(&rom_path).map_err(|err| {
+            format!(
+                "{} failed to read ROM '{}': {err}",
+                "Error:".with(Color::Red).bold(),
+                rom_path.display()
+            )
+        })?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
             print_processing_progress(stdout, &rom_name, Color::Yellow);
