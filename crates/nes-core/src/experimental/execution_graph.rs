@@ -62,6 +62,7 @@ impl ExecutionGraph {
     /// Exports the recorded transitions to a Graphviz DOT string.
     #[must_use]
     pub fn to_dot(&self) -> String {
+        use std::fmt::Write;
         let mut dot = String::from("digraph ExecutionFlow {\n");
         // Sort keys to ensure deterministic output for testing/version control
         let mut srcs: Vec<_> = self.transitions.keys().copied().collect();
@@ -71,7 +72,9 @@ impl ExecutionGraph {
             let mut dests: Vec<_> = self.transitions[&src].iter().copied().collect();
             dests.sort_unstable();
             for dest in dests {
-                dot.push_str(&format!("    \"{:04X}\" -> \"{:04X}\";\n", src, dest));
+                // ⚡ Bolt Optimization: Uses `writeln!` instead of `format!` to avoid allocating
+                // an intermediate `String` on the heap for every single edge in the graph.
+                let _ = writeln!(dot, "    \"{:04X}\" -> \"{:04X}\";", src, dest);
             }
         }
         dot.push_str("}\n");
