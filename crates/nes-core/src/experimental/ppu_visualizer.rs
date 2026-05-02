@@ -71,6 +71,11 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A utility for extracting and visualizing PPU memory state as BMP images.
+///
+/// This visualizer provides methods to render pattern tables and nametables
+/// into BMP format, which is useful for debugging graphics issues or building
+/// external developer tools.
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {

@@ -24,50 +24,70 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// Main menu selection overlay.
     MainMenu,
+    /// Cheats configuration overlay.
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainMenuSelection {
+    /// Resume the current game.
     Resume,
+    /// Open a new ROM.
     OpenRom,
+    /// Open the cheats menu.
     OpenCheats,
+    /// Save state to a specific slot.
     SaveSlot(u8),
+    /// Load state from a specific slot.
     LoadSlot(u8),
+    /// Reset the emulator.
     Reset,
+    /// Quit the application.
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatsSelection {
+    /// Add a new cheat code.
     AddCode,
+    /// Manage an existing cheat code.
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlaySelection {
+    /// An action from the main menu.
     Main(MainMenuSelection),
+    /// An action from the cheats menu.
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// A generic application action.
     AppAction(AppAction),
+    /// Toggle the active state of a cheat.
     ToggleCheat(usize),
+    /// Remove a cheat code.
     RemoveCheat(usize),
+    /// Submit a newly entered cheat code.
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// The slot ID.
     pub slot: u8,
+    /// Status label.
     pub status_label: &'static str,
+    /// Modification time.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -86,7 +106,9 @@ impl OverlaySlotSummary {
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// Raw cheat code string.
     pub raw_code: &'a str,
+    /// Whether the cheat is enabled.
     pub enabled: bool,
 }
 

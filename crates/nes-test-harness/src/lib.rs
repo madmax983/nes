@@ -35,26 +35,42 @@ pub use rom_paths::*;
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Represents a single write event to an APU register during test execution.
+/// Used to trace the exact sequence and timing of audio commands.
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle when the write occurred.
     pub cpu_cycle: u64,
+    /// The memory address written to (e.g., 0x4000).
     pub addr: u16,
+    /// The byte value written to the address.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Statistical metrics computed over a window of audio samples.
 pub struct AudioStats {
+    /// Total number of samples analyzed.
     pub sample_count: usize,
+    /// Root Mean Square, representing the average perceived loudness.
     pub rms: f64,
+    /// The maximum absolute amplitude found in the window.
     pub peak: i16,
+    /// The average DC offset of the waveform.
     pub dc_offset: f64,
+    /// The proportion of samples hitting the maximum/minimum amplitude limits.
     pub clipping_ratio: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Results of comparing two audio waveforms (e.g., test output vs golden reference).
 pub struct WaveformComparison {
+    /// The number of samples compared.
     pub samples_compared: usize,
+    /// Pearson correlation coefficient (-1.0 to 1.0) indicating shape similarity.
     pub correlation: f64,
+    /// Ratio of RMS between the two signals (test_rms / ref_rms).
     pub rms_ratio: f64,
+    /// Mean absolute difference in magnitude (dB) between the FFT of both signals.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -98,6 +114,8 @@ pub fn collect_apu_register_writes(
 }
 
 #[must_use]
+/// Computes a deterministic hash of a sequence of APU write events.
+/// Useful for verifying that APU register manipulations remain consistent.
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for event in writes {
@@ -178,6 +196,8 @@ pub fn capture_audio_window(
 }
 
 #[must_use]
+/// Computes a deterministic hash of an audio waveform.
+/// Useful for verifying byte-exact audio reproducibility.
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for sample in samples {
@@ -188,6 +208,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
 }
 
 #[must_use]
+/// Calculates standard statistical metrics (RMS, peak, etc.) for a slice of audio samples.
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
         return AudioStats {
@@ -226,6 +247,7 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
 }
 
 #[must_use]
+/// Calculates a rolling RMS envelope over the provided samples using the specified window size.
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
         return Vec::new();
@@ -328,6 +350,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
 }
 
 #[must_use]
+/// Compares two waveforms and computes similarity metrics like correlation and FFT difference.
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
     if n == 0 {
@@ -373,6 +396,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 }
 
 #[must_use]
+/// Computes the magnitude (in dB) of the Fast Fourier Transform for the given samples.
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
         return Vec::new();
@@ -415,6 +439,7 @@ fn hann_window(idx: usize, len: usize) -> f64 {
 }
 
 #[must_use]
+/// Attempts to read the iNES header of a ROM byte slice and extract the mapper ID.
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
         return None;
@@ -432,6 +457,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 }
 
 #[must_use]
+/// Checks if the given mapper ID is currently supported by the emulator core.
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)
 }
