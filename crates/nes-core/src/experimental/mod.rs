@@ -26,6 +26,8 @@ pub mod memory_visualizer;
 pub mod nametable_viewer;
 /// Performs spatial queries against Object Attribute Memory (OAM).
 pub mod oam_spatial_query;
+/// Analyzes memory entropy to identify RNG seeds and frame counters.
+pub mod ram_entropy;
 /// Maps zone events to controller commands to create an auto-playing bot.
 pub mod spatial_bot;
 /// Extracts sprite graphical data from memory for inspection.
