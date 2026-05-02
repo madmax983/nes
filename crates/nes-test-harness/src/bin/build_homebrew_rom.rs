@@ -33,11 +33,11 @@ fn run() -> Result<(), String> {
             }
             "--out" => {
                 let Some(path) = args.next() else {
-                    return Err("missing value after --out".to_owned());
+                    return Err(format!("{} missing value after --out", "Error:".with(Color::Red).bold()));
                 };
                 out_path = PathBuf::from(path);
             }
-            _ => return Err(format!("unknown argument '{arg}'")),
+            _ => return Err(format!("{} unknown argument '{}'", "Error:".with(Color::Red).bold(), arg)),
         }
     }
 
