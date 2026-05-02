@@ -118,15 +118,15 @@ pub(crate) fn classify_keyboard_input(
     };
 
     if mode.rollback_enabled {
-        if let Some(mask) = map_key_event_to_button_bit(key_code) {
-            KeyboardDecision::UpdateKeyboardBits { mask, pressed }
-        } else {
-            KeyboardDecision::Noop
-        }
-    } else if let Some(mapped) = map_key_event_to_command(key_code, pressed) {
-        KeyboardDecision::ExecuteCore(mapped.core)
+        let Some(mask) = map_key_event_to_button_bit(key_code) else {
+            return KeyboardDecision::Noop;
+        };
+        KeyboardDecision::UpdateKeyboardBits { mask, pressed }
     } else {
-        KeyboardDecision::Noop
+        let Some(mapped) = map_key_event_to_command(key_code, pressed) else {
+            return KeyboardDecision::Noop;
+        };
+        KeyboardDecision::ExecuteCore(mapped.core)
     }
 }
 
