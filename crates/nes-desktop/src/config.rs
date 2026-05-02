@@ -206,3 +206,83 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         auto_player_enabled: runtime_args.auto_player_enabled,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_config::NesConfig;
+    use nes_desktop::args::RuntimeArgs;
+
+    fn dummy_args() -> RuntimeArgs {
+        RuntimeArgs {
+            rom_path: None,
+            cheat_codes: vec![],
+            mcp_enabled: false,
+            mcp_bind_addr: "127.0.0.1:0".to_string(),
+            netplay_enabled: false,
+            netplay_relay_addr: None,
+            netplay_room: None,
+            netplay_player: None,
+            netplay_input_delay_frames: None,
+            netplay_max_rollback_frames: None,
+            netplay_hash_check_every_frames: None,
+            rta_enabled: false,
+            rta_profile_id: None,
+            rta_profiles_dir: None,
+            rta_runs_dir: None,
+            rta_calibrate: false,
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
+        }
+    }
+
+    #[test]
+    fn test_resolve_netplay_config_disabled() {
+        let args = dummy_args();
+        let config = NesConfig::default();
+        let result = resolve_netplay_config(false, &args, &config).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_netplay_config_enabled_empty_room() {
+        let args = RuntimeArgs {
+            netplay_room: Some("   ".to_string()),
+            ..dummy_args()
+        };
+        let config = NesConfig::default();
+        let result = resolve_netplay_config(true, &args, &config);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "netplay room cannot be empty");
+    }
+
+    #[test]
+    fn test_resolve_netplay_config_enabled_valid() {
+        let args = RuntimeArgs {
+            netplay_room: Some("test_room".to_string()),
+            ..dummy_args()
+        };
+        let config = NesConfig::default();
+        let result = resolve_netplay_config(true, &args, &config).unwrap();
+        assert!(result.is_some());
+        let netplay = result.unwrap();
+        assert_eq!(netplay.room, "test_room");
+    }
+
+    #[test]
+    fn test_resolve_rta_config_disabled() {
+        let args = dummy_args();
+        let result = resolve_rta_config(&args);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_rta_config_enabled() {
+        let args = RuntimeArgs {
+            rta_enabled: true,
+            ..dummy_args()
+        };
+        let result = resolve_rta_config(&args);
+        assert!(result.is_some());
+    }
+}
