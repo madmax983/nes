@@ -1,0 +1,562 @@
+info: cargo-llvm-cov currently setting cfg(coverage); you can opt-out it by passing --no-cfg-coverage
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/nes_core-6b040c91c142bb43)
+
+running 212 tests
+test api::tests::core_query_returns_expected_variants ... ok
+test api::tests::should_call_on_ppu_dot_for_mmc3 ... ok
+test api::tests::set_speed_returns_error_on_zero ... ok
+test api::tests::should_ignore_sync_chr_ram_for_unsupported_mappers ... ok
+test api::tests::should_return_chr_window_for_cnrom ... ok
+test api::tests::should_return_chr_window_for_gxrom ... ok
+test api::tests::should_return_chr_window_for_mmc3 ... ok
+test api::tests::should_return_chr_writable_for_cnrom ... ok
+test api::tests::should_return_chr_writable_for_gxrom ... ok
+test api::tests::should_return_chr_writable_for_mmc3 ... ok
+test api::tests::should_return_correct_bit_mask_for_all_buttons ... ok
+test api::tests::command_release_button_clears_controller_bit ... ok
+test api::tests::command_power_cycle_resets_speed_to_default ... ok
+test api::tests::should_ignore_on_ppu_dot_for_unsupported_mappers ... ok
+test api::tests::should_return_correct_index_for_players ... ok
+test api::tests::should_return_false_for_chr_writable_unsupported_mappers ... ok
+test api::tests::should_return_false_for_irq_pending_unsupported_mappers ... ok
+test api::tests::should_return_none_for_chr_window_unsupported_mappers ... ok
+test api::tests::should_return_irq_pending_for_mmc3 ... ok
+test api::tests::should_return_mirroring_override_for_axrom ... ok
+test api::tests::should_return_mirroring_override_for_mmc3 ... ok
+test api::tests::should_return_none_for_mirroring_override_unsupported_mappers ... ok
+test api::tests::should_return_none_mirroring_override_for_nrom ... ok
+test api::tests::should_return_true_for_irq_pending_when_mmc3_has_irq ... ok
+test api::tests::should_sync_chr_ram_for_cnrom ... ok
+test api::tests::should_sync_chr_ram_from_ppu_window_for_mmc3 ... ok
+test api::tests::should_sync_chr_ram_for_gxrom ... ok
+test api::tests::test_cheat_code_hash_component ... ok
+test api::tests::test_core_error_display ... ok
+test api::tests::test_mapper_hash_components ... ok
+test api::tests::test_nescore_default ... ok
+test api::tests::test_core_query_fps_and_frame ... ok
+test apu::tests::dmc_request_does_not_consume_sample_until_loaded ... ok
+test api::tests::test_core_snapshot_mapper_delta ... ok
+test api::tests_rom_loader_internal::test_build_mapper_unsupported_prg_layouts ... ok
+test apu::tests::dmc_timer_uses_exact_period_cycles ... ok
+test apu::tests::noise_control_write_does_not_restart_envelope ... ok
+test apu::tests::pulse_control_write_does_not_restart_envelope ... ok
+test bmp::tests::encode_bmp_multiplies_row_and_column_indices_for_bottom_up_bgr_layout ... ok
+test bmp::tests::encode_bmp_produces_expected_headers_and_pixel_order ... ok
+test bmp::tests::encode_bmp_returns_error_on_buffer_length_mismatch ... ok
+test bmp::tests::encode_bmp_uses_expected_padding_for_odd_row_widths ... ok
+test bmp::tests::encode_bmp_uses_expected_padding_for_width_3 ... ok
+test bus::tests::bus_region_is_legal ... ok
+test bus::tests::map_region_boundaries ... ok
+test bus::tests::map_region_returns_correct_region ... ok
+test cheat_codes::tests::cheat_code_accessors_return_correct_values ... ok
+test cheat_codes::tests::cheat_code_applies_to_logic ... ok
+test cheat_codes::tests::cheat_code_decodes_address_bits_correctly ... ok
+test cheat_codes::tests::cheat_code_decodes_value_bits_correctly ... ok
+test cheat_codes::tests::cheat_code_error_formatting ... ok
+test cheat_codes::tests::cheat_code_parser_fails_with_invalid_characters ... ok
+test cheat_codes::tests::cheat_code_parser_ignores_whitespace_and_hyphens ... ok
+test cheat_codes::tests::invalid_cheat_codes_return_errors ... ok
+test cpu::engine::tests::cpu_snapshot_roundtrips_work_ram ... ok
+test cpu::engine::tests_format::format_trace_covers_padding_paths ... ok
+test cpu::status::tests::bits_for_php_preserves_other_flags_and_forces_unused_and_break_set ... ok
+test cpu::status::tests::bits_for_stack_push_preserves_other_flags_and_forces_unused_set_and_break_clear ... ok
+test cpu::status::tests::construct_with_bits_retains_value ... ok
+test cpu::status::tests::default_status_is_empty ... ok
+test cpu::status::tests::individual_flags_can_be_set_and_cleared ... ok
+test cpu::status::tests::stack_push_pull_semantics ... ok
+test cpu::status::tests::update_bit_test_sets_flags_correctly ... ok
+test cpu::status::tests::update_compare_sets_flags_correctly ... ok
+test cpu::status::tests::update_zn_sets_flags_based_on_value ... ok
+test experimental::audio_exporter::tests::can_clear_samples ... ok
+test experimental::audio_exporter::tests::can_export_wav_file ... ok
+test experimental::cheat_finder::tests::test_cheat_finder_neq_and_unchanged ... ok
+test experimental::cheat_finder::tests::test_cheat_finder ... ok
+test experimental::hotspot_profiler::tests::hotspot_profiler_clears_counts ... ok
+test experimental::hitbox_visualizer::tests::test_hitbox_visualizer_modifies_framebuffer ... ok
+test experimental::execution_graph::tests::should_record_transitions_and_export_dot ... ok
+test experimental::hotspot_profiler::tests::hotspot_profiler_returns_top_hotspots ... ok
+test experimental::hotspot_profiler::tests::hotspot_profiler_tracks_counts ... ok
+test experimental::memory_heatmap::tests::should_initialize_heatmap_with_provided_parameters ... ok
+test experimental::memory_visualizer::tests::can_dump_memory_bmp ... ok
+test experimental::nametable_viewer::tests::test_horizontal_mirroring ... ok
+test experimental::nametable_viewer::tests::test_one_screen_mirroring ... ok
+test experimental::nametable_viewer::tests::test_vertical_mirroring ... ok
+test experimental::oam_spatial_query::tests::test_oam_spatial_query ... ok
+test experimental::oam_spatial_query::tests::test_oam_sprite_overlaps ... ok
+test experimental::ppu_visualizer::tests::extract_nametables_with_scroll_returns_bmp ... ok
+test experimental::ppu_visualizer::tests::extract_pattern_table_returns_bmp ... ok
+test experimental::ram_entropy::tests::ram_entropy_static_is_zero ... ok
+test experimental::memory_heatmap::tests::heatmap_records_and_decays ... ok
+test experimental::ram_entropy::tests::ram_entropy_top_volatile_sorting ... ok
+test experimental::ram_entropy::tests::ram_entropy_uniform_is_eight ... ok
+test experimental::sprite_extractor::tests::can_extract_sprite_sheet ... ok
+test experimental::theme_filter::tests::gameboy_theme_uses_specific_palette ... ok
+test experimental::theme_filter::tests::grayscale_theme_converts_rgb_to_equal_values ... ok
+test experimental::theme_filter::tests::ignores_invalid_framebuffer ... ok
+test experimental::theme_filter::tests::sepia_theme_modifies_colors ... ok
+test experimental::theme_filter::tests::virtualboy_theme_leaves_only_red_channel ... ok
+test experimental::spatial_bot::tests::test_spatial_bot_evaluation ... ok
+test mapper::axrom::tests::axrom_mirroring_reflects_selected_nametable_bank ... ok
+test mapper::axrom::tests::axrom_state_can_be_restored ... ok
+test mapper::cnrom::tests::cnrom_chr_ram_is_writable_and_syncs_from_ppu ... ok
+test mapper::cnrom::tests::cnrom_chr_rom_is_not_writable ... ok
+test mapper::cnrom::tests::cnrom_from_prg_chr_pads_chr_rom_with_remainder ... ok
+test mapper::cnrom::tests::cnrom_prg_offset_for_empty_prg_rom_returns_zero ... ok
+test mapper::cnrom::tests::cnrom_state_can_be_restored ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_exact_32k ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_chr ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_empty_prg ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_partial_bank ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_short_prg ... ok
+test mapper::gxrom::tests::gxrom_read_and_write_prg ... ok
+test mapper::gxrom::tests::should_not_sync_chr_ram_when_not_writable ... ok
+test mapper::gxrom::tests::should_restore_state ... ok
+test mapper::gxrom::tests::should_sync_chr_ram_when_writable ... ok
+test mapper::mmc1::tests::mmc1_commit_to_prg_bank_updates_selected_bank ... ok
+test mapper::mmc1::tests::mmc1_commit_to_unhandled_range_does_not_panic ... ok
+test mapper::mmc1::tests::mmc1_from_prg_rom_initializes_correctly ... ok
+test mapper::mmc1::tests::mmc1_from_prg_rom_pads_partial_bank_and_reads_without_panic ... ok
+test mapper::mmc1::tests::mmc1_from_prg_rom_preserves_large_bank_count_without_u8_wrap ... ok
+test mapper::mmc1::tests::mmc1_prg_mode_0_and_1_switch_32kb_banks ... ok
+test mapper::mmc1::tests::mmc1_prg_mode_2_fixes_first_bank_and_switches_second ... ok
+test mapper::mmc1::tests::mmc1_prg_mode_3_switches_first_bank_and_fixes_last ... ok
+test mapper::mmc1::tests::mmc1_reset_shift_clears_count_and_sets_bit4 ... ok
+test mapper::mmc1::tests::mmc1_shift_is_reset_handles_partial_reset ... ok
+test mapper::mmc1::tests::mmc1_shift_register_accumulates_bits_and_commits_on_fifth_write ... ok
+test mapper::mmc1::tests::mmc1_write_prg_with_bit7_set_preserves_other_control_bits ... ok
+test mapper::mmc1::tests::mmc1_write_prg_with_bit7_set_resets_shift_and_updates_control ... ok
+test mapper::mmc1::tests::state_and_restore_state_round_trip ... ok
+test mapper::mmc3::more_tests::mmc3_mirroring_toggles_between_vertical_and_horizontal ... ok
+test mapper::mmc3::more_tests::mmc3_prg_ram_protect_is_ignored ... ok
+test mapper::mmc3::more_tests::mmc3_write_e000_disables_irq ... ok
+test mapper::mmc3::tests::from_prg_chr_short_inputs_do_not_panic_on_reads ... ok
+test mapper::mmc3::tests::mmc3_c001_clears_counter_for_mmc3c_behavior ... ok
+test mapper::mmc3::tests::mmc3_from_prg_chr_pads_short_roms_to_minimum ... ok
+test mapper::mmc3::tests::mmc3_from_prg_chr_pads_unaligned_roms ... ok
+test mapper::mmc3::tests::mmc3_irq_does_not_clock_when_bg_and_sprites_share_pattern_table_in_8x8_mode ... ok
+test mapper::mmc3::tests::mmc3_irq_uses_previous_scanline_phase_when_bg_uses_high_table ... ok
+test mapper::mmc3::tests::mmc3_mirroring_writes_update_nametable_mirroring ... ok
+test mapper::mmc3::tests::mmc3_write_e001_enables_irq ... ok
+test mapper::mmc3::tests::new_initializes_banks_and_fills_memory ... ok
+test mapper::mmc3::tests::prg_bank_for_slot_prg_mode_true ... ok
+test mapper::mmc3::tests::state_and_restore_state_round_trip ... ok
+test mapper::mmc3::tests::sync_chr_ram_returns_early_when_not_writable ... ok
+test mapper::mmc3::tests::sync_chr_ram_with_chr_inversion ... ok
+test mapper::mmc3::tests::write_prg_unmapped_address ... ok
+test mapper::nrom::tests::test_nrom_from_prg_rom_exact_16k ... ok
+test mapper::nrom::tests::test_nrom_from_prg_rom_exact_32k ... ok
+test mapper::nrom::tests::test_nrom_from_prg_rom_truncate ... ok
+test mapper::nrom::tests::test_nrom_read_prg ... ok
+test mapper::nrom::tests::test_nrom_write_prg ... ok
+test experimental::event_tracker::tests::test_event_tracker ... ok
+test mapper::uxrom::tests::uxrom_from_prg_rom_exact_bank ... ok
+test mapper::uxrom::tests::uxrom_from_prg_rom_pads_partial_bank ... ok
+test mapper::uxrom::tests::uxrom_read_prg_resolves_via_mapper_trait ... ok
+test ppm::tests::encode_ppm_emits_expected_headers_and_pixel_layout ... ok
+test ppm::tests::encode_ppm_returns_error_on_buffer_length_mismatch ... ok
+test mapper::uxrom::tests::uxrom_state_can_be_restored ... ok
+test ppu::tests::chr_window_change_after_sprite_prefetch_keeps_next_scanline_sprite_tiles ... ok
+test experimental::memory_heatmap::tests::heatmap_covers_color_bands_and_dummy_reads ... ok
+test ppu::tests::dot_257_reloads_horizontal_scroll_from_temp_addr ... ok
+test ppu::tests::chr_window_change_before_sprite_prefetch_updates_next_scanline_sprite_tiles ... ok
+test ppu::tests::hblank_chr_window_change_is_visible_on_next_scanline_start ... ok
+test ppu::tests::chr_window_change_mid_sprite_prefetch_splits_next_scanline_sprite_banks ... ok
+test ppu::tests::hblank_ppuaddr_change_is_visible_on_next_scanline_start ... ok
+test ppu::tests::hblank_ppuctrl_write_preserves_split_vertical_scroll ... ok
+test experimental::zone_tracker::tests::test_zone_tracker_entry_events ... ok
+test ppu::tests::late_visible_ppuaddr_change_that_matures_in_hblank_hits_next_scanline_start ... ok
+test ppu::tests::nametable_mirroring_maps_addresses ... ok
+test ppu::tests::one_screen_upper_mirroring_maps_all_tables_to_second_page ... ok
+test ppu::tests::one_screen_lower_mirroring_maps_all_tables_to_first_page ... ok
+test ppu::tests::only_first_eight_sprites_render_on_a_scanline ... ok
+test ppu::tests::ppuaddr_write_during_vblank_does_not_update_scroll ... ok
+test ppu::tests::ppuaddr_write_during_hblank_targets_next_scanline ... ok
+test ppu::tests::ppuaddr_write_during_visible_scanline_updates_scroll ... ok
+test ppu::tests::pre_render_scroll_y_ff_wraps_back_to_row_zero_on_second_visible_scanline ... ok
+test ppu::tests::restore_position_is_derived_from_cycle_in_frame ... ok
+test ppu::tests::restore_rerender_falls_back_to_live_scroll_before_first_vblank_capture ... ok
+test ppu::tests::sprite_overflow_stays_latched_until_pre_render_clear_when_sprites_disabled ... ok
+test ppu::tests::visible_dot_background_cache_invalidates_after_pattern_write ... ok
+test ppu::tests::visible_dot_sprite_cache_invalidates_after_oam_write ... ok
+test ppu::tests::visible_ppuaddr_split_write_advances_vertical_vram_at_dot_256 ... ok
+test ppu::tests::visible_scanline_chr_window_change_is_delayed_until_prefetch_boundary ... ok
+test ppu::tests::visible_scanline_ppuaddr_change_is_delayed_until_prefetch_boundary ... ok
+test ppu::tests::vblank_edges_are_dot_exact ... ok
+test rom::tests::test_parse_ines_exactly_16_bytes_missing_prg ... ok
+test rom::tests::test_parse_ines_four_screen_mirroring ... ok
+test rom::tests::test_parse_ines_ines_console_type_is_rejected ... ok
+test rom::tests::test_parse_ines_invalid_magic ... ok
+test rom::tests::test_parse_ines_mirroring ... ok
+test rom::tests::test_parse_ines_missing_prg ... ok
+test rom::tests::test_parse_ines_nes2_console_type_is_rejected ... ok
+test rom::tests::test_parse_ines_nes2_extended_mapper ... ok
+test rom::tests::test_parse_ines_nes2_mapper_id ... ok
+test rom::tests::test_parse_ines_nes2_prg_chr_msb ... ok
+test rom::tests::test_parse_ines_nes2_size_encoding ... ok
+test rom::tests::test_parse_ines_nes2_submapper_is_rejected ... ok
+test rom::tests::test_parse_ines_trainer ... ok
+test rom::tests::test_parse_ines_truncated_body ... ok
+test rom::tests::test_parse_ines_truncated_header ... ok
+test rom::tests::test_rom_error_display ... ok
+test scheduler::tests::restore_near_wrap_then_step_advances_and_wraps ... ok
+test scheduler::tests::should_reset_scheduler_counters ... ok
+test scheduler::tests::should_return_correct_default_scheduler ... ok
+test scheduler::tests::should_save_and_restore_scheduler_snapshot ... ok
+test scheduler::tests::test_cpu_ppu_apu_getters ... ok
+test scheduler::tests::wrap_behavior_preserves_phase_instead_of_saturating ... ok
+test serde_array::tests::test_deserialize_invalid_length ... ok
+test serde_array::tests::test_expected_length_formatting ... ok
+test serde_array::tests::test_serialize_deserialize_u8_array ... ok
+test tas::tests::test_tas_movie_push_run_coalescing ... ok
+test tas::tests_mutants::test_tas_frame_run_new ... ok
+test ppu::tests::restore_rerender_uses_vblank_captured_y_scroll ... ok
+test tas::tests_mutants::test_tas_recorder_methods ... ok
+test ppu::tests::odd_frame_shortens_by_one_dot_when_rendering_enabled ... ok
+test tas::tests_mutants::test_tas_movie_methods ... ok
+test rom::havoc_fuzz_tests::havoc_fuzz_ines_parse ... ok
+
+test result: ok. 212 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.03s
+
+     Running tests/apu_hardware_fidelity.rs (target/llvm-cov-target/debug/deps/apu_hardware_fidelity-b88809bf6079b6df)
+
+running 5 tests
+test mode5_write_clocks_quarter_and_half_immediately ... ok
+test pulse_sweep_updates_timer_reload_on_half_frame_tick ... ok
+test pulse1_negate_sweep_uses_extra_subtract_step ... ok
+test frame_irq_clears_on_status_read ... ok
+test pulse2_triangle_noise_writes_change_mixed_output ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/audio_contract.rs (target/llvm-cov-target/debug/deps/audio_contract-345b0732d652a382)
+
+running 4 tests
+test audio_chunk_has_expected_sample_geometry ... ok
+test audio_chunk_is_input_invariant_without_channel_state_changes ... ok
+test audio_chunk_is_reset_deterministic ... ok
+test audio_chunk_stays_well_formed_under_long_run has been running for over 60 seconds
+test audio_chunk_stays_well_formed_under_long_run ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 120.05s
+
+     Running tests/bus_map.rs (target/llvm-cov-target/debug/deps/bus_map-0a17e9b8817a5361)
+
+running 1 test
+test address_regions_are_unambiguous ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bus_map_prop.rs (target/llvm-cov-target/debug/deps/bus_map_prop-d2a28b329e797aa2)
+
+running 1 test
+test every_address_maps_to_legal_region ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/cheat_codes.rs (target/llvm-cov-target/debug/deps/cheat_codes-4664303883e08923)
+
+running 6 tests
+test cheat_code_decodes_six_letter_codes ... ok
+test cheat_code_rejects_invalid_codes ... ok
+test cheat_code_decodes_eight_letter_codes_with_compare ... ok
+test state_hash_differentiates_cheat_code_variations ... ok
+test cheat_codes_override_nrom_reads_and_can_be_cleared ... ok
+test compare_guarded_cheat_codes_track_uxrom_bank_switches ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/command_query_contract.rs (target/llvm-cov-target/debug/deps/command_query_contract-98c9378ef83305a8)
+
+running 4 tests
+test boot_state_is_queryable_without_frontend ... ok
+test controller_state_and_speed_are_queryable ... ok
+test pause_and_resume_are_core_commands ... ok
+test ppu_frame_counter_is_queryable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/cpu_exec_trace.rs (target/llvm-cov-target/debug/deps/cpu_exec_trace-a64a3841209db57e)
+
+running 18 tests
+test beq_not_taken_when_zero_flag_is_clear ... ok
+test beq_taken_when_zero_flag_is_set ... ok
+test bne_taken_when_zero_flag_is_clear ... ok
+test bus_microphase_for_lda_immediate_matches_cycle_reads ... ok
+test bpl_and_bmi_follow_negative_flag ... ok
+test bus_microphase_for_sta_absolute_matches_fetch_fetch_fetch_write ... ok
+test cpu_executes_lda_tax_inx_sequence ... ok
+test cpu_executes_ldx_ldy_txa_tya_sequence ... ok
+test irq_service_is_masked_when_interrupt_disable_is_set ... ok
+test irq_service_vectors_when_interrupts_enabled ... ok
+test nestest_style_trace_for_ldx_immediate_matches_expected_prefix ... ok
+test jsr_and_rts_round_trip_through_stack ... ok
+test nestest_style_trace_for_lda_immediate_matches_expected_prefix ... ok
+test nop_advances_pc_and_preserves_registers ... ok
+test sta_absolute_writes_memory_and_emits_prg_write ... ok
+test sta_absolute_x_writes_indexed_target ... ok
+test unknown_opcode_returns_error ... ok
+test txs_and_stx_absolute_update_stack_and_memory ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cycle_accuracy.rs (target/llvm-cov-target/debug/deps/cycle_accuracy-9019ec2f99e61c8a)
+
+running 3 tests
+test branch_taken_and_page_cross_add_cycles ... ok
+test absolute_x_page_cross_adds_cycle_for_reads ... ok
+test step_frame_advances_to_next_ppu_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/dma_microcycle_timing.rs (target/llvm-cov-target/debug/deps/dma_microcycle_timing-b5432ed0aaf1b160)
+
+running 4 tests
+test dmc_irq_latches_until_disabled_via_status_write ... ok
+test oam_dma_copies_page_and_stalls_cpu ... ok
+test oam_dma_timing_remains_correct_across_cpu_cycle_wrap ... ok
+test dmc_fetches_increase_cpu_cycle_count_via_dma_stalls ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/dot_hardware_timing.rs (target/llvm-cov-target/debug/deps/dot_hardware_timing-99d5814f4457c47a)
+
+running 3 tests
+test apu_frame_sequencer_ticks_on_hardware_cycle_boundaries ... ok
+test ppu_vblank_edges_are_dot_exact ... ok
+test step_frame_advances_one_ppu_frame_with_odd_frame_shortening ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/framebuffer_contract.rs (target/llvm-cov-target/debug/deps/framebuffer_contract-e5f9449bc6a8e4da)
+
+running 4 tests
+test framebuffer_geometry_matches_nes_resolution ... ok
+test mid_frame_scroll_write_changes_later_scanline_pixels_only ... ok
+test timed_sta_to_ppuscroll_does_not_retroactively_rewrite_earlier_pixels ... ok
+test framebuffer_reflects_ppu_background_pattern_data ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/havoc.rs (target/llvm-cov-target/debug/deps/havoc-9fe5b9c4addedc91)
+
+running 1 test
+test havoc_fuzz_cheat_code_parsing ... ignored, havoc target
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/havoc_bmp.rs (target/llvm-cov-target/debug/deps/havoc_bmp-ff452d73939d00f4)
+
+running 1 test
+test havoc_encode_bmp_panics_on_small_buffer ... ignored, havoc target
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/irq_line.rs (target/llvm-cov-target/debug/deps/irq_line-e20877d78c202433)
+
+running 2 tests
+test apu_frame_irq_vectors_cpu_when_interrupts_enabled ... ok
+test apu_frame_irq_is_masked_while_interrupt_disable_set ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/mapper_axrom.rs (target/llvm-cov-target/debug/deps/mapper_axrom-1830226820fe7c7e)
+
+running 4 tests
+test axrom_short_prg_is_zero_padded_to_full_32k_window ... ok
+test axrom_read_prg_masks_address_into_32k_window ... ok
+test axrom_selected_bank_maps_entire_32k_prg_window ... ok
+test axrom_write_selects_bank_and_one_screen_mirroring ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mapper_cnrom.rs (target/llvm-cov-target/debug/deps/mapper_cnrom-f3e472d5b987f1c2)
+
+running 6 tests
+test cnrom_from_prg_chr_pads_chr_rom ... ok
+test cnrom_prg_mapping_is_fixed_across_chr_bank_switches ... ok
+test cnrom_empty_prg_defaults_to_zero_byte ... ok
+test cnrom_chr_bank_count_does_not_wrap_at_256_banks ... ok
+test cnrom_short_chr_input_is_zero_padded ... ok
+test cnrom_write_selects_chr_bank_window ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mapper_gxrom.rs (target/llvm-cov-target/debug/deps/mapper_gxrom-47efcc98ff94371d)
+
+running 6 tests
+test gxrom_selected_prg_bank_maps_entire_32k_window ... ok
+test gxrom_from_prg_chr_pads_unaligned_prg_rom ... ok
+test gxrom_read_prg_masks_address_into_32k_window ... ok
+test gxrom_bank_counts_do_not_wrap_at_256_banks ... ok
+test gxrom_write_selects_prg_and_chr_banks ... ok
+test gxrom_short_inputs_are_zero_padded ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mapper_mmc1.rs (target/llvm-cov-target/debug/deps/mapper_mmc1-4523ff87f4ca52b5)
+
+running 1 test
+test mmc1_resets_shift_register_on_bit7_write ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mapper_mmc3.rs (target/llvm-cov-target/debug/deps/mapper_mmc3-10f277dc6b182c21)
+
+running 9 tests
+test mmc3_chr_inversion_reorders_1k_and_2k_windows ... ok
+test mmc3_irq_counter_reloads_and_raises_pending_flag ... ok
+test mmc3_irq_not_triggered_if_rendering_disabled ... ok
+test mmc3_irq_disabled_and_acknowledged_on_write_to_e000 ... ok
+test mmc3_irq_not_triggered_on_wrong_dot ... ok
+test mmc3_prg_ram_protect_is_ignored ... ok
+test mmc3_write_prg_below_8000_is_ignored ... ok
+test mmc3_prg_mode_swaps_fixed_and_switchable_windows ... ok
+test mmc3_irq_not_triggered_on_wrong_scanline ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mapper_nrom_uxrom.rs (target/llvm-cov-target/debug/deps/mapper_nrom_uxrom-c6ff1cb9bd6ea5d9)
+
+running 10 tests
+test nrom_from_prg_rom_truncates_large_rom ... ok
+test nrom_reads_from_prg_rom ... ok
+test nrom_ignores_bank_switch_writes ... ok
+test uxrom_from_prg_rom_empty_is_readable ... ok
+test uxrom_from_prg_rom_counts_banks ... ok
+test uxrom_from_prg_rom_partial_bank_is_padded ... ok
+test uxrom_boundary_read ... ok
+test uxrom_from_prg_rom_preserves_large_bank_count_without_u8_wrap ... ok
+test uxrom_reads_lower_bank_from_selected_and_upper_from_last ... ok
+test uxrom_switches_lower_bank_only ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mmio_register_reads.rs (target/llvm-cov-target/debug/deps/mmio_register_reads-83ebc6bf9fe00de7)
+
+running 12 tests
+test controller2_port_reads_shift_bits_from_4017 ... ok
+test controller_port_reads_shift_bits_when_strobe_low ... ok
+test oamdata_read_returns_byte_at_oamaddr ... ok
+test ppudata_reads_are_buffered ... ok
+test sprite_overflow_sets_ppustatus_bit ... ok
+test sprite_zero_hit_requires_background_rendering_enabled ... ok
+test sprite_zero_hit_requires_non_transparent_background_pixel ... ok
+test sprite_zero_hit_sets_ppustatus_bit ... ok
+test ppu_status_read_clears_vblank_bit ... ok
+test mirrored_ppu_status_read_clears_vblank_bit ... ok
+test ppustatus_write_is_ignored ... ok
+test unofficial_nop_abs_still_performs_read_side_effects ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/ppu_nmi.rs (target/llvm-cov-target/debug/deps/ppu_nmi-85417e861f145c10)
+
+running 2 tests
+test nmi_triggers_when_ppuctrl_nmi_enabled ... ok
+test ppu_status_register_reflects_vblank_progression ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/proptest_math.rs (target/llvm-cov-target/debug/deps/proptest_math-3060b139723c21d9)
+
+running 2 tests
+test test_core_read_memory_fuzz ... ok
+test test_cpu_cycles_dont_overflow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+     Running tests/rom_loader.rs (target/llvm-cov-target/debug/deps/rom_loader-37562516e4f6e6d5)
+
+running 16 tests
+test invalid_ines_magic_is_rejected ... ok
+test load_axrom_maps_initial_32k_bank_for_boot ... ok
+test axrom_bank_switch_via_cpu_prg_write_changes_entire_prg_window ... ok
+test load_gxrom_maps_initial_32k_bank_for_boot ... ok
+test load_mmc1_maps_first_and_last_bank_for_boot ... ok
+test load_mmc3_maps_switchable_and_fixed_prg_windows_for_boot ... ok
+test load_nes2_nrom32_maps_prg_and_respects_reset_vector ... ok
+test load_nrom16_maps_prg_and_respects_reset_vector ... ok
+test load_uxrom_maps_first_and_last_bank_for_boot ... ok
+test mmc3_bank_switch_via_prg_writes_changes_lower_8k_window ... ok
+test mmc1_bank_switch_via_prg_writes_changes_lower_window ... ok
+test unsupported_mapper_is_rejected ... ok
+test uxrom_bank_switch_via_cpu_prg_write_changes_lower_window ... ok
+test mmc3_chr_ram_writes_survive_mapper_register_writes ... ok
+test cnrom_chr_bank_switch_via_prg_write_changes_background_pixels ... ok
+test gxrom_bank_switch_via_cpu_prg_write_updates_prg_and_chr_windows ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+     Running tests/scheduler_determinism.rs (target/llvm-cov-target/debug/deps/scheduler_determinism-be56d42cbd201494)
+
+running 3 tests
+test identical_command_sequences_yield_identical_state_hash ... ok
+test step_frame_advances_monotonic_cycle_counter ... ok
+test step_scanline_advances_cycles_less_than_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/state_hash_mapper.rs (target/llvm-cov-target/debug/deps/state_hash_mapper-967f333532525139)
+
+running 2 tests
+test state_hash_differentiates_mapper_state ... ok
+test state_hash_differentiates_all_mappers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/status_flags.rs (target/llvm-cov-target/debug/deps/status_flags-2d145f087b456313)
+
+running 1 test
+test zero_and_negative_flags_follow_value_written ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/step_cpu_core_integration.rs (target/llvm-cov-target/debug/deps/step_cpu_core_integration-25ec99e10f13973a)
+
+running 2 tests
+test step_cpu_surfaces_unknown_opcode_errors ... ok
+test step_cpu_executes_instruction_and_tracks_trace ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/step_cpu_coverage.rs (target/llvm-cov-target/debug/deps/step_cpu_coverage-6b6f2d3f21644ec4)
+
+running 1 test
+test cpu_opcode_coverage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/step_cpu_unofficial.rs (target/llvm-cov-target/debug/deps/step_cpu_unofficial-dad896a096378c7a)
+
+running 1 test
+test test_unofficial_instruction_trace_no_alloc ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tas.rs (target/llvm-cov-target/debug/deps/tas-e182318e810cda01)
+
+running 9 tests
+test tas_error_display_describes_player2_macro_limit ... ok
+test tas_movie_exports_legacy_macro_script ... ok
+test tas_movie_macro_export_rejects_player2_input ... ok
+test tas_movie_serde_round_trip_preserves_runs ... ok
+test tas_recorder_macro_script_matches_movie_export ... ok
+test tas_recorder_start_stop_and_clear_update_observable_state ... ok
+test tas_recorder_can_capture_live_core_state_and_finish_movie ... ok
+test tas_recorder_coalesces_identical_frames_into_runs ... ok
+test tas_movie_replay_matches_direct_command_execution ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+     Running benches/frame_throughput.rs (target/llvm-cov-target/debug/deps/frame_throughput-cade7fbc592c5226)
+frame_throughput
+├─ sixty_frames_burst
+├─ step_cpu_nop
+├─ step_frame_cold
+├─ step_frame_warm
+├─ step_scanline_warm
+╰─ no_trace
+   ├─ sixty_frames_burst
+   ├─ step_cpu_nop
+   ╰─ step_frame_warm
