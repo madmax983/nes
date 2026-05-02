@@ -3,7 +3,6 @@ use nes_mcp::dispatch_tool;
 use std::collections::BTreeMap;
 
 #[test]
-#[ignore = "Havoc OOM Attack (SIGKILL)"]
 fn havoc_load_rom_oom() {
     let mut core = NesCore::new();
     let mut params = BTreeMap::new();

@@ -17,3 +17,7 @@
 ## 2024-05-27 - [MCP Slowloris DoS Vulnerability]
 **Learning:** A synchronous TCP listener loop that performs blocking reads (or allows infinite idle time) on a client socket is vulnerable to a Slowloris attack, where a single malicious client can tie up the entire server. Simply adding a blanket `read_timeout` to the socket breaks persistent connections (like JSON-RPC/LSP).
 **Action:** Always process client connections concurrently (e.g., using `thread::spawn` or an async runtime) to prevent head-of-line blocking on the listener thread, while preserving the ability for legitimate connections to remain idle safely.
+
+## 2024-05-28 - Unbounded `fs::read` leading to OOM panics
+**Learning:** Functions that parse external data using `std::fs::read` directly (such as ROM files or save state files) are vulnerable to Out-Of-Memory (OOM) SIGKILL crashes if pointed at infinite devices like `/dev/zero`. This cannot be easily caught with `#[should_panic]` since the OS kills the process.
+**Action:** Always use bounded reads via `File::open(path)?.take(max_size + 1).read_to_end(&mut buf)` when reading external files into memory to enforce strict size ceilings.

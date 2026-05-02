@@ -8,6 +8,7 @@
 use core::fmt;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::io::Read;
 use std::sync::{Mutex, OnceLock};
 
 use nes_core::{
@@ -840,9 +841,23 @@ fn parse_integer(raw: &str) -> Result<u64, DispatchError> {
 
 fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
     if let Some(path) = params.get("rom_path") {
-        return fs::read(path).map_err(|err| {
-            DispatchError::InvalidParams(format!("unable to read rom_path '{path}': {err}"))
-        });
+        return fs::File::open(path)
+            .and_then(|f| {
+                let mut buf = Vec::new();
+                let mut handle = f.take(10 * 1024 * 1024 + 1);
+                handle.read_to_end(&mut buf)?;
+                if buf.len() > 10 * 1024 * 1024 {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "file exceeds maximum allowed size of 10 MB",
+                    ))
+                } else {
+                    Ok(buf)
+                }
+            })
+            .map_err(|err| {
+                DispatchError::InvalidParams(format!("unable to read rom_path '{path}': {err}"))
+            });
     }
 
     let Some(hex) = params.get("rom_hex") else {

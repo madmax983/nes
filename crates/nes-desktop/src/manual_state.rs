@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::ops::RangeInclusive;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -75,8 +76,24 @@ fn hash_prefix(rom_hash: &str) -> String {
     prefix
 }
 
+pub fn safe_read(path: &Path, max_size: u64) -> std::io::Result<Vec<u8>> {
+    let file = fs::File::open(path)?;
+    let mut handle = file.take(max_size + 1);
+    let mut buf = Vec::new();
+    handle.read_to_end(&mut buf)?;
+
+    if buf.len() as u64 > max_size {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("file size exceeds maximum allowed size of {max_size} bytes"),
+        ));
+    }
+
+    Ok(buf)
+}
+
 fn read_save_state_file(path: &Path) -> Result<SaveStateFile, String> {
-    let encoded = fs::read(path)
+    let encoded = safe_read(path, 100 * 1024 * 1024)
         .map_err(|err| format!("failed to read save-state file '{}': {err}", path.display()))?;
     let payload: SaveStateFile = serde_json::from_slice(&encoded).map_err(|err| {
         format!(
@@ -429,6 +446,39 @@ mod tests {
         assert_eq!(metadata.slot, 3);
         assert!(matches!(metadata.status, SaveSlotStatus::Corrupt));
         assert!(metadata.modified_unix_secs.is_some());
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn should_return_error_when_file_exceeds_max_size() {
+        let root = unique_test_dir("safe_read_too_large");
+        fs::create_dir_all(&root).expect("temp root should be created");
+        let file_path = root.join("test_large.bin");
+
+        let data = vec![0x42; 2048]; // 2 KB
+        fs::write(&file_path, &data).expect("file should write");
+
+        let result = super::safe_read(&file_path, 1024);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("exceeds maximum allowed size"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn should_read_file_successfully_within_limit() {
+        let root = unique_test_dir("safe_read");
+        fs::create_dir_all(&root).expect("temp root should be created");
+        let file_path = root.join("test.bin");
+
+        let data = vec![0x42; 512];
+        fs::write(&file_path, &data).expect("file should write");
+
+        let read_data = super::safe_read(&file_path, 1024).expect("safe_read should succeed");
+        assert_eq!(read_data, data);
 
         let _ = fs::remove_dir_all(&root);
     }

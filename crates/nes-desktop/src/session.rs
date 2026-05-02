@@ -1,10 +1,10 @@
 use crossterm::style::{Color, Stylize};
 use nes_core::{NesCore, RomLoadInfo};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use nes_desktop::manual_state::{
-    SaveSlotMetadata, SaveSlotStatus, read_slot_metadata, slot_path_for_rom, slot_paths_for_rom,
+    SaveSlotMetadata, SaveSlotStatus, read_slot_metadata, safe_read, slot_path_for_rom,
+    slot_paths_for_rom,
 };
 use nes_desktop::overlay::OverlaySlotSummary;
 use nes_desktop::rta::compute_rom_hash;
@@ -44,7 +44,7 @@ pub(crate) fn load_rom_session(
     rom_path: &Path,
     cheats: &SessionCheats,
 ) -> Result<LoadedRomSession, String> {
-    let rom_bytes = fs::read(rom_path)
+    let rom_bytes = safe_read(rom_path, 10 * 1024 * 1024)
         .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
     core.clear_cheat_codes();
     let info = core
