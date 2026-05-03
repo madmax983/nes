@@ -17,3 +17,6 @@
 ## 2024-05-27 - [MCP Slowloris DoS Vulnerability]
 **Learning:** A synchronous TCP listener loop that performs blocking reads (or allows infinite idle time) on a client socket is vulnerable to a Slowloris attack, where a single malicious client can tie up the entire server. Simply adding a blanket `read_timeout` to the socket breaks persistent connections (like JSON-RPC/LSP).
 **Action:** Always process client connections concurrently (e.g., using `thread::spawn` or an async runtime) to prevent head-of-line blocking on the listener thread, while preserving the ability for legitimate connections to remain idle safely.
+## 2024-05-03 - Added test for frame size overflow in encode_ppm
+**Learning:** `checked_mul` bounds checking was untested in the `ppm` encoding module, creating a coverage gap for `InvalidInput` errors when rendering frames that exceed `usize` limits.
+**Action:** Targeted `usize::MAX` values in tests rather than allocating huge buffers, confirming arithmetic boundary handling returns the correct `ErrorKind::InvalidInput`.
