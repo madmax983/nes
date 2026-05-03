@@ -1,6 +1,16 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Returns the hardcoded path to the workspace's default `homebrew.nes` file.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// assert!(path.to_string_lossy().ends_with(".nes"));
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

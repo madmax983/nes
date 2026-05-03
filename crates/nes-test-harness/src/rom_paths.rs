@@ -3,6 +3,10 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Resolves the filesystem path to a Super Mario Bros ROM, asserting that it exists.
+///
+/// ## Panics
+/// Panics if the `roms.smb` or `desktop.rom_path` config values are missing from `nes.toml`, or if the file does not exist.
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +22,10 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Resolves the filesystem path to the `nestest.nes` CPU test ROM.
+///
+/// ## Panics
+/// Panics if `roms.nestest` is missing from `nes.toml`, or if the file does not exist.
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +35,10 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Resolves the filesystem path to a Blargg CPU test ROM.
+///
+/// ## Panics
+/// Panics if `roms.blargg_cpu` is missing from `nes.toml`, or if the file does not exist.
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +50,10 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Locates all `.nes` rom files within the configured Bradsmith Audio Test Suite directory.
+///
+/// ## Panics
+/// Panics if `roms.bbbradsmith_audio_suite_dir` is not configured, does not exist, or contains no `.nes` files.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +84,10 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Resolves the directory path containing "golden" `.pcm` and `.apu` recordings for the Bradsmith suite.
+///
+/// ## Panics
+/// Panics if `roms.bbbradsmith_audio_golden_dir` is not configured, or if the directory does not exist.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
