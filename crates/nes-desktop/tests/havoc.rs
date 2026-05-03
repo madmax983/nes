@@ -43,3 +43,11 @@ fn havoc_mcp_host_oom_on_massive_content_length() {
     ));
     let _ = nes_desktop::mcp_host::read_framed_message(&mut reader);
 }
+
+#[test]
+#[ignore = "Havoc OOM Attack (SIGKILL)"]
+fn havoc_desktop_load_state_oom() {
+    // The Trigger: passing /dev/zero to load_state_file will cause an OOM SIGKILL.
+    // It blindly uses fs::read.
+    let _ = nes_desktop::manual_state::load_state_file(std::path::Path::new("/dev/zero"), "hash");
+}

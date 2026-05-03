@@ -88,3 +88,9 @@ capacity overflow
 📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
 🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_desktop_load_state_oom -- --ignored`
 😈 **Comment:** You assumed the desktop application would only ever try to read finite save state files. You were wrong.
+
+**Havoc OOM Attack on load_state_file**
+**The Trigger:** `nes_desktop::manual_state::load_state_file(Path::new("/dev/zero"), "hash")`
+**The Stack Trace:** (OOM SIGKILL)
+**Reproduction:** `cargo test -p nes-desktop --test havoc -- --ignored`
+**Comment:** You assumed files read from disk would fit in RAM. You were wrong.
