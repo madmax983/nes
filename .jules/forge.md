@@ -47,3 +47,7 @@
 **[Extract reset ephemeral state]
 **Learning:** Found duplicate logic in `crates/nes-desktop/src/main.rs` for `AppAction::OpenRom`, `AppAction::LoadSlot`, and `AppAction::Reset` to reset the time machine, rewind state, audio, and metrics.
 **Action:** Extracted this into `reset_ephemeral_state` taking `&mut AppContext` and reducing repetitive logic and boilerplate.
+
+**[Extract repetitve RTA unwrap into helper]**
+**Learning:** Found repetitive Option unwrapping (`if let Some(rta) = ctx.rta_manager.as_mut()`) in `crates/nes-desktop/src/main.rs` strictly to forward actions to `mark_forbidden_action`. This created visual noise around UI control flow.
+**Action:** Abstracted the repetitive boilerplate Option unwrap into a single `mark_rta_forbidden` helper function.

@@ -415,13 +415,11 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             Ok(false)
         }
         AppAction::SaveSlot(slot) => {
-            if let Some(rta) = ctx.rta_manager.as_mut() {
-                let _ = rta.mark_forbidden_action(
-                    ForbiddenAction::SaveLoad,
-                    ctx.frame_index,
-                    Instant::now(),
-                );
-            }
+            mark_rta_forbidden(
+                ctx.rta_manager,
+                ForbiddenAction::SaveLoad,
+                ctx.frame_index,
+            );
             let snapshot = ctx.core.save_state();
             let slot_path = slot_path_for_selection(ctx.session, slot);
             save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
@@ -432,13 +430,11 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             Ok(false)
         }
         AppAction::LoadSlot(slot) => {
-            if let Some(rta) = ctx.rta_manager.as_mut() {
-                let _ = rta.mark_forbidden_action(
-                    ForbiddenAction::SaveLoad,
-                    ctx.frame_index,
-                    Instant::now(),
-                );
-            }
+            mark_rta_forbidden(
+                ctx.rta_manager,
+                ForbiddenAction::SaveLoad,
+                ctx.frame_index,
+            );
             let slot_path = slot_path_for_selection(ctx.session, slot);
             let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
             ctx.core.load_state(&snapshot);
@@ -484,6 +480,16 @@ fn reset_ephemeral_state(ctx: &mut AppContext<'_>) {
         ctx.runtime.metrics_every_frames,
         ctx.core.ppu_frame_counter(),
     );
+}
+
+fn mark_rta_forbidden(
+    rta_manager: &mut Option<RtaManager>,
+    action: ForbiddenAction,
+    frame_index: u64,
+) {
+    if let Some(rta) = rta_manager.as_mut() {
+        let _ = rta.mark_forbidden_action(action, frame_index, Instant::now());
+    }
 }
 
 fn command_marks_rta_invalidation(command: Command) -> Option<ForbiddenAction> {
@@ -901,13 +907,11 @@ fn run() -> Result<(), String> {
                     KeyboardDecision::SetRewindHeld(held) => {
                         // R: hold to rewind, release to resume.
                         rewind_held = held;
-                        if held
-                            && let Some(rta) = rta_manager.as_mut()
-                        {
-                            let _ = rta.mark_forbidden_action(
+                        if held {
+                            mark_rta_forbidden(
+                                &mut rta_manager,
                                 ForbiddenAction::Rewind,
                                 frame_index,
-                                Instant::now(),
                             );
                         }
                         if should_resume_after_rewind_hold(held) {
@@ -941,10 +945,8 @@ fn run() -> Result<(), String> {
                         keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
                     }
                     KeyboardDecision::ExecuteCore(command) => {
-                        if let Some(action) = command_marks_rta_invalidation(command)
-                            && let Some(rta) = rta_manager.as_mut()
-                        {
-                            let _ = rta.mark_forbidden_action(action, frame_index, Instant::now());
+                        if let Some(action) = command_marks_rta_invalidation(command) {
+                            mark_rta_forbidden(&mut rta_manager, action, frame_index);
                         }
                         if let Err(err) = core.execute(command) {
                             eprintln!("Input command failed: {err}");
