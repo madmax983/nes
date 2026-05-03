@@ -47,3 +47,11 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+**decode_string_literal Equivalent Mutant**
+**Mutant:** replace | with ^ in decode_string_literal in crates/nes-dsl/src/lib.rs
+**Diagnosis:** EQUIVALENT_MUTANT. `hi_val << 4 | lo_val` and `hi_val << 4 ^ lo_val` are completely equivalent because the lower 4 bits of `hi_val << 4` are always 0, and `lo_val` is always a 4-bit value. Thus, XOR and OR produce the identical result without overlapping bits.
+**Kill Shot:** None (added to skip list conceptually).
+**cheat_codes.rs Equivalent Mutant**
+**Mutant:** replace | with ^ in <impl FromStr for CheatCode>::from_str in crates/nes-core/src/cheat_codes.rs
+**Diagnosis:** EQUIVALENT_MUTANT. The parts shifted and OR'd together are perfectly disjoint in bits, so XOR and OR are strictly equivalent operations here.
+**Kill Shot:** None (added to skip list conceptually).

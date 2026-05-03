@@ -536,6 +536,22 @@ mod tests {
         if altered_value_bitwise_and[0].value != writes[0].value {
             assert_ne!(hash, apu_write_hash(&altered_value_bitwise_and));
         }
+
+        // Pin the exact hash of a known sequence to prevent any arbitrary mutation
+        // of the hashing algorithm (like ^= to |=).
+        let known_events = [
+            crate::ApuWriteEvent {
+                cpu_cycle: 100,
+                addr: 0x4000,
+                value: 0x0F,
+            },
+            crate::ApuWriteEvent {
+                cpu_cycle: 200,
+                addr: 0x4001,
+                value: 0xFF,
+            },
+        ];
+        assert_eq!(apu_write_hash(&known_events), 9631730865785397830);
     }
 
     #[test]
