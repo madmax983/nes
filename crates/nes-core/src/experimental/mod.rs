@@ -8,6 +8,8 @@
 
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
+/// Automatically captures screenshots based on memory events.
+pub mod auto_clipper;
 /// Utility for discovering cheat codes by monitoring RAM changes.
 pub mod cheat_finder;
 /// Tracks emulator events for external logging and analysis.
