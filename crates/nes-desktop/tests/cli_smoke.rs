@@ -28,7 +28,7 @@ fn nes_desktop_missing_rom_prints_styled_error() {
     assert!(stderr.contains("Could not find the ROM file at"));
     assert!(stderr.contains("__does_not_exist__.nes"));
     assert!(stderr.contains("Hint:"));
-    assert!(stderr.contains("Check the path or try the bundled homebrew ROM"));
+    assert!(stderr.contains("Check the path or build the bundled homebrew ROM first"));
 }
 
 #[test]

@@ -2114,7 +2114,7 @@ mod tests {
         let msg = format_rom_read_error("bad.nes", &not_found);
         assert!(msg.contains("Could not find the ROM file at"));
         assert!(msg.contains("bad.nes"));
-        assert!(msg.contains("homebrew.nes"));
+        assert!(msg.contains("build_homebrew_rom"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);
