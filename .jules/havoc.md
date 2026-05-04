@@ -88,3 +88,9 @@ capacity overflow
 📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
 🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_desktop_load_state_oom -- --ignored`
 😈 **Comment:** You assumed the desktop application would only ever try to read finite save state files. You were wrong.
+
+**Relay OOM via read_line**
+**The Trigger:** A rogue client sends an infinite stream of bytes without a newline.
+**The Stack Trace:** (OOM SIGKILL)
+**Reproduction:** Run `cargo test --test havoc -- --ignored`
+**Comment:** You trusted the network to send well-formed lines. The network sent infinite garbage, and you eagerly consumed it until the OS killed you.
