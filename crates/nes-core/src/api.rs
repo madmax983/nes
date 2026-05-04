@@ -2202,3 +2202,86 @@ mod tests_rom_loader_internal {
         ));
     }
 }
+
+#[cfg(test)]
+mod tests_api {
+    use super::*;
+
+    #[test]
+    fn test_strobe_behavior() {
+        let mut ports = ControllerPorts {
+            controllers: [
+                ControllerState { bits: 0, shift: 0 },
+                ControllerState { bits: 0, shift: 0 },
+            ],
+            controller_strobe: false,
+        };
+
+        ports.write_controller_strobe(1);
+        ports.set_controller_bits(0b10101010, Player::One);
+        assert_eq!(ports.controllers[0].shift, 0b10101010);
+        assert_eq!(ports.controllers[0].bits, 0b10101010);
+
+        ports.write_controller_strobe(0);
+
+        ports.set_controller_bits(0b00000000, Player::One);
+        assert_eq!(ports.controllers[0].shift, 0b10101010);
+        assert_eq!(ports.controllers[0].bits, 0b00000000);
+    }
+
+    #[test]
+    fn test_controller_port_sample() {
+        let mut ports = ControllerPorts {
+            controllers: [
+                ControllerState {
+                    bits: 0,
+                    shift: 0b10101010,
+                },
+                ControllerState { bits: 0, shift: 0 },
+            ],
+            controller_strobe: false,
+        };
+
+        assert_eq!(ports.controller_port_sample(Player::One) & 1, 0); // LSB
+        ports.consume_controller_read(Player::One);
+        assert_eq!(ports.controller_port_sample(Player::One) & 1, 1);
+        ports.consume_controller_read(Player::One);
+        assert_eq!(ports.controller_port_sample(Player::One) & 1, 0);
+    }
+
+    #[test]
+    fn test_controller_port_sample_masks_correctly() {
+        let mut ports = ControllerPorts {
+            controllers: [
+                ControllerState { bits: 0, shift: 0 },
+                ControllerState { bits: 0, shift: 0 },
+            ],
+            controller_strobe: false,
+        };
+
+        ports.write_controller_strobe(1);
+        ports.set_controller_bits(0b11111110, Player::One);
+        assert_eq!(
+            ports.controller_port_sample(Player::One),
+            CONTROLLER_OPEN_BUS_MASK
+        );
+
+        ports.set_controller_bits(0b11111111, Player::One);
+        assert_eq!(
+            ports.controller_port_sample(Player::One),
+            1 | CONTROLLER_OPEN_BUS_MASK
+        );
+
+        ports.write_controller_strobe(0);
+        assert_eq!(
+            ports.controller_port_sample(Player::One),
+            1 | CONTROLLER_OPEN_BUS_MASK
+        );
+
+        ports.consume_controller_read(Player::One);
+        assert_eq!(
+            ports.controller_port_sample(Player::One),
+            1 | CONTROLLER_OPEN_BUS_MASK
+        );
+    }
+}

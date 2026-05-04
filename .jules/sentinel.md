@@ -47,3 +47,10 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**[Title] Equivalent Mutant: Controller API read and consume bitwise OR and XOR**
+**Mutant:** `replace | with ^ in ControllerPorts::controller_port_sample` at `api.rs:143` and `replace | with ^ in ControllerPorts::consume_controller_read` at `api.rs:149`
+**Diagnosis:** EQUIVALENT_MUTANT.
+For `controller_port_sample`, `bit | 0x40` vs `bit ^ 0x40` are equivalent because `bit` is always `0` or `1`, which are disjoint with `0x40`.
+For `consume_controller_read`, `(shift >> 1) | 0x80` vs `(shift >> 1) ^ 0x80` are equivalent because shifting an 8-bit unsigned integer right by 1 guarantees the most significant bit (0x80) is 0 before the operation.
+**Kill Shot:** None (Equivalent Mutant)
