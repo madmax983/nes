@@ -20,3 +20,6 @@
 ## 2024-04-27 - [Avoid String clones in RTA DraftCandidate]
 **Learning:** Avoid unnecessary `.clone()`s of `String` during serialization workflows.
 **Action:** Used `&'a str` in structs purely meant for serialization like `DraftCandidate` and `DraftReport` instead of cloning `String` on every candidate instantiation in hot-ish parsing paths. Also optimized `push_split` by constructing the `SplitEvent` structure and then pushing it to the vector without cloning the original string name argument.
+**[Eliminating Intermediate String Allocations]
+**Learning:** Using `string.push_str(&format!(...))` inside a loop forces a new intermediate `String` allocation on the heap for every single iteration.
+**Action:** Replace it with the `writeln!` or `write!` macro (via `std::fmt::Write`) to write directly to the existing string buffer, eliminating unnecessary intermediate heap allocations.
