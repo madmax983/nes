@@ -17,3 +17,7 @@
 ## 2024-05-27 - [MCP Slowloris DoS Vulnerability]
 **Learning:** A synchronous TCP listener loop that performs blocking reads (or allows infinite idle time) on a client socket is vulnerable to a Slowloris attack, where a single malicious client can tie up the entire server. Simply adding a blanket `read_timeout` to the socket breaks persistent connections (like JSON-RPC/LSP).
 **Action:** Always process client connections concurrently (e.g., using `thread::spawn` or an async runtime) to prevent head-of-line blocking on the listener thread, while preserving the ability for legitimate connections to remain idle safely.
+
+## 2024-05-28 - Parameter Parsing Edge Cases
+**Learning:** Even simple parameter extraction methods like `parse_u8` and `parse_required_string` have error handling branches that handle missing or malformed data. These need explicit tests to prevent regressions.
+**Action:** Added unit tests in `nes-mcp` to cover all error variants of parameter parsing.

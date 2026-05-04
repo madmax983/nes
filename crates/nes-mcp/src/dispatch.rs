@@ -977,8 +977,9 @@ mod tests {
 
     use super::{
         Button, DispatchError, Mirroring, ToolParams, encode_base64, parse_button,
-        parse_dsl_rom_options, parse_hex_bytes, parse_player2, parse_slot, parse_speed_permille,
-        parse_u64, sync_audio_output, sync_frame_output,
+        parse_dsl_rom_options, parse_dsl_source, parse_hex_bytes, parse_player2,
+        parse_required_string, parse_rom_payload, parse_slot, parse_speed_permille, parse_u8,
+        parse_u16, parse_u64, sync_audio_output, sync_frame_output,
     };
     use crate::output::{latest_output_metadata, reset_output_state_for_test};
 
@@ -1157,6 +1158,101 @@ mod tests {
             }
             _ => panic!("Expected DispatchOutput::PpuOam"),
         }
+    }
+
+    #[test]
+    fn test_parse_u8_validates_value_and_range() {
+        assert_eq!(
+            parse_u8(&params(&[("val", "42")]), "val").expect("valid u8"),
+            42
+        );
+
+        let missing = parse_u8(&ToolParams::new(), "val").expect_err("missing value");
+        assert_eq!(missing.to_string(), "invalid params: val must be provided");
+
+        let out_of_bounds = parse_u8(&params(&[("val", "256")]), "val").expect_err("out of bounds");
+        assert_eq!(
+            out_of_bounds.to_string(),
+            "invalid params: val must be an integer in [0, 255]"
+        );
+
+        let not_a_number = parse_u8(&params(&[("val", "abc")]), "val").expect_err("not a number");
+        assert_eq!(
+            not_a_number.to_string(),
+            "invalid params: invalid integer literal 'abc'"
+        );
+    }
+
+    #[test]
+    fn test_parse_u16_validates_value_and_range() {
+        assert_eq!(
+            parse_u16(&params(&[("val", "12345")]), "val").expect("valid u16"),
+            12345
+        );
+
+        let missing = parse_u16(&ToolParams::new(), "val").expect_err("missing value");
+        assert_eq!(missing.to_string(), "invalid params: val must be provided");
+
+        let out_of_bounds =
+            parse_u16(&params(&[("val", "65536")]), "val").expect_err("out of bounds");
+        assert_eq!(
+            out_of_bounds.to_string(),
+            "invalid params: val must be an integer in [0, 65535]"
+        );
+
+        let not_a_number = parse_u16(&params(&[("val", "abc")]), "val").expect_err("not a number");
+        assert_eq!(
+            not_a_number.to_string(),
+            "invalid params: invalid integer literal 'abc'"
+        );
+    }
+
+    #[test]
+    fn test_parse_required_string_validates_presence_and_length() {
+        assert_eq!(
+            parse_required_string(&params(&[("val", "hello")]), "val").expect("valid string"),
+            "hello"
+        );
+
+        let missing = parse_required_string(&ToolParams::new(), "val").expect_err("missing value");
+        assert_eq!(missing.to_string(), "invalid params: val must be provided");
+
+        let empty =
+            parse_required_string(&params(&[("val", "  ")]), "val").expect_err("empty string");
+        assert_eq!(empty.to_string(), "invalid params: val must not be empty");
+    }
+
+    #[test]
+    fn test_parse_dsl_source_validates_presence_and_length() {
+        assert_eq!(
+            parse_dsl_source(&params(&[("source", "LDA #$00")])).expect("valid source"),
+            "LDA #$00"
+        );
+
+        let missing = parse_dsl_source(&ToolParams::new()).expect_err("missing source");
+        assert_eq!(
+            missing.to_string(),
+            "invalid params: source must be provided"
+        );
+
+        let empty = parse_dsl_source(&params(&[(
+            "source", "
+	 ",
+        )]))
+        .expect_err("empty source");
+        assert_eq!(
+            empty.to_string(),
+            "invalid params: source must not be empty"
+        );
+    }
+
+    #[test]
+    fn test_parse_rom_payload_requires_path_or_hex() {
+        let missing = parse_rom_payload(&ToolParams::new()).expect_err("missing path and hex");
+        assert_eq!(
+            missing.to_string(),
+            "invalid params: provide rom_hex or rom_path"
+        );
     }
 }
 #[cfg(test)]
