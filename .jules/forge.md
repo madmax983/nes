@@ -47,3 +47,7 @@
 **[Extract reset ephemeral state]
 **Learning:** Found duplicate logic in `crates/nes-desktop/src/main.rs` for `AppAction::OpenRom`, `AppAction::LoadSlot`, and `AppAction::Reset` to reset the time machine, rewind state, audio, and metrics.
 **Action:** Extracted this into `reset_ephemeral_state` taking `&mut AppContext` and reducing repetitive logic and boilerplate.
+
+**[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
+**Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
+**Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
