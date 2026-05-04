@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract RTA Manager Initialization]**
+**Learning:** The `run()` method had a 60+ line "God Block" for initializing the `RtaManager`, containing deeply nested matches for profile selection and fallback templates. This heavily bloated the startup routine.
+**Action:** Extracted this into a standalone `initialize_rta_manager` helper function, taking `Option<&RtaConfig>` and the `rom_hash`. This flattens the `run()` function and isolates RTA initialization.
