@@ -61,7 +61,9 @@ impl ExecutionGraph {
 
     /// Exports the recorded transitions to a Graphviz DOT string.
     #[must_use]
+    /// **Performance optimization:** Avoids intermediate `String` allocations by using `writeln!`.
     pub fn to_dot(&self) -> String {
+        use std::fmt::Write;
         let mut dot = String::from("digraph ExecutionFlow {\n");
         // Sort keys to ensure deterministic output for testing/version control
         let mut srcs: Vec<_> = self.transitions.keys().copied().collect();
@@ -71,7 +73,7 @@ impl ExecutionGraph {
             let mut dests: Vec<_> = self.transitions[&src].iter().copied().collect();
             dests.sort_unstable();
             for dest in dests {
-                dot.push_str(&format!("    \"{:04X}\" -> \"{:04X}\";\n", src, dest));
+                let _ = writeln!(dot, "    \"{:04X}\" -> \"{:04X}\";", src, dest);
             }
         }
         dot.push_str("}\n");
@@ -113,5 +115,16 @@ mod tests {
         assert!(dot.contains("\"C002\" -> \"C000\""));
         assert!(dot.starts_with("digraph ExecutionFlow {"));
         assert!(dot.ends_with("}\n"));
+    }
+
+    #[test]
+    fn should_export_multiple_transitions_efficiently() {
+        let mut graph = ExecutionGraph::new();
+        graph.last_pc = Some(0x8000);
+        graph.transitions.entry(0x8000).or_default().insert(0x8001);
+        graph.transitions.entry(0x8000).or_default().insert(0x8005);
+        let dot = graph.to_dot();
+        assert!(dot.contains("    \"8000\" -> \"8001\";\n"));
+        assert!(dot.contains("    \"8000\" -> \"8005\";\n"));
     }
 }
