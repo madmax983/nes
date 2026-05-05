@@ -36,9 +36,10 @@ use crate::output::{
 pub type ToolParams = BTreeMap<String, String>;
 
 fn get_arg<'a>(params: &'a ToolParams, key: &str) -> Result<&'a str, DispatchError> {
-    params.get(key).map(String::as_str).ok_or_else(|| {
-        DispatchError::InvalidParams(format!("{key} must be provided"))
-    })
+    params
+        .get(key)
+        .map(String::as_str)
+        .ok_or_else(|| DispatchError::InvalidParams(format!("{key} must be provided")))
 }
 
 /// Represents the strongly typed response from a successful tool invocation.
@@ -835,9 +836,8 @@ fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
         });
     }
 
-    let hex = get_arg(params, "rom_hex").map_err(|_| {
-        DispatchError::InvalidParams("provide rom_hex or rom_path".to_owned())
-    })?;
+    let hex = get_arg(params, "rom_hex")
+        .map_err(|_| DispatchError::InvalidParams("provide rom_hex or rom_path".to_owned()))?;
     parse_hex_bytes(hex)
 }
 
