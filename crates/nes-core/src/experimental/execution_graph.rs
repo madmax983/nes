@@ -8,6 +8,8 @@
 use crate::NesCore;
 #[cfg(feature = "nova")]
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "nova")]
+use std::fmt::Write;
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
@@ -71,7 +73,9 @@ impl ExecutionGraph {
             let mut dests: Vec<_> = self.transitions[&src].iter().copied().collect();
             dests.sort_unstable();
             for dest in dests {
-                dot.push_str(&format!("    \"{:04X}\" -> \"{:04X}\";\n", src, dest));
+                // ⚡ **Bolt Optimization:** Avoids allocating a new intermediate `String`
+                // on the heap for every graph transition.
+                let _ = writeln!(dot, "    \"{:04X}\" -> \"{:04X}\";", src, dest);
             }
         }
         dot.push_str("}\n");
@@ -113,5 +117,22 @@ mod tests {
         assert!(dot.contains("\"C002\" -> \"C000\""));
         assert!(dot.starts_with("digraph ExecutionFlow {"));
         assert!(dot.ends_with("}\n"));
+    }
+
+    #[test]
+    fn should_export_exact_dot_format() {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(0xC000, &[0xEA, 0xEA, 0x4C, 0x00, 0xC0]);
+
+        let mut graph = ExecutionGraph::new();
+        graph.record_step(&core);
+        let _ = core.execute(crate::Command::StepCpu);
+        graph.record_step(&core);
+
+        let dot = graph.to_dot();
+        assert_eq!(
+            dot,
+            "digraph ExecutionFlow {\n    \"C000\" -> \"C001\";\n}\n"
+        );
     }
 }
