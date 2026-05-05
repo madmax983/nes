@@ -25,3 +25,12 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+
+
+**Extract `events` boundaries from `main.rs`**
+**Tangle:** `crates/nes-tui/src/main.rs` contained over 1800 lines with application logic interwoven with terminal event handling (Crossterm).
+**Blueprint:** Extracted event and timer types (`EventSource`, `LoopTimer`, `CrosstermEventSource`, `SystemLoopTimer`) into a separate `events.rs` module, encapsulating crossterm-specific event traits to keep `main.rs` focused on orchestration.
+
+**Extract `events` boundaries from `main.rs`**
+**Tangle:** `crates/nes-tui/src/main.rs` contained over 1800 lines with application logic interwoven with terminal event handling (Crossterm).
+**Blueprint:** Extracted event and timer types (`EventSource`, `LoopTimer`, `CrosstermEventSource`, `SystemLoopTimer`) into a separate `events.rs` module, encapsulating crossterm-specific event traits to keep `main.rs` focused on orchestration.
