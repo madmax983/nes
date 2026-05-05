@@ -35,6 +35,12 @@ use crate::output::{
 /// ```
 pub type ToolParams = BTreeMap<String, String>;
 
+fn get_arg<'a>(params: &'a ToolParams, key: &str) -> Result<&'a str, DispatchError> {
+    params.get(key).map(String::as_str).ok_or_else(|| {
+        DispatchError::InvalidParams(format!("{key} must be provided"))
+    })
+}
+
 /// Represents the strongly typed response from a successful tool invocation.
 ///
 /// Converts the internal emulator state or query results into a structured format
@@ -732,11 +738,7 @@ fn write_frame_image(
 }
 
 fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
-    let Some(button) = params.get("button").map(String::as_str) else {
-        return Err(DispatchError::InvalidParams(
-            "button must be provided".to_owned(),
-        ));
-    };
+    let button = get_arg(params, "button")?;
 
     match button {
         "A" => Ok(Button::A),
@@ -754,22 +756,14 @@ fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
 }
 
 fn parse_u8(params: &ToolParams, key: &str) -> Result<u8, DispatchError> {
-    let Some(raw) = params.get(key) else {
-        return Err(DispatchError::InvalidParams(format!(
-            "{key} must be provided"
-        )));
-    };
+    let raw = get_arg(params, key)?;
     let value = parse_integer(raw)?;
     u8::try_from(value)
         .map_err(|_| DispatchError::InvalidParams(format!("{key} must be an integer in [0, 255]")))
 }
 
 fn parse_u16(params: &ToolParams, key: &str) -> Result<u16, DispatchError> {
-    let Some(raw) = params.get(key) else {
-        return Err(DispatchError::InvalidParams(format!(
-            "{key} must be provided"
-        )));
-    };
+    let raw = get_arg(params, key)?;
     let value = parse_integer(raw)?;
     u16::try_from(value).map_err(|_| {
         DispatchError::InvalidParams(format!("{key} must be an integer in [0, 65535]"))
@@ -782,11 +776,7 @@ fn parse_u64(params: &ToolParams, key: &str) -> Option<u64> {
 }
 
 fn parse_speed_permille(params: &ToolParams) -> Result<u16, DispatchError> {
-    let Some(raw) = params.get("multiplier") else {
-        return Err(DispatchError::InvalidParams(
-            "multiplier must be provided".to_owned(),
-        ));
-    };
+    let raw = get_arg(params, "multiplier")?;
 
     let multiplier: f64 = raw.parse().map_err(|_| {
         DispatchError::InvalidParams("multiplier must be a positive number".to_owned())
@@ -845,20 +835,14 @@ fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
         });
     }
 
-    let Some(hex) = params.get("rom_hex") else {
-        return Err(DispatchError::InvalidParams(
-            "provide rom_hex or rom_path".to_owned(),
-        ));
-    };
+    let hex = get_arg(params, "rom_hex").map_err(|_| {
+        DispatchError::InvalidParams("provide rom_hex or rom_path".to_owned())
+    })?;
     parse_hex_bytes(hex)
 }
 
 fn parse_dsl_source(params: &ToolParams) -> Result<&str, DispatchError> {
-    let Some(source) = params.get("source").map(String::as_str) else {
-        return Err(DispatchError::InvalidParams(
-            "source must be provided".to_owned(),
-        ));
-    };
+    let source = get_arg(params, "source")?;
     if source.trim().is_empty() {
         return Err(DispatchError::InvalidParams(
             "source must not be empty".to_owned(),
@@ -890,11 +874,7 @@ fn parse_dsl_rom_options(params: &ToolParams) -> Result<RomBuildOptions, Dispatc
 }
 
 fn parse_required_string(params: &ToolParams, key: &str) -> Result<String, DispatchError> {
-    let Some(value) = params.get(key).cloned() else {
-        return Err(DispatchError::InvalidParams(format!(
-            "{key} must be provided"
-        )));
-    };
+    let value = get_arg(params, key)?.to_owned();
     if value.trim().is_empty() {
         return Err(DispatchError::InvalidParams(format!(
             "{key} must not be empty"

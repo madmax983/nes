@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract get_arg helper to reduce parameter parsing boilerplate]
+**Learning:** Found repetitive `let Some(...) = params.get(...) else { return Err(...) }` boilerplate across multiple parsing functions in `dispatch.rs`.
+**Action:** Extracted a `get_arg` helper function to safely fetch string references and map missing keys to `DispatchError::InvalidParams`, making parameter parsing strictly typed, concise, and DRY.
