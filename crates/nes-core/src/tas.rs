@@ -246,6 +246,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_tas_movie_to_macro_script_fails_with_player_2_input() {
+        let mut movie = TasMovie::default();
+        movie.push_run(TasFrameRun::new(0, 1, 10)); // controller2_bits != 0
+        let result = movie.to_macro_script();
+        assert_eq!(result, Err(TasError::Player2MacroScriptUnsupported));
+    }
+
+    #[test]
     fn test_tas_movie_push_run_coalescing() {
         let mut movie = TasMovie::default();
 
