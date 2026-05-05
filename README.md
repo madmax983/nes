@@ -2,6 +2,9 @@
 
 This repository hosts a Rust NES emulator workspace focused on systems learning, deterministic behavior, and strong correctness checks.
 
+> [!IMPORTANT]
+> **REQUIRES FEATURE NOVA:** Some experimental tools and visualizers require the `nova` feature to be enabled (`--features nova`).
+
 ## Workspace
 
 - `crates/nes-core`: deterministic emulation core, command/query API, and stable TAS movie/recorder primitives.
@@ -45,6 +48,7 @@ Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
 Desktop/TUI launch commands:
 
+**Note: You must create a `nes.toml` config file before launching the emulator.**
 First, copy the example configuration:
 
 ```powershell
