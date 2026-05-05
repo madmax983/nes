@@ -17,3 +17,7 @@
 ## 2024-05-27 - [MCP Slowloris DoS Vulnerability]
 **Learning:** A synchronous TCP listener loop that performs blocking reads (or allows infinite idle time) on a client socket is vulnerable to a Slowloris attack, where a single malicious client can tie up the entire server. Simply adding a blanket `read_timeout` to the socket breaks persistent connections (like JSON-RPC/LSP).
 **Action:** Always process client connections concurrently (e.g., using `thread::spawn` or an async runtime) to prevent head-of-line blocking on the listener thread, while preserving the ability for legitimate connections to remain idle safely.
+
+## 2026-05-05 - Edge Cases in Image Encoding and Script Generation
+**Learning:** Error returns on extremely large dimensions (overflow) in utilities like PPM encoding and unimplemented player 2 script generation features are easily missed in standard coverage.
+**Action:** Write tests specifically targeting dimension overflows and verify error variants for unsupported inputs are triggered.

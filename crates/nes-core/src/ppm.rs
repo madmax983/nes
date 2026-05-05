@@ -73,4 +73,11 @@ mod tests {
         let err = encode_ppm(2, 1, &[1, 2, 3, 255]).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
     }
+
+    #[test]
+    fn encode_ppm_returns_error_on_frame_size_overflow() {
+        let err = encode_ppm(usize::MAX, usize::MAX, &[]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(err.to_string(), "frame size overflow");
+    }
 }
