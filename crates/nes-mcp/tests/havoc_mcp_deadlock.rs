@@ -5,7 +5,6 @@ use std::time::Duration;
 
 #[test]
 #[should_panic(expected = "output state lock")]
-#[ignore = "Havoc Mutex Poison Attack"]
 fn havoc_test_mutex_poison() {
     let (tx, rx) = mpsc::channel();
 
