@@ -88,3 +88,13 @@ capacity overflow
 📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory. No explicit panic trace).
 🧪 **Reproduction:** Run `cargo test -p nes-desktop havoc_desktop_load_state_oom -- --ignored`
 😈 **Comment:** You assumed the desktop application would only ever try to read finite save state files. You were wrong.
+
+**MCP Output Mutex Poisoning**
+**The Trigger:** A panic inside the closure passed to `publish_audio_with` while the global output state mutex is locked.
+**The Stack Trace:**
+thread '<unnamed>' panicked at crates/nes-mcp/tests/havoc_mcp_output_poison.rs:14:13:
+Havoc closure panic
+thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src/output.rs:299:43:
+output state lock: PoisonError { .. }
+**Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
+**Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
