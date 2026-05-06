@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**[Extract AppContext]**
+**Tangle:** `main.rs` is over 2,100 lines long and contains the `AppContext` "God Struct" alongside all action dispatching logic, deeply coupling the setup phase with the runtime execution loop.
+**Blueprint:** Extracted `AppContext`, `execute_app_action`, and dispatch functions into a dedicated `app_context.rs` module, establishing a clear domain boundary for runtime state mutation and action routing.
