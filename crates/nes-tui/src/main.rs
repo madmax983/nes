@@ -916,17 +916,24 @@ fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            "Hint:".with(crossterm::style::Color::Cyan).bold()
+            "{}\n  {}\n\n{}\n  {}\n  {}",
+            "Error: ROM Not Found"
+                .with(crossterm::style::Color::Red)
+                .bold(),
+            format!("Could not read the file at '{rom_path}'")
+                .with(crossterm::style::Color::Yellow),
+            "Hint:".with(crossterm::style::Color::Cyan).bold(),
+            "Check the path and try again.",
+            "Or use the bundled ROM: ./roms/homebrew/homebrew.nes"
         )
     } else {
         format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            err
+            "{}\n  {}\n  {}",
+            "Error: Failed to read ROM"
+                .with(crossterm::style::Color::Red)
+                .bold(),
+            format!("Path: '{rom_path}'").with(crossterm::style::Color::Yellow),
+            format!("Reason: {err}").with(crossterm::style::Color::DarkGrey)
         )
     }
 }
@@ -1147,13 +1154,13 @@ mod tests {
     fn format_rom_read_error_handles_not_found_and_other_errors() {
         let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
         let msg = format_rom_read_error("bad.nes", &not_found);
-        assert!(msg.contains("Could not find the ROM file at"));
+        assert!(msg.contains("Error: ROM Not Found"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("homebrew.nes"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);
-        assert!(msg.contains("Failed to read ROM at"));
+        assert!(msg.contains("Error: Failed to read ROM"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("permission denied"));
     }

@@ -113,17 +113,19 @@ pub(crate) fn window_title(session: &LoadedRomSession, overlay_open: bool) -> St
 pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            "{}\n  {}\n\n{}\n  {}\n  {}",
+            "Error: ROM Not Found".with(Color::Red).bold(),
+            format!("Could not read the file at '{rom_path}'").with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold(),
+            "Check the path and try again.",
+            "Or use the bundled ROM: ./roms/homebrew/homebrew.nes"
         )
     } else {
         format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            err
+            "{}\n  {}\n  {}",
+            "Error: Failed to read ROM".with(Color::Red).bold(),
+            format!("Path: '{rom_path}'").with(Color::Yellow),
+            format!("Reason: {err}").with(Color::DarkGrey)
         )
     }
 }
@@ -147,14 +149,14 @@ mod tests {
     fn format_rom_read_error_handles_not_found() {
         let err = std::io::Error::from(std::io::ErrorKind::NotFound);
         let msg = format_rom_read_error("foo.nes", &err);
-        assert!(msg.contains("Could not find the ROM file"));
+        assert!(msg.contains("Error: ROM Not Found"));
     }
 
     #[test]
     fn format_rom_read_error_handles_other_errors() {
         let err = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("foo.nes", &err);
-        assert!(msg.contains("Failed to read ROM"));
+        assert!(msg.contains("Error: Failed to read ROM"));
     }
 
     #[test]
@@ -172,7 +174,7 @@ mod tests {
         let cheats = SessionCheats::new();
         let result = load_rom_session(&mut core, Path::new("does_not_exist.nes"), &cheats);
         if let Err(err) = result {
-            assert!(err.contains("Could not find the ROM file"));
+            assert!(err.contains("Error: ROM Not Found"));
         } else {
             panic!("Expected an error but got success");
         }
