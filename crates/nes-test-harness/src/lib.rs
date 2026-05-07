@@ -34,6 +34,23 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// Represents a captured write to an APU register during CPU execution.
+///
+/// These events are collected by the harness and compared to "golden" known-good executions
+/// to verify that the core emits audio register writes on the exact expected CPU cycles.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::ApuWriteEvent;
+///
+/// let event = ApuWriteEvent {
+///     cpu_cycle: 12345,
+///     addr: 0x4000,
+///     value: 0x8F,
+/// };
+/// assert_eq!(event.addr, 0x4000);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
     pub cpu_cycle: u64,
@@ -41,6 +58,22 @@ pub struct ApuWriteEvent {
     pub value: u8,
 }
 
+/// Computed statistics for a raw audio waveform buffer.
+///
+/// Contains metrics like root-mean-square (RMS) volume, peak amplitude, and DC offset.
+/// Used for regression testing audio output by ensuring the shape and volume match
+/// expected constraints.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::{AudioStats, audio_stats};
+///
+/// let samples = [0, 16000, 32000, 16000, 0, -16000, -32000, -16000];
+/// let stats = audio_stats(&samples);
+/// assert_eq!(stats.sample_count, 8);
+/// assert_eq!(stats.peak, 32000);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
     pub sample_count: usize,
@@ -50,6 +83,25 @@ pub struct AudioStats {
     pub clipping_ratio: f64,
 }
 
+/// Quantitative comparison result between two audio waveforms.
+///
+/// Generates statistical closeness indicators like Pearson correlation and Fast Fourier Transform (FFT)
+/// mean difference, allowing tests to pass audio that "sounds the same" even if individual
+/// sample points float slightly due to precision variations.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::WaveformComparison;
+///
+/// let comp = WaveformComparison {
+///     samples_compared: 1024,
+///     correlation: 0.999,
+///     rms_ratio: 1.01,
+///     fft_mean_abs_db_diff: 0.5,
+/// };
+/// assert!(comp.correlation > 0.95);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
     pub samples_compared: usize,
@@ -97,6 +149,23 @@ pub fn collect_apu_register_writes(
     Ok(writes)
 }
 
+/// Computes a stable hash signature from a sequence of APU write events.
+///
+/// Used in tests to uniquely identify a sequence of register writes so it can be compared
+/// to a known golden hash, allowing verification of thousands of events with a single assert.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::{ApuWriteEvent, apu_write_hash};
+///
+/// let writes = vec![
+///     ApuWriteEvent { cpu_cycle: 100, addr: 0x4000, value: 0x11 },
+///     ApuWriteEvent { cpu_cycle: 200, addr: 0x4001, value: 0x22 },
+/// ];
+/// let hash = apu_write_hash(&writes);
+/// assert_ne!(hash, 0);
+/// ```
 #[must_use]
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
