@@ -152,6 +152,8 @@ For in-process automation, `nes_core::tas` is now the stable foundation when `ne
 
 ## AI Control Training
 
+REQUIRES FEATURE NOVA
+
 `nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
 
 ```powershell
