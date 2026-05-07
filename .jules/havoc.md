@@ -98,3 +98,8 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+**Unbounded OOM in nes-mcp Header Parsing**
+**The Trigger:** Input stream without a newline character `\n` causes unbounded buffering.
+**The Stack Trace:** (Process terminated by OS with SIGKILL due to Out of Memory)
+**Reproduction:** Run `cargo test -p nes-mcp --test havoc_oom -- --ignored`
+**Comment:** You assumed standard input would always contain well-formed lines. You were wrong.
