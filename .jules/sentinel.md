@@ -47,3 +47,23 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+## 2024-05-18 - Missing Bounds Checking tests in Desktop `validate_action_allowed`
+**Mutant:** Uncaught mutants in `validate_action_allowed` (`replace && with ||` and others).
+**Diagnosis:** The function determines if certain actions are allowed under specific application states (e.g. `rollback_enabled`). Although tests exist for the basic check, changing `&&` to `||` bypasses standard boolean paths and survives without explicit edge-case assertions on the permutations of state flags.
+**Kill Shot:** Added `test_validate_action_allowed_with_rollback` in `crates/nes-desktop/src/main.rs`.
+
+## 2024-05-18 - Un-testable WASM bindings Error in nes-web
+**Mutant:** `MISSED   crates/nes-web/src/lib.rs:508:5: replace to_js_error -> JsValue with Default::default()`
+**Diagnosis:** The test suite doesn't have a way to assert the error `JsValue` content natively because `wasm-bindgen` causes a panic `function not implemented on non-wasm32 targets` when trying to call `JsValue`'s string conversion or debug formatting outside of a real wasm target (which normal `cargo test` isn't). This mutant is therefore an equivalent mutant in the context of the available testing environment.
+**Kill Shot:** None. This mutant should be ignored or added to the skip list, since it's a limitation of testing `wasm-bindgen` APIs in native `cargo test`.
+
+## 2024-05-18 - Missing Bounds Checking tests in Config `parse_arg`
+**Mutant:** Uncaught mutants in `parse_arg` replacing `+=` with `-=` or `*=` for `*idx += 2` and `*idx += 1`.
+**Diagnosis:** The mutation changes the index advancement loop when parsing command-line flags. If `*idx` is not properly advanced (e.g., `-=` instead of `+=`), the surrounding `while idx < args.len()` loop in `parse_command_line` results in an infinite loop, causing a TIMEOUT. This behavior is expected when a mutant creates an infinite loop and the test runner enforces a time limit.
+**Kill Shot:** None. This is an equivalent mutant scenario due to TIMEOUT on infinite loop.
+
+## 2024-05-18 - Ignored Tests for `seed_entropy` Mutants
+**Mutant:** Mutants in `seed_entropy` (e.g., `replace seed_entropy -> u64 with 0`, replacing `^` with `|`, etc).
+**Diagnosis:** The test `seed_entropy_varies_and_mixes_bits_with_pid_component` is marked with `#[ignore = "havoc target"]`, meaning the test runner skips it by default. The mutants survive because standard test runs do not execute this test. If the test is meant to be ignored because it's a "havoc target", these mutants are expected to survive standard `cargo test`.
+**Kill Shot:** None, as removing `#[ignore]` on an explicitly ignored havoc target violates testing policies.

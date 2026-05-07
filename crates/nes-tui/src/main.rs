@@ -1815,3 +1815,51 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_tui_render {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn test_render_pause_overlay_boundaries() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // Large enough
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(0, 0, 14, 3));
+        }).unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(buffer.content.iter().any(|c| c.symbol() == "P")); // "PAUSED"
+
+        // Too small width
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(0, 0, 13, 3));
+        }).unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(!buffer.content.iter().any(|c| c.symbol() == "P"));
+
+        // Too small height
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(0, 0, 14, 2));
+        }).unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(!buffer.content.iter().any(|c| c.symbol() == "P"));
+
+        // Ensure centering math is covered
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(10, 5, 20, 10)); // odd/even to check `+` vs `-` vs `/ 2`
+        }).unwrap();
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer.cell((17, 9)).unwrap().symbol(), "P");
+    }
+}

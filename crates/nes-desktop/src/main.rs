@@ -2148,3 +2148,75 @@ mod tests {
         let _ = fs::remove_file(bmp_path);
     }
 }
+
+#[cfg(test)]
+mod tests_desktop_main {
+    use super::*;
+    use nes_core::Command;
+
+    #[test]
+    fn test_command_marks_rta_invalidation() {
+        assert_eq!(command_marks_rta_invalidation(Command::StepCpu), Some(ForbiddenAction::FrameStep));
+        assert_eq!(command_marks_rta_invalidation(Command::StepScanline), Some(ForbiddenAction::FrameStep));
+        assert_eq!(command_marks_rta_invalidation(Command::StepFrame), Some(ForbiddenAction::FrameStep));
+        assert_eq!(command_marks_rta_invalidation(Command::PressButton(nes_core::Button::A)), None);
+    }
+}
+
+#[cfg(test)]
+mod tests_desktop_menu_action {
+    use super::*;
+
+    #[test]
+    fn test_menu_action_enabled_flags() {
+        // AppAction::OpenRom
+        assert_eq!(menu_action_enabled(AppAction::OpenRom, false, false, false), rom_picker_supported());
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, true, false));
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, false, true));
+
+        // Actually we also need to cover `menu_action_enabled(AppAction::OpenRom, false, true, true)`
+        // and `AppAction::OpenCheats` combinations to fully exercise the boolean expressions.
+        assert!(!menu_action_enabled(AppAction::OpenCheats, false, true, true));
+
+        // AppAction::OpenCheats
+        assert!(menu_action_enabled(AppAction::OpenCheats, false, false, false));
+        assert!(!menu_action_enabled(AppAction::OpenCheats, false, true, false));
+        assert!(!menu_action_enabled(AppAction::OpenCheats, false, false, true));
+
+        // AppAction::SaveSlot / LoadSlot
+        assert!(menu_action_enabled(AppAction::SaveSlot(1), false, false, false));
+        assert!(!menu_action_enabled(AppAction::SaveSlot(1), false, true, false));
+    }
+}
+
+#[cfg(test)]
+mod tests_desktop_overlay {
+    use super::*;
+    use winit::event::VirtualKeyCode;
+
+    #[test]
+    fn test_apply_overlay_keyboard_input_delegates() {
+        let mut overlay = OverlayModel::new(1);
+        overlay.open();
+        let mut keyboard_bits = 0;
+        let cmd = apply_overlay_keyboard_input(&mut overlay, VirtualKeyCode::Escape, true, 0, &mut keyboard_bits);
+        assert_eq!(cmd, Some(OverlayCommand::AppAction(AppAction::Resume)));
+    }
+}
+
+#[cfg(test)]
+mod tests_desktop_validate_action {
+    use super::*;
+
+    #[test]
+    fn test_validate_action_allowed_with_rollback() {
+        assert!(validate_action_allowed(AppAction::OpenRom, true).is_err());
+        assert!(validate_action_allowed(AppAction::OpenCheats, true).is_err());
+        assert!(validate_action_allowed(AppAction::SaveSlot(1), true).is_err());
+        assert!(validate_action_allowed(AppAction::LoadSlot(1), true).is_err());
+        assert!(validate_action_allowed(AppAction::Resume, true).is_ok());
+
+        // When rollback is disabled, these are allowed
+        assert!(validate_action_allowed(AppAction::OpenRom, false).is_ok());
+    }
+}
