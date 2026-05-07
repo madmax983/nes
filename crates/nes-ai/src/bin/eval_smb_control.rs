@@ -40,14 +40,14 @@ fn run() -> Result<(), String> {
         .get(3)
         .map(|value| value.parse::<usize>())
         .transpose()
-        .map_err(|e| format!("Failed to parse episodes: {e}"))?
+        .map_err(|e| format!("{} Failed to parse episodes: {}", "Error:".with(Color::Red).bold(), e))?
         .unwrap_or(2);
     let artifact_dir = args.get(4).map(PathBuf::from);
 
     let profile_str = fs::read_to_string(&profile_path)
-        .map_err(|e| format!("Failed to read profile config: {e}"))?;
+        .map_err(|e| format!("{} Failed to read profile config at '{}':\n  {}", "Error:".with(Color::Red).bold(), profile_path.display().to_string().with(Color::Yellow), e))?;
     let profile_cfg: AiProfileConfig =
-        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
+        toml::from_str(&profile_str).map_err(|e| format!("{} Failed to parse profile config at '{}':\n  {}", "Error:".with(Color::Red).bold(), profile_path.display().to_string().with(Color::Yellow), e))?;
 
     let trainer_cfg = TrainerConfig {
         artifact_dir: artifact_dir.clone(),
@@ -58,7 +58,7 @@ fn run() -> Result<(), String> {
 
     let summary =
         evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
-            .map_err(|e| format!("Evaluation failed: {e}"))?;
+            .map_err(|e| format!("{} Evaluation failed:\n  {}", "Error:".with(Color::Red).bold(), e))?;
 
     println!(
         "\n{}",

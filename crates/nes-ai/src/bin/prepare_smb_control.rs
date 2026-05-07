@@ -54,19 +54,19 @@ fn run() -> Result<(), String> {
         fs::read(&rom_path).map_err(|e| format_rom_read_error(&rom_path.to_string_lossy(), &e))?;
     let rom_hash = sha256_hex(&rom);
 
-    let movie_json = fs::read(&movie_path).map_err(|e| format!("Failed to read TAS json: {e}"))?;
+    let movie_json = fs::read(&movie_path).map_err(|e| format!("{} Failed to read TAS json at '{}':\n  {}", "Error:".with(Color::Red).bold(), movie_path.display().to_string().with(Color::Yellow), e))?;
     let movie: TasMovie = serde_json::from_slice(&movie_json)
-        .map_err(|e| format!("Failed to parse TAS json: {e}"))?;
+        .map_err(|e| format!("{} Failed to parse TAS json at '{}':\n  {}", "Error:".with(Color::Red).bold(), movie_path.display().to_string().with(Color::Yellow), e))?;
 
     let mut core = NesCore::new();
     core.load_ines_rom(&rom)
-        .map_err(|e| format!("Failed to load ROM: {e}"))?;
+        .map_err(|e| format!("{} Failed to load ROM at '{}':\n  {}", "Error:".with(Color::Red).bold(), rom_path.display().to_string().with(Color::Yellow), e))?;
     movie
         .replay(&mut core)
-        .map_err(|e| format!("Failed to replay TAS: {e}"))?;
+        .map_err(|e| format!("{} Failed to replay TAS:\n  {}", "Error:".with(Color::Red).bold(), e))?;
 
     write_snapshot_bundle(&out_path, &rom_hash, "smb-control-v1", &core.save_state())
-        .map_err(|e| format!("Failed to write snapshot bundle: {e}"))?;
+        .map_err(|e| format!("{} Failed to write snapshot bundle to '{}':\n  {}", "Error:".with(Color::Red).bold(), out_path.display().to_string().with(Color::Yellow), e))?;
 
     println!(
         "{}",
