@@ -1533,9 +1533,11 @@ impl CalibrationRecorder {
     /// let recorder = CalibrationRecorder::new("smb-any-draft".to_owned());
     /// ```
     pub fn new(profile_id: String) -> Self {
+        // **⚡ Bolt Optimization:** Pre-allocates space for 30,000 frames to prevent repeated heap
+        // reallocations when aggressively buffering data during an RTA draft run.
         Self {
             profile_id,
-            frames: VecDeque::new(),
+            frames: VecDeque::with_capacity(30_000),
             splits: Vec::new(),
             max_frames: 30_000,
         }
