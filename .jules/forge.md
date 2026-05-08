@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Extracting Application Setup]
+**Learning:** The `run` loop in main.rs became a God Function because it handled too many initialization sub-systems (like RTA profiling and Netplay rollback) directly within the main flow.
+**Action:** Extracted complex conditional setup blocks into their own dedicated `setup_*` helper functions to flatten the main flow and improve readability.

@@ -611,66 +611,11 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("Invalid cheat code in runtime config: {err}"))?;
     let mut session = load_rom_session(&mut core, Path::new(&runtime.rom_path), &session_cheats)?;
     let step_mode = runtime.step_mode;
-    let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
-        let profiles = load_profiles(&rta_config.profiles_dir)?;
-        let profile = if rta_config.calibrate {
-            match select_profile(
-                &profiles,
-                &session.rom_hash,
-                rta_config.profile_id_override.as_deref(),
-                true,
-            ) {
-                Ok(selection) => selection.selected.profile,
-                Err(err) => {
-                    if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
-                        eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
-                            profile_id
-                        );
-                        RtaProfile {
-                            id: profile_id.clone(),
-                            rom_hashes: vec![session.rom_hash.clone()],
-                            status: ProfileStatus::Published,
-                            ..RtaProfile::default()
-                        }
-                    } else {
-                        return Err(format!(
-                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
-                            session.rom_hash
-                        ));
-                    }
-                }
-            }
-        } else {
-            select_profile(
-                &profiles,
-                &session.rom_hash,
-                rta_config.profile_id_override.as_deref(),
-                false,
-            )
-            .map_err(|err| {
-                format!(
-                    "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
-                    session.rom_hash
-                )
-            })?
-            .selected
-            .profile
-        };
-        let calibration = if rta_config.calibrate {
-            Some(CalibrationRecorder::new(profile.id.clone()))
-        } else {
-            None
-        };
-        Some(RtaManager::new(
-            profile,
-            session.rom_hash.clone(),
-            rta_config.runs_dir.clone(),
-            calibration,
-        ))
-    } else {
-        None
-    };
+    let mut rta_manager = runtime
+        .rta
+        .as_ref()
+        .map(|config| setup_rta_manager(config, &session.rom_hash))
+        .transpose()?;
 
     let table = build_startup_table(&runtime, &session, &step_mode, rta_manager.as_ref());
 
@@ -696,18 +641,11 @@ fn run() -> Result<(), String> {
     } else {
         None
     };
-    let mut rollback = if let Some(netplay) = runtime.netplay.as_ref() {
-        Some(
-            RollbackEngine::new(RollbackConfig {
-                local_player: netplay.player,
-                input_delay_frames: netplay.input_delay_frames,
-                max_rollback_frames: netplay.max_rollback_frames,
-            })
-            .map_err(|err| format!("failed to initialize rollback engine: {err}"))?,
-        )
-    } else {
-        None
-    };
+    let mut rollback = runtime
+        .netplay
+        .as_ref()
+        .map(setup_rollback_engine)
+        .transpose()?;
     let netplay_hash_check_every = runtime
         .netplay
         .as_ref()
@@ -1470,6 +1408,81 @@ fn build_startup_table(
     }
 
     table
+}
+
+fn setup_rta_manager(
+    rta_config: &nes_desktop::rta::RtaRuntimeConfig,
+    rom_hash: &str,
+) -> Result<RtaManager, String> {
+    let profiles = load_profiles(&rta_config.profiles_dir)?;
+    let profile = if rta_config.calibrate {
+        match select_profile(
+            &profiles,
+            rom_hash,
+            rta_config.profile_id_override.as_deref(),
+            true,
+        ) {
+            Ok(selection) => selection.selected.profile,
+            Err(err) => {
+                if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
+                    eprintln!(
+                        "[rta] calibration creating profile template '{}' ({err})",
+                        profile_id
+                    );
+                    RtaProfile {
+                        id: profile_id.clone(),
+                        rom_hashes: vec![rom_hash.to_string()],
+                        status: ProfileStatus::Published,
+                        ..RtaProfile::default()
+                    }
+                } else {
+                    return Err(format!(
+                        "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
+                        rom_hash
+                    ));
+                }
+            }
+        }
+    } else {
+        select_profile(
+            &profiles,
+            rom_hash,
+            rta_config.profile_id_override.as_deref(),
+            false,
+        )
+        .map_err(|err| {
+            format!(
+                "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
+                rom_hash
+            )
+        })?
+        .selected
+        .profile
+    };
+
+    let calibration = if rta_config.calibrate {
+        Some(CalibrationRecorder::new(profile.id.clone()))
+    } else {
+        None
+    };
+
+    Ok(RtaManager::new(
+        profile,
+        rom_hash.to_string(),
+        rta_config.runs_dir.clone(),
+        calibration,
+    ))
+}
+
+fn setup_rollback_engine(
+    netplay: &crate::netplay::NetplayRuntimeConfig,
+) -> Result<RollbackEngine, String> {
+    RollbackEngine::new(RollbackConfig {
+        local_player: netplay.player,
+        input_delay_frames: netplay.input_delay_frames,
+        max_rollback_frames: netplay.max_rollback_frames,
+    })
+    .map_err(|err| format!("failed to initialize rollback engine: {err}"))
 }
 
 #[cfg(test)]
