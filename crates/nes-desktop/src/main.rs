@@ -741,6 +741,7 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("Failed to create pixel surface: {err}"))?;
 
     let mut frame_index = 0_u64;
+    let mut rta_events = Vec::with_capacity(4);
     let mut frame_rgba = vec![0_u8; FRAME_RGBA_BYTES];
     let mut next_frame_deadline = Instant::now();
     let capture = runtime.capture.clone();
@@ -1209,14 +1210,14 @@ fn run() -> Result<(), String> {
             let step_elapsed = step_start.elapsed();
             frame_index = frame_index.saturating_add(1);
             if let Some(rta) = rta_manager.as_mut() {
-                let events = rta.tick(frame_index, now, |addr| core.read_memory(addr));
+                rta.tick(frame_index, now, |addr| core.read_memory(addr), &mut rta_events);
                 rta.record_input_frame(
                     frame_index,
                     core.controller_bits(),
                     core.controller2_bits(),
                     now,
                 );
-                if events
+                if rta_events
                     .iter()
                     .any(|event| matches!(event, RtaEvent::Finished(_)))
                 {

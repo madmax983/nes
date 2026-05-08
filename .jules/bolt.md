@@ -24,3 +24,6 @@
 **Replacing push_str format allocations**
 **Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
 **Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+**Eliminating Per-Frame Vector Allocations**
+**Learning:** Returning dynamically allocated `Vec`s from per-frame functions (`tick`) causes continuous, significant heap allocation overhead (60 allocs/sec), even if instantiated with `Vec::with_capacity`.
+**Action:** Pass a mutable reference to a pre-allocated vector (`&mut Vec`) from the outer main loop into the hot path function. Call `.clear()` on it before populating to recycle its memory capacity without reallocating.

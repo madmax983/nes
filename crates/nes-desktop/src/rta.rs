@@ -1058,35 +1058,31 @@ impl RtaManager {
     /// let mut dummy_ram = vec![0_u8; 0x800];
     ///
     /// // Tick exactly once per frame update
-    /// let events = manager.tick(1, Instant::now(), |addr| dummy_ram[(addr as usize) % 0x800]);
+    /// let mut events = Vec::new();
+    /// manager.tick(1, Instant::now(), |addr| dummy_ram[(addr as usize) % 0x800], &mut events);
     /// ```
-    pub fn tick<F>(&mut self, frame: u64, now: Instant, mut read_u8: F) -> Vec<RtaEvent>
+    pub fn tick<F>(&mut self, frame: u64, now: Instant, mut read_u8: F, events: &mut Vec<RtaEvent>)
     where
         F: FnMut(u16) -> u8,
     {
+        events.clear();
         if let Some(calibration) = self.calibration.as_mut() {
             calibration.record_frame(frame, &mut read_u8);
         }
 
-        // Avoids `Vec::new()` without capacity on the hot path (called every frame).
-        // RTA events per frame rarely exceed 2.
-        let mut events = Vec::<RtaEvent>::with_capacity(2);
-
-        self.tick_start(now, &mut read_u8, &mut events);
+        self.tick_start(now, &mut read_u8, events);
 
         if !self.is_active() {
-            return events;
+            return;
         }
 
-        let is_paused = self.tick_pause_resume(now, &mut read_u8, &mut events);
+        let is_paused = self.tick_pause_resume(now, &mut read_u8, events);
 
         if !is_paused {
-            self.tick_splits(frame, now, &mut read_u8, &mut events);
+            self.tick_splits(frame, now, &mut read_u8, events);
         }
 
-        self.tick_end(frame, now, &mut read_u8, &mut events);
-
-        events
+        self.tick_end(frame, now, &mut read_u8, events);
     }
 
     fn tick_start<F>(&mut self, now: Instant, mut read_u8: F, events: &mut Vec<RtaEvent>)
@@ -1231,18 +1227,14 @@ impl RtaManager {
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
         let elapsed_ms = self.elapsed(now).as_millis();
-        self.split_events.push(SplitEvent {
-            name: name.clone(),
-            source,
-            frame,
-            elapsed_ms,
-        });
-        SplitEvent {
+        let event = SplitEvent {
             name,
             source,
             frame,
             elapsed_ms,
-        }
+        };
+        self.split_events.push(event.clone());
+        event
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
@@ -1920,14 +1912,19 @@ unexpected = "boom"
 
         let mut memory = [0_u8; 65_536];
         let t0 = Instant::now();
-        let events = manager.tick(1, t0, |addr| memory[usize::from(addr)]);
+        let mut events = Vec::new();
+        manager.tick(1, t0, |addr| memory[usize::from(addr)], &mut events);
         assert!(events.is_empty());
         assert_eq!(manager.state(), RtaSessionState::Armed);
 
         memory[0] = 1;
-        let events = manager.tick(2, t0 + Duration::from_millis(10), |addr| {
-            memory[usize::from(addr)]
-        });
+        events.clear();
+        manager.tick(
+            2,
+            t0 + Duration::from_millis(10),
+            |addr| memory[usize::from(addr)],
+            &mut events,
+        );
         assert!(
             events
                 .iter()
@@ -1947,9 +1944,13 @@ unexpected = "boom"
         assert!(elapsed_before_end >= Duration::from_millis(40));
 
         memory[1] = 9;
-        let events = manager.tick(4, t0 + Duration::from_millis(60), |addr| {
-            memory[usize::from(addr)]
-        });
+        events.clear();
+        manager.tick(
+            4,
+            t0 + Duration::from_millis(60),
+            |addr| memory[usize::from(addr)],
+            &mut events,
+        );
         assert!(
             events
                 .iter()
@@ -1985,12 +1986,17 @@ unexpected = "boom"
         let t0 = Instant::now();
 
         memory[0] = 1;
-        let _ = manager.tick(1, t0, |addr| memory[usize::from(addr)]);
+        let mut events = Vec::new();
+        manager.tick(1, t0, |addr| memory[usize::from(addr)], &mut events);
         manager.record_input_frame(1, 0x12, 0x34, t0 + Duration::from_millis(5));
         memory[1] = 2;
-        let _ = manager.tick(2, t0 + Duration::from_millis(10), |addr| {
-            memory[usize::from(addr)]
-        });
+        events.clear();
+        manager.tick(
+            2,
+            t0 + Duration::from_millis(10),
+            |addr| memory[usize::from(addr)],
+            &mut events,
+        );
 
         let written = manager
             .write_artifacts_if_finished()
