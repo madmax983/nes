@@ -98,3 +98,9 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2025-05-08 - MCP Daemon OOM via Unbounded read_line
+🧨 **The Trigger:** Sending a continuous stream of bytes without a newline (`\n`) to `nes-mcp`'s standard input.
+📉 **The Stack Trace:** No explicit stack trace outputted; the OS sends SIGKILL due to Out of Memory (OOM) because `read_line` buffers indefinitely.
+🧪 **Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_read_line_oom -- --ignored`
+😈 **Comment:** You assumed the client would always send newlines. You were wrong.
