@@ -88,7 +88,17 @@ pub struct RpcError {
 impl RpcError {
     /// Creates a new "Parse error" (-32700) response.
     ///
-    /// Use this when the incoming payload cannot be parsed as valid JSON.
+    /// The MCP server uses this internally when the raw TCP stream produces
+    /// malformed strings that cannot be deserialized into `ClientMessage`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_mcp::protocol::RpcError;
+    ///
+    /// let err = RpcError::parse_error("expected value at line 1 column 1");
+    /// assert_eq!(err.code, -32700);
+    /// ```
     pub fn parse_error(message: impl Into<String>) -> Self {
         Self {
             code: -32700,
@@ -99,8 +109,17 @@ impl RpcError {
 
     /// Creates a new "Invalid Request" (-32600) response.
     ///
-    /// Use this when the JSON payload is valid, but the structure does not
-    /// conform to the JSON-RPC 2.0 specification.
+    /// This is strictly for JSON-RPC 2.0 compliance, returning to the client
+    /// when the parsed JSON object is missing required headers like `jsonrpc` or `id`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_mcp::protocol::RpcError;
+    ///
+    /// let err = RpcError::invalid_request("Missing 'jsonrpc' version field");
+    /// assert_eq!(err.code, -32600);
+    /// ```
     pub fn invalid_request(message: impl Into<String>) -> Self {
         Self {
             code: -32600,
@@ -111,8 +130,17 @@ impl RpcError {
 
     /// Creates a new "Method not found" (-32601) response.
     ///
-    /// Use this when the client attempts to invoke a tool or method that
-    /// the server does not expose in its catalog.
+    /// Protects the router by catching unsupported tool calls before they reach
+    /// execution.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_mcp::protocol::RpcError;
+    ///
+    /// let err = RpcError::method_not_found("Unknown tool: 'hack_mainframe'");
+    /// assert_eq!(err.code, -32601);
+    /// ```
     pub fn method_not_found(message: impl Into<String>) -> Self {
         Self {
             code: -32601,
@@ -123,8 +151,17 @@ impl RpcError {
 
     /// Creates a new "Invalid params" (-32602) response.
     ///
-    /// Use this when the tool exists, but the provided arguments fail validation
-    /// against the tool's expected schema.
+    /// Enforces the JSON Schema types declared in the tool catalog to ensure
+    /// the tool implementation doesn't panic on missing or mistyped arguments.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_mcp::protocol::RpcError;
+    ///
+    /// let err = RpcError::invalid_params("expected integer for 'frame'");
+    /// assert_eq!(err.code, -32602);
+    /// ```
     pub fn invalid_params(message: impl Into<String>) -> Self {
         Self {
             code: -32602,
@@ -167,8 +204,18 @@ impl RpcError {
 
     /// Creates a new "Internal error" (-32603) response.
     ///
-    /// Use this when the emulator core encounters an unexpected panic or
-    /// fatal state during the execution of a valid tool command.
+    /// Acts as a catch-all boundary so that emulator panics or I/O failures
+    /// (like missing ROM files) are gracefully reported back to the LLM instead
+    /// of crashing the daemon.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_mcp::protocol::RpcError;
+    ///
+    /// let err = RpcError::internal_error("Failed to read rom bytes");
+    /// assert_eq!(err.code, -32603);
+    /// ```
     pub fn internal_error(message: impl Into<String>) -> Self {
         Self {
             code: -32603,
