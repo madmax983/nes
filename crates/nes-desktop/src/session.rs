@@ -47,9 +47,12 @@ pub(crate) fn load_rom_session(
     let rom_bytes = fs::read(rom_path)
         .map_err(|err| format_rom_read_error(&rom_path.display().to_string(), &err))?;
     core.clear_cheat_codes();
-    let info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {err}"))?;
+    let info = core.load_ines_rom(&rom_bytes).map_err(|err| {
+        format!(
+            "{} Failed to load ROM: {err}",
+            "Error:".with(Color::Red).bold()
+        )
+    })?;
     apply_session_cheats(core, cheats)?;
     let rom_hash = compute_rom_hash(&rom_bytes);
     let slot_metadata = load_slot_metadata_for_rom(rom_path, &rom_hash)?;

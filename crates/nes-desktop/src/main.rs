@@ -624,7 +624,8 @@ fn run() -> Result<(), String> {
                 Err(err) => {
                     if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
                         eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
+                            "{} [rta] calibration creating profile template '{}' ({err})",
+                            "Info:".with(Color::Cyan).bold(),
                             profile_id
                         );
                         RtaProfile {
@@ -678,7 +679,9 @@ fn run() -> Result<(), String> {
     println!("\n{table}");
     if cfg!(debug_assertions) {
         eprintln!(
-            "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
+            "{} Running debug build; performance will be much lower.\n{} For speed use: cargo run -p nes-desktop --release -- <rom>",
+            "Warning:".with(Color::Yellow).bold(),
+            "Hint:".with(Color::Cyan).bold()
         );
     }
 
@@ -787,13 +790,19 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Continuing without audio output.");
+                eprintln!("{} {err}", "Error:".with(Color::Red).bold());
+                eprintln!(
+                    "{} Continuing without audio output.",
+                    "Hint:".with(Color::Cyan).bold()
+                );
                 None
             }
         }
     } else {
-        eprintln!("Audio disabled by config.");
+        eprintln!(
+            "{} Audio disabled by config.",
+            "Info:".with(Color::Yellow).bold()
+        );
         None
     };
 

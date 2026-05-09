@@ -118,17 +118,27 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite".to_owned()
+        format!(
+            "{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite.\n{} Provide it in the nes.toml file.",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output".to_owned()
+        format!(
+            "{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output.\n{} Provide it in the nes.toml file.",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
     if !suite_dir_path.is_dir() {
         return Err(format!(
-            "bbbradsmith audio suite directory does not exist or is not a directory: {}",
-            suite_dir_path.display()
+            "{} bbbradsmith audio suite directory does not exist or is not a directory: {}\n{} Ensure it is cloned.",
+            "Error:".with(Color::Red).bold(),
+            suite_dir_path.display(),
+            "Hint:".with(Color::Cyan).bold()
         ));
     }
     fs::create_dir_all(&golden_dir)

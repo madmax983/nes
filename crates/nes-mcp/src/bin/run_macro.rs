@@ -20,7 +20,11 @@ fn main() {
         std::process::exit(0);
     }
     if args.len() != 3 {
-        eprintln!("Usage: nes-mcp-run-macro <rom_path> <script_path>");
+        eprintln!(
+            "{} missing or invalid number of arguments.\n{} Usage: nes-mcp-run-macro <rom_path> <script_path>",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        );
         std::process::exit(1);
     }
 
@@ -75,9 +79,12 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
         .map_err(|err| format_script_read_error(script_path, &err))?;
 
     let mut core = NesCore::new();
-    let rom_info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {}", err))?;
+    let rom_info = core.load_ines_rom(&rom_bytes).map_err(|err| {
+        format!(
+            "{} Failed to load ROM: {err}",
+            "Error:".with(Color::Red).bold()
+        )
+    })?;
 
     println!("{}", "Executing Macro Script...".with(Color::Cyan).bold());
 

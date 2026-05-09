@@ -42,7 +42,11 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() != 4 {
-        eprintln!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        eprintln!(
+            "{} missing or invalid number of arguments.\n{} Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        );
         std::process::exit(1);
     }
 
@@ -59,8 +63,12 @@ fn run() -> Result<(), String> {
         .map_err(|e| format!("Failed to parse TAS json: {e}"))?;
 
     let mut core = NesCore::new();
-    core.load_ines_rom(&rom)
-        .map_err(|e| format!("Failed to load ROM: {e}"))?;
+    core.load_ines_rom(&rom).map_err(|e| {
+        format!(
+            "{} Failed to load ROM: {e}",
+            "Error:".with(Color::Red).bold()
+        )
+    })?;
     movie
         .replay(&mut core)
         .map_err(|e| format!("Failed to replay TAS: {e}"))?;
