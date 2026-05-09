@@ -60,14 +60,18 @@ fn main() {
     }
 }
 
-fn slot_action_for_hotkey(is_save: bool, selected_slot: u8) -> Option<AppAction> {
+enum SlotAction {
+    Save,
+    Load,
+}
+
+fn slot_action_for_hotkey(action: SlotAction, selected_slot: u8) -> Option<AppAction> {
     if !(1..=5).contains(&selected_slot) {
         return None;
     }
-    Some(if is_save {
-        AppAction::SaveSlot(selected_slot)
-    } else {
-        AppAction::LoadSlot(selected_slot)
+    Some(match action {
+        SlotAction::Save => AppAction::SaveSlot(selected_slot),
+        SlotAction::Load => AppAction::LoadSlot(selected_slot),
     })
 }
 
@@ -566,8 +570,17 @@ fn should_trace_frame(trace_every_frames: u64, frame_index: u64) -> bool {
     trace_every_frames != 0 && frame_index != 0 && frame_index.is_multiple_of(trace_every_frames)
 }
 
-fn audio_queue_dropped(queued: bool) -> bool {
-    !queued
+enum AudioQueueStatus {
+    Queued,
+    Dropped,
+}
+
+fn audio_queue_status(queued: bool) -> AudioQueueStatus {
+    if queued {
+        AudioQueueStatus::Queued
+    } else {
+        AudioQueueStatus::Dropped
+    }
 }
 
 fn should_capture_frame(every_n_frames: u64, frame_index: u64) -> bool {
@@ -883,7 +896,7 @@ fn run() -> Result<(), String> {
                         let _ = dispatch_app_action(AppAction::ToggleOverlay, &mut ctx, control_flow);
                     }
                     KeyboardDecision::ManualSaveState => {
-                        if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
+                        if let Some(action) = slot_action_for_hotkey(SlotAction::Save, overlay.selected_slot()) {
                             let _ = {
                                 let mut ctx = build_ctx!();
                                 dispatch_app_action(action, &mut ctx, control_flow)
@@ -891,7 +904,7 @@ fn run() -> Result<(), String> {
                         }
                     }
                     KeyboardDecision::ManualLoadState => {
-                        if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
+                        if let Some(action) = slot_action_for_hotkey(SlotAction::Load, overlay.selected_slot()) {
                             let _ = {
                                 let mut ctx = build_ctx!();
                                 dispatch_app_action(action, &mut ctx, control_flow)
@@ -1258,7 +1271,7 @@ fn run() -> Result<(), String> {
                     metrics.on_audio_queue(audio_output.queue_len(), true);
                 } else {
                     let queued = audio_output.queue_samples(core.audio_chunk_i16());
-                    metrics.on_audio_queue(audio_output.queue_len(), audio_queue_dropped(queued));
+                    metrics.on_audio_queue(audio_output.queue_len(), matches!(audio_queue_status(queued), AudioQueueStatus::Dropped));
                 }
             }
 
@@ -1382,61 +1395,50 @@ fn build_startup_table(
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("ROM Path"),
-        Cell::new(session.rom_path.display().to_string()).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("ROM Info"),
-        Cell::new(format!(
+    let mut add_row = |key: &str, val: String| {
+        table.add_row(vec![Cell::new(key), Cell::new(val).fg(TableColor::Green)]);
+    };
+
+    add_row("ROM Path", session.rom_path.display().to_string());
+    add_row(
+        "ROM Info",
+        format!(
             "Mapper {}, PRG {} bytes, reset vector ${:04X}",
             session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
-        ))
-        .fg(TableColor::Green),
-    ]);
+        ),
+    );
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
-        table.add_row(vec![
-            Cell::new("Config"),
-            Cell::new(config_path.display().to_string()).fg(TableColor::Green),
-        ]);
+        add_row("Config", config_path.display().to_string());
     }
-    table.add_row(vec![
-        Cell::new("Controls"),
-        Cell::new(
-            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
-        ).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Menu"),
-        Cell::new(if native_menu_supported() {
+    add_row(
+        "Controls",
+        "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu".to_string(),
+    );
+    add_row(
+        "Menu",
+        if native_menu_supported() {
             "native menu bar + Esc overlay"
         } else {
             "Esc overlay only on this platform"
-        })
-        .fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Gamepad"),
-        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick").fg(TableColor::Green),
-    ]);
+        }
+        .to_string(),
+    );
+    add_row(
+        "Gamepad",
+        "face buttons=A/B, Start/Select, D-pad or left stick".to_string(),
+    );
     match step_mode {
         StepMode::Frame => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new("frame").fg(TableColor::Green),
-            ]);
+            add_row("Step Mode", "frame".to_string());
         }
         StepMode::CpuBudget(steps) => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new(format!("cpu ({steps} instructions/frame)")).fg(TableColor::Green),
-            ]);
+            add_row("Step Mode", format!("cpu ({steps} instructions/frame)"));
         }
     }
     if let Some(netplay) = runtime.netplay.as_ref() {
-        table.add_row(vec![
-            Cell::new("Netplay"),
-            Cell::new(format!(
+        add_row(
+            "Netplay",
+            format!(
                 "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
                 netplay.relay_addr,
                 netplay.room,
@@ -1444,20 +1446,18 @@ fn build_startup_table(
                 netplay.input_delay_frames,
                 netplay.max_rollback_frames,
                 netplay.hash_check_every_frames
-            ))
-            .fg(TableColor::Green),
-        ]);
+            ),
+        );
     }
     if let Some(rta) = rta_manager.as_ref() {
-        table.add_row(vec![
-            Cell::new("RTA"),
-            Cell::new(format!(
+        add_row(
+            "RTA",
+            format!(
                 "enabled profile='{}' calibrate={}",
                 rta.profile_id(),
                 rta.is_calibrating()
-            ))
-            .fg(TableColor::Green),
-        ]);
+            ),
+        );
     }
     #[cfg(feature = "nova")]
     {
@@ -1477,6 +1477,7 @@ mod tests {
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
+
         use std::path::PathBuf;
 
         let runtime = RuntimeConfig {
@@ -1518,18 +1519,19 @@ mod tests {
     }
 
     use super::{
-        FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats,
-        StepMode, WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
-        apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
-        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        AudioQueueStatus, FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot,
+        NetplayRuntimeStats, StepMode, WindowEventDecision, advance_core_for_host_frame,
+        apply_gamepad_delta_commands, apply_overlay_keyboard_input, audio_queue_status,
+        capture_path_for_frame, classify_window_event, connected_gamepad_ids,
+        controller_state_delta_for_player, element_state_pressed, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        overlay_input_requires_redraw, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+        update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1683,11 +1685,11 @@ mod tests {
     #[test]
     fn selected_slot_hotkeys_target_current_slot() {
         assert_eq!(
-            slot_action_for_hotkey(true, 3),
+            slot_action_for_hotkey(crate::SlotAction::Save, 3),
             Some(AppAction::SaveSlot(3))
         );
         assert_eq!(
-            slot_action_for_hotkey(false, 3),
+            slot_action_for_hotkey(crate::SlotAction::Load, 3),
             Some(AppAction::LoadSlot(3))
         );
     }
@@ -1824,8 +1826,11 @@ mod tests {
         assert!(should_trace_frame(60, 120));
         assert!(!should_trace_frame(60, 121));
 
-        assert!(!audio_queue_dropped(true));
-        assert!(audio_queue_dropped(false));
+        assert!(matches!(audio_queue_status(true), AudioQueueStatus::Queued));
+        assert!(matches!(
+            audio_queue_status(false),
+            AudioQueueStatus::Dropped
+        ));
 
         assert!(!should_capture_frame(0, 120));
         assert!(should_capture_frame(60, 120));

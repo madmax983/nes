@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Replace boolean arguments with semantic Enums]
+**Learning:** Found functions like `slot_action_for_hotkey(is_save: bool, ...)` and `audio_queue_dropped(queued: bool) -> bool`. This causes "Boolean Blindness" where callers have to pass `true` or `false`, making the intent unclear at the call site.
+**Action:** Replaced the boolean argument with a semantic Enum (e.g. `SlotAction { Save, Load }`) to improve clarity. For functions returning negated booleans to act as a flag, evaluate whether the function can just be simplified or return a semantic enum as well if complex.
