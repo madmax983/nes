@@ -56,7 +56,12 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        let err_str = err.to_string();
+        let lines: Vec<&str> = err_str.split('\n').collect();
+        eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), lines[0]);
+        for line in lines.iter().skip(1) {
+            eprintln!("{} {}", "Hint:".with(Color::Cyan).bold(), line);
+        }
     }
 }
 
