@@ -13,12 +13,12 @@ fn recorded_command_log_replays_to_identical_state_hash() {
 
     a.load_cpu_bytes(0xC000, &[0xEA]);
     for cmd in &log {
-        a.execute(*cmd).unwrap();
+        a.execute(*cmd).expect("Should succeed");
     }
     let target = a.state_hash();
 
     let mut b = NesCore::new();
     b.load_cpu_bytes(0xC000, &[0xEA]);
-    b.replay(&log).unwrap();
+    b.replay(&log).expect("Should succeed");
     assert_eq!(target, b.state_hash());
 }

@@ -51,7 +51,7 @@ use nes_core::{Button, Command, NesCore};
 /// RELEASE Start
 /// ";
 ///
-/// let frames_elapsed = execute_macro_script(&mut core, script, None).unwrap();
+/// let frames_elapsed = execute_macro_script(&mut core, script, None).expect("Should execute");
 /// assert_eq!(frames_elapsed, 11);
 /// ```
 pub fn execute_macro_script(
@@ -153,7 +153,7 @@ mod tests {
         let initial_frames = core.ppu_frame_counter();
 
         let script = "WAIT 5";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None).expect("Should execute");
 
         assert_eq!(elapsed, 5);
         assert_eq!(core.ppu_frame_counter(), initial_frames + 5);
@@ -177,7 +177,7 @@ mod tests {
             assert!(current <= total);
         };
 
-        execute_macro_script(&mut core, script, Some(&mut callback)).unwrap();
+        execute_macro_script(&mut core, script, Some(&mut callback)).expect("Should execute");
 
         assert_eq!(lines_reported, 5);
         assert_eq!(max_total_lines, 5);
@@ -192,7 +192,7 @@ mod tests {
             PRESS A
             PRESS Start
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None).expect("Should execute");
         assert_eq!(elapsed, 0); // PRESS doesn't wait
         assert_eq!(
             core.controller_bits(),
@@ -200,7 +200,7 @@ mod tests {
         );
 
         let script2 = "RELEASE A";
-        let elapsed2 = execute_macro_script(&mut core, script2, None).unwrap();
+        let elapsed2 = execute_macro_script(&mut core, script2, None).expect("Should execute");
         assert_eq!(elapsed2, 0);
         assert_eq!(core.controller_bits(), Button::Start.bit_mask());
     }
@@ -216,7 +216,7 @@ mod tests {
             WAIT 1
             RELEASE B
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None).expect("Should execute");
         assert_eq!(elapsed, 1);
         assert_eq!(core.controller_bits(), 0);
     }
@@ -227,7 +227,7 @@ mod tests {
         let script = "JUMP 10";
         let res = execute_macro_script(&mut core, script, None);
         assert!(res.is_err());
-        assert!(res.unwrap_err().contains("Unknown command 'JUMP'"));
+        assert!(res.expect_err("should return error").contains("Unknown command 'JUMP'"));
     }
 
     #[test]
@@ -235,11 +235,11 @@ mod tests {
         let mut core = NesCore::new();
         let res = execute_macro_script(&mut core, "WAIT X", None);
         assert!(res.is_err());
-        assert!(res.unwrap_err().contains("Invalid frame count 'X'"));
+        assert!(res.expect_err("should return error").contains("Invalid frame count 'X'"));
 
         let res2 = execute_macro_script(&mut core, "PRESS MAGIC_BUTTON", None);
         assert!(res2.is_err());
-        assert!(res2.unwrap_err().contains("Invalid button 'MAGIC_BUTTON'"));
+        assert!(res2.expect_err("should return error").contains("Invalid button 'MAGIC_BUTTON'"));
     }
 
     #[test]
@@ -283,7 +283,7 @@ mod tests {
             HOLD a
             HOLD start
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None).expect("Should execute");
         assert_eq!(elapsed, 0);
         assert_eq!(
             core.controller_bits(),
@@ -291,7 +291,7 @@ mod tests {
         );
 
         let script2 = "RELEASE a";
-        let elapsed2 = execute_macro_script(&mut core, script2, None).unwrap();
+        let elapsed2 = execute_macro_script(&mut core, script2, None).expect("Should execute");
         assert_eq!(elapsed2, 0);
         assert_eq!(core.controller_bits(), Button::Start.bit_mask());
     }
@@ -300,25 +300,25 @@ mod tests {
     fn test_execute_macro_script_missing_arguments() {
         let mut core = NesCore::new();
 
-        let wait_err = execute_macro_script(&mut core, "WAIT", None).unwrap_err();
+        let wait_err = execute_macro_script(&mut core, "WAIT", None).expect_err("WAIT missing arg");
         assert!(
             wait_err.contains("WAIT needs a frame count"),
             "Expected missing frame count error for WAIT"
         );
 
-        let press_err = execute_macro_script(&mut core, "PRESS", None).unwrap_err();
+        let press_err = execute_macro_script(&mut core, "PRESS", None).expect_err("PRESS missing arg");
         assert!(
             press_err.contains("PRESS needs a button"),
             "Expected missing button error for PRESS"
         );
 
-        let hold_err = execute_macro_script(&mut core, "HOLD", None).unwrap_err();
+        let hold_err = execute_macro_script(&mut core, "HOLD", None).expect_err("HOLD missing arg");
         assert!(
             hold_err.contains("HOLD needs a button"),
             "Expected missing button error for HOLD"
         );
 
-        let release_err = execute_macro_script(&mut core, "RELEASE", None).unwrap_err();
+        let release_err = execute_macro_script(&mut core, "RELEASE", None).expect_err("RELEASE missing arg");
         assert!(
             release_err.contains("RELEASE needs a button"),
             "Expected missing button error for RELEASE"

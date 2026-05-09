@@ -504,25 +504,25 @@ mod tests {
     #[test]
     fn read_stdio_message_handles_errors() {
         let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader).expect_err("should return error");
         assert!(
             err.to_string()
                 .contains("invalid Content-Length value 'abc'")
         );
 
         let mut reader = b"Something else\r\n\r\n".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader).expect_err("should return error");
         assert!(err.to_string().contains("missing Content-Length header"));
 
         let mut reader = b"Content-Length: 100\r\nEOF".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader).expect_err("should return error");
         assert!(
             err.to_string()
                 .contains("unexpected EOF while reading MCP headers")
         );
 
         let mut reader = b"Content-Length: 100\r\n\r\nshort".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader).expect_err("should return error");
         assert!(err.to_string().contains("failed reading payload body"));
     }
 }

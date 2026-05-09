@@ -422,7 +422,7 @@ mod tests {
         });
         let meta = latest_output_metadata();
         assert_eq!(meta.frame_seq, initial_meta.frame_seq + 1);
-        let chunk = frame_chunk(meta.frame_seq).unwrap();
+        let chunk = frame_chunk(meta.frame_seq).expect("Frame chunk should exist");
         assert_eq!(chunk.rgba[0], 99);
     }
 
@@ -436,7 +436,7 @@ mod tests {
         });
         let meta = latest_output_metadata();
         assert_eq!(meta.audio_seq, initial_meta.audio_seq + 1);
-        let chunk = audio_chunk(meta.audio_seq).unwrap();
+        let chunk = audio_chunk(meta.audio_seq).expect("Audio chunk should exist");
         assert_eq!(chunk.samples[0], 42);
     }
 

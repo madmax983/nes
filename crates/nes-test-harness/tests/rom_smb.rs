@@ -94,7 +94,7 @@ fn smb_start_input_changes_execution_trajectory() {
         .expect("failed to load SMB ROM");
     with_start
         .execute(Command::PressButton(Button::Start))
-        .unwrap();
+        .expect("Should succeed");
     let with_start_reads = collect_controller_reads(&mut with_start, 400_000);
 
     assert!(
@@ -122,23 +122,23 @@ fn smb_start_and_move_right_keeps_video_progressing() {
     core.load_ines_rom(&bytes).expect("failed to load SMB ROM");
 
     for _ in 0..180 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
     }
 
-    core.execute(Command::PressButton(Button::Start)).unwrap();
+    core.execute(Command::PressButton(Button::Start)).expect("Should succeed");
     for _ in 0..4 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
     }
-    core.execute(Command::ReleaseButton(Button::Start)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Start)).expect("Should succeed");
 
-    core.execute(Command::PressButton(Button::Right)).unwrap();
+    core.execute(Command::PressButton(Button::Right)).expect("Should succeed");
     let mut signatures = HashSet::new();
     for _ in 0..600 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
         let frame = core.framebuffer_rgba();
         signatures.insert(frame_signature(&frame));
     }
-    core.execute(Command::ReleaseButton(Button::Right)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Right)).expect("Should succeed");
 
     assert!(
         signatures.len() >= 32,
@@ -159,7 +159,7 @@ fn smb_does_not_stall_in_sprite_zero_wait_loop() {
     let mut current_stall_frames = 0_u32;
     let mut max_stall_frames = 0_u32;
     for _ in 0..1_500_u32 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
         if core.cpu_pc() == 0x8155 {
             current_stall_frames = current_stall_frames.saturating_add(1);
             max_stall_frames = max_stall_frames.max(current_stall_frames);
@@ -184,16 +184,16 @@ fn smb_run_and_jump_keeps_progressing() {
     core.load_ines_rom(&bytes).expect("failed to load SMB ROM");
 
     for _ in 0..180 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
     }
 
-    core.execute(Command::PressButton(Button::Start)).unwrap();
+    core.execute(Command::PressButton(Button::Start)).expect("Should succeed");
     for _ in 0..4 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
     }
-    core.execute(Command::ReleaseButton(Button::Start)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Start)).expect("Should succeed");
 
-    core.execute(Command::PressButton(Button::Right)).unwrap();
+    core.execute(Command::PressButton(Button::Right)).expect("Should succeed");
 
     let mut signatures = HashSet::new();
     let mut last_pc = 0_u16;
@@ -201,13 +201,13 @@ fn smb_run_and_jump_keeps_progressing() {
     let mut max_pc_stall = 0_u32;
     for frame in 0..1_200_u32 {
         if frame % 45 == 0 {
-            core.execute(Command::PressButton(Button::A)).unwrap();
+            core.execute(Command::PressButton(Button::A)).expect("Should succeed");
         }
         if frame % 45 == 8 {
-            core.execute(Command::ReleaseButton(Button::A)).unwrap();
+            core.execute(Command::ReleaseButton(Button::A)).expect("Should succeed");
         }
 
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
         signatures.insert(frame_signature(&core.framebuffer_rgba()));
 
         let pc = core.cpu_pc();
@@ -220,8 +220,8 @@ fn smb_run_and_jump_keeps_progressing() {
         }
     }
 
-    core.execute(Command::ReleaseButton(Button::Right)).unwrap();
-    core.execute(Command::ReleaseButton(Button::A)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Right)).expect("Should succeed");
+    core.execute(Command::ReleaseButton(Button::A)).expect("Should succeed");
 
     assert!(
         signatures.len() >= 80,
@@ -244,16 +244,16 @@ fn smb_run_and_jump_audio_chunks_stay_live() {
     core.load_ines_rom(&bytes).expect("failed to load SMB ROM");
 
     for _ in 0..180 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
     }
 
-    core.execute(Command::PressButton(Button::Start)).unwrap();
+    core.execute(Command::PressButton(Button::Start)).expect("Should succeed");
     for _ in 0..4 {
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
     }
-    core.execute(Command::ReleaseButton(Button::Start)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Start)).expect("Should succeed");
 
-    core.execute(Command::PressButton(Button::Right)).unwrap();
+    core.execute(Command::PressButton(Button::Right)).expect("Should succeed");
 
     let mut signatures = HashSet::new();
     let mut last_pc = 0_u16;
@@ -262,13 +262,13 @@ fn smb_run_and_jump_audio_chunks_stay_live() {
     let mut non_silent_chunks = 0_u32;
     for frame in 0..1_200_u32 {
         if frame % 45 == 0 {
-            core.execute(Command::PressButton(Button::A)).unwrap();
+            core.execute(Command::PressButton(Button::A)).expect("Should succeed");
         }
         if frame % 45 == 8 {
-            core.execute(Command::ReleaseButton(Button::A)).unwrap();
+            core.execute(Command::ReleaseButton(Button::A)).expect("Should succeed");
         }
 
-        core.execute(Command::StepFrame).unwrap();
+        core.execute(Command::StepFrame).expect("Should succeed");
         signatures.insert(frame_signature(&core.framebuffer_rgba()));
 
         let chunk = core.audio_chunk_i16();
@@ -291,8 +291,8 @@ fn smb_run_and_jump_audio_chunks_stay_live() {
         }
     }
 
-    core.execute(Command::ReleaseButton(Button::Right)).unwrap();
-    core.execute(Command::ReleaseButton(Button::A)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Right)).expect("Should succeed");
+    core.execute(Command::ReleaseButton(Button::A)).expect("Should succeed");
 
     assert!(
         signatures.len() >= 80,
@@ -321,18 +321,18 @@ fn smb_run_and_jump_keeps_progressing_under_cpu_budget_loop() {
 
     for _ in 0..180 {
         for _ in 0..CPU_STEPS_PER_HOST_FRAME {
-            core.execute(Command::StepCpu).unwrap();
+            core.execute(Command::StepCpu).expect("Should succeed");
         }
     }
 
-    core.execute(Command::PressButton(Button::Start)).unwrap();
+    core.execute(Command::PressButton(Button::Start)).expect("Should succeed");
     for _ in 0..4 {
         for _ in 0..CPU_STEPS_PER_HOST_FRAME {
-            core.execute(Command::StepCpu).unwrap();
+            core.execute(Command::StepCpu).expect("Should succeed");
         }
     }
-    core.execute(Command::ReleaseButton(Button::Start)).unwrap();
-    core.execute(Command::PressButton(Button::Right)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Start)).expect("Should succeed");
+    core.execute(Command::PressButton(Button::Right)).expect("Should succeed");
 
     let mut signatures = HashSet::new();
     let mut last_pc = 0_u16;
@@ -340,14 +340,14 @@ fn smb_run_and_jump_keeps_progressing_under_cpu_budget_loop() {
     let mut max_pc_stall = 0_u32;
     for frame in 0..1_200_u32 {
         if frame % 45 == 0 {
-            core.execute(Command::PressButton(Button::A)).unwrap();
+            core.execute(Command::PressButton(Button::A)).expect("Should succeed");
         }
         if frame % 45 == 8 {
-            core.execute(Command::ReleaseButton(Button::A)).unwrap();
+            core.execute(Command::ReleaseButton(Button::A)).expect("Should succeed");
         }
 
         for _ in 0..CPU_STEPS_PER_HOST_FRAME {
-            core.execute(Command::StepCpu).unwrap();
+            core.execute(Command::StepCpu).expect("Should succeed");
         }
         signatures.insert(frame_signature(&core.framebuffer_rgba()));
 
@@ -361,8 +361,8 @@ fn smb_run_and_jump_keeps_progressing_under_cpu_budget_loop() {
         }
     }
 
-    core.execute(Command::ReleaseButton(Button::Right)).unwrap();
-    core.execute(Command::ReleaseButton(Button::A)).unwrap();
+    core.execute(Command::ReleaseButton(Button::Right)).expect("Should succeed");
+    core.execute(Command::ReleaseButton(Button::A)).expect("Should succeed");
 
     assert!(
         signatures.len() >= 80,
@@ -378,7 +378,7 @@ fn smb_run_and_jump_keeps_progressing_under_cpu_budget_loop() {
 fn collect_controller_reads(core: &mut NesCore, steps: u32) -> Vec<u8> {
     let mut reads = Vec::new();
     for _ in 0..steps {
-        core.execute(Command::StepCpu).unwrap();
+        core.execute(Command::StepCpu).expect("Should succeed");
         for access in core.last_cpu_bus_trace() {
             if access.addr == 0x4016 && access.kind == nes_core::cpu::CpuBusAccessKind::Read {
                 reads.push(access.value);
