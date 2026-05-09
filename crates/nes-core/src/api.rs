@@ -300,28 +300,38 @@ enum LoadedMapper {
 }
 
 impl LoadedMapper {
-    fn read_prg(&self, addr: u16) -> u8 {
+    #[inline(always)]
+    fn get_mapper(&self) -> &dyn crate::mapper::Mapper {
         match self {
-            Self::Nrom(mapper) => mapper.read_prg(addr),
-            Self::Uxrom(mapper) => mapper.read_prg(addr),
-            Self::Mmc1(mapper) => mapper.read_prg(addr),
-            Self::Cnrom(mapper) => mapper.read_prg(addr),
-            Self::Axrom(mapper) => mapper.read_prg(addr),
-            Self::Gxrom(mapper) => mapper.read_prg(addr),
-            Self::Mmc3(mapper) => mapper.read_prg(addr),
+            Self::Nrom(mapper) => mapper,
+            Self::Uxrom(mapper) => mapper,
+            Self::Mmc1(mapper) => mapper,
+            Self::Cnrom(mapper) => mapper,
+            Self::Axrom(mapper) => mapper,
+            Self::Gxrom(mapper) => mapper,
+            Self::Mmc3(mapper) => mapper,
         }
     }
 
-    fn write_prg(&mut self, addr: u16, value: u8) {
+    #[inline(always)]
+    fn get_mapper_mut(&mut self) -> &mut dyn crate::mapper::Mapper {
         match self {
-            Self::Nrom(mapper) => mapper.write_prg(addr, value),
-            Self::Uxrom(mapper) => mapper.write_prg(addr, value),
-            Self::Mmc1(mapper) => mapper.write_prg(addr, value),
-            Self::Cnrom(mapper) => mapper.write_prg(addr, value),
-            Self::Axrom(mapper) => mapper.write_prg(addr, value),
-            Self::Gxrom(mapper) => mapper.write_prg(addr, value),
-            Self::Mmc3(mapper) => mapper.write_prg(addr, value),
+            Self::Nrom(mapper) => mapper,
+            Self::Uxrom(mapper) => mapper,
+            Self::Mmc1(mapper) => mapper,
+            Self::Cnrom(mapper) => mapper,
+            Self::Axrom(mapper) => mapper,
+            Self::Gxrom(mapper) => mapper,
+            Self::Mmc3(mapper) => mapper,
         }
+    }
+
+    fn read_prg(&self, addr: u16) -> u8 {
+        self.get_mapper().read_prg(addr)
+    }
+
+    fn write_prg(&mut self, addr: u16, value: u8) {
+        self.get_mapper_mut().write_prg(addr, value)
     }
 
     fn chr_window(&self) -> Option<([u8; CHR_8K_BYTES], bool)> {

@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+## 2024-05-18 - Nested Enum Dispatch Boilerplate
+**Learning:** Repetitive `match self { Self::Variant(inner) => inner.method() }` blocks on "enum of structs" architectures (like `LoadedMapper`) create significant boilerplate and reduce readability, but manually extracting them to `&dyn Trait` introduces dynamic dispatch which can hurt performance in hot loops (like emulator memory access).
+**Action:** When extracting such boilerplate into a helper method (e.g. `get_mapper(&self) -> &dyn Mapper`), ensure you use `#[inline(always)]` on the helper to give the compiler the best chance to optimize away the dynamic dispatch overhead while keeping the source code clean and DRY.
