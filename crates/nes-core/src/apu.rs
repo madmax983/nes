@@ -837,11 +837,9 @@ impl Apu {
         self.clock_frame_sequencer();
         let dmc_request = self.clock_timers();
 
-        let raw_sample = self.raw_mixed_sample(paused);
-        self.sample_accumulator = self
-            .sample_accumulator
-            .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
-        while self.sample_accumulator >= CPU_CLOCK_HZ {
+        self.sample_accumulator += u64::from(AUDIO_SAMPLE_RATE);
+        if self.sample_accumulator >= CPU_CLOCK_HZ {
+            let raw_sample = self.raw_mixed_sample(paused);
             self.sample_accumulator -= CPU_CLOCK_HZ;
             let filtered_sample = self.apply_output_filters(raw_sample);
             self.samples.push_back(filtered_sample);

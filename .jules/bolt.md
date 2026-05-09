@@ -24,3 +24,7 @@
 **Replacing push_str format allocations**
 **Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
 **Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+
+**Fast APU Sample Mixing
+**Learning:** Moving `self.raw_mixed_sample(paused)` inside the `self.sample_accumulator >= CPU_CLOCK_HZ` branch significantly reduces overhead because it's only called when a sample is actually emitted (~1/40th of CPU cycles), rather than every single CPU cycle.
+**Action:** Always check if expensive computation can be deferred inside a rate-limiting branch, especially for audio or video downsampling.
