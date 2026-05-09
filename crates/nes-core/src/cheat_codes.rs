@@ -303,6 +303,12 @@ mod tests {
 
     #[test]
     fn cheat_code_decodes_value_bits_correctly() {
+        let code_n1 = CheatCode::from_str("ANAAAA").unwrap();
+        assert_eq!(code_n1.value(), 0x70);
+        let code_n0 = CheatCode::from_str("NAAAAA").unwrap();
+        assert_eq!(code_n0.value(), 0x87);
+        let code_n5 = CheatCode::from_str("AAAAAN").unwrap();
+        assert_eq!(code_n5.value(), 0x08);
         // "AAAAAA" -> value 0x00
         let code1 = CheatCode::from_str("AAAAAA").unwrap();
         assert_eq!(code1.value(), 0x00);
@@ -331,6 +337,11 @@ mod tests {
 
     #[test]
     fn cheat_code_decodes_address_bits_correctly() {
+        let code_all = CheatCode::from_str("NNNNNNNN").unwrap();
+        assert_eq!(code_all.address(), 0xFFFF);
+        assert_eq!(code_all.value(), 0xFF);
+        assert_eq!(code_all.compare(), Some(0xFF));
+
         // We want to test the bits of the address specifically to catch mutant replacements of `&` with `|` and `^`.
         // Base address without any bits set is 0x8000
         let base = CheatCode::from_str("AAAAAA").unwrap();

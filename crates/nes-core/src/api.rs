@@ -2047,27 +2047,33 @@ mod tests {
 
         let uxrom = Uxrom::from_prg_rom(vec![0; 64 * 1024]);
         core.mapper = Some(LoadedMapper::Uxrom(uxrom));
-        assert_ne!(core.mapper_hash_component(), 0);
+        assert_eq!(core.mapper_hash_component(), 0x20);
 
         let mmc1 = Mmc1::from_prg_rom(vec![0; 64 * 1024], 0);
         core.mapper = Some(LoadedMapper::Mmc1(mmc1));
-        assert_ne!(core.mapper_hash_component(), 0);
+        assert_eq!(core.mapper_hash_component(), 0x30);
 
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         core.mapper = Some(LoadedMapper::Cnrom(cnrom));
-        assert_ne!(core.mapper_hash_component(), 0);
+        assert_eq!(core.mapper_hash_component(), 0x35);
 
         let axrom = Axrom::from_prg_rom(vec![0; 64 * 1024]);
         core.mapper = Some(LoadedMapper::Axrom(axrom));
-        assert_ne!(core.mapper_hash_component(), 0);
+        assert_eq!(core.mapper_hash_component(), 0x37);
 
         let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         core.mapper = Some(LoadedMapper::Gxrom(gxrom));
-        assert_ne!(core.mapper_hash_component(), 0);
+        assert_eq!(core.mapper_hash_component(), 0x38);
 
         let mmc3 = Mmc3::from_prg_chr(vec![0; 64 * 1024], vec![], NametableMirroring::Vertical);
         core.mapper = Some(LoadedMapper::Mmc3(mmc3));
-        assert_ne!(core.mapper_hash_component(), 0);
+        let mmc3_hash = core.mapper_hash_component();
+        let bank_8000 = core.mapper.as_ref().unwrap().read_prg(0x8000);
+        let bank_a000 = core.mapper.as_ref().unwrap().read_prg(0xA000);
+        assert_eq!(
+            mmc3_hash,
+            0x40 ^ ((bank_8000 as u64) << 8) ^ ((bank_a000 as u64) << 16)
+        );
     }
 
     #[test]
@@ -2075,9 +2081,13 @@ mod tests {
         use std::str::FromStr;
         let mut core = NesCore::new();
         let code = crate::cheat_codes::CheatCode::from_str("SXTPOU").unwrap();
-        core.cheat_codes.push(code);
+        core.cheat_codes.push(code.clone());
         let hash = core.cheat_code_hash_component();
-        assert_ne!(hash, 0);
+        let compare = 0x1FF_u64;
+        let expected_comp =
+            u64::from(code.address()) ^ (u64::from(code.value()) << 16) ^ (compare << 24);
+        let expected_hash = expected_comp.rotate_left(1);
+        assert_eq!(hash, expected_hash);
     }
 }
 
@@ -2085,6 +2095,16 @@ mod tests {
 mod tests_rom_loader_internal {
     use super::*;
     use crate::rom::NametableMirroring;
+
+    #[test]
+    fn test_build_mapper_invalid_sizes() {
+        let core = NesCore::new();
+        assert!(core.build_gxrom(&[0; 10], &[0; 10]).is_err());
+        assert!(
+            core.build_mmc3(&[0; 10], &[0; 10], NametableMirroring::Vertical)
+                .is_err()
+        );
+    }
 
     #[test]
     fn test_build_mapper_unsupported_prg_layouts() {
