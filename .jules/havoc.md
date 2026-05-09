@@ -98,3 +98,15 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2025-05-09 - nes-mcp Daemon read_line OOM
+🧨 **The Trigger:** A malicious client writes continuously to standard input without sending a newline `\n`.
+📉 **The Stack Trace:** No panic trace, process is sent SIGKILL (9) by the OS due to Out of Memory (OOM) or capacity overflow.
+🧪 **Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_read_line_oom -- --ignored`
+😈 **Comment:** You assumed inputs from standard IO would always send well-formed headers delimited by newlines. You were wrong.
+
+## 2025-05-09 - nes-relay Server read_line OOM
+🧨 **The Trigger:** A malicious client writes continuously to a socket without sending a newline `\n`.
+📉 **The Stack Trace:** No panic trace, process is sent SIGKILL (9) by the OS due to Out of Memory (OOM) or capacity overflow.
+🧪 **Reproduction:** Run `cargo test -p nes-relay --test havoc_relay_read_line_oom -- --ignored`
+😈 **Comment:** You assumed connecting sockets would send newline delimited messages. You were wrong.
