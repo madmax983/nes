@@ -24,3 +24,7 @@
 **Replacing push_str format allocations**
 **Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
 **Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+
+**[Unnecessary Vec Allocations in Tests]
+**Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
+**Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.

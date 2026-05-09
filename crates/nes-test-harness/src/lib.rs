@@ -501,41 +501,47 @@ mod tests {
         assert_ne!(hash, 0);
         assert_ne!(hash, 1);
 
-        let mut altered_cycle = writes.clone();
-        altered_cycle[0].cpu_cycle ^= 0xFFFF;
-        assert_ne!(hash, apu_write_hash(&altered_cycle));
+        let mut writes = writes;
 
-        let mut altered_addr = writes.clone();
-        altered_addr[0].addr ^= 0xFFFF;
-        assert_ne!(hash, apu_write_hash(&altered_addr));
+        writes[0].cpu_cycle ^= 0xFFFF;
+        assert_ne!(hash, apu_write_hash(&writes));
+        writes[0].cpu_cycle ^= 0xFFFF;
 
-        let mut altered_value = writes.clone();
-        altered_value[0].value ^= 0xFF;
-        assert_ne!(hash, apu_write_hash(&altered_value));
+        writes[0].addr ^= 0xFFFF;
+        assert_ne!(hash, apu_write_hash(&writes));
+        writes[0].addr ^= 0xFFFF;
 
-        let mut altered_cycle_bitwise = writes.clone();
-        altered_cycle_bitwise[0].cpu_cycle |= 0xFFFF;
-        if altered_cycle_bitwise[0].cpu_cycle != writes[0].cpu_cycle {
-            assert_ne!(hash, apu_write_hash(&altered_cycle_bitwise));
+        writes[0].value ^= 0xFF;
+        assert_ne!(hash, apu_write_hash(&writes));
+        writes[0].value ^= 0xFF;
+
+        let orig_cycle = writes[0].cpu_cycle;
+        writes[0].cpu_cycle |= 0xFFFF;
+        if writes[0].cpu_cycle != orig_cycle {
+            assert_ne!(hash, apu_write_hash(&writes));
         }
+        writes[0].cpu_cycle = orig_cycle;
 
-        let mut altered_addr_bitwise = writes.clone();
-        altered_addr_bitwise[0].addr &= 0x0000;
-        if altered_addr_bitwise[0].addr != writes[0].addr {
-            assert_ne!(hash, apu_write_hash(&altered_addr_bitwise));
+        let orig_addr = writes[0].addr;
+        writes[0].addr &= 0x0000;
+        if writes[0].addr != orig_addr {
+            assert_ne!(hash, apu_write_hash(&writes));
         }
+        writes[0].addr = orig_addr;
 
-        let mut altered_value_bitwise = writes.clone();
-        altered_value_bitwise[0].value |= 0xFF;
-        if altered_value_bitwise[0].value != writes[0].value {
-            assert_ne!(hash, apu_write_hash(&altered_value_bitwise));
+        let orig_value_or = writes[0].value;
+        writes[0].value |= 0xFF;
+        if writes[0].value != orig_value_or {
+            assert_ne!(hash, apu_write_hash(&writes));
         }
+        writes[0].value = orig_value_or;
 
-        let mut altered_value_bitwise_and = writes.clone();
-        altered_value_bitwise_and[0].value &= 0x00;
-        if altered_value_bitwise_and[0].value != writes[0].value {
-            assert_ne!(hash, apu_write_hash(&altered_value_bitwise_and));
+        let orig_value_and = writes[0].value;
+        writes[0].value &= 0x00;
+        if writes[0].value != orig_value_and {
+            assert_ne!(hash, apu_write_hash(&writes));
         }
+        writes[0].value = orig_value_and;
     }
 
     #[test]
