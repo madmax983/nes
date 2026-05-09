@@ -1,12 +1,22 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. Refactor `classify_keyboard_input` in `crates/nes-desktop/src/input.rs`
+   - Use `match key` with guard clauses (`if pressed` etc.) to replace the sequence of `if`/`return` statements.
+   - This flattens the "Pyramid of Doom" and makes the mapping of keys to `KeyboardDecision` much clearer and more idiomatic in Rust.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+2. Verify Changes
+   - Run `cargo fmt --all`.
+   - Run `cargo clippy --all-targets --all-features -- -D warnings`.
+   - Run `cargo test --all-targets --all-features`.
 
-3. **Complete pre commit steps**
+3. Update Journal
+   - Append to `.jules/forge.md`:
+     `**[Refactoring classify_keyboard_input]
+**Learning:** Found cascading `if` statements with early returns in `classify_keyboard_input` which obscured the simple key-to-action mapping.
+**Action:** Replaced the cascading `if` statements with a single `match` expression using guard clauses to flatten the logic and improve readability.`
+
+4. Complete pre-commit steps
    - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
 
-4. **Submit the PR**
+5. Submit PR
+   - Use the `submit` tool to create a PR.
+   - Title: "⚒️ Forge: Flatten classify_keyboard_input"
+   - Description sections: `🚮 Smell`, `✨ Solution`, `🧼 Benefit`, `🛡️ Verification`.
