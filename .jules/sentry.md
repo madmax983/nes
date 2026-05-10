@@ -21,3 +21,7 @@
 ## 2026-05-05 - Edge Cases in Image Encoding and Script Generation
 **Learning:** Error returns on extremely large dimensions (overflow) in utilities like PPM encoding and unimplemented player 2 script generation features are easily missed in standard coverage.
 **Action:** Write tests specifically targeting dimension overflows and verify error variants for unsupported inputs are triggered.
+
+## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
+**Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
+**Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.

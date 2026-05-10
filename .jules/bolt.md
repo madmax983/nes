@@ -28,3 +28,10 @@
 **[Pre-allocated CalibrationRecorder Frames]**
 **Learning:** `CalibrationRecorder::new` was initializing `frames` with `VecDeque::new()` without reserving capacity, causing repeated heap reallocations as the buffer filled up to 30,000 frames.
 **Action:** Used `VecDeque::with_capacity(30_000)` to eliminate reallocations during RTA draft recording.
+**[Lazy Iterator Operations]
+**Learning:** `Iterator::count()` iterates over all elements to calculate the length. If the result is only needed in an optional branch (like a callback function), it introduces unnecessary O(N) overhead.
+**Action:** Wrap eager iterator operations like `count()` inside `if option.is_some() { Some(...) } else { None }` so it's only lazily computed when strictly necessary.
+
+**[Unnecessary Vec Allocations in Tests]
+**Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
+**Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
