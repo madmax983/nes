@@ -501,6 +501,31 @@ mod tests {
         assert_eq!(mcp_proto_string.to_string(), "Protocol error: bad format");
     }
 
+    struct EndlessGarbageReader {
+        bytes_read: usize,
+    }
+
+    impl std::io::Read for EndlessGarbageReader {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.bytes_read > 10 * 1024 * 1024 {
+                panic!("OOM Vulnerability Triggered: read_line buffered over 10MB without a newline!");
+            }
+            for b in buf.iter_mut() {
+                *b = b'A';
+            }
+            self.bytes_read += buf.len();
+            Ok(buf.len())
+        }
+    }
+
+    #[test]
+    #[ignore = "Havoc OOM Attack"]
+    #[should_panic(expected = "OOM Vulnerability Triggered")]
+    fn havoc_oom_vulnerability_in_read_line() {
+        let mut reader = std::io::BufReader::new(EndlessGarbageReader { bytes_read: 0 });
+        let _ = read_stdio_message(&mut reader);
+    }
+
     #[test]
     fn read_stdio_message_handles_errors() {
         let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();

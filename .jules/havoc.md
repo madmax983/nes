@@ -98,3 +98,10 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+👺 Havoc: Unbounded Memory Growth in `read_line`
+
+🧨 **The Trigger:** Sending a continuous stream of data without a newline character `\n` to `nes-mcp` stdio or sockets.
+📉 **The Stack Trace:** Omitted due to environment limitations preventing stack trace capture.
+🧪 **Reproduction:** Run `cargo test -p nes-mcp -- --ignored --nocapture`
+😈 **Comment:** You trusted standard library `read_line` to not devour your RAM. You were wrong. A malicious client can send gigabytes of padding without a newline, laughing as your CI containers and production servers OOM and die.
