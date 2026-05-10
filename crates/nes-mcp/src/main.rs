@@ -508,7 +508,9 @@ mod tests {
     impl std::io::Read for EndlessGarbageReader {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
             if self.bytes_read > 10 * 1024 * 1024 {
-                panic!("OOM Vulnerability Triggered: read_line buffered over 10MB without a newline!");
+                panic!(
+                    "OOM Vulnerability Triggered: read_line buffered over 10MB without a newline!"
+                );
             }
             for b in buf.iter_mut() {
                 *b = b'A';
