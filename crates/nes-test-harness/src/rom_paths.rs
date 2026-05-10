@@ -3,6 +3,13 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Resolves the absolute path to the Super Mario Bros ROM based on the workspace `nes.toml`.
+///
+/// This is heavily used by AI control integration tests that train explicitly against SMB.
+/// It will panic if the path is missing from configuration or if the file does not exist locally.
+///
+/// ## Panics
+/// Panics if `roms.smb` is unset or if the resolved file does not exist on disk.
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +25,12 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Resolves the absolute path to the `nestest.nes` CPU diagnostic ROM based on `nes.toml`.
+///
+/// Used for deterministic CPU core coverage testing.
+///
+/// ## Panics
+/// Panics if `roms.nestest` is unset or if the resolved file does not exist.
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +40,12 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Resolves the absolute path to the `instr_test-v5.nes` blargg CPU test ROM.
+///
+/// This provides comprehensive validation of all official and unofficial CPU instructions.
+///
+/// ## Panics
+/// Panics if `roms.blargg_cpu` is unset or if the file does not exist.
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +57,13 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Discovers and returns all `.nes` files within the configured bbbradsmith audio test suite directory.
+///
+/// This suite contains dozens of ROMs targeting exact APU channel behaviors (Pulse, Triangle, Noise, DMC, DPCM).
+/// The paths are returned in stable alphabetical order for deterministic test execution.
+///
+/// ## Panics
+/// Panics if the directory is missing, empty, or fails to read.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +94,13 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Resolves the absolute path to the directory containing golden reference `.pcm` audio captures.
+///
+/// These reference files map 1:1 with the execution of the bbbradsmith audio suite ROMs
+/// and are used to verify no audio regressions have occurred.
+///
+/// ## Panics
+/// Panics if the golden directory is missing from configuration or does not exist.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();

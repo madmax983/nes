@@ -1,6 +1,9 @@
+#![allow(missing_docs)]
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// The default TCP binding address for the MCP host.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// The CLI usage help text string.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -21,6 +24,7 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// assert!(parsed.mcp_enabled);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Parsed command line arguments for the desktop application.
 pub struct RuntimeArgs {
     pub rom_path: Option<String>,
     pub cheat_codes: Vec<String>,

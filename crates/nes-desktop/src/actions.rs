@@ -1,13 +1,23 @@
+#![allow(missing_docs)]
 /// Shared high-level intents emitted by the native menu, overlay, and hotkeys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// High-level actions triggered by desktop user inputs (keyboard, gamepads).
 pub enum AppAction {
+    /// Toggle the in-game overlay menu.
     ToggleOverlay,
+    /// Resume the emulation.
     Resume,
+    /// Open the ROM selection dialog.
     OpenRom,
+    /// Open the cheat code manager.
     OpenCheats,
+    /// Save the game state to the specified slot.
     SaveSlot(u8),
+    /// Load the game state from the specified slot.
     LoadSlot(u8),
+    /// Reset the emulator.
     Reset,
+    /// Quit the application.
     Quit,
 }
 

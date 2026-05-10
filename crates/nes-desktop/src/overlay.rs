@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! Modal pause overlay model and bitmap renderer for `nes-desktop`.
 
 use font8x8::{BASIC_FONTS, UnicodeFonts};
@@ -23,6 +24,7 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Determines which overlay panel is currently visible.
 pub enum OverlayPanel {
     MainMenu,
     Cheats,
@@ -30,6 +32,7 @@ pub enum OverlayPanel {
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Options available on the primary overlay menu.
 pub enum MainMenuSelection {
     Resume,
     OpenRom,
@@ -42,6 +45,7 @@ pub enum MainMenuSelection {
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Options available on the cheats overlay menu.
 pub enum CheatsSelection {
     AddCode,
     Cheat(usize),
@@ -49,6 +53,7 @@ pub enum CheatsSelection {
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Represents the currently highlighted UI item across all overlay panels.
 pub enum OverlaySelection {
     Main(MainMenuSelection),
     Cheats(CheatsSelection),
@@ -56,6 +61,7 @@ pub enum OverlaySelection {
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// An actionable command resulting from a user interaction with the overlay.
 pub enum OverlayCommand {
     AppAction(AppAction),
     ToggleCheat(usize),
@@ -65,9 +71,13 @@ pub enum OverlayCommand {
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Read-only snapshot of a save slot used during overlay rendering.
 pub struct OverlaySlotSummary {
+    /// The save slot index.
     pub slot: u8,
+    /// The human-readable status string.
     pub status_label: &'static str,
+    /// The last modified time, if present.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -85,8 +95,11 @@ impl OverlaySlotSummary {
 
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Read-only snapshot of a cheat code used during overlay rendering.
 pub struct OverlayCheatSummary<'a> {
+    /// The raw cheat code string.
     pub raw_code: &'a str,
+    /// Whether the cheat is currently active.
     pub enabled: bool,
 }
 
