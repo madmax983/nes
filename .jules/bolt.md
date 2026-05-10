@@ -24,6 +24,10 @@
 **Replacing push_str format allocations**
 **Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
 **Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+
+**[Pre-allocated CalibrationRecorder Frames]**
+**Learning:** `CalibrationRecorder::new` was initializing `frames` with `VecDeque::new()` without reserving capacity, causing repeated heap reallocations as the buffer filled up to 30,000 frames.
+**Action:** Used `VecDeque::with_capacity(30_000)` to eliminate reallocations during RTA draft recording.
 **[Lazy Iterator Operations]
 **Learning:** `Iterator::count()` iterates over all elements to calculate the length. If the result is only needed in an optional branch (like a callback function), it introduces unnecessary O(N) overhead.
 **Action:** Wrap eager iterator operations like `count()` inside `if option.is_some() { Some(...) } else { None }` so it's only lazily computed when strictly necessary.
