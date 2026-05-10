@@ -337,137 +337,145 @@ fn dispatch_overlay_command(
     }
 }
 
+fn execute_toggle_overlay(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    set_overlay_open(
+        ctx.overlay,
+        !ctx.overlay.is_open(),
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
+fn execute_resume(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    set_overlay_open(
+        ctx.overlay,
+        false,
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
+fn execute_open_cheats(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if ctx.rta_manager.is_some() {
+        ctx.overlay
+            .set_status_message("Cheats are unavailable while RTA mode is active");
+        return Ok(false);
+    }
+    if !ctx.overlay.is_open() {
+        set_overlay_open(
+            ctx.overlay,
+            true,
+            ctx.core,
+            ctx.audio_output,
+            ctx.window,
+            ctx.session,
+        )?;
+    }
+    ctx.overlay.open_cheats_panel();
+    ctx.window.set_title(&window_title(ctx.session, true));
+    Ok(false)
+}
+
+fn execute_open_rom(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if ctx.rta_manager.is_some() {
+        ctx.overlay
+            .set_status_message("Open ROM is unavailable while RTA mode is active");
+        return Ok(false);
+    }
+    if !rom_picker_supported() {
+        ctx.overlay
+            .set_status_message("Open ROM picker is unavailable on this platform build");
+        return Ok(false);
+    }
+    let Some(path) = pick_rom_path() else {
+        ctx.overlay.set_status_message("Open ROM cancelled");
+        return Ok(false);
+    };
+    let cleared_cheats = SessionCheats::new();
+    *ctx.session = load_rom_session(ctx.core, &path, &cleared_cheats)?;
+    ctx.session_cheats.clear();
+    reset_ephemeral_state(ctx);
+    resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
+    ctx.overlay.clear_status_message();
+    set_overlay_open(
+        ctx.overlay,
+        false,
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
+fn execute_save_slot(slot: u8, ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if let Some(rta) = ctx.rta_manager.as_mut() {
+        let _ =
+            rta.mark_forbidden_action(ForbiddenAction::SaveLoad, ctx.frame_index, Instant::now());
+    }
+    let snapshot = ctx.core.save_state();
+    let slot_path = slot_path_for_selection(ctx.session, slot);
+    save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
+    refresh_slot_metadata(ctx.session)?;
+    ctx.overlay.focus_slot(slot, true);
+    ctx.overlay
+        .set_status_message(format!("[state] saved {}", slot_path.display()));
+    Ok(false)
+}
+
+fn execute_load_slot(slot: u8, ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if let Some(rta) = ctx.rta_manager.as_mut() {
+        let _ =
+            rta.mark_forbidden_action(ForbiddenAction::SaveLoad, ctx.frame_index, Instant::now());
+    }
+    let slot_path = slot_path_for_selection(ctx.session, slot);
+    let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
+    ctx.core.load_state(&snapshot);
+    apply_session_cheats(ctx.core, ctx.session_cheats)?;
+    reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
+    resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
+    reset_ephemeral_state(ctx);
+    refresh_slot_metadata(ctx.session)?;
+    ctx.overlay.focus_slot(slot, false);
+    ctx.overlay
+        .set_status_message(format!("[state] loaded {}", slot_path.display()));
+    Ok(false)
+}
+
+fn execute_reset(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    ctx.core
+        .execute(Command::Reset)
+        .map_err(|err| format!("Reset failed: {err}"))?;
+    reset_ephemeral_state(ctx);
+    ctx.overlay.set_status_message("System reset");
+    set_overlay_open(
+        ctx.overlay,
+        false,
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
 fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<bool, String> {
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
     match action {
-        AppAction::ToggleOverlay => {
-            set_overlay_open(
-                ctx.overlay,
-                !ctx.overlay.is_open(),
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::Resume => {
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::OpenCheats => {
-            if ctx.rta_manager.is_some() {
-                ctx.overlay
-                    .set_status_message("Cheats are unavailable while RTA mode is active");
-                return Ok(false);
-            }
-            if !ctx.overlay.is_open() {
-                set_overlay_open(
-                    ctx.overlay,
-                    true,
-                    ctx.core,
-                    ctx.audio_output,
-                    ctx.window,
-                    ctx.session,
-                )?;
-            }
-            ctx.overlay.open_cheats_panel();
-            ctx.window.set_title(&window_title(ctx.session, true));
-            Ok(false)
-        }
-        AppAction::OpenRom => {
-            if ctx.rta_manager.is_some() {
-                ctx.overlay
-                    .set_status_message("Open ROM is unavailable while RTA mode is active");
-                return Ok(false);
-            }
-            if !rom_picker_supported() {
-                ctx.overlay
-                    .set_status_message("Open ROM picker is unavailable on this platform build");
-                return Ok(false);
-            }
-            let Some(path) = pick_rom_path() else {
-                ctx.overlay.set_status_message("Open ROM cancelled");
-                return Ok(false);
-            };
-            let cleared_cheats = SessionCheats::new();
-            *ctx.session = load_rom_session(ctx.core, &path, &cleared_cheats)?;
-            ctx.session_cheats.clear();
-            reset_ephemeral_state(ctx);
-            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
-            ctx.overlay.clear_status_message();
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::SaveSlot(slot) => {
-            if let Some(rta) = ctx.rta_manager.as_mut() {
-                let _ = rta.mark_forbidden_action(
-                    ForbiddenAction::SaveLoad,
-                    ctx.frame_index,
-                    Instant::now(),
-                );
-            }
-            let snapshot = ctx.core.save_state();
-            let slot_path = slot_path_for_selection(ctx.session, slot);
-            save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
-            refresh_slot_metadata(ctx.session)?;
-            ctx.overlay.focus_slot(slot, true);
-            ctx.overlay
-                .set_status_message(format!("[state] saved {}", slot_path.display()));
-            Ok(false)
-        }
-        AppAction::LoadSlot(slot) => {
-            if let Some(rta) = ctx.rta_manager.as_mut() {
-                let _ = rta.mark_forbidden_action(
-                    ForbiddenAction::SaveLoad,
-                    ctx.frame_index,
-                    Instant::now(),
-                );
-            }
-            let slot_path = slot_path_for_selection(ctx.session, slot);
-            let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
-            ctx.core.load_state(&snapshot);
-            apply_session_cheats(ctx.core, ctx.session_cheats)?;
-            reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
-            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
-            reset_ephemeral_state(ctx);
-            refresh_slot_metadata(ctx.session)?;
-            ctx.overlay.focus_slot(slot, false);
-            ctx.overlay
-                .set_status_message(format!("[state] loaded {}", slot_path.display()));
-            Ok(false)
-        }
-        AppAction::Reset => {
-            ctx.core
-                .execute(Command::Reset)
-                .map_err(|err| format!("Reset failed: {err}"))?;
-            reset_ephemeral_state(ctx);
-            ctx.overlay.set_status_message("System reset");
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
+        AppAction::ToggleOverlay => execute_toggle_overlay(ctx),
+        AppAction::Resume => execute_resume(ctx),
+        AppAction::OpenCheats => execute_open_cheats(ctx),
+        AppAction::OpenRom => execute_open_rom(ctx),
+        AppAction::SaveSlot(slot) => execute_save_slot(slot, ctx),
+        AppAction::LoadSlot(slot) => execute_load_slot(slot, ctx),
+        AppAction::Reset => execute_reset(ctx),
         AppAction::Quit => Ok(true),
     }
 }

@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring execute_app_action to extract handlers and use guard clauses]**
+**Learning:** The `execute_app_action` dispatcher in `crates/nes-desktop/src/main.rs` was a 130+ line God Function containing complex state mutation, IO setup, and deeply nested error handling inline within its `match` arms.
+**Action:** Extracted each arm into private standalone helper functions (`execute_toggle_overlay`, `execute_open_rom`, etc.) and used guard clauses (`let Some(path) = ... else { return ... }`) within those functions to keep the happy path un-indented. `execute_app_action` is now purely a router.
