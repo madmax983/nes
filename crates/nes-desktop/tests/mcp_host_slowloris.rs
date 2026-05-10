@@ -69,5 +69,8 @@ fn test_read_framed_message_unexpected_eof() {
     let data = b"Content-Length: 10\r\n"; // Incomplete headers
     let mut reader = std::io::BufReader::new(std::io::Cursor::new(data));
     let result = read_framed_message(&mut reader);
-    assert_eq!(result, Err("unexpected EOF while reading MCP headers".to_owned()));
+    assert_eq!(
+        result,
+        Err("unexpected EOF while reading MCP headers".to_owned())
+    );
 }

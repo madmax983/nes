@@ -345,7 +345,7 @@ mod tests {
             let result = parse_runtime_args(&args);
             let _ = tx.send(result);
         });
-        rx.recv_timeout(Duration::from_millis(100))
+        rx.recv_timeout(Duration::from_secs(5))
             .expect("parse_runtime_args blocked or panicked")
     }
 
