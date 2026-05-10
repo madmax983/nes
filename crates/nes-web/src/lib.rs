@@ -511,8 +511,14 @@ fn to_js_error(err: String) -> JsValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Note: Do not test to_js_error natively to prevent coverage panics in CI tools
+    // that don't capture aborts well (e.g., cargo tarpaulin).
+    // Mutants are handled by the wasm runner.
+    #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
     fn test_to_js_error_output() {
         let err_msg = "test error msg".to_string();
