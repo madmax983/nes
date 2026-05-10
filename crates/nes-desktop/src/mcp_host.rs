@@ -682,6 +682,16 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "infinite EOF loop detected in test")]
+    fn test_eof_panic_stream_panics_on_infinite_eof() {
+        let mut stream = EofPanicStream { inner: Cursor::new(Vec::new()), eof_count: 0 };
+        let mut buf = [0u8; 10];
+        for _ in 0..102 {
+            let _ = std::io::Read::read(&mut stream, &mut buf);
+        }
+    }
+
+    #[test]
     fn host_start_fails_on_invalid_bind_address() {
         let result = McpHost::start("256.256.256.256:0");
         if let Err(err) = result {
