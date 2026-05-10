@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**[crates/nes-web/src/lib.rs] `to_js_error` Mutants and wasm_bindgen_test**
+**Mutant:** `replace to_js_error -> JsValue with Default::default()`
+**Diagnosis:** Missing test. `nes-web` tests the wasm API, but `cargo mutants` only runs natively. Attempting to use a standard `#[test]` panics naturally because `JsValue::from_str` isn't implemented natively. This means we cannot natively kill this mutant via `cargo test` because `assert_eq!` panics when it tries to stringify `JsValue`. We wrote a `#[wasm_bindgen_test]` which effectively catches it in `wasm-pack test`, but `cargo mutants` marks it as missed because it only evaluates the native `cargo test`.
+**Kill Shot:** Appended `#[wasm_bindgen_test]` to `crates/nes-web/src/lib.rs` and added `wasm-bindgen-test` to `Cargo.toml`. We'll accept the mutant is missed natively.

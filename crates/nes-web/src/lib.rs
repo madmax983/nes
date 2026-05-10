@@ -507,3 +507,16 @@ impl Default for NesWebEmulator {
 fn to_js_error(err: String) -> JsValue {
     JsValue::from_str(&err)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn test_to_js_error_output() {
+        let err_msg = "test error msg".to_string();
+        let js_err = to_js_error(err_msg.clone());
+        assert_eq!(js_err.as_string(), Some(err_msg));
+    }
+}
