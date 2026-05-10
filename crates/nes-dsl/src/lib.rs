@@ -324,7 +324,7 @@ impl Assembler {
             bytes: BTreeMap::new(),
             labels: BTreeMap::new(),
             constants: BTreeMap::new(),
-            fixups: Vec::new(),
+            fixups: Vec::with_capacity(32),
             vectors: VectorExprs::default(),
         }
     }
@@ -1228,8 +1228,10 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
     Ok(Expr::Number(sign * value))
 }
 
+/// **Performance optimization:** Pre-allocates `Vec` capacity to eliminate heap re-allocations
+/// for the common case where comma-separated lists contain multiple small items.
 fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(4);
     let mut in_string = false;
     let mut escaped = false;
     let mut start_idx = 0;

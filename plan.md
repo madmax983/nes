@@ -1,12 +1,16 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. **Identify Performance Optimization**
+   - After analyzing the codebase for potential optimizations that adhere to Bolt's boundaries, the `split_csv` function in `nes-dsl` creates a new vector via `Vec::new()` to hold comma-separated items on every call. This occurs twice: once in `nes-dsl/src/lib.rs` and once in `nes-dsl/src/parser.rs`.
+   - By replacing `Vec::new()` with `Vec::with_capacity(4)` in both locations, we can eliminate a heap allocation resize for the common case where comma-separated lists contain multiple small items.
+   - Also changed `Vec::new()` to `Vec::with_capacity(32)` in the `Assembler::new()` function for the `fixups` vector, which frequently accumulates items during assembly.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+2. **Implement the optimization**
+   - (Done) I've successfully replaced `Vec::new()` with `Vec::with_capacity(...)` in `crates/nes-dsl/src/lib.rs`, `crates/nes-dsl/src/parser.rs`, and `crates/nes-dsl/src/assembler.rs`.
+   - Run `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo fmt --all`.
+   - Update `.jules/bolt.md` with the critical learning if applicable.
 
-3. **Complete pre commit steps**
+3. **Complete pre-commit steps**
    - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
 
 4. **Submit the PR**
+   - Title: `⚡ Bolt: [performance improvement]`
+   - Description includes What, Why, Impact, and Measurement.

@@ -24,3 +24,7 @@
 **Replacing push_str format allocations**
 **Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
 **Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+
+**Optimize split_csv string parsing in nes-dsl**
+**Learning:** Found unnecessary `Vec::new()` without capacity within `split_csv` which caused small allocations.
+**Action:** Replaced `Vec::new()` with `Vec::with_capacity(4)` in `split_csv` in `nes-dsl/src/parser.rs` and `nes-dsl/src/lib.rs`. Also applied `Vec::with_capacity(32)` to `Assembler` struct initialization.

@@ -123,8 +123,10 @@ pub(crate) fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> 
     Ok(Expr::Symbol(normalized))
 }
 
+/// **Performance optimization:** Pre-allocates `Vec` capacity to eliminate heap re-allocations
+/// for the common case where comma-separated lists contain multiple small items.
 pub(crate) fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
-    let mut parts = Vec::new();
+    let mut parts = Vec::with_capacity(4);
     let mut current_start = 0;
     let mut in_string = false;
     let mut escaped = false;

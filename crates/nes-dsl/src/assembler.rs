@@ -95,6 +95,8 @@ pub(crate) struct Assembler {
 }
 
 impl Assembler {
+    /// **Performance optimization:** Pre-allocates `Vec` capacity for `fixups` to eliminate heap re-allocations
+    /// since most assemblies have at least a small number of forward references or symbols.
     pub(crate) fn new(config: AssembleConfig) -> Self {
         Self {
             config,
@@ -102,7 +104,7 @@ impl Assembler {
             bytes: BTreeMap::new(),
             labels: BTreeMap::new(),
             constants: BTreeMap::new(),
-            fixups: Vec::new(),
+            fixups: Vec::with_capacity(32),
             vectors: VectorExprs::default(),
         }
     }
