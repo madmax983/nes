@@ -929,13 +929,17 @@ fn forward_policy(
     (logits, value)
 }
 
+/// **Performance optimization:** Fuses exponential probability calculation and total summation into a single pass, avoiding the `.collect::<Vec<_>>()` allocation chain and eliminating an extra O(N) iteration over the dataset.
 fn logits_to_probabilities(logits: &[f32]) -> Vec<f32> {
     let max_logit = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-    let mut probabilities = logits
-        .iter()
-        .map(|logit| (logit - max_logit).exp())
-        .collect::<Vec<_>>();
-    let total = probabilities.iter().sum::<f32>();
+    let mut probabilities = Vec::with_capacity(logits.len());
+    let mut total = 0.0;
+    for &logit in logits {
+        let prob = (logit - max_logit).exp();
+        total += prob;
+        probabilities.push(prob);
+    }
+
     if total <= f32::EPSILON {
         return vec![1.0 / usize_to_f32(logits.len()); logits.len()];
     }
