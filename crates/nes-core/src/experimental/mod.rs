@@ -8,6 +8,9 @@
 
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
+/// Visualizes audio samples as an oscilloscope trace.
+#[cfg(feature = "nova")]
+pub mod audio_oscilloscope;
 /// Utility for discovering cheat codes by monitoring RAM changes.
 pub mod cheat_finder;
 /// Tracks emulator events for external logging and analysis.
