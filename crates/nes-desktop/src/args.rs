@@ -566,6 +566,13 @@ mod tests {
                 .expect("netplay delay branch should parse");
         assert_eq!(delay.netplay_input_delay_frames, Some(3));
 
+        let max_rollback = parse_runtime_args_with_timeout(vec![
+            "--netplay-max-rollback".to_owned(),
+            "10".to_owned(),
+        ])
+        .expect("netplay max-rollback branch should parse");
+        assert_eq!(max_rollback.netplay_max_rollback_frames, Some(10));
+
         let hash_every = parse_runtime_args_with_timeout(vec![
             "--netplay-hash-every".to_owned(),
             "90".to_owned(),
