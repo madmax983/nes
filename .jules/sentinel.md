@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**Fix MCP Host EOF Infinite Loop Timeout**
+**Mutant:** Replaced `==` with `!=` in `if read == 0 {` inside `read_framed_message`.
+**Diagnosis:** The mutant causes `read_framed_message` to immediately return `Ok(None)` when data is read. This kills the host server connection in the test suite. The test client tries to read the response from the closed socket, leading to `read_line` returning 0 (EOF). Because the mutant changed `if read == 0` to `if read != 0`, the client does not return on EOF and loops infinitely. This hangs the test suite, leading to a cargo-mutants TIMEOUT.
+**Kill Shot:** Wrapped the `TcpStream` client in `host_start_and_client_round_trip_cover_bind_addr_drain_and_dispatch` with an `EofPanicStream` that panics if `read` returns `0` more than 100 times sequentially. This catches the infinite loop and correctly fails the test, killing the mutant cleanly.

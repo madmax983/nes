@@ -412,6 +412,26 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
 
 #[cfg(test)]
 mod tests {
+    struct EofPanicStream<T: std::io::Read> {
+        inner: T,
+        eof_count: usize,
+    }
+
+    impl<T: std::io::Read> std::io::Read for EofPanicStream<T> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let res = self.inner.read(buf);
+            if let Ok(0) = res {
+                self.eof_count += 1;
+                if self.eof_count > 100 {
+                    panic!("infinite EOF loop detected in test");
+                }
+            } else {
+                self.eof_count = 0;
+            }
+            res
+        }
+    }
+
     use super::*;
     use nes_core::NesCore;
     use std::io::{BufReader, Cursor};
@@ -432,7 +452,7 @@ mod tests {
     fn read_response_with_host_drain(
         host: &McpHost,
         core: &mut NesCore,
-        reader: &mut BufReader<TcpStream>,
+        reader: &mut impl std::io::BufRead,
         context: &str,
     ) -> Vec<u8> {
         let deadline = Instant::now() + Duration::from_secs(2);
@@ -602,11 +622,12 @@ mod tests {
         stream
             .set_read_timeout(Some(Duration::from_millis(500)))
             .expect("set read timeout");
-        let mut reader = BufReader::new(
-            stream
+        let mut reader = BufReader::new(EofPanicStream {
+            inner: stream
                 .try_clone()
                 .expect("client stream clone for reader should succeed"),
-        );
+            eof_count: 0,
+        });
 
         let ping_request = json!({
             "jsonrpc": "2.0",
