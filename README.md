@@ -1,5 +1,7 @@
 # NES Emulator (Proof-Forward + MCP-First)
 
+> **⚠️ REQUIRES FEATURE NOVA:** To use experimental features like the `story_demo` or `NarrativeGenerator`, you must enable the `nova` feature flag during build (e.g., `cargo run --features nova`).
+
 This repository hosts a Rust NES emulator workspace focused on systems learning, deterministic behavior, and strong correctness checks.
 
 ## Workspace

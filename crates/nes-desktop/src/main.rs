@@ -1,8 +1,3 @@
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
-use std::time::{Duration, Instant};
-
 #[cfg(feature = "nova")]
 mod auto_player;
 pub(crate) mod config;
@@ -11,32 +6,36 @@ pub(crate) mod input;
 pub(crate) mod metrics;
 mod netplay;
 pub(crate) mod session;
-use crate::config::*;
-use crate::metrics::PerfMetrics;
-use crate::session::*;
 
-use crate::gamepad::*;
-use crate::input::*;
+use crate::{config::*, gamepad::*, input::*, metrics::PerfMetrics, session::*};
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
-use nes_desktop::actions::AppAction;
-use nes_desktop::app::map_key_event_to_button_bit;
-use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
-use nes_desktop::manual_state::{load_state_file, save_state_file};
-use nes_desktop::menu::{
-    DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
-};
-use nes_desktop::overlay::{OverlayCheatSummary, OverlayCommand, OverlayModel, draw_overlay};
-use nes_desktop::rta::{
-    CalibrationRecorder, ForbiddenAction, ProfileStatus, RtaEvent, RtaManager, RtaProfile,
-    load_profiles, select_profile,
-};
 use nes_desktop::session_cheats::SessionCheats;
+use nes_desktop::{
+    actions::AppAction,
+    app::map_key_event_to_button_bit,
+    audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS},
+    manual_state::{load_state_file, save_state_file},
+    menu::{
+        DesktopMenu, build_native_menu, native_menu_supported, pick_rom_path, rom_picker_supported,
+    },
+    overlay::{OverlayCheatSummary, OverlayCommand, OverlayModel, draw_overlay},
+    rta::{
+        CalibrationRecorder, ForbiddenAction, ProfileStatus, RtaEvent, RtaManager, RtaProfile,
+        load_profiles, select_profile,
+    },
+};
 use nes_netplay::{RollbackConfig, RollbackEngine};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::Path,
+    time::{Duration, Instant},
+};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoopBuilder};

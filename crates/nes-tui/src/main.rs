@@ -1,32 +1,36 @@
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::time::{Duration, Instant};
-
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use crossterm::execute;
-use crossterm::style::Stylize;
-use crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    execute,
+    style::Stylize,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use image::{DynamicImage, Rgba, RgbaImage};
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig, parse_config_path_arg};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
-use nes_tui::app::map_key_event_to_command;
-use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
-use ratatui::Frame;
-use ratatui::Terminal;
-use ratatui::backend::Backend;
-use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
-use ratatui_image::errors::Errors as ImageEncodingError;
-use ratatui_image::picker::{Picker, ProtocolType};
-use ratatui_image::protocol::{ImageSource, StatefulProtocol, StatefulProtocolType};
-use ratatui_image::{Resize, ResizeEncodeRender};
+use nes_tui::{
+    app::map_key_event_to_command,
+    render::{frame_lines_half_blocks, mini_palette_spans},
+};
+use ratatui::{
+    Frame, Terminal,
+    backend::{Backend, CrosstermBackend},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Paragraph},
+};
+use ratatui_image::{
+    Resize, ResizeEncodeRender,
+    errors::Errors as ImageEncodingError,
+    picker::{Picker, ProtocolType},
+    protocol::{ImageSource, StatefulProtocol, StatefulProtocolType},
+};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+    sync::mpsc::{self, Receiver, Sender, TryRecvError},
+    time::{Duration, Instant},
+};
 
 const TARGET_FRAME_TIME: Duration = Duration::from_micros(16_667);
 const NES_CELL_HEIGHT: u32 = (FRAME_HEIGHT / 2) as u32;
