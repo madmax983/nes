@@ -60,11 +60,15 @@ pub fn execute_macro_script(
     mut progress_callback: Option<&mut dyn FnMut(usize, usize)>,
 ) -> Result<u64, String> {
     let mut frames_elapsed = 0;
-    let total_lines = script.lines().count();
+    let total_lines = if progress_callback.is_some() {
+        Some(script.lines().count())
+    } else {
+        None
+    };
 
     for (line_num, line) in script.lines().enumerate() {
-        if let Some(cb) = &mut progress_callback {
-            cb(line_num + 1, total_lines);
+        if let (Some(total), Some(cb)) = (total_lines, &mut progress_callback) {
+            cb(line_num + 1, total);
         }
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') || line.starts_with("//") {

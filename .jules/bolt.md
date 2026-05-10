@@ -24,6 +24,9 @@
 **Replacing push_str format allocations**
 **Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
 **Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+**[Lazy Iterator Operations]
+**Learning:** `Iterator::count()` iterates over all elements to calculate the length. If the result is only needed in an optional branch (like a callback function), it introduces unnecessary O(N) overhead.
+**Action:** Wrap eager iterator operations like `count()` inside `if option.is_some() { Some(...) } else { None }` so it's only lazily computed when strictly necessary.
 
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
