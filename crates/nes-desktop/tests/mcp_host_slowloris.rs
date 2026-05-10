@@ -1,27 +1,26 @@
+#[cfg(feature = "mcp-host")]
 use std::io::{BufReader, Write};
+#[cfg(feature = "mcp-host")]
 use std::net::TcpStream;
+#[cfg(feature = "mcp-host")]
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "mcp-host")]
 use nes_desktop::mcp_host::{McpHost, read_framed_message};
 
+#[cfg(feature = "mcp-host")]
 #[test]
 fn havoc_mcp_slowloris_dos() {
     let host = McpHost::start("127.0.0.1:0").expect("host should start");
     let bind_addr = host.bind_addr().to_owned();
 
-    // Client 1: The malicious actor, sending an incomplete payload
     let mut stream1 = TcpStream::connect(&bind_addr).expect("client 1 should connect");
     stream1
         .write_all(b"Content-Length: 100\r\n\r\n{")
         .expect("write partial");
 
-    // Client 2: The legitimate user, who should be able to connect and get a response
-    // If the server is blocked by stream1, this will time out or fail.
     let mut stream2 = TcpStream::connect(&bind_addr).expect("client 2 should connect");
 
-    // We send a valid request from client 2. It's a notification, so it doesn't need a response,
-    // but the server should be able to parse it without blocking on client 1.
-    // Wait, let's use tools/list which gets a response.
     let ping_request = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -53,4 +52,22 @@ fn havoc_mcp_slowloris_dos() {
 
     let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
     assert_eq!(value["result"], serde_json::json!({}));
+}
+
+#[cfg(feature = "mcp-host")]
+#[test]
+fn test_read_framed_message_empty_payload() {
+    let data = b"Content-Length: 0\r\n\r\n";
+    let mut reader = std::io::BufReader::new(std::io::Cursor::new(data));
+    let result = read_framed_message(&mut reader).unwrap();
+    assert_eq!(result.unwrap(), b"");
+}
+
+#[cfg(feature = "mcp-host")]
+#[test]
+fn test_read_framed_message_unexpected_eof() {
+    let data = b"Content-Length: 10\r\n"; // Incomplete headers
+    let mut reader = std::io::BufReader::new(std::io::Cursor::new(data));
+    let result = read_framed_message(&mut reader);
+    assert_eq!(result, Err("unexpected EOF while reading MCP headers".to_owned()));
 }
