@@ -480,6 +480,23 @@ impl LoadedMapper {
 
 impl CoreSnapshot {
     /// Computes the mapper-specific delta needed to transform this snapshot into `after`.
+    ///
+    /// This is a critical performance optimization used by the rewind engine.
+    /// Instead of saving the full cartridge state (which can be hundreds of kilobytes of CHR-RAM),
+    /// we only extract the small delta of what changed between two frames.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    ///
+    /// let mut core = NesCore::new();
+    /// let snapshot1 = core.save_state();
+    /// // ... emulation runs ...
+    /// let snapshot2 = core.save_state();
+    ///
+    /// let delta = snapshot1.mapper_delta(&snapshot2);
+    /// ```
     #[must_use]
     pub fn mapper_delta(&self, after: &Self) -> Option<MapperDelta> {
         match (&self.mapper, &after.mapper) {
@@ -739,6 +756,20 @@ impl NesCore {
     }
 
     /// Reads CPU-visible memory with MMIO-aware behavior.
+    ///
+    /// The NES CPU uses Memory-Mapped I/O (MMIO) to communicate with peripheral chips
+    /// like the PPU and APU. This function routes reads to the correct component based
+    /// on the 16-bit address.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    ///
+    /// let core = NesCore::new();
+    /// // The PPU status register is memory-mapped at 0x2002.
+    /// let ppu_status = core.read_memory(0x2002);
+    /// ```
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
         match addr {

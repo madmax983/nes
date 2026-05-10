@@ -29,7 +29,7 @@ impl BusRegion {
     /// This currently returns `true` for all regions, but could be used
     /// in the future to identify open bus or strictly-invalid access zones.
     ///
-    /// ## Examples
+    /// # Examples
     ///
     /// ```
     /// use nes_core::bus::BusRegion;
@@ -44,11 +44,11 @@ impl BusRegion {
 
 /// Maps a 16-bit CPU address to its corresponding [`BusRegion`].
 ///
-/// ## Panics
+/// # Panics
 ///
 /// This function does not panic.
 ///
-/// ## Examples
+/// # Examples
 ///
 /// ```
 /// use nes_core::bus::{map_region, BusRegion};
