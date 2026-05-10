@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Optimized push_split memory allocation]
+**Learning:** Returning a newly created struct and pushing a `.clone()` of it into a `Vec` avoids constructing an identical object twice or cloning individual fields (like Strings) multiple times when storing and returning events on a hot path.
+**Action:** Replace multiple struct instantiations with a single struct initialization, pushing a clone of the entire struct, and returning the original, especially in high-frequency event logging loops.**
