@@ -1,4 +1,3 @@
-use std::io::BufRead;
 use std::io::BufReader;
 
 struct EndlessNoNewline {
