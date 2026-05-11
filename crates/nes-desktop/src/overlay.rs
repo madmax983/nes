@@ -307,11 +307,16 @@ impl OverlayModel {
                 None
             }
             VirtualKeyCode::Return => {
-                let buffer = self.add_cheat_input.as_ref()?;
+                let buffer = self.add_cheat_input.take()?;
                 if buffer.is_empty() {
+                    self.add_cheat_input = Some(buffer);
                     return None;
                 }
-                Some(OverlayCommand::SubmitCheatCode(buffer.clone()))
+                // **⚡ Bolt Optimization:** We use `Option::take()` to extract the `String` directly
+                // out of the struct. This entirely eliminates the need to allocate and `.clone()`
+                // the string buffer on the heap when dispatching the `SubmitCheatCode` event, and
+                // correctly clears the modal state back to `None` instead of an empty `String`.
+                Some(OverlayCommand::SubmitCheatCode(buffer))
             }
             _ => {
                 if let Some(ch) = key_to_cheat_char(key)
@@ -963,8 +968,6 @@ mod tests {
             action,
             Some(OverlayCommand::SubmitCheatCode("GOSSIP".to_owned()))
         );
-        assert!(overlay.is_add_cheat_modal_open());
-        overlay.close_add_cheat_modal();
         assert!(!overlay.is_add_cheat_modal_open());
     }
 

@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Optimizing String buffer cloning in UI events]**
+**Learning:** `std::mem::take` can be used to extract an owned `String` from an `Option<&mut String>` inside a struct. This prevents unnecessary string allocations when firing events that take ownership of a buffer (like `SubmitCheatCode(String)`).
+**Action:** Use `std::mem::take(buffer)` instead of `buffer.clone()` when taking ownership of an `Option`'s content, provided the original struct state intends to clear it.
