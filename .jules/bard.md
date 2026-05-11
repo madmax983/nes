@@ -26,3 +26,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2025-06-18 - Missing serde Module Docs Again
+**Confusion:** The documentation for the `serde_iter` module was missing again, causing compiler warnings when running `cargo doc` with `-W missing_docs`.
+**Clarification:** Added a simple doc string `/// Provides serialization helpers for iterators.` to the module to fix the warning.

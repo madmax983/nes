@@ -674,6 +674,7 @@ struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     splits: &'a [SplitEvent],
 }
 
+/// Provides serialization helpers for iterators.
 pub mod serde_iter {
     use serde::{Serialize, Serializer};
 
