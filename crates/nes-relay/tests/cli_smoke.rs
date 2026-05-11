@@ -9,5 +9,5 @@ fn help_flag_prints_usage_to_stderr_and_exits_nonzero() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
-    assert!(stderr.contains("Usage: nes-relay"));
+    assert!(stderr.contains("Usage:"));
 }

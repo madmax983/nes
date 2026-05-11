@@ -22,15 +22,14 @@ fn main() {
 fn run() -> Result<(), String> {
     let args = env::args().collect::<Vec<_>>();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        println!(
-            "Usage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]"
-        );
+        println!("{} train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]", "Usage:".with(crossterm::style::Color::Cyan).bold());
         std::process::exit(0);
     }
     if args.len() < 2 || args.len() > 5 {
         return Err(format!(
-            "{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
-            "Error:".with(Color::Red).bold()
+            "{} missing or invalid number of arguments.\n{} train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
+            "Error:".with(Color::Red).bold(),
+            "Usage:".with(crossterm::style::Color::Cyan).bold()
         ));
     }
 
@@ -47,7 +46,7 @@ fn run() -> Result<(), String> {
     let profile_str = fs::read_to_string(&profile_path)
         .map_err(|e| format!("Failed to read profile config: {e}"))?;
     let profile_cfg: AiProfileConfig =
-        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
+        toml::from_str(&profile_str).map_err(|e| format!("{} Failed to parse profile config: {e}", "Error:".with(Color::Red).bold()))?;
 
     let trainer_cfg = TrainerConfig {
         checkpoint_dir: checkpoint_dir.clone(),
@@ -58,7 +57,7 @@ fn run() -> Result<(), String> {
     println!("{}", "Training AI Profile...".with(Color::Cyan).bold());
 
     let summary = train_smb_control(&profile_cfg, &trainer_cfg, episodes)
-        .map_err(|e| format!("Training failed: {e}"))?;
+        .map_err(|e| format!("{} Training failed: {e}", "Error:".with(Color::Red).bold()))?;
 
     println!(
         "\n{}",

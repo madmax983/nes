@@ -102,7 +102,7 @@ fn main() {
 fn run(stdout: &mut impl Write) -> Result<(), String> {
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
     if raw_args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        println!("Usage: bbbradsmith_golden_capture [--config <path>] [--force]");
+        println!("{} bbbradsmith_golden_capture [--config <path>] [--force]", "Usage:".with(crossterm::style::Color::Cyan).bold());
         std::process::exit(0);
     }
 
@@ -118,10 +118,10 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite".to_owned()
+        format!("{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite", "Error:".with(Color::Red).bold())
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output".to_owned()
+        format!("{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output", "Error:".with(Color::Red).bold())
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
