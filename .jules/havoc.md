@@ -98,3 +98,13 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## YYYY-MM-DD - unbounded read_line Memory Exhaustion (OOM)
+🧨 **The Trigger:** Simulating a continuous stream of bytes without any newline characters `\n` to `std::io::BufRead::read_line()`. This unbounded reading buffer can be exploited by an endless, newline-less stream in `nes-relay`, `nes-desktop` (`mcp_host`, `netplay`), and `nes-mcp` (stdio MCP).
+📉 **The Stack Trace:** (Simulated limit hit via test panic due to unbounded read_line memory growth before exhausting system RAM)
+```
+thread 'havoc_relay_read_line_oom' panicked at crates/nes-relay/tests/havoc_relay_read_line_oom.rs:13:13:
+Simulated OOM: read_line unbounded allocation exceeded memory limit
+```
+🧪 **Reproduction:** Run `cargo test -p nes-relay --test havoc_relay_read_line_oom -- --ignored` or `cargo test -p nes-mcp --test havoc_mcp_read_line_oom -- --ignored` or `cargo test -p nes-desktop --test havoc_mcp_host_read_line_oom --features mcp-host -- --ignored`.
+😈 **Comment:** You assumed `\n` would eventually arrive from the network or stdio, enabling unbounded allocations. You were wrong.
