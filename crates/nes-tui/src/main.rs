@@ -609,25 +609,29 @@ fn should_refresh_protocol_frame(
     }
 }
 
-fn should_replace_protocol_state(
+struct ProtocolStateFlags {
     has_protocol_state: bool,
     pending_resize: bool,
     area_needs_resize: bool,
     paused: bool,
+}
+
+fn should_replace_protocol_state(
+    flags: ProtocolStateFlags,
     last_frame_update: Option<Instant>,
     now: Instant,
     interval: Duration,
 ) -> bool {
-    if pending_resize {
+    if flags.pending_resize {
         return false;
     }
-    if !has_protocol_state {
+    if !flags.has_protocol_state {
         return true;
     }
-    if area_needs_resize {
+    if flags.area_needs_resize {
         return true;
     }
-    !paused && should_refresh_protocol_frame(last_frame_update, now, interval)
+    !flags.paused && should_refresh_protocol_frame(last_frame_update, now, interval)
 }
 
 fn make_protocol_state(
@@ -693,10 +697,12 @@ fn render_video_region(frame: &mut Frame<'_>, runtime: &mut TuiRuntime, area: Re
                 .as_ref()
                 .and_then(|state| state.needs_resize(&protocol_image_resize(), area));
             let should_refresh = should_replace_protocol_state(
-                has_protocol_state,
-                renderer.pending_resize,
-                area_needs_resize.is_some(),
-                runtime.paused,
+                ProtocolStateFlags {
+                    has_protocol_state,
+                    pending_resize: renderer.pending_resize,
+                    area_needs_resize: area_needs_resize.is_some(),
+                    paused: runtime.paused,
+                },
                 *last_frame_update,
                 now,
                 PROTOCOL_FRAME_INTERVAL,
@@ -935,12 +941,12 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
 mod tests {
     use super::{
         CrosstermEventSource, EventSource, FrameTick, LoopAction, LoopTimer,
-        PROTOCOL_FRAME_INTERVAL, ProtocolRenderer, SystemLoopTimer, TARGET_FRAME_TIME, TuiRuntime,
-        VideoBackend, VideoBackendKind, drain_protocol_results, draw_frame, evaluate_frame_tick,
-        event_loop, fit_nes_viewport, format_rom_read_error, frame_rgba_to_rgba_image,
-        handle_runtime_key_event, key_is_pressed, key_pressed_state, make_protocol_state,
-        maybe_step_runtime_frame, parse_tui_args, protocol_image_resize, refresh_runtime_fps,
-        select_video_backend_kind, should_quit, should_refresh_protocol_frame,
+        PROTOCOL_FRAME_INTERVAL, ProtocolRenderer, ProtocolStateFlags, SystemLoopTimer,
+        TARGET_FRAME_TIME, TuiRuntime, VideoBackend, VideoBackendKind, drain_protocol_results,
+        draw_frame, evaluate_frame_tick, event_loop, fit_nes_viewport, format_rom_read_error,
+        frame_rgba_to_rgba_image, handle_runtime_key_event, key_is_pressed, key_pressed_state,
+        make_protocol_state, maybe_step_runtime_frame, parse_tui_args, protocol_image_resize,
+        refresh_runtime_fps, select_video_backend_kind, should_quit, should_refresh_protocol_frame,
         should_replace_protocol_state, usage_line, usage_message,
     };
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
@@ -1657,10 +1663,12 @@ mod tests {
     #[test]
     fn protocol_state_replace_skips_when_pending_resize_is_active() {
         assert!(!should_replace_protocol_state(
-            true,
-            true,
-            false,
-            false,
+            ProtocolStateFlags {
+                has_protocol_state: true,
+                pending_resize: true,
+                area_needs_resize: false,
+                paused: false,
+            },
             Some(Instant::now() - Duration::from_millis(34)),
             Instant::now(),
             Duration::from_millis(33)
@@ -1670,10 +1678,12 @@ mod tests {
     #[test]
     fn protocol_state_replace_happens_without_existing_state() {
         assert!(should_replace_protocol_state(
-            false,
-            false,
-            false,
-            true,
+            ProtocolStateFlags {
+                has_protocol_state: false,
+                pending_resize: false,
+                area_needs_resize: false,
+                paused: true,
+            },
             None,
             Instant::now(),
             Duration::from_millis(33)
@@ -1685,10 +1695,12 @@ mod tests {
         let now = Instant::now();
         let interval = Duration::from_millis(33);
         assert!(!should_replace_protocol_state(
-            true,
-            false,
-            false,
-            true,
+            ProtocolStateFlags {
+                has_protocol_state: true,
+                pending_resize: false,
+                area_needs_resize: false,
+                paused: true,
+            },
             Some(now - interval),
             now,
             interval
@@ -1700,10 +1712,12 @@ mod tests {
         let now = Instant::now();
         let interval = Duration::from_millis(33);
         assert!(!should_replace_protocol_state(
-            true,
-            false,
-            false,
-            false,
+            ProtocolStateFlags {
+                has_protocol_state: true,
+                pending_resize: false,
+                area_needs_resize: false,
+                paused: false,
+            },
             Some(now - Duration::from_millis(10)),
             now,
             interval
@@ -1713,10 +1727,12 @@ mod tests {
     #[test]
     fn protocol_state_replace_happens_when_area_needs_resize() {
         assert!(should_replace_protocol_state(
-            true,
-            false,
-            true,
-            true,
+            ProtocolStateFlags {
+                has_protocol_state: true,
+                pending_resize: false,
+                area_needs_resize: true,
+                paused: true,
+            },
             Some(Instant::now()),
             Instant::now(),
             Duration::from_millis(33)

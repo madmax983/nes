@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Fix Boolean Blindness in should_replace_protocol_state]**
+**Learning:** The function `should_replace_protocol_state` in `nes-tui` accepted 4 boolean parameters, causing boolean blindness and violating clippy's `fn_params_excessive_bools` lint.
+**Action:** Extracted the 4 booleans into a `ProtocolStateFlags` struct to improve readability and safety at call sites.
