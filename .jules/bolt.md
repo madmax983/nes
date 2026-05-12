@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Optimized RtaManager input log allocations]
+**Learning:** `RtaManager::new` was initializing `input_log` with `Vec::new()` without reserving capacity, causing repeated heap reallocations as the buffer filled up during speedrun drafts (which write every frame).
+**Action:** Used `Vec::with_capacity(54_000)` to pre-allocate enough space for 15 minutes of gameplay, effectively eliminating many reallocations.

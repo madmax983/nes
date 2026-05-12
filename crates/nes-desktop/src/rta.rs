@@ -834,7 +834,9 @@ impl RtaManager {
             split_counter: 0,
             split_events,
             triggers,
-            input_log: Vec::new(),
+            // **⚡ Bolt Optimization:** Pre-allocates space for 15 minutes of gameplay (54,000 frames)
+            // to avoid repeated heap reallocations during long speedruns when input logging is enabled.
+            input_log: Vec::with_capacity(54_000),
             runs_dir,
             artifacts_written: None,
             calibration,
