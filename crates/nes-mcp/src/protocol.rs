@@ -849,3 +849,68 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod protocol_mutants_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_rpc_error_mutants() {
+        let mut err = RpcError::parse_error("test");
+        err.data = Some(json!({"details": "bad JSON"}));
+        let val = err.into_json();
+        assert_eq!(val["data"], json!({"details": "bad JSON"}));
+        assert!(val.get("data").is_some(), "data must be present when Some");
+
+        let err2 = RpcError::invalid_request("test");
+        let val2 = err2.into_json();
+        assert!(val2.get("data").is_none(), "data must be absent when None");
+    }
+
+    #[test]
+    fn test_tool_input_schema_mutants() {
+        let schema = tool_input_schema("unknown_tool");
+        assert_eq!(schema, json!({
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }));
+
+        let t = tool_input_schema("set_breakpoint");
+        assert_eq!(t["required"], json!(["address"]));
+
+        let t = tool_input_schema("clear_breakpoint");
+        assert_eq!(t["required"], json!(["address"]));
+
+        let t = tool_input_schema("disassemble_at");
+        assert_eq!(t["required"], json!(["address"]));
+
+        let t = tool_input_schema("get_audio_chunk");
+        assert_eq!(t.get("required"), None); // It might not have required array
+
+        let t = tool_input_schema("load_state");
+        assert!(t["properties"]["slot"].is_object(), "load_state has slot");
+
+        let t = tool_input_schema("load_rom");
+        assert!(t["oneOf"].is_array());
+
+        let t = tool_input_schema("release_button");
+        assert_eq!(t["required"], json!(["button"]));
+
+        let t = tool_input_schema("export_6502_dsl_rom");
+        assert_eq!(t["required"], json!(["source", "output_path"]));
+
+        let t = tool_input_schema("export_6502_dsl_rom_base64");
+        assert_eq!(t["required"], json!(["source"]));
+
+        let t = tool_input_schema("assemble_6502_dsl");
+        assert_eq!(t["required"], json!(["source"]));
+
+        let t = tool_input_schema("load_6502_dsl");
+        assert_eq!(t["required"], json!(["source"]));
+
+        let t = tool_input_schema("get_frame");
+        assert_eq!(t.get("required"), None);
+    }
+}

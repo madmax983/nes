@@ -1172,3 +1172,91 @@ mod havoc_fuzz_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod dispatch_mutants_tests {
+    use super::*;
+
+    #[test]
+    fn test_dispatch_error_display() {
+        let err = DispatchError::InvalidParams("test_error".to_string());
+        assert_eq!(format!("{}", err), "invalid params: test_error");
+
+        let err = DispatchError::Core("core_error".to_string());
+        assert_eq!(format!("{}", err), "core command failed: core_error");
+
+        let err = DispatchError::Internal("internal_error".to_string());
+        assert_eq!(format!("{}", err), "internal error: internal_error");
+    }
+
+    #[test]
+    fn test_dispatch_tool_unhandled_paths() {
+        let mut core = nes_core::NesCore::new();
+        let mut params = ToolParams::new();
+        params.insert("address".into(), "0x8000".into());
+        params.insert("slot".into(), "test_slot".into());
+        params.insert("multiplier".into(), "1".into());
+        params.insert("button".into(), "A".into());
+        params.insert("bits".into(), "1".into());
+
+        let pause = dispatch_tool(&mut core, "pause", &ToolParams::new());
+        assert!(matches!(pause, Ok(DispatchOutput::Ack)));
+
+        let resume = dispatch_tool(&mut core, "resume", &ToolParams::new());
+        assert!(matches!(resume, Ok(DispatchOutput::Ack)));
+
+        let reset = dispatch_tool(&mut core, "reset", &ToolParams::new());
+        assert!(matches!(reset, Ok(DispatchOutput::Ack)));
+
+        let power = dispatch_tool(&mut core, "power_cycle", &ToolParams::new());
+        assert!(matches!(power, Ok(DispatchOutput::Ack)));
+
+        let spd = dispatch_tool(&mut core, "set_speed", &params);
+        assert!(matches!(spd, Ok(DispatchOutput::EmulatorState { .. })));
+
+        let scan = dispatch_tool(&mut core, "step_scanline", &ToolParams::new());
+        assert!(matches!(scan, Ok(DispatchOutput::CycleCount { .. })));
+
+        let step_frame = dispatch_tool(&mut core, "step_frame", &ToolParams::new());
+        assert!(matches!(step_frame, Ok(DispatchOutput::CycleCount { .. })));
+
+        let press = dispatch_tool(&mut core, "press_button", &params);
+        assert!(matches!(press, Ok(DispatchOutput::ControllerState { .. })));
+
+        let rel = dispatch_tool(&mut core, "release_button", &params);
+        assert!(matches!(rel, Ok(DispatchOutput::ControllerState { .. })));
+
+        let state = dispatch_tool(&mut core, "set_controller_state", &params);
+        assert!(matches!(state, Ok(DispatchOutput::ControllerState { .. })));
+
+        let p_frame = dispatch_tool(&mut core, "get_ppu_frame_counter", &ToolParams::new());
+        assert!(matches!(
+            p_frame,
+            Ok(DispatchOutput::PpuFrameCounter { .. })
+        ));
+
+        let p_oam = dispatch_tool(&mut core, "get_ppu_oam", &ToolParams::new());
+        assert!(matches!(p_oam, Ok(DispatchOutput::PpuOam { .. })));
+
+        let bkp = dispatch_tool(&mut core, "set_breakpoint", &params);
+        assert!(matches!(bkp, Err(DispatchError::UnsupportedTool(_))));
+
+        let cbkp = dispatch_tool(&mut core, "clear_breakpoint", &params);
+        assert!(matches!(cbkp, Err(DispatchError::UnsupportedTool(_))));
+
+        let dasm = dispatch_tool(&mut core, "disassemble_at", &params);
+        assert!(matches!(dasm, Err(DispatchError::UnsupportedTool(_))));
+
+        let get_state = dispatch_tool(&mut core, "get_emulator_state", &ToolParams::new());
+        assert!(matches!(
+            get_state,
+            Ok(DispatchOutput::EmulatorState { .. })
+        ));
+
+        let r_mem = dispatch_tool(&mut core, "read_memory", &params);
+        assert!(matches!(r_mem, Ok(DispatchOutput::Memory { .. })));
+
+        // Assert unhandled
+        assert!(dispatch_tool(&mut core, "non_existent_tool", &ToolParams::new()).is_err());
+    }
+}

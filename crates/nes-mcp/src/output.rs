@@ -484,3 +484,24 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod output_mutants_tests {
+    use super::*;
+
+    #[test]
+    fn test_frame_chunk_not_found() {
+        let _guard = reset_output_state_for_test();
+        let chunk = frame_chunk(u64::MAX);
+        assert!(chunk.is_some());
+        assert_eq!(chunk.unwrap().seq, u64::MAX);
+    }
+
+    #[test]
+    fn test_audio_chunk_not_found() {
+        let _guard = reset_output_state_for_test();
+        let chunk = audio_chunk(u64::MAX);
+        assert!(chunk.is_some());
+        assert_eq!(chunk.unwrap().seq, u64::MAX);
+    }
+}
