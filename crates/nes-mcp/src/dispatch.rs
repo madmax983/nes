@@ -527,10 +527,7 @@ fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, Dis
         ))
     })?;
 
-    let prg_rom_bytes = rom
-        .get(4)
-        .map(|banks| usize::from(*banks) * 16 * 1024)
-        .unwrap_or(0);
+    let prg_rom_bytes = extract_prg_rom_bytes(&rom);
     Ok(DispatchOutput::DslRomExported {
         path: output_path,
         bytes: rom.len(),
@@ -544,10 +541,7 @@ fn handle_export_6502_dsl_rom_base64(params: &ToolParams) -> Result<DispatchOutp
     let options = parse_dsl_rom_options(params)?;
     let rom = nes_dsl::build_ines_nrom_rom(source, &options)
         .map_err(|err| DispatchError::InvalidParams(format!("dsl rom build failed: {err}")))?;
-    let prg_rom_bytes = rom
-        .get(4)
-        .map(|banks| usize::from(*banks) * 16 * 1024)
-        .unwrap_or(0);
+    let prg_rom_bytes = extract_prg_rom_bytes(&rom);
     Ok(DispatchOutput::DslRomExportedBase64 {
         rom_base64: encode_base64(rom.as_slice()),
         bytes: rom.len(),
@@ -969,6 +963,12 @@ fn decode_hex_nibble(ch: u8, index: usize) -> Result<u8, DispatchError> {
             ch as char, index
         ))),
     }
+}
+
+fn extract_prg_rom_bytes(rom: &[u8]) -> usize {
+    rom.get(4)
+        .map(|banks| usize::from(*banks) * 16 * 1024)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

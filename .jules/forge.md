@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extracting duplicate PRG ROM bytes logic**
+**Learning:** Found duplicate identical `let prg_rom_bytes = rom.get(4).map(|banks| usize::from(*banks) * 16 * 1024).unwrap_or(0);` logic in `crates/nes-mcp/src/dispatch.rs` for DSL ROM exporting handlers.
+**Action:** Extracted this into a pure `extract_prg_rom_bytes` helper function, removing duplication and centralizing the math logic and magic index.
