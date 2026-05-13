@@ -837,12 +837,15 @@ impl Apu {
         self.clock_frame_sequencer();
         let dmc_request = self.clock_timers();
 
-        let raw_sample = self.raw_mixed_sample(paused);
         self.sample_accumulator = self
             .sample_accumulator
             .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
         while self.sample_accumulator >= CPU_CLOCK_HZ {
             self.sample_accumulator -= CPU_CLOCK_HZ;
+            // **⚡ Bolt Optimization:** Defer expensive per-sample computations inside the
+            // rate-limiting branch. This prevents executing `raw_mixed_sample` pointlessly
+            // on every single CPU cycle when we only output samples at 44.1kHz.
+            let raw_sample = self.raw_mixed_sample(paused);
             let filtered_sample = self.apply_output_filters(raw_sample);
             self.samples.push_back(filtered_sample);
             if self.samples.len() > MAX_QUEUED_SAMPLES {
