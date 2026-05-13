@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -271,6 +272,8 @@ fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), Strin
     loop {
         line.clear();
         let bytes = reader
+            .by_ref()
+            .take(8192)
             .read_line(&mut line)
             .map_err(|err| format!("failed to read relay message: {err}"))?;
         if bytes == 0 {

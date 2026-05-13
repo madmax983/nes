@@ -12,6 +12,7 @@
 //! The main thread must regularly call `McpHost::drain` to apply these queued
 //! commands to the emulator state.
 
+use std::io::Read;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -361,6 +362,8 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
         line.clear();
 
         let read = reader
+            .by_ref()
+            .take(8192)
             .read_line(&mut line)
             .map_err(|err| format!("failed reading header line: {err}"))?;
         if read == 0 {

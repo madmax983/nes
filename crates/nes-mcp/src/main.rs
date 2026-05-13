@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
@@ -283,6 +284,8 @@ fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpE
         line.clear();
 
         let read = reader
+            .by_ref()
+            .take(8192)
             .read_line(&mut line)
             .map_err(|err| McpError::Protocol(format!("failed reading header line: {err}")))?;
         if read == 0 {

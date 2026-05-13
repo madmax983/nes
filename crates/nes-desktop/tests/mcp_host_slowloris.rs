@@ -1,8 +1,11 @@
+#![cfg(feature = "mcp-host")]
+
+use nes_desktop::mcp_host::read_framed_message;
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
-use nes_desktop::mcp_host::{McpHost, read_framed_message};
+use nes_desktop::mcp_host::McpHost;
 
 #[test]
 fn havoc_mcp_slowloris_dos() {
@@ -28,16 +31,16 @@ fn havoc_mcp_slowloris_dos() {
         "method": "ping"
     });
 
-    let payload = serde_json::to_vec(&ping_request).unwrap();
+    let payload = serde_json::to_vec(&ping_request).expect("serialize payload");
     stream2
         .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
-        .unwrap();
-    stream2.write_all(&payload).unwrap();
-    stream2.flush().unwrap();
+        .expect("write header");
+    stream2.write_all(&payload).expect("write payload");
+    stream2.flush().expect("flush stream");
 
     stream2
         .set_read_timeout(Some(Duration::from_secs(2)))
-        .unwrap();
+        .expect("set read timeout");
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
@@ -51,6 +54,35 @@ fn havoc_mcp_slowloris_dos() {
         "Second client blocked waiting for first client!"
     );
 
-    let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&response).expect("deserialize response");
     assert_eq!(value["result"], serde_json::json!({}));
+}
+
+#[test]
+fn havoc_mcp_content_length_oom() {
+    use std::io::Cursor;
+    let payload = b"Content-Length: 18446744073709551615\r\n\r\n{}";
+    let mut cursor = Cursor::new(payload);
+    let result = read_framed_message(&mut cursor);
+    assert!(result.is_err());
+    assert!(
+        result
+            .expect_err("test setup failed")
+            .contains("exceeds maximum allowed size")
+    );
+}
+
+#[test]
+fn havoc_mcp_read_line_oom() {
+    use std::io::Cursor;
+    let mut payload = b"Content-Length: 2\r\n".to_vec();
+    // Simulate an attacker sending a never-ending header line
+    payload.resize(payload.len() + 10 * 1024, b'A');
+
+    let mut cursor = Cursor::new(&payload);
+    let result = read_framed_message(&mut cursor);
+    assert!(
+        result.is_err(),
+        "Expected an error from an overly long header line"
+    );
 }

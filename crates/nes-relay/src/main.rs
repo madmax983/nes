@@ -7,6 +7,7 @@
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
+use std::io::Read;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -295,6 +296,8 @@ fn read_client_message(
 ) -> Result<Option<ClientMessage>, String> {
     line.clear();
     let bytes_read = reader
+        .by_ref()
+        .take(8192)
         .read_line(line)
         .map_err(|err| format!("failed to read socket line: {err}"))?;
     if bytes_read == 0 {
