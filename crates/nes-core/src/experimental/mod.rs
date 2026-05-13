@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// A brute forcer to explore deterministic controller input timelines.
+#[cfg(feature = "nova")]
+pub mod tas_brute_forcer;
