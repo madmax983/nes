@@ -130,8 +130,16 @@ fn test_stdio_mcp_valid_arguments() {
         .unwrap_or(false);
     assert!(!is_error, "Should not be an error");
 
-    let content = result.get("content").expect("valid test data").as_array().expect("valid test data");
-    let text = content[0].get("text").expect("valid test data").as_str().expect("valid test data");
+    let content = result
+        .get("content")
+        .expect("valid test data")
+        .as_array()
+        .expect("valid test data");
+    let text = content[0]
+        .get("text")
+        .expect("valid test data")
+        .as_str()
+        .expect("valid test data");
     assert!(text.contains("ok"), "Output should contain ok");
 }
 

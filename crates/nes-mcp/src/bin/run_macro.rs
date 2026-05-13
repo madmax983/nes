@@ -173,8 +173,11 @@ mod tests {
         let rom_path = temp_dir.join("dummy.nes");
         std::fs::write(&rom_path, vec![0; 16 + 16384]).expect("valid test data");
 
-        let err = run(rom_path.to_str().expect("valid test data"), "__missing_script__.txt")
-            .expect_err("missing script should fail");
+        let err = run(
+            rom_path.to_str().expect("valid test data"),
+            "__missing_script__.txt",
+        )
+        .expect_err("missing script should fail");
         assert!(err.contains("Could not find the macro script at"));
         assert!(err.contains("__missing_script__.txt"));
 

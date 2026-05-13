@@ -32,7 +32,9 @@ fn havoc_mcp_slowloris_dos() {
     stream2
         .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
         .expect("valid connection or payload");
-    stream2.write_all(&payload).expect("valid connection or payload");
+    stream2
+        .write_all(&payload)
+        .expect("valid connection or payload");
     stream2.flush().expect("valid connection or payload");
 
     stream2
@@ -51,6 +53,7 @@ fn havoc_mcp_slowloris_dos() {
         "Second client blocked waiting for first client!"
     );
 
-    let value: serde_json::Value = serde_json::from_slice(&response).expect("valid connection or payload");
+    let value: serde_json::Value =
+        serde_json::from_slice(&response).expect("valid connection or payload");
     assert_eq!(value["result"], serde_json::json!({}));
 }
