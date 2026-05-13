@@ -40,7 +40,7 @@ pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 ///     }
 /// }"#;
 ///
-/// let request: RpcRequest = serde_json::from_str(json_payload).unwrap();
+/// let request: RpcRequest = serde_json::from_str(json_payload).expect("valid test data");
 /// assert_eq!(request.method, "tools/call");
 /// assert_eq!(request.id, Some(json!(1)));
 /// ```
@@ -384,7 +384,7 @@ pub fn dispatch_output_value(output: DispatchOutput) -> Value {
 /// use nes_mcp::protocol::tool_input_schema;
 ///
 /// let schema = tool_input_schema("set_controller_state");
-/// assert!(schema.get("properties").unwrap().get("bits").is_some());
+/// assert!(schema.get("properties").expect("valid test data").get("bits").is_some());
 /// ```
 #[must_use]
 pub fn tool_input_schema(tool_name: &str) -> Value {

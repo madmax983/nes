@@ -265,7 +265,7 @@ where
 /// use nes_mcp::{frame_chunk, publish_frame};
 ///
 /// publish_frame(256, 240, vec![0; 256 * 240 * 4]);
-/// let chunk = frame_chunk(1).unwrap();
+/// let chunk = frame_chunk(1).expect("valid test data");
 /// assert_eq!(chunk.rgba.len(), 256 * 240 * 4);
 /// ```
 #[must_use]
@@ -291,7 +291,7 @@ pub fn frame_chunk(requested_seq: u64) -> Option<FrameChunk> {
 /// use nes_mcp::{audio_chunk, publish_audio};
 ///
 /// publish_audio(vec![0; 735]);
-/// let chunk = audio_chunk(1).unwrap();
+/// let chunk = audio_chunk(1).expect("valid test data");
 /// assert_eq!(chunk.samples.len(), 735);
 /// ```
 #[must_use]
@@ -422,7 +422,7 @@ mod tests {
         });
         let meta = latest_output_metadata();
         assert_eq!(meta.frame_seq, initial_meta.frame_seq + 1);
-        let chunk = frame_chunk(meta.frame_seq).unwrap();
+        let chunk = frame_chunk(meta.frame_seq).expect("valid test data");
         assert_eq!(chunk.rgba[0], 99);
     }
 
@@ -436,7 +436,7 @@ mod tests {
         });
         let meta = latest_output_metadata();
         assert_eq!(meta.audio_seq, initial_meta.audio_seq + 1);
-        let chunk = audio_chunk(meta.audio_seq).unwrap();
+        let chunk = audio_chunk(meta.audio_seq).expect("valid test data");
         assert_eq!(chunk.samples[0], 42);
     }
 

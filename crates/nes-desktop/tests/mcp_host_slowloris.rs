@@ -28,16 +28,16 @@ fn havoc_mcp_slowloris_dos() {
         "method": "ping"
     });
 
-    let payload = serde_json::to_vec(&ping_request).unwrap();
+    let payload = serde_json::to_vec(&ping_request).expect("valid connection or payload");
     stream2
         .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
-        .unwrap();
-    stream2.write_all(&payload).unwrap();
-    stream2.flush().unwrap();
+        .expect("valid connection or payload");
+    stream2.write_all(&payload).expect("valid connection or payload");
+    stream2.flush().expect("valid connection or payload");
 
     stream2
         .set_read_timeout(Some(Duration::from_secs(2)))
-        .unwrap();
+        .expect("valid connection or payload");
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
@@ -51,6 +51,6 @@ fn havoc_mcp_slowloris_dos() {
         "Second client blocked waiting for first client!"
     );
 
-    let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&response).expect("valid connection or payload");
     assert_eq!(value["result"], serde_json::json!({}));
 }

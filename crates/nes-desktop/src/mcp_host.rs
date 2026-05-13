@@ -44,7 +44,7 @@ const TOOL_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 /// use nes_core::NesCore;
 ///
 /// // Start the server on an ephemeral port
-/// let host = McpHost::start("127.0.0.1:0").unwrap();
+/// let host = McpHost::start("127.0.0.1:0").expect("valid test data");
 /// println!("Listening on {}", host.bind_addr());
 ///
 /// // The emulator core must regularly drain requests
@@ -80,7 +80,7 @@ impl McpHost {
     /// use nes_desktop::mcp_host::McpHost;
     ///
     /// // Start the server on an ephemeral port
-    /// let host = McpHost::start("127.0.0.1:0").unwrap();
+    /// let host = McpHost::start("127.0.0.1:0").expect("valid test data");
     /// println!("Bound to {}", host.bind_addr());
     /// ```
     pub fn start(bind_addr: &str) -> Result<Self, String> {
@@ -112,7 +112,7 @@ impl McpHost {
     /// ```
     /// use nes_desktop::mcp_host::McpHost;
     ///
-    /// let host = McpHost::start("127.0.0.1:0").unwrap();
+    /// let host = McpHost::start("127.0.0.1:0").expect("valid test data");
     /// let addr = host.bind_addr();
     /// assert!(addr.starts_with("127.0.0.1:"));
     /// ```
@@ -135,7 +135,7 @@ impl McpHost {
     /// use nes_desktop::mcp_host::McpHost;
     /// use nes_core::NesCore;
     ///
-    /// let host = McpHost::start("127.0.0.1:0").unwrap();
+    /// let host = McpHost::start("127.0.0.1:0").expect("valid test data");
     /// let mut core = NesCore::new();
     ///
     /// // Typically called inside the main emulation loop
@@ -350,8 +350,8 @@ fn handle_tools_call(
 /// # use std::io::Cursor;
 /// let data = b"Content-Length: 13\r\n\r\n{\"key\":\"val\"}";
 /// let mut reader = Cursor::new(data);
-/// let result = read_framed_message(&mut reader).unwrap();
-/// assert_eq!(result.unwrap(), b"{\"key\":\"val\"}");
+/// let result = read_framed_message(&mut reader).expect("valid test data");
+/// assert_eq!(result.expect("valid test data"), b"{\"key\":\"val\"}");
 /// ```
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
@@ -678,7 +678,7 @@ mod coverage_tests {
 
     #[test]
     fn test_mcp_host_start() {
-        let host = McpHost::start("127.0.0.1:0").unwrap();
+        let host = McpHost::start("127.0.0.1:0").expect("valid test data");
         assert!(host.bind_addr().starts_with("127.0.0.1:"));
     }
 

@@ -47,7 +47,7 @@ fn run_macro_with_missing_rom_prints_styled_error() {
 fn run_macro_with_missing_script_prints_styled_error() {
     let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_missing_script_cli_test");
     let _ = std::fs::remove_dir_all(&temp_dir);
-    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::create_dir_all(&temp_dir).expect("valid test data");
     let rom_path = create_dummy_rom_file(&temp_dir);
 
     let output = Command::new(run_macro_bin())
@@ -98,7 +98,7 @@ fn create_dummy_rom_file(dir: &std::path::Path) -> std::path::PathBuf {
     rom_bytes[0..4].copy_from_slice(b"NES\x1A"); // Magic string
     rom_bytes[4] = 1; // PRG ROM Size (16KB)
     rom_bytes[5] = 0; // CHR ROM Size (0KB - uses RAM)
-    std::fs::write(&path, &rom_bytes).unwrap();
+    std::fs::write(&path, &rom_bytes).expect("valid test data");
     path
 }
 
@@ -106,12 +106,12 @@ fn create_dummy_rom_file(dir: &std::path::Path) -> std::path::PathBuf {
 fn run_macro_with_valid_script_prints_progress() {
     let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_test");
     let _ = std::fs::remove_dir_all(&temp_dir);
-    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::create_dir_all(&temp_dir).expect("valid test data");
 
     let rom_path = create_dummy_rom_file(&temp_dir);
 
     let script_path = temp_dir.join("script.txt");
-    std::fs::write(&script_path, "WAIT 1\nPRESS A\nRELEASE A\n").unwrap();
+    std::fs::write(&script_path, "WAIT 1\nPRESS A\nRELEASE A\n").expect("valid test data");
 
     let output = Command::new(run_macro_bin())
         .arg(&rom_path)
@@ -135,12 +135,12 @@ fn run_macro_with_valid_script_prints_progress() {
 fn run_macro_with_empty_script_prints_zero_progress() {
     let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_empty_test");
     let _ = std::fs::remove_dir_all(&temp_dir);
-    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::create_dir_all(&temp_dir).expect("valid test data");
 
     let rom_path = create_dummy_rom_file(&temp_dir);
 
     let script_path = temp_dir.join("empty.txt");
-    std::fs::write(&script_path, "").unwrap();
+    std::fs::write(&script_path, "").expect("valid test data");
 
     let output = Command::new(run_macro_bin())
         .arg(&rom_path)

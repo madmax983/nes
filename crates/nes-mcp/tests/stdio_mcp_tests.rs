@@ -78,7 +78,7 @@ fn test_stdio_mcp_invalid_arguments_type() {
 
     let resp = &responses[0];
     if resp.get("error").is_none() {
-        let result = resp.get("result").unwrap();
+        let result = resp.get("result").expect("valid test data");
         let is_error = result
             .get("isError")
             .and_then(|v| v.as_bool())
@@ -123,15 +123,15 @@ fn test_stdio_mcp_valid_arguments() {
     assert_eq!(responses.len(), 1);
 
     let resp = &responses[0];
-    let result = resp.get("result").unwrap();
+    let result = resp.get("result").expect("valid test data");
     let is_error = result
         .get("isError")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     assert!(!is_error, "Should not be an error");
 
-    let content = result.get("content").unwrap().as_array().unwrap();
-    let text = content[0].get("text").unwrap().as_str().unwrap();
+    let content = result.get("content").expect("valid test data").as_array().expect("valid test data");
+    let text = content[0].get("text").expect("valid test data").as_str().expect("valid test data");
     assert!(text.contains("ok"), "Output should contain ok");
 }
 

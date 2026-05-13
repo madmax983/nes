@@ -41,7 +41,7 @@ fn havoc_crash_mcp_dos_wait_frames() {
         // The trigger: A wait command with u64::MAX will hang the thread forever.
         let script = "WAIT 18446744073709551615";
         let _ = execute_macro_script(&mut core, script, None);
-        tx.send(()).unwrap();
+        tx.send(()).expect("valid test data");
     });
 
     // Wait for up to 1 second. If it doesn't finish, we've successfully proven the DoS.

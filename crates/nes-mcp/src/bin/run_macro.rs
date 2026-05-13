@@ -169,11 +169,11 @@ mod tests {
         // We need a dummy ROM file to pass the first check
         let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_missing_script_test");
         let _ = std::fs::remove_dir_all(&temp_dir);
-        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::fs::create_dir_all(&temp_dir).expect("valid test data");
         let rom_path = temp_dir.join("dummy.nes");
-        std::fs::write(&rom_path, vec![0; 16 + 16384]).unwrap();
+        std::fs::write(&rom_path, vec![0; 16 + 16384]).expect("valid test data");
 
-        let err = run(rom_path.to_str().unwrap(), "__missing_script__.txt")
+        let err = run(rom_path.to_str().expect("valid test data"), "__missing_script__.txt")
             .expect_err("missing script should fail");
         assert!(err.contains("Could not find the macro script at"));
         assert!(err.contains("__missing_script__.txt"));

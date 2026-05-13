@@ -159,12 +159,12 @@ fn every_catalog_tool_has_dispatch_path() {
 #[test]
 fn press_and_release_button_tools_match_direct_commands() {
     let mut via_core = NesCore::new();
-    via_core.execute(Command::PressButton(Button::A)).unwrap();
-    via_core.execute(Command::ReleaseButton(Button::A)).unwrap();
+    via_core.execute(Command::PressButton(Button::A)).expect("valid test data");
+    via_core.execute(Command::ReleaseButton(Button::A)).expect("valid test data");
 
     let mut via_mcp = NesCore::new();
-    dispatch_tool(&mut via_mcp, "press_button", &params(&[("button", "A")])).unwrap();
-    dispatch_tool(&mut via_mcp, "release_button", &params(&[("button", "A")])).unwrap();
+    dispatch_tool(&mut via_mcp, "press_button", &params(&[("button", "A")])).expect("valid test data");
+    dispatch_tool(&mut via_mcp, "release_button", &params(&[("button", "A")])).expect("valid test data");
 
     assert_eq!(via_core.state_hash(), via_mcp.state_hash());
 }
@@ -177,7 +177,7 @@ fn controller_tools_support_player2_argument() {
         "set_controller_state",
         &params(&[("bits", "0xA5"), ("player", "2")]),
     )
-    .unwrap();
+    .expect("valid test data");
     match output {
         DispatchOutput::ControllerState { controller_bits } => assert_eq!(controller_bits, 0xA5),
         other => panic!("unexpected set_controller_state output: {other:?}"),
@@ -190,7 +190,7 @@ fn controller_tools_support_player2_argument() {
         "press_button",
         &params(&[("button", "A"), ("player", "2")]),
     )
-    .unwrap();
+    .expect("valid test data");
     assert_eq!(
         core.controller2_bits() & Button::A.bit_mask(),
         Button::A.bit_mask()
@@ -201,7 +201,7 @@ fn controller_tools_support_player2_argument() {
         "release_button",
         &params(&[("button", "A"), ("player", "2")]),
     )
-    .unwrap();
+    .expect("valid test data");
     assert_eq!(core.controller2_bits() & Button::A.bit_mask(), 0);
 }
 
@@ -209,10 +209,10 @@ fn controller_tools_support_player2_argument() {
 fn read_registers_and_memory_tools_reflect_core_state() {
     let mut core = NesCore::new();
     core.load_cpu_bytes(0xC000, &[0xA9, 0x7F]);
-    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).expect("valid test data");
 
-    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).unwrap();
-    let mem = dispatch_tool(&mut core, "read_memory", &params(&[("address", "0xC001")])).unwrap();
+    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).expect("valid test data");
+    let mem = dispatch_tool(&mut core, "read_memory", &params(&[("address", "0xC001")])).expect("valid test data");
 
     match regs {
         DispatchOutput::Registers { a, pc, .. } => {
@@ -231,10 +231,10 @@ fn read_registers_and_memory_tools_reflect_core_state() {
 #[test]
 fn get_ppu_frame_counter_reflects_core_progress() {
     let mut core = NesCore::new();
-    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).unwrap();
-    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).expect("valid test data");
+    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).expect("valid test data");
 
-    let output = dispatch_tool(&mut core, "get_ppu_frame_counter", &ToolParams::new()).unwrap();
+    let output = dispatch_tool(&mut core, "get_ppu_frame_counter", &ToolParams::new()).expect("valid test data");
     match output {
         DispatchOutput::PpuFrameCounter { frame_counter } => assert!(frame_counter >= 1),
         other => panic!("unexpected get_ppu_frame_counter output: {other:?}"),
@@ -244,7 +244,7 @@ fn get_ppu_frame_counter_reflects_core_progress() {
 #[test]
 fn get_fps_returns_fps_output_variant() {
     let mut core = NesCore::new();
-    let output = dispatch_tool(&mut core, "get_fps", &ToolParams::new()).unwrap();
+    let output = dispatch_tool(&mut core, "get_fps", &ToolParams::new()).expect("valid test data");
     match output {
         DispatchOutput::Fps { fps_milli } => assert!(fps_milli > 0),
         other => panic!("unexpected get_fps output: {other:?}"),
@@ -254,7 +254,7 @@ fn get_fps_returns_fps_output_variant() {
 #[test]
 fn get_frame_reports_full_rgba_payload_size() {
     let mut core = NesCore::new();
-    let output = dispatch_tool(&mut core, "get_frame", &ToolParams::new()).unwrap();
+    let output = dispatch_tool(&mut core, "get_frame", &ToolParams::new()).expect("valid test data");
     match output {
         DispatchOutput::Frame { bytes, .. } => assert_eq!(bytes, 256 * 240 * 4),
         other => panic!("unexpected get_frame output: {other:?}"),
@@ -272,7 +272,7 @@ fn capture_frame_writes_ppm_file() {
         "capture_frame",
         &params(&[("path", path_str.as_str())]),
     )
-    .unwrap();
+    .expect("valid test data");
     match output {
         DispatchOutput::FrameCaptured {
             path: out_path,
@@ -301,7 +301,7 @@ fn capture_frame_writes_bmp_file() {
         "capture_frame",
         &params(&[("path", path_str.as_str())]),
     )
-    .unwrap();
+    .expect("valid test data");
     match output {
         DispatchOutput::FrameCaptured {
             path: out_path,
@@ -322,7 +322,7 @@ fn capture_frame_writes_bmp_file() {
 #[test]
 fn get_audio_chunk_reports_expected_sample_count() {
     let mut core = NesCore::new();
-    let output = dispatch_tool(&mut core, "get_audio_chunk", &ToolParams::new()).unwrap();
+    let output = dispatch_tool(&mut core, "get_audio_chunk", &ToolParams::new()).expect("valid test data");
     match output {
         DispatchOutput::Audio { samples, .. } => assert_eq!(samples, AUDIO_CHUNK_SAMPLES),
         other => panic!("unexpected get_audio_chunk output: {other:?}"),
@@ -333,14 +333,14 @@ fn get_audio_chunk_reports_expected_sample_count() {
 fn save_and_load_state_round_trip_restores_state_hash() {
     let mut core = NesCore::new();
     core.load_cpu_bytes(0xC000, &[0xEA]);
-    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
-    dispatch_tool(&mut core, "save_state", &params(&[("slot", "slot0")])).unwrap();
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).expect("valid test data");
+    dispatch_tool(&mut core, "save_state", &params(&[("slot", "slot0")])).expect("valid test data");
     let saved_hash = core.state_hash();
 
-    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_frame", &ToolParams::new()).expect("valid test data");
     assert_ne!(saved_hash, core.state_hash());
 
-    dispatch_tool(&mut core, "load_state", &params(&[("slot", "slot0")])).unwrap();
+    dispatch_tool(&mut core, "load_state", &params(&[("slot", "slot0")])).expect("valid test data");
     assert_eq!(saved_hash, core.state_hash());
 }
 
@@ -362,7 +362,7 @@ fn load_rom_tool_maps_program_into_core_execution_path() {
     let mut core = NesCore::new();
     let rom_hex = hex_encode(&sample_nrom16_ines());
 
-    let output = dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).unwrap();
+    let output = dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).expect("valid test data");
     match output {
         DispatchOutput::RomLoaded {
             mapper_id,
@@ -376,9 +376,9 @@ fn load_rom_tool_maps_program_into_core_execution_path() {
         other => panic!("unexpected load_rom output: {other:?}"),
     }
 
-    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).expect("valid test data");
 
-    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).unwrap();
+    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).expect("valid test data");
     match regs {
         DispatchOutput::Registers { a, pc, .. } => {
             assert_eq!(a, 0x42);
@@ -393,7 +393,7 @@ fn load_rom_tool_supports_uxrom_boot_mapping() {
     let mut core = NesCore::new();
     let rom_hex = hex_encode(&sample_uxrom3_ines());
 
-    let output = dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).unwrap();
+    let output = dispatch_tool(&mut core, "load_rom", &params(&[("rom_hex", &rom_hex)])).expect("valid test data");
     match output {
         DispatchOutput::RomLoaded {
             mapper_id,
@@ -407,14 +407,14 @@ fn load_rom_tool_supports_uxrom_boot_mapping() {
         other => panic!("unexpected load_rom output: {other:?}"),
     }
 
-    let low = dispatch_tool(&mut core, "read_memory", &params(&[("address", "0x8001")])).unwrap();
+    let low = dispatch_tool(&mut core, "read_memory", &params(&[("address", "0x8001")])).expect("valid test data");
     match low {
         DispatchOutput::Memory { value, .. } => assert_eq!(value, 0x11),
         other => panic!("unexpected memory output: {other:?}"),
     }
 
-    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
-    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).expect("valid test data");
+    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).expect("valid test data");
     match regs {
         DispatchOutput::Registers { a, pc, .. } => {
             assert_eq!(a, 0x99);
@@ -435,7 +435,7 @@ fn assemble_6502_dsl_reports_expected_metadata() {
             ".bank 1\nRESET:\n  LDA #$42\n  JMP RESET\n.reset RESET\n",
         )]),
     )
-    .unwrap();
+    .expect("valid test data");
 
     match output {
         DispatchOutput::DslAssembled {
@@ -463,7 +463,7 @@ fn load_6502_dsl_builds_and_loads_into_core() {
             ".bank 1\nRESET:\n  LDA #$7F\n  JMP RESET\n.reset RESET\n",
         )]),
     )
-    .unwrap();
+    .expect("valid test data");
     match output {
         DispatchOutput::DslRomLoaded {
             mapper_id,
@@ -478,8 +478,8 @@ fn load_6502_dsl_builds_and_loads_into_core() {
         other => panic!("unexpected load_6502_dsl output: {other:?}"),
     }
 
-    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).unwrap();
-    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).unwrap();
+    dispatch_tool(&mut core, "step_cpu", &ToolParams::new()).expect("valid test data");
+    let regs = dispatch_tool(&mut core, "read_registers", &ToolParams::new()).expect("valid test data");
     match regs {
         DispatchOutput::Registers { a, pc, .. } => {
             assert_eq!(a, 0x7F);
@@ -506,7 +506,7 @@ fn export_6502_dsl_rom_writes_ines_file() {
             ("output_path", path_str.as_str()),
         ]),
     )
-    .unwrap();
+    .expect("valid test data");
 
     match output {
         DispatchOutput::DslRomExported {
@@ -540,7 +540,7 @@ fn export_6502_dsl_rom_base64_returns_ines_payload() {
             ".bank 1\nRESET:\n  LDA #$22\n  JMP RESET\n.reset RESET\n",
         )]),
     )
-    .unwrap();
+    .expect("valid test data");
 
     match output {
         DispatchOutput::DslRomExportedBase64 {

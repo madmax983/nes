@@ -17,7 +17,7 @@ fn havoc_test_mutex_poison() {
             });
         });
 
-        tx.send(()).unwrap();
+        tx.send(()).expect("valid test data");
     });
 
     // Wait for the background thread to panic

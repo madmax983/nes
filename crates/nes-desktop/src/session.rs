@@ -161,8 +161,8 @@ mod tests {
     fn apply_session_cheats_applies_enabled_codes() {
         let mut core = NesCore::new();
         let mut cheats = SessionCheats::new();
-        cheats.add("GOSSIP").unwrap();
-        apply_session_cheats(&mut core, &cheats).unwrap();
+        cheats.add("GOSSIP").expect("valid test data");
+        apply_session_cheats(&mut core, &cheats).expect("valid test data");
         assert_eq!(core.cheat_codes().len(), 1);
     }
 
@@ -191,7 +191,7 @@ mod tests {
             slot_metadata: vec![],
         };
         // Expect loading metadata to succeed, producing 5 empty metadata objects
-        refresh_slot_metadata(&mut session).unwrap();
+        refresh_slot_metadata(&mut session).expect("valid test data");
         assert_eq!(session.slot_metadata.len(), 5);
         assert_eq!(session.slot_metadata[0].status, SaveSlotStatus::Empty);
     }
