@@ -1,0 +1,9 @@
+👺 Havoc: Unbounded read_line OOM vulnerabilities
+
+🧨 **The Trigger:** Malicious clients can send infinite byte streams without newlines over TCP/stdio (`read_line`), which causes the host memory buffer to expand indefinitely until an Out of Memory panic kills the server.
+
+📉 **The Stack Trace:** thread 'main' panicked at 'OOM simulated: read_line buffered 10485760 bytes without a newline'
+
+🧪 **Reproduction:** Run `cargo test --test havoc_oom --features mcp-host`
+
+😈 **Comment:** You assumed every network packet would gracefully end with `\n`. The chaos monkey doesn't type `\n`. It types `A` forever until your RAM begs for mercy.

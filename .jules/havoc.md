@@ -98,3 +98,13 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2024-05-13 - Unbounded read_line creates OOM vulnerability
+
+**The Trigger:** Malicious clients can send infinite byte streams without newlines over TCP (`read_line`), which causes the host memory buffer to expand indefinitely until an Out of Memory panic kills the server.
+**The Stack Trace:**
+```
+thread 'main' panicked at 'OOM simulated: read_line buffered 10485760 bytes without a newline'
+```
+**Reproduction:** Create a `TcpStream`, connect to `nes-relay`, `nes-mcp`, or `nes-desktop` netplay server port, and continuously write `b'A'` chunks without newlines in an infinite loop.
+**Comment:** You assumed every network packet would gracefully end with `\n`. The chaos monkey doesn't type `\n`. It types `A` forever until your RAM begs for mercy.
