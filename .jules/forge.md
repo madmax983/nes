@@ -51,3 +51,8 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+
+**Extract `execute_app_action` match arms into helpers**
+**Learning:** `nes-desktop`'s `execute_app_action` function had grown to over 130 lines, suffering from 'God Function' smell and violating the `clippy::too_many_lines` rule. It nested significant business logic and state modifications into a single large match block.
+**Action:** Extracted each `AppAction` variant's logic into dedicated, clearly-named helper functions (`execute_toggle_overlay`, `execute_resume`, `execute_open_cheats`, etc.) to flatten the structure and dramatically improve readability. Also extracted the RTA initialization logic from the `run` function into an `initialize_rta_manager` helper, further reducing lines in `main.rs`.

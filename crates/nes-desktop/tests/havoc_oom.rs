@@ -1,6 +1,8 @@
 #[cfg(feature = "mcp-host")]
 #[test]
+#[cfg(feature = "mcp-host")]
 fn havoc_mcp_host_oom() {
+    #[cfg(feature = "mcp-host")]
     use nes_desktop::mcp_host::read_framed_message;
     use std::io::BufReader;
 

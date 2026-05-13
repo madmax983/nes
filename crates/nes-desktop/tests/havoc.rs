@@ -34,6 +34,7 @@ proptest! {
 #[test]
 #[should_panic(expected = "capacity overflow")]
 #[ignore = "havoc target"]
+#[cfg(feature = "mcp-host")]
 fn havoc_mcp_host_oom_on_massive_content_length() {
     use std::io::{BufReader, Cursor};
     // The vulnerability is in `read_framed_message` inside `mcp_host.rs`.

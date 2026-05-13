@@ -1,7 +1,9 @@
+#[cfg(feature = "mcp-host")]
 use nes_desktop::mcp_host::read_framed_message;
 use std::io::Cursor;
 
 #[test]
+#[cfg(feature = "mcp-host")]
 fn havoc_mcp_content_length_oom() {
     // Injecting a massive Content-Length to force capacity overflow panic
     let payload = b"Content-Length: 18446744073709551615\r\n\r\n{}";
