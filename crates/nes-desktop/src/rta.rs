@@ -480,9 +480,10 @@ pub fn select_profile(
         ));
     };
 
-    if let Some(second_match) = match_iter.next() {
-        let mut conflict_profiles = vec![first_match.clone(), second_match.clone()];
-        conflict_profiles.extend(match_iter.cloned());
+    let remaining: Vec<_> = match_iter.cloned().collect();
+    if !remaining.is_empty() {
+        let mut conflict_profiles = vec![first_match.clone()];
+        conflict_profiles.extend(remaining);
         let conflict = format_profile_names(&conflict_profiles);
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"

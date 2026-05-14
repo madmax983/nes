@@ -22,7 +22,7 @@ use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
-use nes_desktop::app::map_key_event_to_button_bit;
+
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{load_state_file, save_state_file};
 use nes_desktop::menu::{
@@ -529,11 +529,21 @@ fn release_all_buttons(core: &mut NesCore) {
 }
 
 fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
-        && let Some(mask) = map_key_event_to_button_bit(key_code)
-    {
-        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
-    }
+    let mask = match key {
+        VirtualKeyCode::Z => Some(nes_core::Button::A.bit_mask()),
+        VirtualKeyCode::X => Some(nes_core::Button::B.bit_mask()),
+        VirtualKeyCode::Return => Some(nes_core::Button::Start.bit_mask()),
+        VirtualKeyCode::RShift => Some(nes_core::Button::Select.bit_mask()),
+        VirtualKeyCode::Up => Some(nes_core::Button::Up.bit_mask()),
+        VirtualKeyCode::Down => Some(nes_core::Button::Down.bit_mask()),
+        VirtualKeyCode::Left => Some(nes_core::Button::Left.bit_mask()),
+        VirtualKeyCode::Right => Some(nes_core::Button::Right.bit_mask()),
+        _ => None,
+    };
+    let Some(mask) = mask else {
+        return;
+    };
+    *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
 }
 
 fn resync_restored_inputs(
@@ -1606,25 +1616,6 @@ mod tests {
     fn adaptive_delay_returns_min_when_bounds_are_invalid() {
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
-    }
-
-    #[test]
-    fn map_virtual_keycode_maps_all_supported_keys() {
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::RShift),
-            Some("ShiftRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::Right),
-            Some("ArrowRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
     }
 
     #[test]

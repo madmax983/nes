@@ -51,3 +51,11 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flattening double Option unwraps in track_keyboard_bits_for_key]
+**Learning:** Found deeply nested option unwrapping where `map_virtual_keycode` was used to convert a `VirtualKeyCode` to a string, and then `map_key_event_to_button_bit` was used to convert the string to a mask, all inside an `if let Some` condition. This causes unnecessary indirection, string mapping, and the Pyramid of Doom smell.
+**Action:** Replaced the intermediate mappings with a direct `match` statement from `VirtualKeyCode` to the `Button::bit_mask()` and used a guard clause `let Some(...) = ... else { return; };` to keep the successful execution path flat at the function root.
+
+**[Flattening Iterator collect in rta select_profile]
+**Learning:** Found unnecessary mapping/cloning of iterators where `match_iter` elements were retrieved twice via `.next()` and then a vector was constructed via `extend(match_iter.cloned())`. This can be simplified.
+**Action:** Replaced it with a single `.collect()` and an `is_empty()` check to flatten logic.
