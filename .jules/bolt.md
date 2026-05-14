@@ -35,3 +35,9 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Defer APU Mixing Computation]
+**Learning:** Computations placed directly inside hot loops (like a 1.78M Hz CPU emulator step) create massive overhead if their outputs are only consumed at a lower frequency (like 44.1k Hz audio samples).
+**Action:** Always verify if a hot-path computation can be deferred inside a rate-limiting conditional branch.
+**[Unresolved import in tests without feature flags]
+**Learning:** `cargo test` checks all integration tests by default, but if an integration test explicitly imports a module that is gated behind a conditional feature flag (like `#[cfg(feature = "mcp-host")]`), the test will fail compilation unless the test itself is also properly gated.
+**Action:** When working on crates with conditional feature flags, always wrap related integration tests in the exact same `#[cfg(feature = "...")]` flag to prevent `cargo test` breakage.

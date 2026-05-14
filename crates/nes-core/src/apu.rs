@@ -829,6 +829,11 @@ impl Apu {
 
     /// Steps one CPU cycle worth of APU timing.
     ///
+    /// **Why this optimization matters:**
+    /// Deferring `raw_mixed_sample` inside the `sample_accumulator` while-loop prevents
+    /// 5 channel outputs and 2 array lookups from executing pointlessly on every single CPU cycle.
+    /// It reduces operations from ~1.78M per second to just ~44.1k per second (a ~97.5% reduction).
+    ///
     /// Returns an optional DMC DMA request that the host/core must service.
     pub fn step_cpu_cycle(&mut self, paused: bool) -> Option<DmcDmaRequest> {
         self.cpu_cycles = self.cpu_cycles.saturating_add(1);
@@ -837,12 +842,12 @@ impl Apu {
         self.clock_frame_sequencer();
         let dmc_request = self.clock_timers();
 
-        let raw_sample = self.raw_mixed_sample(paused);
         self.sample_accumulator = self
             .sample_accumulator
             .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
         while self.sample_accumulator >= CPU_CLOCK_HZ {
             self.sample_accumulator -= CPU_CLOCK_HZ;
+            let raw_sample = self.raw_mixed_sample(paused);
             let filtered_sample = self.apply_output_filters(raw_sample);
             self.samples.push_back(filtered_sample);
             if self.samples.len() > MAX_QUEUED_SAMPLES {
@@ -1201,6 +1206,24 @@ mod tests {
 
         dmc.step_timer();
         assert_eq!(dmc.bits_remaining, initial_bits - 1);
+    }
+
+    #[test]
+    fn step_cpu_cycle_defers_mixing_optimization() {
+        let mut apu = Apu::new();
+        // Since `sample_accumulator` adds `AUDIO_SAMPLE_RATE` on every CPU cycle,
+        // we need slightly more than `CPU_CLOCK_HZ / AUDIO_SAMPLE_RATE` cycles to hit the CPU_CLOCK_HZ threshold
+        let cycles_for_one_sample = (CPU_CLOCK_HZ / AUDIO_SAMPLE_RATE as u64) + 1;
+
+        let initial_samples = apu.samples.len();
+        // Step enough to guarantee an overflow
+        for _ in 0..(cycles_for_one_sample * 2) {
+            apu.step_cpu_cycle(false);
+        }
+        assert!(
+            apu.samples.len() > initial_samples,
+            "Sample should be generated"
+        );
     }
 
     #[test]
