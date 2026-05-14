@@ -9,14 +9,23 @@ use crate::Command;
 #[cfg(feature = "nova")]
 use crate::experimental::zone_tracker::ZoneTracker;
 
+/// A reaction rule defining what the bot should do when an entity enters a specific zone.
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
 pub struct BotRule {
+    /// The unique identifier of the zone this rule watches.
     pub zone_id: usize,
+    /// The controller button to press when the zone is triggered.
     pub button: Button,
+    /// How many frames to hold the button down after the initial trigger.
     pub duration_frames: u32,
 }
 
+/// An automated bot that evaluates zone tracker events and emits controller commands.
+///
+/// The `SpatialBot` can be configured with a list of [`BotRule`]s. On each frame,
+/// it evaluates any active events from a [`ZoneTracker`] and issues the appropriate
+/// `Command::PressButton` or `Command::ReleaseButton` commands based on its active rules.
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
 pub struct SpatialBot {
@@ -26,6 +35,14 @@ pub struct SpatialBot {
 
 #[cfg(feature = "nova")]
 impl SpatialBot {
+    /// Creates a new, empty `SpatialBot`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// let bot = SpatialBot::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {

@@ -71,6 +71,11 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A utility for extracting visual representations of the PPU's internal state.
+///
+/// The `PpuVisualizer` provides methods to render pattern tables (character ROM/RAM)
+/// and full nametable layouts (backgrounds) directly into BMP image data. This is
+/// primarily used for debugging, tooling, and exposing internal state visually.
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
