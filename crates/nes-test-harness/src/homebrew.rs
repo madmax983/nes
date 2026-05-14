@@ -1,6 +1,19 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Returns the standard temporary file path for built homebrew ROMs.
+///
+/// Using a predictable temp path allows multiple tests to share a generated ROM without
+/// race conditions, assuming they read after the first test writes it.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// assert!(path.to_string_lossy().ends_with("homebrew.nes"));
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

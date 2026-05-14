@@ -34,27 +34,85 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// Represents a single memory mapped register write to the Audio Processing Unit (APU).
+///
+/// Tracing these events allows test suites to verify that CPU instruction timing exactly
+/// matches expected sound generation hardware interactions without needing to compare
+/// fully rendered audio waveforms.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::ApuWriteEvent;
+///
+/// let event = ApuWriteEvent {
+///     cpu_cycle: 12345,
+///     addr: 0x4000,
+///     value: 0xFF,
+/// };
+/// assert_eq!(event.addr, 0x4000);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle timestamp when the write occurred.
     pub cpu_cycle: u64,
+    /// The memory address written to (typically `0x4000`..=`0x4017`).
     pub addr: u16,
+    /// The 8-bit value written to the register.
     pub value: u8,
 }
 
+/// A statistical summary of an audio waveform segment.
+///
+/// This provides metrics to detect silent streams, excessive DC offsets, or clipped audio
+/// without requiring full frequency analysis.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{AudioStats, audio_stats};
+///
+/// let samples = [1000, -1000, 1000, -1000];
+/// let stats = audio_stats(&samples);
+/// assert!(stats.rms > 0.0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
+    /// The total number of 16-bit PCM samples analyzed.
     pub sample_count: usize,
+    /// The Root Mean Square power of the waveform.
     pub rms: f64,
+    /// The maximum absolute sample amplitude observed.
     pub peak: i16,
+    /// The mean value of all samples (detects DC bias).
     pub dc_offset: f64,
+    /// The proportion of samples that hit the `i16` min/max boundaries.
     pub clipping_ratio: f64,
 }
 
+/// Defines the numerical differences between two overlapping audio streams.
+///
+/// Perfect alignment yields a correlation of `1.0` and a DB diff of `0.0`.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{WaveformComparison, compare_waveforms};
+///
+/// let lhs = [0, 100, 200];
+/// let rhs = [0, 101, 201];
+/// let diff = compare_waveforms(&lhs, &rhs, 8);
+/// assert!(diff.correlation > 0.99);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
+    /// Total overlapping samples that were analyzed.
     pub samples_compared: usize,
+    /// Pearson correlation coefficient (-1.0 to 1.0).
     pub correlation: f64,
+    /// Ratio of the test stream's RMS power vs the reference.
     pub rms_ratio: f64,
+    /// Average difference in magnitude across all computed frequency bins (in dB).
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -97,6 +155,20 @@ pub fn collect_apu_register_writes(
     Ok(writes)
 }
 
+/// Generates a deterministic hash of an APU write trace.
+///
+/// This prevents test suites from needing to bundle large golden arrays of register writes,
+/// allowing simple one-line assertions for complex integration scenarios.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{ApuWriteEvent, apu_write_hash};
+///
+/// let writes = [ApuWriteEvent { cpu_cycle: 0, addr: 0x4000, value: 0 }];
+/// let hash = apu_write_hash(&writes);
+/// assert_ne!(hash, 0);
+/// ```
 #[must_use]
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -177,6 +249,18 @@ pub fn capture_audio_window(
         .map_err(|err| format!("audio capture failed after warmup: {err}"))
 }
 
+/// Generates a deterministic hash of a raw PCM waveform.
+///
+/// Useful for snapshot-testing exact audio output behavior.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::waveform_hash;
+///
+/// let hash = waveform_hash(&[0, 100, -100]);
+/// assert_ne!(hash, 0);
+/// ```
 #[must_use]
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -187,6 +271,16 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
     hash
 }
 
+/// Computes a statistical summary for a PCM waveform.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{audio_stats, AudioStats};
+///
+/// let stats = audio_stats(&[10, -10, 10]);
+/// assert_eq!(stats.sample_count, 3);
+/// ```
 #[must_use]
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
@@ -225,6 +319,22 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
     }
 }
 
+/// Calculates the RMS power over sliding windows of a waveform.
+///
+/// Useful for aligning or plotting volume decay over time.
+///
+/// ## Panics
+///
+/// Panics if `window_samples` is 0.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rms_envelope;
+///
+/// let env = rms_envelope(&[100, -100, 50, -50], 2);
+/// assert_eq!(env.len(), 2);
+/// ```
 #[must_use]
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
@@ -327,6 +437,19 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     Ok(samples)
 }
 
+/// Runs a statistical and frequency-domain comparison between two audio streams.
+///
+/// Evaluates length, correlation, volume ratios, and spectral similarities.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::compare_waveforms;
+///
+/// let lhs = [0, 100, 200, 100, 0, -100, -200, -100];
+/// let diff = compare_waveforms(&lhs, &lhs, 8);
+/// assert_eq!(diff.correlation, 1.0);
+/// ```
 #[must_use]
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
@@ -372,6 +495,19 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
     }
 }
 
+/// Computes the magnitude of the frequency spectrum in decibels (dB).
+///
+/// This uses an unoptimized, $O(N^2)$ Discrete Fourier Transform (DFT), so `fft_size`
+/// should be kept very small (e.g. 512). It is intended for testing, not realtime playback.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::fft_log_mag_db;
+///
+/// let bins = fft_log_mag_db(&[0, 100, 0, -100], 4);
+/// assert!(!bins.is_empty());
+/// ```
 #[must_use]
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
@@ -414,6 +550,19 @@ fn hann_window(idx: usize, len: usize) -> f64 {
     0.5 - 0.5 * phase.cos()
 }
 
+/// Parses the iNES or NES2.0 header to extract the hardware Mapper ID.
+///
+/// Returns `None` if the ROM lacks a valid magic header or is too short.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::detect_mapper_id;
+///
+/// let mut header = [0_u8; 16];
+/// header[0..4].copy_from_slice(b"NES");
+/// assert_eq!(detect_mapper_id(&header), Some(0));
+/// ```
 #[must_use]
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
@@ -431,6 +580,18 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     }
 }
 
+/// Checks if the provided hardware Mapper ID is currently implemented by the engine.
+///
+/// Useful for filtering ROM directories during test execution.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::mapper_supported_by_core;
+///
+/// assert!(mapper_supported_by_core(0)); // NROM is always supported
+/// assert!(!mapper_supported_by_core(999));
+/// ```
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)
