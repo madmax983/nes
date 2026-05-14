@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**Defer APU Mixing Computation**
+**Learning:** The APU `step_cpu_cycle` function runs on every single CPU cycle, but audio samples are only needed at a much lower frequency (determined by `AUDIO_SAMPLE_RATE`). Calling `raw_mixed_sample` outside the rate-limiting conditional branch executes expensive per-sample computations pointlessly on every CPU cycle.
+**Action:** Always defer expensive per-sample computations (like `raw_mixed_sample`) inside rate-limiting conditional branches (e.g., `sample_accumulator >= CPU_CLOCK_HZ`) to prevent them from executing pointlessly on every single CPU cycle.
