@@ -7,7 +7,7 @@
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -294,9 +294,14 @@ fn read_client_message(
     line: &mut String,
 ) -> Result<Option<ClientMessage>, String> {
     line.clear();
-    let bytes_read = reader
-        .read_line(line)
-        .map_err(|err| format!("failed to read socket line: {err}"))?;
+    let bytes_read = {
+        let mut take = std::io::Read::take(reader.by_ref(), 8192);
+        take.read_line(line)
+            .map_err(|err| format!("failed to read socket line: {err}"))?
+    };
+    if bytes_read == 8192 && !line.ends_with('\n') {
+        return Err("socket line exceeds maximum length of 8192 bytes".to_owned());
+    }
     if bytes_read == 0 {
         return Ok(None);
     }
@@ -380,7 +385,7 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
 
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{BufRead, BufReader, Read, Write};
     use std::net::{Shutdown, TcpListener, TcpStream};
     use std::sync::atomic::AtomicU64;
     use std::sync::mpsc;
@@ -942,7 +947,13 @@ mod tests {
             client.flush().expect("flush write");
             let mut line = String::new();
             let mut reader = BufReader::new(client);
-            let _ = reader.read_line(&mut line).expect("read joined response");
+            let read = {
+                let mut take = std::io::Read::take(reader.by_ref(), 8192);
+                take.read_line(&mut line).expect("read joined response")
+            };
+            if read == 8192 && !line.ends_with('\n') {
+                panic!("joined response exceeds maximum length of 8192 bytes");
+            }
             line
         });
 

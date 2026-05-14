@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-10-24 - Unbounded memory growth in network streams
+**Learning:** `std::io::BufRead::read_line` does not have an upper bound and will buffer indefinitely if an attacker sends an infinite stream of characters without a newline, causing OOM.
+**Action:** Always wrap standard network or external input streams with `.take(MAX_BYTES)` before calling `read_line`, e.g., `std::io::Read::take(reader.by_ref(), LIMIT).read_line(&mut buffer)`.

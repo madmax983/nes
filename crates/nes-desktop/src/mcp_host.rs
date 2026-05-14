@@ -360,9 +360,14 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
     loop {
         line.clear();
 
-        let read = reader
-            .read_line(&mut line)
-            .map_err(|err| format!("failed reading header line: {err}"))?;
+        let read = {
+            let mut take = std::io::Read::take(reader.by_ref(), 8192);
+            take.read_line(&mut line)
+                .map_err(|err| format!("failed reading header line: {err}"))?
+        };
+        if read == 8192 && !line.ends_with('\n') {
+            return Err("header line exceeds maximum length of 8192 bytes".to_owned());
+        }
         if read == 0 {
             if content_length.is_none() {
                 return Ok(None);
