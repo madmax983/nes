@@ -99,37 +99,21 @@ fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<
 }
 
 fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
-    pressed
-        && (matches!(
-            key,
-            VirtualKeyCode::Up
-                | VirtualKeyCode::Down
-                | VirtualKeyCode::Escape
-                | VirtualKeyCode::Return
-                | VirtualKeyCode::Space
-                | VirtualKeyCode::Delete
-                | VirtualKeyCode::Back
-                | VirtualKeyCode::F5
-                | VirtualKeyCode::F8
-        ) || matches!(
-            key,
-            VirtualKeyCode::A
-                | VirtualKeyCode::E
-                | VirtualKeyCode::G
-                | VirtualKeyCode::I
-                | VirtualKeyCode::K
-                | VirtualKeyCode::L
-                | VirtualKeyCode::N
-                | VirtualKeyCode::O
-                | VirtualKeyCode::P
-                | VirtualKeyCode::S
-                | VirtualKeyCode::T
-                | VirtualKeyCode::U
-                | VirtualKeyCode::V
-                | VirtualKeyCode::X
-                | VirtualKeyCode::Y
-                | VirtualKeyCode::Z
-        ))
+    if !pressed {
+        return false;
+    }
+    matches!(
+        key,
+        VirtualKeyCode::Up
+            | VirtualKeyCode::Down
+            | VirtualKeyCode::Escape
+            | VirtualKeyCode::Return
+            | VirtualKeyCode::Space
+            | VirtualKeyCode::Delete
+            | VirtualKeyCode::Back
+            | VirtualKeyCode::F5
+            | VirtualKeyCode::F8
+    ) || nes_desktop::overlay::key_to_cheat_char(key).is_some()
 }
 
 fn menu_action_enabled(

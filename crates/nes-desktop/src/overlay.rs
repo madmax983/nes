@@ -787,7 +787,7 @@ fn slot_suffix(
     }
 }
 
-fn key_to_cheat_char(key: VirtualKeyCode) -> Option<char> {
+pub fn key_to_cheat_char(key: VirtualKeyCode) -> Option<char> {
     match key {
         VirtualKeyCode::A => Some('A'),
         VirtualKeyCode::E => Some('E'),
