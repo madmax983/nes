@@ -2112,3 +2112,39 @@ unexpected = "boom"
         assert!(multi_err.contains("pub2"));
     }
 }
+
+#[cfg(test)]
+mod push_split_tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn push_split_stores_and_returns_correct_event() {
+        let profile = RtaProfile::default();
+        let mut manager = RtaManager::new(
+            profile,
+            "hash".to_owned(),
+            std::path::PathBuf::from("push_split_test"),
+            None,
+        );
+
+        // Ensure active state
+        manager.state = RtaSessionState::Running;
+
+        let now = Instant::now();
+        let event = manager.push_split("test_split".to_owned(), SplitSource::Manual, 42, now);
+
+        assert_eq!(event.name, "test_split");
+        assert_eq!(event.frame, 42);
+
+        assert_eq!(manager.split_events.len(), 1);
+        assert_eq!(manager.split_events[0].name, "test_split");
+        assert_eq!(manager.split_events[0].frame, 42);
+
+        let _event2 =
+            manager.push_split("test_split_2".to_owned(), SplitSource::Automatic, 84, now);
+        assert_eq!(manager.split_events.len(), 2);
+        assert_eq!(manager.split_events[1].name, "test_split_2");
+        assert_eq!(manager.split_events[1].frame, 84);
+    }
+}
