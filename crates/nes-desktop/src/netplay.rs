@@ -1,4 +1,5 @@
-use std::io::{BufRead, BufReader, Write};
+
+use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -265,14 +266,17 @@ fn writer_loop(
     Ok(())
 }
 
+
 fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), String> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
     loop {
         line.clear();
-        let bytes = reader
-            .read_line(&mut line)
+        let bytes = read_line_bounded(&mut reader, &mut line, 1048576)
             .map_err(|err| format!("failed to read relay message: {err}"))?;
+        if bytes >= 1048576 && !line.ends_with('\n') {
+            return Err("relay message exceeded maximum length".to_owned());
+        }
         if bytes == 0 {
             return Err("relay closed connection".to_owned());
         }
@@ -478,6 +482,47 @@ pub fn handle_netplay_server_message(
     Ok(())
 }
 
+fn read_line_bounded(reader: &mut impl std::io::BufRead, line: &mut String, limit: usize) -> Result<usize, std::io::Error> {
+    let mut total_read = 0;
+    loop {
+        let (done, used) = {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                return Ok(total_read);
+            }
+
+            let mut newline_idx = None;
+            let mut check_len = available.len();
+            if total_read + check_len > limit {
+                check_len = limit - total_read;
+            }
+
+            for (i, &b) in available[..check_len].iter().enumerate() {
+                if b == b'\n' {
+                    newline_idx = Some(i);
+                    break;
+                }
+            }
+
+            if let Some(idx) = newline_idx {
+                let bytes = &available[..=idx];
+                line.push_str(&String::from_utf8_lossy(bytes));
+                (true, idx + 1)
+            } else {
+                let bytes = &available[..check_len];
+                line.push_str(&String::from_utf8_lossy(bytes));
+                (total_read + check_len >= limit, check_len)
+            }
+        };
+
+        reader.consume(used);
+        total_read += used;
+        if done {
+            return Ok(total_read);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,6 +539,7 @@ mod tests {
         server_stream
             .set_read_timeout(Some(Duration::from_millis(500)))
             .expect("set read timeout");
+        use std::io::BufRead;
         let mut server_reader = BufReader::new(server_stream);
 
         let (tx, rx) = mpsc::channel::<ClientMessage>();
@@ -629,7 +675,8 @@ mod tests {
     }
 
     #[test]
-    fn reader_loop_forwards_messages_and_reports_relay_close() {
+
+fn reader_loop_forwards_messages_and_reports_relay_close() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
         let addr = listener.local_addr().expect("listener addr");
         let client_stream = TcpStream::connect(addr).expect("connect client");
