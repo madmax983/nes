@@ -43,3 +43,40 @@ fn havoc_mcp_host_oom_on_massive_content_length() {
     ));
     let _ = nes_desktop::mcp_host::read_framed_message(&mut reader);
 }
+
+#[cfg(feature = "mcp-host")]
+struct InfiniteNoNewlineReader {
+    bytes_read: usize,
+    limit: usize,
+}
+#[cfg(feature = "mcp-host")]
+impl std::io::Read for InfiniteNoNewlineReader {
+    fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+        unimplemented!()
+    }
+}
+#[cfg(feature = "mcp-host")]
+impl std::io::BufRead for InfiniteNoNewlineReader {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.bytes_read > self.limit {
+            panic!("Simulated OOM: read_line consumed too much memory without a newline");
+        }
+        static BUF: [u8; 1024] = [b'x'; 1024];
+        Ok(&BUF)
+    }
+    fn consume(&mut self, amt: usize) {
+        self.bytes_read += amt;
+    }
+}
+
+#[cfg(feature = "mcp-host")]
+#[test]
+#[should_panic(expected = "Simulated OOM")]
+#[ignore = "Havoc OOM Attack"]
+fn havoc_mcp_host_oom_on_missing_newline() {
+    let mut reader = InfiniteNoNewlineReader {
+        bytes_read: 0,
+        limit: 10_000_000,
+    };
+    let _ = nes_desktop::mcp_host::read_framed_message(&mut reader);
+}
