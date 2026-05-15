@@ -829,10 +829,6 @@ impl Apu {
 
     /// Steps one CPU cycle worth of APU timing.
     ///
-    /// **Why this optimization matters:**
-    /// We defer the execution of `raw_mixed_sample` to inside the downsampling rate-limiting loop
-    /// to prevent calculating complex mixing outputs roughly 1.78M times per second on every CPU cycle.
-    ///
     /// Returns an optional DMC DMA request that the host/core must service.
     pub fn step_cpu_cycle(&mut self, paused: bool) -> Option<DmcDmaRequest> {
         self.cpu_cycles = self.cpu_cycles.saturating_add(1);
@@ -845,6 +841,10 @@ impl Apu {
             .sample_accumulator
             .saturating_add(u64::from(AUDIO_SAMPLE_RATE));
         while self.sample_accumulator >= CPU_CLOCK_HZ {
+            /// **Why this optimization matters:**
+            /// Moving `raw_mixed_sample` inside this audio output rate-limiting loop prevents
+            /// calculating complex mixing outputs roughly 1.78M times per second on every CPU cycle,
+            /// significantly improving the `step_cpu_cycle` throughput.
             self.sample_accumulator -= CPU_CLOCK_HZ;
             let raw_sample = self.raw_mixed_sample(paused);
             let filtered_sample = self.apply_output_filters(raw_sample);
