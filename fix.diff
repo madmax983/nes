@@ -1,0 +1,15 @@
+<<<<<<< SEARCH
+use nes_desktop::mcp_host::read_framed_message;
+use std::io::Cursor;
+
+#[test]
+fn havoc_mcp_content_length_oom() {
+=======
+#![cfg(feature = "mcp-host")]
+
+use nes_desktop::mcp_host::read_framed_message;
+use std::io::Cursor;
+
+#[test]
+fn havoc_mcp_content_length_oom() {
+>>>>>>> REPLACE
