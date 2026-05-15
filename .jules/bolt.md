@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Avoid Unnecessary `.clone()` or `.to_owned()` in Deserialization Output Types**
+**Learning:** Returning references (`&str`) to input lines parsing eliminates multiple heap allocations on the hot path (like processing MCP messages or netplay data streams), but applying it globally to complex `Vec` iterations and struct constructions can introduce significant borrow checker fighting and lifetime complexities without matching measurable impact compared to other simpler optimizations.
+**Action:** Focus on reducing `String::new()` and `Vec::new()` without capacity, and target simpler `.clone()` calls inside tight loops rather than overhauling deep serialization struct lifetimes.

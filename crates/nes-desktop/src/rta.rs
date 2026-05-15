@@ -1231,18 +1231,16 @@ impl RtaManager {
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
         let elapsed_ms = self.elapsed(now).as_millis();
-        self.split_events.push(SplitEvent {
-            name: name.clone(),
-            source,
-            frame,
-            elapsed_ms,
-        });
-        SplitEvent {
+
+        // ⚡ Bolt Optimization: Construct struct once and clone the struct instead of string fields.
+        let event = SplitEvent {
             name,
             source,
             frame,
             elapsed_ms,
-        }
+        };
+        self.split_events.push(event.clone());
+        event
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
