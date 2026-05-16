@@ -4,6 +4,18 @@ use std::path::Path;
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
 #[allow(dead_code)]
+/// Resolves the absolute path to the Super Mario Bros ROM.
+///
+/// Checks the `nes.toml` configuration under `roms.smb` or `desktop.rom_path`.
+/// Panics if the path is missing or the file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rom_paths::smb_rom_path;
+///
+/// // let path = smb_rom_path(); // commented out to prevent test failure without nes.toml
+/// ```
 pub fn smb_rom_path() -> String {
     let config = load_config();
     let rom_path = config
@@ -19,6 +31,18 @@ pub fn smb_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Resolves the absolute path to the generic `nestest.nes` ROM.
+///
+/// Checks the `nes.toml` configuration under `roms.nestest`.
+/// Panics if the path is missing or the file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rom_paths::nestest_rom_path;
+///
+/// // let path = nestest_rom_path(); // commented out to prevent test failure without nes.toml
+/// ```
 pub fn nestest_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.nestest.unwrap_or_else(|| {
@@ -28,6 +52,18 @@ pub fn nestest_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Resolves the absolute path to the `blargg` CPU instructions test ROM.
+///
+/// Checks the `nes.toml` configuration under `roms.blargg_cpu`.
+/// Panics if the path is missing or the file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rom_paths::blargg_cpu_rom_path;
+///
+/// // let path = blargg_cpu_rom_path(); // commented out to prevent test failure without nes.toml
+/// ```
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.blargg_cpu.unwrap_or_else(|| {
@@ -39,6 +75,19 @@ pub fn blargg_cpu_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Resolves the absolute paths to all ROMs in the `bbbradsmith` audio test suite.
+///
+/// Scans the directory specified in `nes.toml` under `roms.bbbradsmith_audio_suite_dir`
+/// for any files with a `.nes` extension and returns their paths.
+/// Panics if the directory is missing or empty.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rom_paths::bbbradsmith_audio_suite_rom_paths;
+///
+/// // let paths = bbbradsmith_audio_suite_rom_paths(); // commented out to prevent test failure without nes.toml
+/// ```
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.unwrap_or_else(|| {
@@ -69,6 +118,19 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
 }
 
 #[allow(dead_code)]
+/// Resolves the absolute path to the golden test recordings directory.
+///
+/// These `.pcm` files are compared against emulation output to detect audio regressions.
+/// Checks the `nes.toml` configuration under `roms.bbbradsmith_audio_golden_dir`.
+/// Panics if the directory is missing.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rom_paths::bbbradsmith_audio_golden_dir_path;
+///
+/// // let dir = bbbradsmith_audio_golden_dir_path(); // commented out to prevent test failure without nes.toml
+/// ```
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.unwrap_or_else(|| {

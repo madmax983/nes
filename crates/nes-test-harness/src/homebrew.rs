@@ -2,6 +2,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[must_use]
+/// Returns the default file path where generated homebrew ROMs are written.
+///
+/// Usually points to `target/tmp/homebrew.nes` in the project root.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
