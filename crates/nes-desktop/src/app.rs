@@ -1,12 +1,15 @@
 use nes_core::{Button, Command};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A command to send to the core emulator loop.
 pub struct BridgeCommand {
+    /// The inner emulator command.
     pub core: Command,
 }
 
 impl BridgeCommand {
     #[must_use]
+    /// Get the human readable name of the tool.
     pub fn tool_name(self) -> &'static str {
         match self.core {
             Command::PressButton(_) => "press_button",
@@ -17,6 +20,7 @@ impl BridgeCommand {
 }
 
 #[must_use]
+/// Maps a raw keycode string from the OS window into a bridge command.
 pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
     let button = map_key_event_to_button(key_code)?;
 
@@ -30,6 +34,7 @@ pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeC
 }
 
 #[must_use]
+/// Maps a raw keycode string into an NES controller button.
 pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     match key_code {
         "KeyZ" => Some(Button::A),
@@ -45,6 +50,7 @@ pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
 }
 
 #[must_use]
+/// Maps a raw keycode string into an NES controller button bitmask.
 pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
     map_key_event_to_button(key_code).map(Button::bit_mask)
 }

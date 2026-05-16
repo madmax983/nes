@@ -71,6 +71,7 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// Visualizes the internal state of the PPU (Picture Processing Unit).
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {

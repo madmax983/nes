@@ -4,6 +4,19 @@ use std::path::Path;
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
 #[allow(dead_code)]
+/// Gets the path to the Super Mario Bros ROM, configured in `nes.toml`.
+///
+/// ## Panics
+///
+/// Panics if the path is not configured or if the ROM file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::smb_rom_path;
+///
+/// // let path = smb_rom_path();
+/// ```
 pub fn smb_rom_path() -> String {
     let config = load_config();
     let rom_path = config
@@ -19,6 +32,19 @@ pub fn smb_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Gets the path to the nestest ROM, configured in `nes.toml`.
+///
+/// ## Panics
+///
+/// Panics if the path is not configured or if the ROM file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::nestest_rom_path;
+///
+/// // let path = nestest_rom_path();
+/// ```
 pub fn nestest_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.nestest.unwrap_or_else(|| {
@@ -28,6 +54,19 @@ pub fn nestest_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Gets the path to the Blargg CPU test ROM, configured in `nes.toml`.
+///
+/// ## Panics
+///
+/// Panics if the path is not configured or if the ROM file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::blargg_cpu_rom_path;
+///
+/// // let path = blargg_cpu_rom_path();
+/// ```
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.blargg_cpu.unwrap_or_else(|| {
@@ -39,6 +78,19 @@ pub fn blargg_cpu_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Gets a list of paths to all NES ROMs in the bbbradsmith audio test suite directory.
+///
+/// ## Panics
+///
+/// Panics if the directory path is not configured, does not exist, or is empty.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::bbbradsmith_audio_suite_rom_paths;
+///
+/// // let paths = bbbradsmith_audio_suite_rom_paths();
+/// ```
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.unwrap_or_else(|| {
@@ -69,6 +121,19 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
 }
 
 #[allow(dead_code)]
+/// Gets the path to the directory containing golden reference audio for the bbbradsmith suite.
+///
+/// ## Panics
+///
+/// Panics if the directory path is not configured or does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::bbbradsmith_audio_golden_dir_path;
+///
+/// // let path = bbbradsmith_audio_golden_dir_path();
+/// ```
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.unwrap_or_else(|| {

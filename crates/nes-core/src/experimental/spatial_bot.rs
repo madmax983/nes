@@ -11,14 +11,19 @@ use crate::experimental::zone_tracker::ZoneTracker;
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
+/// A rule defining an action the bot will take in a specific zone.
 pub struct BotRule {
+    /// The ID of the zone that triggers this rule.
     pub zone_id: usize,
+    /// The button to press.
     pub button: Button,
+    /// How long to press the button.
     pub duration_frames: u32,
 }
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
+/// An experimental bot that plays games based on spatial zones.
 pub struct SpatialBot {
     rules: Vec<BotRule>,
     active_presses: std::collections::HashMap<Button, u32>,
@@ -27,6 +32,7 @@ pub struct SpatialBot {
 #[cfg(feature = "nova")]
 impl SpatialBot {
     #[must_use]
+    /// Creates a new SpatialBot instance.
     pub fn new() -> Self {
         Self {
             rules: Vec::new(),

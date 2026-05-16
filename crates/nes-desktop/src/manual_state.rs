@@ -19,18 +19,28 @@ struct SaveStateFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Represents the state of a save slot.
 pub enum SaveSlotStatus {
+    /// The save slot is empty.
     Empty,
+    /// The save slot contains valid data.
     Saved,
+    /// The save slot contains corrupted data.
     Corrupt,
+    /// The save slot is for a different ROM.
     IncompatibleRom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Metadata for a specific save slot.
 pub struct SaveSlotMetadata {
+    /// The slot number.
     pub slot: u8,
+    /// The path to the save file.
     pub path: PathBuf,
+    /// The state of the save slot.
     pub status: SaveSlotStatus,
+    /// Last modified timestamp in unix seconds.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -124,6 +134,7 @@ fn slot_number_from_path(path: &Path) -> Result<u8, String> {
 }
 
 #[must_use]
+/// Returns the exact file path for a specific save slot.
 pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);
@@ -133,6 +144,7 @@ pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
 }
 
 #[must_use]
+/// Returns paths for the given range of save slots for a ROM.
 pub fn slot_paths_for_rom(
     rom_path: &Path,
     rom_hash: &str,
@@ -144,6 +156,7 @@ pub fn slot_paths_for_rom(
 }
 
 #[must_use]
+/// Returns the quicksave path for a ROM.
 pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);

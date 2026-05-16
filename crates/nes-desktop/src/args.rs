@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// The default bind address for the MCP (Model Context Protocol) server.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// Command line usage string.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,23 +24,40 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// The ROM to load on startup.
     pub rom_path: Option<String>,
+    /// Cheat codes to apply on startup.
     pub cheat_codes: Vec<String>,
+    /// Whether the MCP server is enabled.
     pub mcp_enabled: bool,
+    /// The MCP bind address.
     pub mcp_bind_addr: String,
+    /// Whether netplay is enabled.
     pub netplay_enabled: bool,
+    /// The address of the relay server.
     pub netplay_relay_addr: Option<String>,
+    /// The room name for netplay.
     pub netplay_room: Option<String>,
+    /// The player number (1 or 2).
     pub netplay_player: Option<u8>,
+    /// Artificial input delay in frames.
     pub netplay_input_delay_frames: Option<u32>,
+    /// Maximum number of frames to rollback.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// Frequency of state hash checks.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// Whether the RTA speedrun tracker is enabled.
     pub rta_enabled: bool,
+    /// Profile ID to use for the run.
     pub rta_profile_id: Option<String>,
+    /// Directory where RTA profiles are stored.
     pub rta_profiles_dir: Option<String>,
+    /// Directory to output run artifacts.
     pub rta_runs_dir: Option<String>,
+    /// If true, runs the engine in calibration mode.
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
+    /// If true, the AI or auto-player is enabled.
     pub auto_player_enabled: bool,
 }
 
