@@ -1,12 +1,13 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
+1. **Optimize `VecDeque::new()` to `VecDeque::with_capacity(8)` in `nes-core/src/ppu.rs`**
+   - The files have already been updated using `python3` search and replace. Verify the changes using `git diff HEAD~1` or `cat crates/nes-core/src/ppu.rs`.
+2. **Verify Changes**
+   - Run `cargo fmt --all`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test` using `run_in_bash_session`.
+3. **Complete pre-commit steps**
    - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+4. **Submit PR**
+   - Run `git status` to verify the active branch.
+   - Submit a PR titled "⚡ Bolt: [pre-allocate PPU update queues]" detailing the bottleneck, optimization, and impact:
+     - 💡 What: Initialize `pending_live_chr_updates` and `pending_live_bg_updates` with `VecDeque::with_capacity(8)`.
+     - 🎯 Why: `VecDeque::new()` initializes these vectors with no capacity, forcing heap allocations when frame updates are pushed during rendering.
+     - 📊 Impact: Eliminates unneccessary small heap allocations during frame rendering.
+     - 🔬 Measurement: Observe that tests and builds pass cleanly.

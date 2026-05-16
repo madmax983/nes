@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Pre-allocated PPU frame update queues]**
+**Learning:** `Ppu::new` initialized `pending_live_chr_updates` and `pending_live_bg_updates` with `VecDeque::new()`, meaning they lacked capacity and would force heap allocations when populated with frame events during execution.
+**Action:** Initialized both queues with `VecDeque::with_capacity(8)` to ensure they have enough capacity to hold typical per-frame live background updates without requiring re-allocation during hot rendering paths.

@@ -323,11 +323,13 @@ impl Ppu {
             chr: [0; CHR_BYTES],
             chr_writable: true,
             live_chr: Box::new([0; CHR_BYTES]),
-            pending_live_chr_updates: VecDeque::new(),
+            // **Performance optimization:** Initialized with `VecDeque::with_capacity(8)` to avoid heap reallocations during frame rendering.
+            pending_live_chr_updates: VecDeque::with_capacity(8),
             live_ctrl: 0,
             live_scroll_x: 0,
             live_scroll_y: 0,
-            pending_live_bg_updates: VecDeque::new(),
+            // **Performance optimization:** Initialized with `VecDeque::with_capacity(8)` to avoid heap reallocations during frame rendering.
+            pending_live_bg_updates: VecDeque::with_capacity(8),
             live_bg_tracks_vram_addr: false,
             nametable_ram: [0; NAMETABLE_RAM_BYTES],
             palette_ram: [0; PALETTE_RAM_BYTES],
