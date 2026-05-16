@@ -1,3 +1,4 @@
+#![cfg(feature = "mcp-host")]
 use nes_desktop::mcp_host::read_framed_message;
 use std::io::Cursor;
 
@@ -7,7 +8,8 @@ fn havoc_mcp_content_length_oom() {
     let payload = b"Content-Length: 18446744073709551615\r\n\r\n{}";
     let mut cursor = Cursor::new(payload);
 
-    let result = read_framed_message(&mut cursor);
+    let mut line = String::new();
+    let result = read_framed_message(&mut cursor, &mut line);
     assert!(
         result.is_err(),
         "Expected reading an oversized content-length to result in an error"

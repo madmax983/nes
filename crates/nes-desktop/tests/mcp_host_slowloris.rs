@@ -41,7 +41,8 @@ fn havoc_mcp_slowloris_dos() {
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
-    let response = read_framed_message(&mut reader2)
+    let mut line = String::new();
+    let response = read_framed_message(&mut reader2, &mut line)
         .expect("should read response")
         .expect("response should not be empty");
 
