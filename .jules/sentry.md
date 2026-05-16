@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2024-05-16 - Cargo Mutants Timeouts
+**Learning:** Cargo Mutants timeouts can be extremely tricky because a mutant that creates an infinite loop or hanging blocking IO can prevent test runners from exiting cleanly. If `read_line` expects an EOF or a newline, replacing its break condition could cause unbounded blocking on a `TcpStream` that intentionally keeps the connection open (e.g. slowloris).
+**Action:** When creating tests for parsing network buffers, always use wrappers like `PanicOnEofReader` or enforce explicit dropping of TCP streams inside tests to forcefully tear down lingering server threads that might otherwise hang the `cargo mutants` test runner.

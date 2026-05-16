@@ -1,3 +1,5 @@
+#![cfg(feature = "mcp-host")]
+
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
@@ -16,12 +18,8 @@ fn havoc_mcp_slowloris_dos() {
         .expect("write partial");
 
     // Client 2: The legitimate user, who should be able to connect and get a response
-    // If the server is blocked by stream1, this will time out or fail.
     let mut stream2 = TcpStream::connect(&bind_addr).expect("client 2 should connect");
 
-    // We send a valid request from client 2. It's a notification, so it doesn't need a response,
-    // but the server should be able to parse it without blocking on client 1.
-    // Wait, let's use tools/list which gets a response.
     let ping_request = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -38,6 +36,7 @@ fn havoc_mcp_slowloris_dos() {
     stream2
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
+
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
@@ -53,4 +52,6 @@ fn havoc_mcp_slowloris_dos() {
 
     let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
     assert_eq!(value["result"], serde_json::json!({}));
+
+    drop(stream1);
 }

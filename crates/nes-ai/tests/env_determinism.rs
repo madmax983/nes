@@ -239,13 +239,59 @@ fn profile_env_step_sets_done_when_budget_done() {
     let mut env = make_mock_env();
     let _ = env.reset().unwrap();
 
-    // Simulate budget done by forcing episode frames to max.
-    // Frame skip is 1, so step increments episode_frames by 1.
+    // To hit budget_done we need the episode limit.
+    // The previous test checks episode limit using max_episode_frames.
+    // Let's actually test both budget_done explicitly.
+    // When budget_done is hit mid-step loop, reward.done should be true.
+    let mut was_done = false;
     for _ in 0..60 {
         let step = env.step(ControlAction::Noop).unwrap();
         if step.done {
-            return;
+            was_done = true;
+            break;
         }
     }
-    panic!("Should have been done");
+    assert!(was_done, "Should have been done when budget_done triggers");
+}
+
+#[test]
+fn profile_env_step_sets_done_when_budget_done_survivor() {
+    let mut env = make_mock_env();
+    let _ = env.reset().unwrap();
+
+    // We want to verify `reward.done || budget_done`.
+    // We will trigger a death condition (which sets `reward.done = true` in RewardModel)
+    // BEFORE `budget_done` becomes true.
+    // And we check that `step.done` is true!
+    // If the operator were `&&`, `reward.done && budget_done` would evaluate to `false` here!
+
+    // Cause death! Writing memory or making progress to trigger a death?
+    // In smb control: death is returned if Mario's state is dying.
+    // Address 0x000E is player state. 0x06 is dying.
+    env.core_mut().load_cpu_bytes(0x000E, &[0x06]);
+
+    // Now we step once.
+    // `budget_done` will be false because we haven't reached 60 frames yet!
+    // `reward.done` will be true because Mario died.
+    let step = env.step(ControlAction::Noop).unwrap();
+
+    assert!(
+        step.done,
+        "episode should be done when reward.done is true, even if budget_done is false"
+    );
+}
+
+#[test]
+fn profile_env_core_accessor_returns_underlying_core() {
+    let mut env = make_mock_env();
+    let _ = env.reset().unwrap();
+
+    // Test the core() accessor that was mutated
+    let hash = env.core().state_hash();
+
+    // We step to change the internal state and verify the accessor reflects it
+    env.step(ControlAction::Right).unwrap();
+
+    let new_hash = env.core().state_hash();
+    assert_ne!(hash, new_hash, "core() should return the updated internal core state");
 }
