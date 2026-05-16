@@ -236,3 +236,10 @@ Or build and run in one command:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run_homebrew.ps1
 ```
+
+## Experimental Features (Nova)
+
+> ⚠️ **REQUIRES FEATURE NOVA**
+>
+> Experimental tools and visualizers (such as memory heatmaps, narrative generators, and execution graphs) are gated behind the `nova` feature to keep the core emulator lightweight.
+> You must compile or run with `--features nova` to access these capabilities.
