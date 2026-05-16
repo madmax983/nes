@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract repetitive match blocks for cheat logic]**
+**Learning:** `dispatch_overlay_command` in `crates/nes-desktop/src/main.rs` contained duplicate match structures where the success branch nested another `if let Err(err) = apply_session_cheats(...)` check before setting the status message and unconditionally requesting a redraw.
+**Action:** Extracted the core `apply_session_cheats` check into a generic `apply_cheat_update` helper function that takes a closure for the success message. This flattens the match, removes duplicated error-handling boilerplate, and separates string formatting from side effects.
