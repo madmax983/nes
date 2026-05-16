@@ -98,3 +98,9 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 👺 Havoc: Unbounded Memory Exhaustion (OOM) via read_line in MCP Host
+**The Trigger:** Malicious client streaming endless bytes without `\n` to `read_framed_message`.
+**The Consequence:** Unbounded growth of `String` using `read_line`, eventually leading to an Out-of-Memory panic and container crash.
+**The Location:** `crates/nes-desktop/src/mcp_host.rs`
+**Status:** Exploited and documented. Test written.
