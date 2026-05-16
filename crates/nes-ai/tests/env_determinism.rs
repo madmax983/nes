@@ -293,5 +293,8 @@ fn profile_env_core_accessor_returns_underlying_core() {
     env.step(ControlAction::Right).unwrap();
 
     let new_hash = env.core().state_hash();
-    assert_ne!(hash, new_hash, "core() should return the updated internal core state");
+    assert_ne!(
+        hash, new_hash,
+        "core() should return the updated internal core state"
+    );
 }
