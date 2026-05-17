@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring God Function execute_app_action]**
+**Learning:** Found a "God Function" `execute_app_action` in `crates/nes-desktop/src/main.rs` that handled 8 distinct `AppAction` enum variants (such as `OpenRom`, `SaveSlot`, `LoadSlot`, etc.) with complex logic inside a single `match` block spanning ~140 lines. This created deep nesting and bloated the main event processing path.
+**Action:** Extracted each `AppAction` match branch into its own small, named helper function (`handle_open_rom`, `handle_save_slot`, etc.). This flattens the execution flow and drastically improves the readability of the core action dispatcher without changing any behavior.
