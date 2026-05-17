@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2024-06-25 - std::error::Error trait implementation coverage
+**Learning:** `RomError` and similar custom error types often lack unit tests for standard library trait implementations like `std::error::Error`, which can mask regressions or cause issues when interacting with the wider ecosystem (e.g. `anyhow` or dynamic dispatch).
+**Action:** When inspecting error types, explicitly verify that `std::error::Error` is implemented and adequately tested.

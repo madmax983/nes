@@ -203,6 +203,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn should_implement_std_error() {
+        let err = RomError::InvalidMagic;
+        let _dyn_err: &dyn std::error::Error = &err;
+    }
+
+    #[test]
     fn test_rom_error_display() {
         assert_eq!(
             RomError::InvalidMagic.to_string(),
