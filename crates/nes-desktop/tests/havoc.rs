@@ -1,3 +1,5 @@
+#![cfg(feature = "mcp-host")]
+
 use nes_desktop::args::parse_runtime_args;
 use nes_desktop::session_cheats::SessionCheats;
 use proptest::prelude::*;
