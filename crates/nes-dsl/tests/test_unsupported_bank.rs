@@ -7,7 +7,7 @@ fn test_unsupported_bank() {
     "#;
     let res = assemble(source);
     assert!(res.is_err());
-    let err = res.unwrap_err();
+    let err = res.expect_err("expected error");
     assert!(
         err.to_string()
             .contains("only `.bank 0` and `.bank 1` are supported")

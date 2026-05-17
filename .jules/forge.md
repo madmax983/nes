@@ -51,3 +51,11 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Replacing unwrap() with expect() in nes-dsl test files]**
+**Learning:** `unwrap()` inside tests causes opaque panics. Found multiple `unwrap_err()` in test assertions for expected errors.
+**Action:** Replaced `.unwrap_err()` with `.expect_err("...")` in `test_instruction_error.rs`, `test_unknown_directive.rs`, and `test_unsupported_bank.rs` to provide context when tests fail.
+
+**[Flattening nested let matches in nes-dsl/src/parser.rs]**
+**Learning:** Found deep nesting in `parse_operand_syntax` when checking parenthesis prefix (`if let Some(inner) = operand.strip_prefix('(') { if let ... }`).
+**Action:** Flattened by combining the inner `if let` checks into a single `if let ... else if ...` chain that assigns to `syntax` and returns, maintaining the correct fallback behavior if no exact indirect suffixes are matched.

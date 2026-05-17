@@ -239,11 +239,9 @@ pub(crate) fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<Oper
     if let Some(inner) = operand.strip_prefix('(') {
         if let Some(inner) = inner.strip_suffix(",X)") {
             return Ok(OperandSyntax::IndirectX(parse_expr(inner.trim(), line_no)?));
-        }
-        if let Some(inner) = inner.strip_suffix("),Y") {
+        } else if let Some(inner) = inner.strip_suffix("),Y") {
             return Ok(OperandSyntax::IndirectY(parse_expr(inner.trim(), line_no)?));
-        }
-        if let Some(inner) = inner.strip_suffix(')') {
+        } else if let Some(inner) = inner.strip_suffix(')') {
             return Ok(OperandSyntax::Indirect(parse_expr(inner.trim(), line_no)?));
         }
     }

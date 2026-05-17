@@ -8,7 +8,7 @@ fn test_instruction_error() {
     "#;
     let res = assemble(source);
     assert!(res.is_err());
-    let err = res.unwrap_err();
+    let err = res.expect_err("expected error");
     assert!(err.to_string().contains("unknown mnemonic 'WUT'"));
 }
 
@@ -20,7 +20,7 @@ fn test_instruction_mode_error() {
     "#;
     let res = assemble(source);
     assert!(res.is_err());
-    let err = res.unwrap_err();
+    let err = res.expect_err("expected error");
     assert!(
         err.to_string()
             .contains("addressing mode implied not supported for LDA")
@@ -35,6 +35,6 @@ fn test_instruction_branch_no_target() {
     "#;
     let res = assemble(source);
     assert!(res.is_err());
-    let err = res.unwrap_err();
+    let err = res.expect_err("expected error");
     assert!(err.to_string().contains("BNE expects a target operand"));
 }
