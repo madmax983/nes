@@ -2,6 +2,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[must_use]
+/// Returns the path to the default homebrew ROM for testing.
+///
+/// Looks for a valid test ROM in the predefined workspace paths.
+///
+/// # Examples
+/// ```text
+/// // let path = nes_test_harness::default_homebrew_rom_path();
+/// // assert!(path.exists());
+/// ```
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
