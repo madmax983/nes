@@ -267,7 +267,8 @@ fn writer_loop(
 
 fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), String> {
     let mut reader = BufReader::new(stream);
-    let mut line = String::new();
+    // ⚡ Bolt Optimization: Allocate string with enough capacity to prevent multiple reallocations
+    let mut line = String::with_capacity(256);
     loop {
         line.clear();
         let bytes = reader
