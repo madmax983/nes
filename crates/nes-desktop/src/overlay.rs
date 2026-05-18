@@ -24,50 +24,73 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// The main menu.
     MainMenu,
+    /// The cheats menu.
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The user\'s selection from the main menu.
 pub enum MainMenuSelection {
+    /// Resume the game.
     Resume,
+    /// Open a new ROM.
     OpenRom,
+    /// Open the cheats menu.
     OpenCheats,
+    /// Save to the specified slot.
     SaveSlot(u8),
+    /// Load from the specified slot.
     LoadSlot(u8),
+    /// Reset the emulator.
     Reset,
+    /// Quit the application.
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The user\'s selection from the cheats menu.
 pub enum CheatsSelection {
+    /// Add a new cheat code.
     AddCode,
+    /// Select a specific cheat by index.
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The final action selected by the user from an overlay.
 pub enum OverlaySelection {
+    /// Action from the main menu.
     Main(MainMenuSelection),
+    /// Action from the cheats menu.
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// Perform a standard application action.
     AppAction(AppAction),
+    /// Toggle the cheat at the given index.
     ToggleCheat(usize),
+    /// Remove the cheat at the given index.
     RemoveCheat(usize),
+    /// Submit a new cheat code.
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// The slot index.
     pub slot: u8,
+    /// A human-readable label for the slot status.
     pub status_label: &'static str,
+    /// The Unix timestamp of when the slot was last modified, if available.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -86,7 +109,9 @@ impl OverlaySlotSummary {
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// The raw string of the cheat code.
     pub raw_code: &'a str,
+    /// Whether the cheat is currently enabled.
     pub enabled: bool,
 }
 

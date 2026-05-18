@@ -15,6 +15,7 @@ use crate::actions::{AppAction, action_from_menu_id, menu_id_for_action};
 /// Pure description of the desktop menu tree.
 #[cfg_attr(test, derive(Debug, Clone, PartialEq, Eq))]
 pub struct DesktopMenu {
+    /// The entries within the submenu.
     entries: Vec<DesktopMenuEntry>,
     #[cfg(all(not(test), any(target_os = "windows", target_os = "macos")))]
     native: NativeDesktopMenu,
@@ -22,11 +23,13 @@ pub struct DesktopMenu {
 
 impl DesktopMenu {
     #[must_use]
+    /// Returns the root menu entries.
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
     }
 
     #[cfg(not(test))]
+    /// Installs the menu on the given window (if supported).
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
         unsafe {
@@ -47,6 +50,7 @@ impl DesktopMenu {
 
     #[cfg(not(test))]
     #[must_use]
+    /// Polls for an action triggered from the menu.
     pub fn poll_action(&self) -> Option<AppAction> {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -60,6 +64,7 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// Enables or disables an action in the menu.
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -73,11 +78,13 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// Synchronizes the menu state with the current emulator runtime state.
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);
     }
 
     #[cfg(test)]
+    /// Installs the menu on the given window (if supported).
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         let _ = window;
         Ok(())
@@ -85,11 +92,13 @@ impl DesktopMenu {
 
     #[cfg(test)]
     #[must_use]
+    /// Polls for an action triggered from the menu.
     pub fn poll_action(&self) -> Option<AppAction> {
         None
     }
 
     #[cfg(test)]
+    /// Enables or disables an action in the menu.
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         let _ = (action, enabled);
     }
@@ -97,19 +106,28 @@ impl DesktopMenu {
 
 /// Declarative menu node used to keep menu semantics testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Represents an entry in a desktop menu.
 pub enum DesktopMenuEntry {
+    /// A selectable item.
     Item(MenuItemSpec),
+    /// A visual separator.
     Separator,
+    /// A nested submenu.
     Submenu {
+        /// The label of the submenu.
         label: &'static str,
+        /// The entries within the submenu.
         entries: Vec<DesktopMenuEntry>,
     },
 }
 
 /// Shared metadata for actionable menu items.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Specification for a single menu item.
 pub struct MenuItemSpec {
+    /// The unique identifier for the item.
     pub id: String,
+    /// The display label.
     pub label: String,
 }
 
@@ -167,24 +185,28 @@ pub fn action_from_menu_event_id(id: &str) -> Option<AppAction> {
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
+/// Returns whether native menus are supported on the current platform.
 pub const fn native_menu_supported() -> bool {
     true
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// Returns whether native menus are supported on the current platform.
 pub const fn native_menu_supported() -> bool {
     false
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
+/// Returns whether native file pickers are supported on the current platform.
 pub const fn rom_picker_supported() -> bool {
     true
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// Returns whether native file pickers are supported on the current platform.
 pub const fn rom_picker_supported() -> bool {
     false
 }
