@@ -98,3 +98,9 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## YYYY-MM-DD - Output State Lock Contention
+🧨 **The Trigger:** Concurrent publishing of frames/audio to the global output state.
+📉 **The Stack Trace:** (Simulated via loom race failure in tests)
+🧪 **Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_output_race`
+😈 **Comment:** Global Mutex locks on hot-paths with multiple producers are a recipe for thread starvation and deadlocks. You were warned.
