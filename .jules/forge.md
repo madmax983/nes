@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring build_startup_table with add_row closure]**
+**Learning:** Extracting an inline closure that borrows a local variable mutably (`let mut add_row = |...| { table.add_row(...) }`) will cause `E0499` (cannot borrow `table` as mutable more than once at a time) if `table` is still accessed directly while the closure remains in scope.
+**Action:** When extracting such a closure, ensure *all* subsequent direct usages of the variable are refactored to use the closure, or the closure is explicitly dropped, to avoid borrow checker conflicts.
