@@ -98,3 +98,9 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2024-05-18 - Relay Read Line Buffer Overflow / OOM
+
+* 🧨 **The Trigger:** Sending a massive continuous byte stream without a newline `\n` to the relay server.
+* 🧪 **Reproduction:** Run `cargo test --package nes-relay --test havoc_relay_oom -- --ignored`
+* 😈 **Comment:** You assumed the `read_line` network payload would eventually contain a newline and never exceed physical memory. You were wrong.
