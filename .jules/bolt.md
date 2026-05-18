@@ -35,3 +35,11 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Avoid format macro inside push_str in tight loops]**
+**Learning:** `string.push_str(&format!("{byte:02X}"))` evaluates the `format!` macro into a brand new `String` heap allocation on every single loop iteration before pushing it to the target buffer.
+**Action:** Always import `std::fmt::Write` and use the `write!` macro directly against the target buffer to avoid intermediate heap allocations.
+
+**[Avoid unwrap_or with unconditional .clone() arguments]**
+**Learning:** `Option::unwrap_or(arg.clone())` evaluates `.clone()` eagerly, performing a heap allocation even when the `Option` is `Some`.
+**Action:** Always use `Option::unwrap_or_else(|| arg.clone())` to defer the clone evaluation to the closure.
