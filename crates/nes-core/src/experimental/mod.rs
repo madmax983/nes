@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Dynamically pans mono audio to stereo based on sprite positions.
+#[cfg(feature = "nova")]
+pub mod spatial_audio;
