@@ -1,12 +1,52 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+We can refactor `push_split` in `crates/nes-desktop/src/rta.rs` to optimize how the `SplitEvent` is constructed and passed to avoid redundant code and memory usage.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+```rust
+<<<<<<< SEARCH
+    fn push_split(
+        &mut self,
+        name: String,
+        source: SplitSource,
+        frame: u64,
+        now: Instant,
+    ) -> SplitEvent {
+        self.split_counter = self.split_counter.saturating_add(1);
+        let elapsed_ms = self.elapsed(now).as_millis();
+        self.split_events.push(SplitEvent {
+            name: name.clone(),
+            source,
+            frame,
+            elapsed_ms,
+        });
+        SplitEvent {
+            name,
+            source,
+            frame,
+            elapsed_ms,
+        }
+    }
+=======
+    /// ⚡ Bolt Optimization:
+    /// Constructs the `SplitEvent` struct once and pushes a `.clone()` of it into the collection,
+    /// rather than instantiating two identical structs and independently cloning individual fields like `String`.
+    fn push_split(
+        &mut self,
+        name: String,
+        source: SplitSource,
+        frame: u64,
+        now: Instant,
+    ) -> SplitEvent {
+        self.split_counter = self.split_counter.saturating_add(1);
+        let elapsed_ms = self.elapsed(now).as_millis();
 
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+        let event = SplitEvent {
+            name,
+            source,
+            frame,
+            elapsed_ms,
+        };
 
-4. **Submit the PR**
+        self.split_events.push(event.clone());
+        event
+    }
+>>>>>>> REPLACE
+```
