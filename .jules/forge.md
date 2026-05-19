@@ -51,3 +51,15 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flattening deeply nested option unwrapping via Guard Clauses in select_profile]**
+**Learning:** Functions like `select_profile` use cascading `if let Some() { ... } else { ... }` blocks that indent the happy path. This causes 'Pyramid of Doom' readability smells.
+**Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring unwrap_or(serde_json::Value::Null) in mcp_host]**
+**Learning:** Found an instance of `unwrap_or(serde_json::Value::Null)`. This is slightly less idiomatic than `unwrap_or_default()` since `Value::Null` is the default for `serde_json::Value`.
+**Action:** Use `.unwrap_or_default()` instead of explicitly providing the default value.
+
+**[Refactoring multiple is_empty checks in parser]**
+**Learning:** Duplicate checks across `if` and `else if` statements cause visual clutter, like `if !tail.is_empty() { ... } else if !parts.is_empty() { ... }`.
+**Action:** Combine mutually exclusive logical branches appropriately and remove `else if` to increase readability.

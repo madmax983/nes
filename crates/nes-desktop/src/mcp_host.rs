@@ -187,7 +187,7 @@ fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Va
         Ok(request) => request,
         Err(err) => {
             return Some(jsonrpc_error(
-                Value::Null,
+                serde_json::Value::Null,
                 RpcError::parse_error(format!("invalid JSON payload: {err}")),
             ));
         }
