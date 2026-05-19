@@ -188,16 +188,12 @@ fn handle_client(
     let (tx_out, rx_out) = mpsc::channel::<ServerMessage>();
     thread::spawn(move || {
         for message in rx_out {
-            let encoded = match serde_json::to_string(&message) {
-                Ok(line) => line,
-                Err(err) => {
-                    eprintln!("failed to serialize message: {err}");
-                    break;
-                }
-            };
+            if serde_json::to_writer(&mut writer, &message).is_err() {
+                eprintln!("failed to serialize message");
+                break;
+            }
             if writer
-                .write_all(encoded.as_bytes())
-                .and_then(|_| writer.write_all(b"\n"))
+                .write_all(b"\n")
                 .and_then(|_| writer.flush())
                 .is_err()
             {

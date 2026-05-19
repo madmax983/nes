@@ -284,11 +284,10 @@ fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), Strin
 }
 
 fn write_message(stream: &mut TcpStream, message: &ClientMessage) -> Result<(), String> {
-    let line = serde_json::to_string(message)
+    serde_json::to_writer(&mut *stream, message)
         .map_err(|err| format!("failed to encode relay message: {err}"))?;
     stream
-        .write_all(line.as_bytes())
-        .and_then(|_| stream.write_all(b"\n"))
+        .write_all(b"\n")
         .and_then(|_| stream.flush())
         .map_err(|err| format!("failed to write relay message: {err}"))
 }
