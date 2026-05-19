@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 mod auto_player;
 pub(crate) mod config;
 pub(crate) mod gamepad;
+pub(crate) mod helpers;
 pub(crate) mod input;
 pub(crate) mod metrics;
 mod netplay;
@@ -16,6 +17,7 @@ use crate::metrics::PerfMetrics;
 use crate::session::*;
 
 use crate::gamepad::*;
+use crate::helpers::*;
 use crate::input::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
@@ -484,41 +486,6 @@ fn reset_ephemeral_state(ctx: &mut AppContext<'_>) {
         ctx.runtime.metrics_every_frames,
         ctx.core.ppu_frame_counter(),
     );
-}
-
-fn command_marks_rta_invalidation(command: Command) -> Option<ForbiddenAction> {
-    match command {
-        Command::StepCpu | Command::StepScanline | Command::StepFrame => {
-            Some(ForbiddenAction::FrameStep)
-        }
-        _ => None,
-    }
-}
-
-fn scaled_window_dimensions(window_scale: u32) -> (f64, f64) {
-    (
-        f64::from(FRAME_WIDTH as u32 * window_scale),
-        f64::from(FRAME_HEIGHT as u32 * window_scale),
-    )
-}
-
-fn gamepad_assignments_changed(
-    next: [Option<GamepadId>; 2],
-    current: [Option<GamepadId>; 2],
-) -> bool {
-    next != current
-}
-
-fn gamepad_slot_changed(
-    next: [Option<GamepadId>; 2],
-    current: [Option<GamepadId>; 2],
-    player: usize,
-) -> bool {
-    next[player] != current[player]
-}
-
-fn should_resume_after_rewind_hold(held: bool) -> bool {
-    !held
 }
 
 fn release_all_buttons(core: &mut NesCore) {
