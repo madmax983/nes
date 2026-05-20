@@ -969,110 +969,25 @@ fn run() -> Result<(), String> {
             WindowEventDecision::Ignore => {}
         },
         Event::MainEventsCleared => {
-            #[cfg(feature = "mcp-host")]
-            if let Some(host) = mcp_host.as_ref() {
-                host.drain(&mut core);
-            }
-
-            sync_native_menu_state(
+            let missed_deadline = match handle_main_events_cleared(
+                &mut build_ctx!(),
+                control_flow,
+                #[cfg(feature = "mcp-host")]
+                mcp_host.as_ref(),
                 &desktop_menu,
-                overlay.is_open(),
-                rollback.is_some(),
-                rta_manager.is_some(),
-            );
-            while let Some(action) = desktop_menu.poll_action() {
-                let mut ctx = build_ctx!();
-                if dispatch_app_action(action, &mut ctx, control_flow) {
+                gilrs.as_mut(),
+                &mut active_gamepads,
+                &mut next_frame_deadline,
+            ) {
+                Ok(Some(missed)) => missed,
+                Ok(None) => return,
+                Err(err) => {
+                    eprintln!("{err}");
+                    *control_flow = ControlFlow::Exit;
                     return;
-                }
-            }
-
-            if let Some(gilrs_state) = gilrs.as_mut() {
-                while gilrs_state.next_event().is_some() {}
-                let connected = connected_gamepad_ids(
-                    gilrs_state
-                        .gamepads()
-                        .map(|(id, gamepad)| (id, gamepad.is_connected())),
-                );
-                let next_active = select_active_gamepad_ids(&connected, active_gamepads);
-                if gamepad_assignments_changed(next_active, active_gamepads) {
-                    for player in 0..active_gamepads.len() {
-                        if gamepad_slot_changed(next_active, active_gamepads, player) {
-                            if let Some(gamepad_id) = next_active[player] {
-                                println!(
-                                    "Gamepad P{} active: {}",
-                                    player + 1,
-                                    gilrs_state.gamepad(gamepad_id).name()
-                                );
-                            } else if active_gamepads[player].is_some() {
-                                println!("Gamepad P{} disconnected", player + 1);
-                            }
-                        }
-                    }
-                    active_gamepads = next_active;
-                }
-
-                for player in 0..gamepad_bits.len() {
-                    let next_gamepad_bits = active_gamepads[player]
-                        .map(|gamepad_id| {
-                            let gamepad = gilrs_state.gamepad(gamepad_id);
-                            gamepad_snapshot_to_bits(GamepadSnapshot {
-                                connected: gamepad.is_connected(),
-                                south_pressed: gamepad.is_pressed(GamepadButton::South),
-                                east_pressed: gamepad.is_pressed(GamepadButton::East),
-                                west_pressed: gamepad.is_pressed(GamepadButton::West),
-                                north_pressed: gamepad.is_pressed(GamepadButton::North),
-                                select_pressed: gamepad.is_pressed(GamepadButton::Select),
-                                start_pressed: gamepad.is_pressed(GamepadButton::Start),
-                                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
-                                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
-                                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
-                                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
-                                left_x: gamepad.value(GamepadAxis::LeftStickX),
-                                left_y: gamepad.value(GamepadAxis::LeftStickY),
-                            })
-                        })
-                        .unwrap_or_default();
-                    if rollback.is_none()
-                        && !overlay.is_open()
-                        && let Err(err) = apply_gamepad_delta_commands(
-                            &mut core,
-                            gamepad_bits[player],
-                            next_gamepad_bits,
-                            if is_player_two_slot(player) {
-                                nes_core::Player::Two
-                            } else {
-                                nes_core::Player::One
-                            },
-                        )
-                    {
-                        eprintln!("{err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
-                    gamepad_bits[player] = next_gamepad_bits;
-                }
-            }
-
-            if overlay.is_open() {
-                *control_flow = ControlFlow::Wait;
-                return;
-            }
-
-            let now = Instant::now();
-            let missed_deadline = match evaluate_frame_deadline(now, next_frame_deadline, TARGET_FRAME_TIME) {
-                FrameDecision::WaitUntil(deadline) => {
-                    *control_flow = ControlFlow::WaitUntil(deadline);
-                    return;
-                }
-                FrameDecision::Step {
-                    missed_deadline,
-                    next_deadline,
-                } => {
-                    next_frame_deadline = next_deadline;
-                    missed_deadline
                 }
             };
+            let now = Instant::now();
             let step_start = Instant::now();
 
             #[cfg(feature = "nova")]
@@ -1347,6 +1262,118 @@ fn advance_core_for_host_frame(core: &mut NesCore, step_mode: StepMode) -> Resul
             Ok(())
         }
     }
+}
+
+fn handle_main_events_cleared(
+    ctx: &mut AppContext<'_>,
+    control_flow: &mut ControlFlow,
+    #[cfg(feature = "mcp-host")] mcp_host: Option<&nes_desktop::mcp_host::McpHost>,
+    desktop_menu: &DesktopMenu,
+    gilrs: Option<&mut Gilrs>,
+    active_gamepads: &mut [Option<GamepadId>; 2],
+    next_frame_deadline: &mut Instant,
+) -> Result<Option<bool>, String> {
+    #[cfg(feature = "mcp-host")]
+    if let Some(host) = mcp_host {
+        host.drain(ctx.core);
+    }
+
+    sync_native_menu_state(
+        desktop_menu,
+        ctx.overlay.is_open(),
+        ctx.rollback_enabled,
+        ctx.rta_manager.is_some(),
+    );
+    while let Some(action) = desktop_menu.poll_action() {
+        if dispatch_app_action(action, ctx, control_flow) {
+            return Ok(None);
+        }
+    }
+
+    if let Some(gilrs_state) = gilrs {
+        while gilrs_state.next_event().is_some() {}
+        let connected = connected_gamepad_ids(
+            gilrs_state
+                .gamepads()
+                .map(|(id, gamepad)| (id, gamepad.is_connected())),
+        );
+        let next_active = select_active_gamepad_ids(&connected, *active_gamepads);
+        if gamepad_assignments_changed(next_active, *active_gamepads) {
+            for player in 0..active_gamepads.len() {
+                if gamepad_slot_changed(next_active, *active_gamepads, player) {
+                    if let Some(gamepad_id) = next_active[player] {
+                        println!(
+                            "Gamepad P{} active: {}",
+                            player + 1,
+                            gilrs_state.gamepad(gamepad_id).name()
+                        );
+                    } else if active_gamepads[player].is_some() {
+                        println!("Gamepad P{} disconnected", player + 1);
+                    }
+                }
+            }
+            *active_gamepads = next_active;
+        }
+
+        for (player, active_gamepad) in active_gamepads.iter().enumerate() {
+            let next_gamepad_bits = active_gamepad
+                .map(|gamepad_id| {
+                    let gamepad = gilrs_state.gamepad(gamepad_id);
+                    gamepad_snapshot_to_bits(GamepadSnapshot {
+                        connected: gamepad.is_connected(),
+                        south_pressed: gamepad.is_pressed(GamepadButton::South),
+                        east_pressed: gamepad.is_pressed(GamepadButton::East),
+                        west_pressed: gamepad.is_pressed(GamepadButton::West),
+                        north_pressed: gamepad.is_pressed(GamepadButton::North),
+                        select_pressed: gamepad.is_pressed(GamepadButton::Select),
+                        start_pressed: gamepad.is_pressed(GamepadButton::Start),
+                        dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
+                        dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
+                        dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
+                        dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
+                        left_x: gamepad.value(GamepadAxis::LeftStickX),
+                        left_y: gamepad.value(GamepadAxis::LeftStickY),
+                    })
+                })
+                .unwrap_or_default();
+            if !ctx.rollback_enabled && !ctx.overlay.is_open() {
+                apply_gamepad_delta_commands(
+                    ctx.core,
+                    ctx.gamepad_bits[player],
+                    next_gamepad_bits,
+                    if is_player_two_slot(player) {
+                        nes_core::Player::Two
+                    } else {
+                        nes_core::Player::One
+                    },
+                )?;
+            }
+            ctx.gamepad_bits[player] = next_gamepad_bits;
+        }
+    }
+
+    if ctx.overlay.is_open() {
+        *control_flow = ControlFlow::Wait;
+        return Ok(None);
+    }
+
+    let now = Instant::now();
+    let missed_deadline =
+        match evaluate_frame_deadline(now, *next_frame_deadline, TARGET_FRAME_TIME) {
+            FrameDecision::WaitUntil(deadline) => {
+                *control_flow = ControlFlow::WaitUntil(deadline);
+                return Ok(None);
+            }
+            FrameDecision::Step {
+                missed_deadline,
+                next_deadline,
+            } => {
+                *next_frame_deadline = next_deadline;
+                missed_deadline
+            }
+        };
+
+    Ok(Some(missed_deadline))
 }
 
 fn capture_path_for_frame(template: &str, frame: u64) -> String {
