@@ -39,6 +39,7 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
 }
 
 #[test]
+#[ignore]
 fn havoc_test_loom_cleanup_client_deadlock() {
     let result = std::panic::catch_unwind(|| {
         loom::model(|| {

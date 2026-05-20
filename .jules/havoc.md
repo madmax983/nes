@@ -98,3 +98,21 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2024-05-20 - nes-mcp Mutex Poisoning Race Condition
+🧨 **The Trigger:** Concurrent looping between `publish_frame` and `frame_chunk` (which simulates a realistic streaming environment).
+📉 **The Stack Trace:**
+```
+thread 'havoc_test_poisoned_mutex_on_panic' panicked at crates/nes-mcp/tests/havoc_mcp_output_race.rs:10:13:
+Havoc closure panic
+thread 'havoc_test_poisoned_mutex_on_panic' panicked at crates/nes-mcp/src/output.rs:194:43:
+output state lock: PoisonError { .. }
+```
+🧪 **Reproduction:** `cargo test -p nes-mcp --test havoc_mcp_output_race -- --ignored`
+😈 **Comment:** A simple panic in the frame publishing closure completely destroys the global frame metadata state because the lock is poisoned. The whole application crashes unrecoverably.
+
+## 2024-05-20 - Concurrency Deadlock in Client Cleanup
+🧨 **The Trigger:** Loom discovers a deadlock / race condition when cleaning up a relay client from the global room map concurrently.
+📉 **The Stack Trace:** Loom model trace panics on deadlock detection.
+🧪 **Reproduction:** `RUSTFLAGS="--cfg loom" cargo test --test havoc_loom_deadlock -- --ignored`
+😈 **Comment:** "Thread-safe" is a lie until proven by `loom`.
