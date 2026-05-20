@@ -1,6 +1,7 @@
 //! Configuration loading and deserialization for the NES emulator workspace.
 //!
 //! This crate parses `nes.toml` files and CLI overrides into a strongly-typed [`NesConfig`] struct.
+pub mod args;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -229,43 +230,26 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
     let mut idx = 0_usize;
     while idx < args.len() {
         let arg = &args[idx];
-        if parse_arg(args, &mut idx, "--config", |value| {
-            if value.starts_with("--") {
-                return Err("missing value after --config".to_owned());
-            }
-            config_path = Some(PathBuf::from(value));
-            Ok(())
-        })? {
+        if crate::args::parse_arg(
+            args,
+            &mut idx,
+            "--config",
+            |value: String| {
+                config_path = Some(PathBuf::from(value));
+            },
+            |v, _| {
+                if v.starts_with("--") {
+                    return Err("missing value after --config".to_owned());
+                }
+                Ok(v.to_owned())
+            },
+        )? {
             continue;
         }
         pass_through.push(arg.clone());
         idx += 1;
     }
     Ok((config_path, pass_through))
-}
-
-fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
-where
-    F: FnMut(&str) -> Result<(), String>,
-{
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(value) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
-        apply(value)?;
-        *idx += 2;
-        Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
-        if value.is_empty() {
-            return Err(format!("missing value after {flag}="));
-        }
-        apply(value)?;
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }
 
 #[cfg(test)]
@@ -440,19 +424,37 @@ window_scale = 9
 
         let start_idx = 0;
         let mut idx = start_idx;
-        let res = super::parse_arg(&args, &mut idx, "--config", |_| Ok(()));
+        let res = crate::args::parse_arg(
+            &args,
+            &mut idx,
+            "--config",
+            |_| {},
+            |v, _| Ok(v.to_string()),
+        );
         assert_eq!(res, Ok(true));
         assert_eq!(idx, start_idx + 2); // Ensure it increments by 2
 
         let mut idx = 0;
         let args2 = vec!["--config=dummy.toml".to_owned(), "extra".to_owned()];
-        let res2 = super::parse_arg(&args2, &mut idx, "--config", |_| Ok(()));
+        let res2 = crate::args::parse_arg(
+            &args2,
+            &mut idx,
+            "--config",
+            |_| {},
+            |v, _| Ok(v.to_string()),
+        );
         assert_eq!(res2, Ok(true));
         assert_eq!(idx, 1); // Ensure it increments by 1
 
         let mut idx = 0;
         let args3 = vec!["extra".to_owned()];
-        let res3 = super::parse_arg(&args3, &mut idx, "--config", |_| Ok(()));
+        let res3 = crate::args::parse_arg(
+            &args3,
+            &mut idx,
+            "--config",
+            |_| {},
+            |v, _| Ok(v.to_string()),
+        );
         assert_eq!(res3, Ok(false));
         assert_eq!(idx, 0); // Unchanged when not matched
     }

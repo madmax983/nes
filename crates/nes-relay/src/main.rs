@@ -533,11 +533,11 @@ mod tests {
     fn parse_args_rejects_invalid_numbers_and_unknown_flags() {
         let latency_err = parse_args(vec!["--latency-ms=not-a-number".to_owned()])
             .expect_err("invalid latency must fail");
-        assert!(latency_err.contains("non-negative integer"));
+        assert!(latency_err.contains("must be a valid number"));
 
         let loss_err =
             parse_args(vec!["--loss-pct=101".to_owned()]).expect_err("percent over 100 must fail");
-        assert!(loss_err.contains("[0, 100]"));
+        assert!(loss_err.contains("must be between 0 and 100"));
 
         let unknown =
             parse_args(vec!["--definitely-not-a-flag".to_owned()]).expect_err("unknown flag");

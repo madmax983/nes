@@ -1,4 +1,5 @@
 use nes_config::DEFAULT_CONFIG_PATH;
+use nes_config::args::parse_arg;
 
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
@@ -286,38 +287,10 @@ fn parse_string_arg(value: &str, _flag: &str) -> Result<String, String> {
     Ok(value.to_owned())
 }
 
-fn parse_arg<T, F, P>(
-    args: &[String],
-    idx: &mut usize,
-    flag: &str,
-    mut apply: F,
-    parse: P,
-) -> Result<bool, String>
-where
-    F: FnMut(T),
-    P: Fn(&str, &str) -> Result<T, String>,
-{
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(val) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
-        apply(parse(val, flag)?);
-        *idx += 2;
-        Ok(true)
-    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
-        apply(parse(val, flag)?);
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
-
 fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {
     value
         .parse::<u8>()
-        .map_err(|_| format!("{flag} must be an integer in [0, 255]"))
+        .map_err(|_| format!("{flag} must be a valid number between 1 and 2"))
 }
 
 fn parse_u32_arg(value: &str, flag: &str) -> Result<u32, String> {

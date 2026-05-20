@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 comfy-table = "7.1"
 crossterm = "0.28"
+nes-config = { version = "0.1.0", path = "../nes-config" }
 nes-netplay = { path = "../nes-netplay" }
 serde_json = "1"
 

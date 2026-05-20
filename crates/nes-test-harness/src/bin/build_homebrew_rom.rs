@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
+use nes_config::args::parse_arg;
 use nes_test_harness::{default_homebrew_rom_path, write_homebrew_rom};
 
 fn main() {
@@ -19,10 +20,12 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let mut args = env::args().skip(1);
+    let args: Vec<String> = env::args().skip(1).collect();
     let mut out_path = default_homebrew_rom_path();
 
-    while let Some(arg) = args.next() {
+    let mut idx = 0;
+    while idx < args.len() {
+        let arg = &args[idx];
         match arg.as_str() {
             "--help" | "-h" => {
                 println!(
@@ -31,13 +34,18 @@ fn run() -> Result<(), String> {
                 );
                 return Ok(());
             }
-            "--out" => {
-                let Some(path) = args.next() else {
-                    return Err("missing value after --out".to_owned());
-                };
-                out_path = PathBuf::from(path);
+            _ => {
+                if parse_arg(
+                    &args,
+                    &mut idx,
+                    "--out",
+                    |v| out_path = PathBuf::from(v),
+                    |v, _| Ok(v.to_string()),
+                )? {
+                    continue;
+                }
+                return Err(format!("unknown argument '{arg}'"));
             }
-            _ => return Err(format!("unknown argument '{arg}'")),
         }
     }
 
