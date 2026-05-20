@@ -1,4 +1,4 @@
-use nes_mcp::{publish_frame_with, frame_chunk};
+use nes_mcp::{frame_chunk, publish_frame_with};
 use std::thread;
 
 #[test]
