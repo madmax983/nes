@@ -183,7 +183,7 @@ fn handle_client(
         .try_clone()
         .map_err(|err| format!("failed to clone stream for writer: {err}"))?;
 
-    let mut line = String::new();
+    let mut line = String::with_capacity(256);
 
     let (tx_out, rx_out) = mpsc::channel::<ServerMessage>();
     thread::spawn(move || {
@@ -736,7 +736,7 @@ mod tests {
             .shutdown(Shutdown::Write)
             .expect("shutdown write half");
         let mut reader = BufReader::new(server);
-        let mut line = String::new();
+        let mut line = String::with_capacity(256);
         let parsed = read_client_message(&mut reader, &mut line)
             .expect("parse message")
             .expect("message present");
@@ -940,7 +940,7 @@ mod tests {
                 .expect("write join");
             client.write_all(b"\n").expect("write newline");
             client.flush().expect("flush write");
-            let mut line = String::new();
+            let mut line = String::with_capacity(256);
             let mut reader = BufReader::new(client);
             let _ = reader.read_line(&mut line).expect("read joined response");
             line

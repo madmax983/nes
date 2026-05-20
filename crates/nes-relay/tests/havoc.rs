@@ -36,7 +36,7 @@ fn havoc_test_read_client_message_dos() {
     thread::sleep(std::time::Duration::from_millis(50));
 
     let mut reader = std::io::BufReader::new(_server);
-    let mut line = String::new();
+    let mut line = String::with_capacity(256);
     let _ = std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
     // After allocating a giant string, parsing it as json should panic by recursing too deeply or hitting a token boundary
     let _ = serde_json::from_str::<nes_netplay::ClientMessage>(&line).unwrap();

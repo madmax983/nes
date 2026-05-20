@@ -110,7 +110,8 @@ fn run() -> Result<(), McpError> {
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("\n{table}");
 
-    while let Some(payload) = read_stdio_message(&mut reader)? {
+    let mut line = String::with_capacity(128);
+    while let Some(payload) = read_stdio_message(&mut reader, &mut line)? {
         let Some(response) = handle_message(&mut state, &payload) else {
             continue;
         };
@@ -275,15 +276,19 @@ fn handle_tools_call(
     Ok(Some(call_result))
 }
 
-fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpError> {
+/// **Performance optimization:** Accepts a mutable `String` buffer (`line`) which is cleared on every iteration
+/// instead of allocating a new `String` internally, eliminating recurring heap allocations on the hot path.
+fn read_stdio_message(
+    reader: &mut impl BufRead,
+    line: &mut String,
+) -> Result<Option<Vec<u8>>, McpError> {
     let mut content_length = None::<usize>;
-    let mut line = String::new();
 
     loop {
         line.clear();
 
         let read = reader
-            .read_line(&mut line)
+            .read_line(line)
             .map_err(|err| McpError::Protocol(format!("failed reading header line: {err}")))?;
         if read == 0 {
             if content_length.is_none() {
@@ -503,26 +508,27 @@ mod tests {
 
     #[test]
     fn read_stdio_message_handles_errors() {
+        let mut line = String::with_capacity(128);
         let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut line).unwrap_err();
         assert!(
             err.to_string()
                 .contains("invalid Content-Length value 'abc'")
         );
 
         let mut reader = b"Something else\r\n\r\n".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut line).unwrap_err();
         assert!(err.to_string().contains("missing Content-Length header"));
 
         let mut reader = b"Content-Length: 100\r\nEOF".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut line).unwrap_err();
         assert!(
             err.to_string()
                 .contains("unexpected EOF while reading MCP headers")
         );
 
         let mut reader = b"Content-Length: 100\r\n\r\nshort".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut line).unwrap_err();
         assert!(err.to_string().contains("failed reading payload body"));
     }
 }

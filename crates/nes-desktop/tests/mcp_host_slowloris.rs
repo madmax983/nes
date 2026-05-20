@@ -1,3 +1,4 @@
+#![cfg(feature = "mcp-host")]
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
@@ -41,7 +42,8 @@ fn havoc_mcp_slowloris_dos() {
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
-    let response = read_framed_message(&mut reader2)
+    let mut line = String::with_capacity(128);
+    let response = read_framed_message(&mut reader2, &mut line)
         .expect("should read response")
         .expect("response should not be empty");
 
