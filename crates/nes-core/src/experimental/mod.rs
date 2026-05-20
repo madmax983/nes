@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Automatically takes screenshots when specific memory conditions are met.
+#[cfg(feature = "nova")]
+pub mod event_camera;
