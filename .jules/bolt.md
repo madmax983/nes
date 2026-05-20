@@ -35,3 +35,11 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+## YYYY-MM-DD - [Pre-allocate Vec capacity to avoid reallocation]
+**Learning:** Initializing heavily used `Vec` vectors with `Vec::new()` in an emulator's hot loop forces unnecessary dynamic re-allocations on the heap once the initial traces start accumulating.
+**Action:** Replace `Vec::new()` with `Vec::with_capacity(N)` for arrays like `bus_trace` and `writes` that predictably grow every cycle. Add inline `///` docs to justify the non-default initialization for future maintainers.
+
+## YYYY-MM-DD - [Avoid Add/Sub on Bitwise Mirrored Regions]
+**Learning:** Resolving mirrored hardware registers like `0x2000 + ((addr - 0x2000) & 0x0007)` involves three separate ALU ops on the hot path, despite the base address `0x2000` not overlapping with the mirrored mask bits.
+**Action:** Use a bitwise OR `0x2000 | (addr & 0x0007)` to combine the base register mapping with the offset mask instead of relying on standard subtraction and addition, yielding a free zero-cost abstraction improvement for the CPU's memory cycle tick.

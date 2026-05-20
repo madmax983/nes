@@ -182,10 +182,11 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
-            writes: Vec::new(),
-            prg_writes: Vec::new(),
-            mmio_reads: RefCell::new(Vec::new()),
-            bus_trace: RefCell::new(Vec::new()),
+            // **Performance optimization:** Avoid dynamic re-allocations on trace and write buffers by pre-allocating capacity.
+            writes: Vec::with_capacity(32),
+            prg_writes: Vec::with_capacity(32),
+            mmio_reads: RefCell::new(Vec::with_capacity(8)),
+            bus_trace: RefCell::new(Vec::with_capacity(8)),
             bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }
@@ -2860,12 +2861,14 @@ fn page_crossed(base: u16, indexed: u16) -> bool {
 }
 
 #[must_use]
+/// **Performance optimization:** Arithmetic simplification `0x2000 | (addr & 0x0007)` prevents redundant
+/// subtract and add operations for mirroring PPU registers, which happens frequently on the hot path.
 const fn normalize_cpu_addr(addr: u16) -> u16 {
     match addr {
         // 2KB internal RAM mirrored through $1FFF.
-        0x0000..=0x1FFF => addr & 0x07FF,
+        0..=0x1FFF => addr & 0x07FF,
         // PPU register mirrors every 8 bytes through $3FFF.
-        0x2000..=0x3FFF => 0x2000 + ((addr - 0x2000) & 0x0007),
+        0x2000..=0x3FFF => 0x2000 | (addr & 0x0007),
         _ => addr,
     }
 }
