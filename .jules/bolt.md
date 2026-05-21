@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Optimized RtaManager Memory Checks]**
+**Learning:** Evaluated triggers using `find_map` created intermediate closure and `Some()` wrappers inside the high-frequency `trigger_fired` loop (executed ~15 times per NES frame).
+**Action:** Replaced `iter_mut().find_map()` with a raw short-circuiting `for` loop, eliminating closure allocation overhead on the most performance-critical path.
