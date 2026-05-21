@@ -355,7 +355,7 @@ fn handle_tools_call(
 /// ```
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
-    let mut line = String::new();
+    let mut line = String::with_capacity(256);
 
     loop {
         line.clear();
@@ -704,6 +704,52 @@ mod coverage_tests {
                 10 * 1024 * 1024 + 1,
                 10 * 1024 * 1024
             ))
+        );
+    }
+}
+
+#[cfg(test)]
+mod sentry_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn read_framed_message_handles_valid_payload() {
+        let payload = b"Content-Length: 4\r\n\r\ntest";
+        let mut reader = Cursor::new(payload);
+        let result = read_framed_message(&mut reader).unwrap();
+        assert_eq!(result.unwrap(), b"test");
+    }
+
+    #[test]
+    fn read_framed_message_returns_none_on_eof() {
+        let payload = b"";
+        let mut reader = Cursor::new(payload);
+        let result = read_framed_message(&mut reader).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn read_framed_message_errors_on_eof_in_headers() {
+        let payload = b"Content-Length: 4\r\n";
+        let mut reader = Cursor::new(payload);
+        let result = read_framed_message(&mut reader);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "unexpected EOF while reading MCP headers"
+        );
+    }
+
+    #[test]
+    fn read_framed_message_errors_on_invalid_content_length() {
+        let payload = b"Content-Length: invalid\r\n\r\n";
+        let mut reader = Cursor::new(payload);
+        let result = read_framed_message(&mut reader);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "invalid Content-Length value 'invalid'"
         );
     }
 }

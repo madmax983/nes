@@ -1,3 +1,5 @@
+#![cfg(feature = "mcp-host")]
+
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
@@ -45,12 +47,15 @@ fn havoc_mcp_slowloris_dos() {
         .expect("should read response")
         .expect("response should not be empty");
 
+    let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
+    assert_eq!(value["result"], serde_json::json!({}));
+
+    drop(stream1);
+    drop(reader2);
+
     let elapsed = start.elapsed();
     assert!(
         elapsed < Duration::from_secs(5),
         "Second client blocked waiting for first client!"
     );
-
-    let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
-    assert_eq!(value["result"], serde_json::json!({}));
 }
