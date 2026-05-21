@@ -1,12 +1,11 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. Verify existing tests for Havoc
+- Use `run_in_bash_session` to execute `git status` and `git diff` to verify the modified `crates/nes-desktop/tests/mcp_host_slowloris.rs` test file.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+2. Run Pre-commit Validation Commands
+- Use `run_in_bash_session` to run `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo fmt --all`.
 
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+3. Pre-commit steps
+- Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
 
-4. **Submit the PR**
+4. Submit PR
+- Use `run_in_bash_session` to run `git status` to determine the active branch, then use the `submit` tool to create a PR on that branch with the title '👺 Havoc: Add test for slowloris vulnerability in mcp-host'. The description must exactly include the sections: '🧨 **The Trigger:**', '📉 **The Stack Trace:**', '🧪 **Reproduction:**', and '😈 **Comment:**'.

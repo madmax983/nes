@@ -98,3 +98,9 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2025-05-21 - Slowloris DoS vulnerability in McpHost
+🧨 **The Trigger:** An incomplete JSON-RPC payload blocks the MCP host server thread.
+📉 **The Stack Trace:** No panic, just a thread hang/deadlock for other clients.
+🧪 **Reproduction:** Run `cargo test --features mcp-host --test mcp_host_slowloris`.
+😈 **Comment:** You assumed a client would finish sending data. You were wrong.
