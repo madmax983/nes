@@ -38,3 +38,6 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+/// Analyzes audio output to simulate haptic rumble feedback.
+#[cfg(feature = "nova")]
+pub mod audio_rumble;
