@@ -130,10 +130,11 @@ impl CompressedTimeline {
                 // Advance the oldest keyframe by absorbing the first delta into
                 // it in-place. This removes one delta (net -1) without breaking
                 // the anchor chain.
-                let delta = self.deltas.pop_front().unwrap();
-                if let Some(oldest) = self.keyframes.front_mut() {
-                    delta.apply(&mut oldest.snapshot);
-                    oldest.frame_id = delta.frame_id;
+                if let Some(delta) = self.deltas.pop_front() {
+                    if let Some(oldest) = self.keyframes.front_mut() {
+                        delta.apply(&mut oldest.snapshot);
+                        oldest.frame_id = delta.frame_id;
+                    }
                 }
             } else {
                 // No deltas anchored to oldest keyframe — drop it and any
