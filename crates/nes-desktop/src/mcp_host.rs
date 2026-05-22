@@ -355,7 +355,8 @@ fn handle_tools_call(
 /// ```
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
-    let mut line = String::new();
+    // ⚡ Bolt: Eliminate heap allocations by pre-allocating buffer for header reading
+    let mut line = String::with_capacity(256);
 
     loop {
         line.clear();
