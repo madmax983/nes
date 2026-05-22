@@ -277,7 +277,7 @@ fn handle_tools_call(
 
 fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpError> {
     let mut content_length = None::<usize>;
-    let mut line = String::new();
+    let mut line = String::with_capacity(128);
 
     loop {
         line.clear();

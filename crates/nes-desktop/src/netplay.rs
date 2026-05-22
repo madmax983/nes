@@ -267,7 +267,7 @@ fn writer_loop(
 
 fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), String> {
     let mut reader = BufReader::new(stream);
-    let mut line = String::new();
+    let mut line = String::with_capacity(128);
     loop {
         line.clear();
         let bytes = reader

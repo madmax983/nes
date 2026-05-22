@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Pre-allocating String capacity for line buffers in network read loops**
+**Learning:** Found multiple loops declaring `let mut line = String::new();` internally instead of pre-allocating using `String::with_capacity()` outside or avoiding internal repeated default allocation. In this codebase specifically, changing `String::new()` to `String::with_capacity(128)` inside line reading loops prevents numerous intermediate reallocation steps during `read_line`, leading to zero-cost abstraction without altering structure significantly.
+**Action:** Always check `String::new()` variables meant for buffered `read_line` ops and use `with_capacity()` where a reasonable payload size (e.g., 128 or 256 bytes) is expected.
