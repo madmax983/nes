@@ -1,8 +1,36 @@
+#![cfg(feature = "mcp-host")]
+
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
 use nes_desktop::mcp_host::{McpHost, read_framed_message};
+
+struct PanicOnInfiniteEofReader<R: std::io::Read> {
+    inner: R,
+    eof_count: usize,
+}
+
+impl<R: std::io::Read> PanicOnInfiniteEofReader<R> {
+    fn new(inner: R) -> Self {
+        Self { inner, eof_count: 0 }
+    }
+}
+
+impl<R: std::io::Read> std::io::Read for PanicOnInfiniteEofReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let res = self.inner.read(buf);
+        if let Ok(0) = res {
+            self.eof_count += 1;
+            if self.eof_count > 100 {
+                panic!("Caught infinite loop on EOF!");
+            }
+        } else {
+            self.eof_count = 0;
+        }
+        res
+    }
+}
 
 #[test]
 fn havoc_mcp_slowloris_dos() {
@@ -38,7 +66,7 @@ fn havoc_mcp_slowloris_dos() {
     stream2
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
-    let mut reader2 = BufReader::new(stream2);
+    let mut reader2 = BufReader::new(PanicOnInfiniteEofReader::new(stream2));
 
     let start = Instant::now();
     let response = read_framed_message(&mut reader2)
@@ -53,4 +81,5 @@ fn havoc_mcp_slowloris_dos() {
 
     let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
     assert_eq!(value["result"], serde_json::json!({}));
+    drop(reader2);
 }

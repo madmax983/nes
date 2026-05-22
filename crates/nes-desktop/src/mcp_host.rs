@@ -412,6 +412,36 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
 
 #[cfg(test)]
 mod tests {
+
+    pub struct PanicOnInfiniteEofReader<R: std::io::Read> {
+        inner: R,
+        eof_count: usize,
+    }
+
+    impl<R: std::io::Read> PanicOnInfiniteEofReader<R> {
+        pub fn new(inner: R) -> Self {
+            Self {
+                inner,
+                eof_count: 0,
+            }
+        }
+    }
+
+    impl<R: std::io::Read> std::io::Read for PanicOnInfiniteEofReader<R> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let res = self.inner.read(buf);
+            if let Ok(0) = res {
+                self.eof_count += 1;
+                if self.eof_count > 100 {
+                    panic!("Caught infinite loop on EOF!");
+                }
+            } else {
+                self.eof_count = 0;
+            }
+            res
+        }
+    }
+
     use super::*;
     use nes_core::NesCore;
     use std::io::{BufReader, Cursor};
@@ -432,7 +462,7 @@ mod tests {
     fn read_response_with_host_drain(
         host: &McpHost,
         core: &mut NesCore,
-        reader: &mut BufReader<TcpStream>,
+        reader: &mut impl std::io::BufRead,
         context: &str,
     ) -> Vec<u8> {
         let deadline = Instant::now() + Duration::from_secs(2);
@@ -576,14 +606,16 @@ mod tests {
         let mut wire = Vec::<u8>::new();
         write_framed_message(&mut wire, &value).expect("framed write should succeed");
 
-        let mut reader = BufReader::new(Cursor::new(wire));
+        let mut reader = BufReader::new(PanicOnInfiniteEofReader::new(Cursor::new(wire)));
         let payload = read_framed_message(&mut reader)
             .expect("framed read should succeed")
             .expect("payload should exist");
         let parsed: Value = serde_json::from_slice(&payload).expect("payload JSON should decode");
         assert_eq!(parsed, value);
 
-        let mut bad_reader = BufReader::new(Cursor::new(b"{}\r\n\r\n".to_vec()));
+        let mut bad_reader = BufReader::new(PanicOnInfiniteEofReader::new(Cursor::new(
+            b"{}\r\n\r\n".to_vec(),
+        )));
         let err =
             read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
         assert!(err.contains("missing Content-Length"));
@@ -602,11 +634,11 @@ mod tests {
         stream
             .set_read_timeout(Some(Duration::from_millis(500)))
             .expect("set read timeout");
-        let mut reader = BufReader::new(
+        let mut reader = BufReader::new(PanicOnInfiniteEofReader::new(
             stream
                 .try_clone()
                 .expect("client stream clone for reader should succeed"),
-        );
+        ));
 
         let ping_request = json!({
             "jsonrpc": "2.0",
@@ -674,6 +706,7 @@ mod tests {
 #[cfg(test)]
 mod coverage_tests {
     use super::*;
+    use crate::mcp_host::tests::PanicOnInfiniteEofReader;
     use std::io::Cursor;
 
     #[test]
@@ -686,7 +719,8 @@ mod coverage_tests {
     fn test_mcp_host_payload_size_limit() {
         // Test exactly at the boundary limit
         let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024);
-        let mut reader = std::io::BufReader::new(Cursor::new(payload));
+        let mut reader =
+            std::io::BufReader::new(PanicOnInfiniteEofReader::new(Cursor::new(payload)));
         let result = read_framed_message(&mut reader);
         assert_eq!(
             result,
@@ -695,7 +729,8 @@ mod coverage_tests {
 
         // Test one byte over the boundary limit
         let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024 + 1);
-        let mut reader = std::io::BufReader::new(Cursor::new(payload));
+        let mut reader =
+            std::io::BufReader::new(PanicOnInfiniteEofReader::new(Cursor::new(payload)));
         let result = read_framed_message(&mut reader);
         assert_eq!(
             result,
