@@ -98,3 +98,20 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2025-05-23 - Fuzzing the Frontends and Desktop Configurations
+
+**The Trigger:**
+Public APIs lacking strict validation of input data. E.g. strings passed as tool names or raw button ids being parsed blindly, or numeric parsing (u64 / u32) without handling overflow. The MCP host daemon also allowed uncontrolled buffer allocations given a forged Content-Length header.
+
+**The Stack Trace:**
+(Varies by sub-crate)
+- `nes_desktop` panicked when parsing an overflow value like "12345678912345678912" to `u32` for `parse_u32_arg`.
+- `nes_mcp` daemon (in `read_framed_message`) caused an OOM panic via `vec![0_u8; usize::MAX]`.
+
+**Reproduction:**
+- `cargo test -p nes-desktop --test havoc -- --ignored`
+- `cargo test -p nes-mcp --test mcp_havoc_crash`
+
+**Comment:**
+Never trust inputs that derive from user arguments or DOM strings. Never trust headers from an external client without a ceiling.

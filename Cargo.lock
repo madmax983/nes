@@ -3222,6 +3222,7 @@ dependencies = [
 name = "nes-config"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "serde",
  "toml",
 ]
@@ -3291,6 +3292,7 @@ name = "nes-netplay"
 version = "0.1.0"
 dependencies = [
  "nes-core",
+ "proptest",
  "serde",
  "serde_json",
 ]
@@ -3351,6 +3353,7 @@ name = "nes-web"
 version = "0.1.0"
 dependencies = [
  "nes-core",
+ "proptest",
  "wasm-bindgen",
 ]
 

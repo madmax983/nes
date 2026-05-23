@@ -20,11 +20,17 @@ proptest! {
     }
 
     #[test]
-    #[ignore = "havoc target"]
-    fn havoc_fuzz_desktop_args(
-        args in proptest::collection::vec(".*", 0..10),
+    #[should_panic]
+    #[ignore = "Havoc Proptest Overflow Attack"]
+    fn havoc_test_parse_args_overflow(
+        latency in "\\d{20,100}" // An overly large number that causes panic on unwrap because it overflows the `u32`
     ) {
-        let _ = parse_runtime_args(&args);
+        let args = vec![
+            "--netplay-delay".to_owned(),
+            latency
+        ];
+        // The proptest finds strings that correctly parse regex but panic on u32 cast
+        let _ = parse_runtime_args(&args).unwrap();
     }
 }
 
