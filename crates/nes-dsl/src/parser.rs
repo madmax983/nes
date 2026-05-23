@@ -124,7 +124,10 @@ pub(crate) fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> 
 }
 
 pub(crate) fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
-    let mut parts = Vec::new();
+    // **⚡ Bolt Optimization:** Pre-calculate the maximum possible number of parts by counting commas
+    // in the input string. This prevents intermediate heap reallocations during the parsing loop.
+    let capacity = input.chars().filter(|&c| c == ',').count() + 1;
+    let mut parts = Vec::with_capacity(capacity);
     let mut current_start = 0;
     let mut in_string = false;
     let mut escaped = false;
@@ -257,4 +260,14 @@ pub(crate) fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<Oper
     }
 
     Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(operand.trim(), line_no)?))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_csv_allocation() {
+        let parts = split_csv(r#"A, B, C"#).expect("csv parse");
+        assert_eq!(parts.capacity(), 3);
+    }
 }

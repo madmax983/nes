@@ -1229,7 +1229,9 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
 }
 
 fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
-    let mut out = Vec::new();
+    // **⚡ Bolt Optimization:** Pre-allocate maximum required capacity by counting commas.
+    let capacity = input.chars().filter(|&c| c == ',').count() + 1;
+    let mut out = Vec::with_capacity(capacity);
     let mut in_string = false;
     let mut escaped = false;
     let mut start_idx = 0;
@@ -1908,6 +1910,12 @@ mod tests {
             Expr::Symbol("LABEL_NAME".to_owned())
         );
         assert!(parse_expr("-label_name", 1).is_err());
+    }
+
+    #[test]
+    fn test_csv_allocation() {
+        let parts = split_csv(r#"A, B, C"#).expect("csv parse");
+        assert_eq!(parts.capacity(), 3);
     }
 
     #[test]

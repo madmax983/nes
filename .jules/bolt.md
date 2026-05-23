@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Eliminating Vec Reallocations in CSV Parsing]**
+**Learning:** [When parsing comma-separated lists, using `Vec::new()` causes intermediate heap allocations as the vector grows. Counting the number of commas beforehand provides an accurate capacity estimate.]
+**Action:** [Use `input.chars().filter(|&c| c == ',').count() + 1` to pre-allocate the vector with `Vec::with_capacity()` and eliminate O(N) reallocations during parsing.]
