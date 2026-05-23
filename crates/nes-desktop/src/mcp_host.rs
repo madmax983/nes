@@ -661,6 +661,49 @@ mod tests {
     }
 
     #[test]
+    fn handle_message_invalid_json() {
+        let (request_tx, _request_rx) = std::sync::mpsc::channel();
+        let parse =
+            handle_message(b"{invalid_json}", &request_tx).expect("parse errors should respond");
+        assert_eq!(parse["error"]["code"], -32700);
+    }
+
+    #[test]
+    fn handle_message_invalid_version() {
+        let (request_tx, _request_rx) = std::sync::mpsc::channel();
+        let wrong_version_payload = serde_json::to_vec(&serde_json::json!({
+            "jsonrpc": "1.0",
+            "method": "notifications/initialized"
+        }))
+        .unwrap();
+        assert_eq!(handle_message(&wrong_version_payload, &request_tx), None);
+    }
+
+    #[test]
+    fn read_framed_message_invalid_length() {
+        let payload = b"Content-Length: xyz\r\n\r\n".to_vec();
+        let mut reader = std::io::BufReader::new(Cursor::new(payload));
+        assert!(
+            read_framed_message(&mut reader)
+                .unwrap_err()
+                .contains("invalid Content-Length")
+        );
+    }
+
+    #[test]
+    fn read_framed_message_eof() {
+        let mut reader = std::io::BufReader::new(Cursor::new(b"".to_vec()));
+        assert_eq!(read_framed_message(&mut reader).unwrap(), None);
+
+        let mut reader2 = std::io::BufReader::new(Cursor::new(b"Content-Length: 10\r\n".to_vec()));
+        assert!(
+            read_framed_message(&mut reader2)
+                .unwrap_err()
+                .contains("unexpected EOF")
+        );
+    }
+
+    #[test]
     fn host_start_fails_on_invalid_bind_address() {
         let result = McpHost::start("256.256.256.256:0");
         if let Err(err) = result {
@@ -684,6 +727,15 @@ mod coverage_tests {
 
     #[test]
     fn test_mcp_host_payload_size_limit() {
+        // Test well below limit to ensure logic doesn't break
+        let payload = format!("Content-Length: {}\r\n\r\n", 1024);
+        let mut reader = std::io::BufReader::new(std::io::Cursor::new(payload));
+        let result = read_framed_message(&mut reader);
+        assert_eq!(
+            result,
+            Err("failed reading payload body: failed to fill whole buffer".to_owned())
+        );
+
         // Test exactly at the boundary limit
         let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024);
         let mut reader = std::io::BufReader::new(Cursor::new(payload));

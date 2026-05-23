@@ -242,7 +242,12 @@ fn handle_tools_call(
 
     let args = match params_obj.remove("arguments") {
         Some(Value::Object(map)) => map,
-        _ => Default::default(),
+        Some(_) => {
+            return Err(RpcError::invalid_params(
+                "tools/call arguments must be an object",
+            ));
+        }
+        None => Default::default(),
     };
     let tool_params = map_tool_arguments(args);
 
