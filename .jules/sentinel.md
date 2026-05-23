@@ -47,3 +47,7 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+## 2024-05-18 - Equivalent Mutant in `decode_string_literal`
+**Mutant:** Replaced `|` with `^` in `decode_string_literal`
+**Diagnosis:** The bitwise OR operation `hi_val << 4 | lo_val` operates on non-overlapping bitfields. Replacing `|` with `^` is mathematically equivalent when the bitfields do not overlap, making this an unviable/equivalent mutant that should be skipped.
+**Kill Shot:** None. This should be added to `.mutants.toml` skip list or ignored.
