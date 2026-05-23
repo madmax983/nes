@@ -35,9 +35,3 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
-
-## 2025-05-23 - Avoided Iterator Heap Allocation on Error Paths
-
-**Learning:** When generating comma-separated string lists from collections, using `Vec::extend` or `.collect::<Vec<_>>()` simply to aggregate elements before formatting is unnecessary and creates intermediate heap allocations. Even on error paths or during CLI startup, relying on iterators like `std::iter::once().chain(...)` passed to a generic formatting function allows us to maintain a zero-cost abstraction up until the final `String::with_capacity` allocation.
-
-**Action:** Look for `vec!` or `.collect()` usage right before string formatting operations (like `join(", ")`) and replace them by passing chained iterators directly into a generic formatting function that pre-computes the capacity.

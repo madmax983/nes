@@ -81,8 +81,8 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 
     let rom_path = runtime_args
         .rom_path
-        .or(config.desktop.rom_path)
-        .or(config.roms.smb)
+        .or_else(|| config.desktop.rom_path.clone())
+        .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
             format!(
                 "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
