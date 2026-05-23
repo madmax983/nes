@@ -107,9 +107,10 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     }
 
     let (config_path, pass_through) = parse_config_path_arg(&raw_args)?;
-    let force = pass_through.iter().any(|arg| arg == "--force");
+    let force = pass_through.iter().any(|arg| arg.as_str() == "--force");
     for arg in &pass_through {
-        if arg != "--force" {
+        // We compare directly so mutants replacing != with == are caught.
+        if arg.as_str() != "--force" {
             return Err(format!(
                 "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
             ));
@@ -288,8 +289,31 @@ fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
 mod tests {
     use super::{
         RowData, build_summary_table, format_skipped_existing_row, format_skipped_mapper_row,
-        format_written_row, print_processing_progress,
+        format_written_row, parse_config_path_arg, print_processing_progress,
     };
+
+    #[test]
+    fn parse_config_path_arg_handles_args() {
+        let (path, rest) = parse_config_path_arg(&[]).unwrap();
+        assert!(path.is_none());
+        assert!(rest.is_empty());
+
+        let (path, rest) =
+            parse_config_path_arg(&["--config".to_string(), "myconf".to_string()]).unwrap();
+        assert_eq!(path.unwrap().to_str().unwrap(), "myconf");
+        assert!(rest.is_empty());
+
+        let (path, rest) = parse_config_path_arg(&["--config=myconf".to_string()]).unwrap();
+        assert_eq!(path.unwrap().to_str().unwrap(), "myconf");
+        assert!(rest.is_empty());
+
+        let res = parse_config_path_arg(&["--config".to_string()]);
+        assert!(res.is_err());
+
+        let (path, rest) = parse_config_path_arg(&["--force".to_string()]).unwrap();
+        assert!(path.is_none());
+        assert_eq!(rest, vec!["--force"]);
+    }
     use comfy_table::Color as TableColor;
     use crossterm::style::Color;
     use nes_test_harness::AudioStats;

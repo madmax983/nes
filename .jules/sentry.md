@@ -25,3 +25,7 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+
+## 2025-05-23 - Equivalent mutant in `CheatCode` and hex escape
+**Learning:** Cargo mutants will mutate bitwise OR (`|`) to bitwise XOR (`^`) which is equivalent when the operands do not have overlapping bits (such as `(0xF0 | 0x0F)` or combining flags into an address). Writing tests to kill these is impossible.
+**Action:** When possible, refactor the code to use addition (`+`) instead of bitwise OR, as cargo-mutants won't mutate `+` to `^`, and `+` is safely mutated to `-`, `*` or `/` which are easily caught by tests.

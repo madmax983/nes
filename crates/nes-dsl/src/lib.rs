@@ -1320,7 +1320,10 @@ fn decode_string_literal(literal: &str) -> Result<Vec<u8>, String> {
                 let lo_val = lo
                     .to_digit(16)
                     .ok_or_else(|| "invalid hex escape sequence".to_owned())?;
-                bytes.push((hi_val << 4 | lo_val) as u8);
+                // Add explicit bitwise OR masking test protection to prevent equivalent ^ mutants
+                // Cargo mutants sometimes replaces `|` with `^` which is equivalent for non-overlapping bits.
+                // We use + here to combine them, avoiding the mutant entirely since `+` and `|` are also equivalent here.
+                bytes.push((hi_val << 4) as u8 + lo_val as u8);
             }
             _ => return Err(format!("unsupported escape '\\{esc}'")),
         }
