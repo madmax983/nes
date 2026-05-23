@@ -24,7 +24,7 @@ impl KeyframePolicy {
     /// ## Examples
     ///
     /// ```
-    /// use nes_rewind::policy::KeyframePolicy;
+    /// use nes_rewind::KeyframePolicy;
     ///
     /// let mut policy = KeyframePolicy::new(60, 4000);
     /// assert_eq!(policy.should_promote(100), false); // Still under interval

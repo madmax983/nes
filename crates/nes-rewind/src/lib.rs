@@ -1,18 +1,18 @@
 //! Time Machine: player-facing rewind with anchor+delta compression.
 
 /// Rewind cursor for querying historical state.
-pub mod cursor;
+mod cursor;
 /// State delta encoding and decoding utilities.
-pub mod delta;
+mod delta;
 /// Keyframe placement policy and heuristic logic.
-pub mod policy;
+mod policy;
 /// Ring-buffer timeline for storing compressed historical states.
-pub mod timeline;
+mod timeline;
 /// Asynchronous worker orchestrating state capturing and compression.
-pub mod worker;
+mod worker;
 
 pub use cursor::{RewindCursor, RewindSpeed};
-pub use delta::{ArrayDelta, FieldDelta, FrameDelta};
+pub use delta::{ArrayDelta, FieldDelta, FrameDelta, apply_deltas};
 pub use policy::KeyframePolicy;
 pub use timeline::CompressedTimeline;
 pub use worker::{TimeMachine, TimeMachineConfig, TimeMachineState};

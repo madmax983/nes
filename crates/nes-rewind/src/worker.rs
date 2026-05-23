@@ -90,7 +90,7 @@ enum WorkerReply {
 ///
 /// ```no_run
 /// use nes_core::{Command, NesCore};
-/// use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
+/// use nes_rewind::{TimeMachine, TimeMachineConfig};
 ///
 /// let mut core = NesCore::new();
 /// let mut tm = TimeMachine::new(TimeMachineConfig::default());

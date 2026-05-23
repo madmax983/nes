@@ -35,7 +35,7 @@ use nes_desktop::rta::{
 };
 use nes_desktop::session_cheats::SessionCheats;
 use nes_netplay::{RollbackConfig, RollbackEngine};
-use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
+use nes_rewind::{TimeMachine, TimeMachineConfig};
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};

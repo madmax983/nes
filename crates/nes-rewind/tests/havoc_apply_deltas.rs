@@ -1,4 +1,4 @@
-use nes_rewind::delta::{ArrayDelta, apply_deltas};
+use nes_rewind::{ArrayDelta, apply_deltas};
 use proptest::prelude::*;
 use smallvec::SmallVec;
 
