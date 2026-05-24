@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Remove Hardcoded Memory Addresses in nes-core**
+**Tangle:** The `api.rs` and `cpu/engine.rs` files within `nes-core` contained hardcoded memory address ranges (e.g., `0x8000..=0xFFFF`, `0x2000..=0x3FFF`, `0x4000..=0x4017`). This leaked bus routing details across modules and made the codebase brittle, violating domain boundaries.
+**Blueprint:** Refactored `api.rs` and `cpu/engine.rs` to use the `map_region` function and the `BusRegion` enum from the `bus.rs` module. Replaced explicit address ranges with clean pattern matching against domain types like `BusRegion::CartridgePrgRom`, `BusRegion::PpuRegisters`, and `BusRegion::ApuIo`.

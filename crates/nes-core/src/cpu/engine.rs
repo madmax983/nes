@@ -7,6 +7,7 @@
 use core::fmt;
 use std::cell::{Cell, RefCell};
 
+use crate::bus::{BusRegion, map_region};
 use crate::cpu::status::Status;
 
 const STACK_BASE: u16 = 0x0100;
@@ -2860,12 +2861,12 @@ fn page_crossed(base: u16, indexed: u16) -> bool {
 }
 
 #[must_use]
-const fn normalize_cpu_addr(addr: u16) -> u16 {
-    match addr {
+fn normalize_cpu_addr(addr: u16) -> u16 {
+    match map_region(addr) {
         // 2KB internal RAM mirrored through $1FFF.
-        0x0000..=0x1FFF => addr & 0x07FF,
+        BusRegion::CpuRam => addr & 0x07FF,
         // PPU register mirrors every 8 bytes through $3FFF.
-        0x2000..=0x3FFF => 0x2000 + ((addr - 0x2000) & 0x0007),
+        BusRegion::PpuRegisters => 0x2000 + ((addr - 0x2000) & 0x0007),
         _ => addr,
     }
 }

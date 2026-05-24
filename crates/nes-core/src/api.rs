@@ -4,7 +4,9 @@
 //! injecting inputs, and querying its state. The [`NesCore`] struct is the
 //! main entry point for host applications.
 
+use crate::bus::{BusRegion, map_region};
 use crate::constants::*;
+
 use core::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -686,7 +688,7 @@ impl NesCore {
     /// assert_eq!(core.cpu_a(), 0x42);
     /// ```
     pub fn load_cpu_bytes(&mut self, start: u16, bytes: &[u8]) {
-        if start >= 0x8000 {
+        if map_region(start) == BusRegion::CartridgePrgRom {
             self.mapper = None;
             self.reset_pc = DEFAULT_START_PC;
         }
@@ -741,13 +743,19 @@ impl NesCore {
     /// Reads CPU-visible memory with MMIO-aware behavior.
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
-        match addr {
-            0x2002 => self.ppu.status(),
-            0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
-            0x2007 => self.ppu.peek_data_for_cpu_read(),
-            0x4015 => self.apu.peek_status(),
-            0x4016 => self.ports.controller_port_sample(Player::One),
-            0x4017 => self.ports.controller_port_sample(Player::Two),
+        match map_region(addr) {
+            BusRegion::PpuRegisters => match normalize_ppu_register_addr(addr) {
+                0x2002 => self.ppu.status(),
+                0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
+                0x2007 => self.ppu.peek_data_for_cpu_read(),
+                _ => self.cpu.read_byte(addr),
+            },
+            BusRegion::ApuIo => match addr {
+                0x4015 => self.apu.peek_status(),
+                0x4016 => self.ports.controller_port_sample(Player::One),
+                0x4017 => self.ports.controller_port_sample(Player::Two),
+                _ => self.cpu.read_byte(addr),
+            },
             _ => self.cpu.read_byte(addr),
         }
     }
@@ -1404,9 +1412,11 @@ impl NesCore {
         let Some(mapper) = self.mapper.as_ref() else {
             return;
         };
-        for addr in 0x8000..=0xFFFF {
-            let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
-            self.cpu.write_byte(addr, value);
+        for addr in 0..=0xFFFF {
+            if map_region(addr) == BusRegion::CartridgePrgRom {
+                let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
+                self.cpu.write_byte(addr, value);
+            }
         }
     }
 
@@ -1471,36 +1481,34 @@ impl NesCore {
     }
 
     fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
+        let mut remap_needed = false;
+        let mut ppu_changed = false;
 
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
-            self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
-            true
-        } else {
-            false
-        };
-
-        if (0x4000..=0x4017).contains(&addr) {
-            if addr == 0x4014 {
-                self.pending_oam_dma_page = Some(value);
-            } else if addr == 0x4016 {
-                self.ports.write_controller_strobe(value);
-            } else {
-                self.apu.write_register(addr, value);
+        match map_region(addr) {
+            BusRegion::CartridgePrgRom => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+                    let chr_window = self.ppu.chr_window_snapshot();
+                    mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                    mapper.write_prg(addr, value);
+                    remap_needed = true;
+                }
             }
+            BusRegion::PpuRegisters => {
+                self.ppu
+                    .write_register(normalize_ppu_register_addr(addr), value);
+                ppu_changed = true;
+            }
+            BusRegion::ApuIo => {
+                if addr == 0x4014 {
+                    self.pending_oam_dma_page = Some(value);
+                } else if addr == 0x4016 {
+                    self.ports.write_controller_strobe(value);
+                } else {
+                    self.apu.write_register(addr, value);
+                }
+            }
+            _ => {}
         }
 
         if remap_needed {
@@ -1564,16 +1572,22 @@ impl NesCore {
     }
 
     fn apply_cpu_read_side_effect(&mut self, addr: u16) {
-        match addr {
-            0x2002 => self.ppu.on_status_read(),
-            0x2007 => {
-                let _ = self.ppu.consume_data_read();
-            }
-            0x4015 => {
-                let _ = self.apu.read_status();
-            }
-            0x4016 => self.ports.consume_controller_read(Player::One),
-            0x4017 => self.ports.consume_controller_read(Player::Two),
+        match map_region(addr) {
+            BusRegion::PpuRegisters => match normalize_ppu_register_addr(addr) {
+                0x2002 => self.ppu.on_status_read(),
+                0x2007 => {
+                    let _ = self.ppu.consume_data_read();
+                }
+                _ => {}
+            },
+            BusRegion::ApuIo => match addr {
+                0x4015 => {
+                    let _ = self.apu.read_status();
+                }
+                0x4016 => self.ports.consume_controller_read(Player::One),
+                0x4017 => self.ports.consume_controller_read(Player::Two),
+                _ => {}
+            },
             _ => {}
         }
     }
