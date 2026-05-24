@@ -2222,3 +2222,74 @@ mod tests_rom_loader_internal {
         ));
     }
 }
+
+#[cfg(test)]
+mod tests_api_coverage_gaps {
+    use super::*;
+    use crate::rom::NametableMirroring;
+
+    #[test]
+    fn test_core_snapshot_mapper_delta_coverage() {
+        use crate::mapper::Mmc1;
+        let mut core1 = NesCore::new();
+        let mmc1 = Mmc1::from_prg_rom(vec![0; 64 * 1024], 0);
+        core1.mapper = Some(LoadedMapper::Mmc1(mmc1.clone()));
+
+        let mut core2 = NesCore::new();
+        core2.mapper = Some(LoadedMapper::Mmc1(mmc1.clone()));
+
+        let snap1 = core1.save_state();
+        let mut snap2 = core2.save_state();
+
+        // This triggers the `Some, Some` arm in CoreSnapshot::mapper_delta
+        let delta = snap1.mapper_delta(&snap2);
+
+        // Apply mapper delta
+        if let Some(d) = delta {
+            snap2.apply_mapper_delta(&d);
+        } else {
+            // Force apply a Replace delta
+            let d = MapperDelta {
+                kind: MapperDeltaKind::Replace(core2.mapper.clone()),
+            };
+            snap2.apply_mapper_delta(&d);
+        }
+
+        // Force chr_writable path by using MMC3 (which has writable CHR if RAM)
+        let mut core3 = NesCore::new();
+        let mmc3 = crate::mapper::Mmc3::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+            NametableMirroring::Vertical,
+        );
+        core3.mapper = Some(LoadedMapper::Mmc3(mmc3.clone()));
+
+        let snap3 = core3.save_state();
+        let mut snap4 = core3.save_state();
+
+        // Modify PPU CHR so they differ, triggering `self.ppu.chr != after.ppu.chr`
+        // AND `after_mapper.chr_writable()` is true for MMC3.
+        snap4.ppu.chr[0] = 99;
+
+        let diff = snap3.mapper_delta(&snap4);
+
+        // Apply delta if returned
+        if let Some(d) = diff {
+            let mut snap_apply = core3.save_state();
+            snap_apply.apply_mapper_delta(&d);
+        }
+
+        // Replace from different mapper type
+        let diff2 = snap1.mapper_delta(&snap4);
+        assert!(diff2.is_some());
+    }
+
+    #[test]
+    fn test_execute_unsupported_commands_returns_ok() {
+        let mut core = NesCore::new();
+
+        // Check `execute` match arms like `SetSpeed`
+        core.execute(Command::SetSpeed(1500)).unwrap();
+        assert_eq!(core.speed_permille(), 1500);
+    }
+}

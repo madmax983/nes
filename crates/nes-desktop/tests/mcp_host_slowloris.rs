@@ -23,7 +23,7 @@ fn havoc_mcp_slowloris_dos() {
 
     // We send a valid request from client 2. It's a notification, so it doesn't need a response,
     // but the server should be able to parse it without blocking on client 1.
-    // Wait, let's use tools/list which gets a response.
+    // Wait, let's use ping which gets a response.
     let ping_request = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
