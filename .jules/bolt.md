@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**Remove unnecessary Option fallback clones**
+**Learning:** When chaining `Option` fallbacks where the fallback value is already an owned `Option` variable that can be safely consumed (e.g. from a local config object that won't need that field again), replacing `.or_else(|| val.clone())` with `.or(val)` transfers ownership and eliminates unnecessary heap allocations from cloning strings.
+**Action:** Always prefer consuming owned `Option` fallbacks using `.or(val)` over cloning them in a closure when lifetimes allow, to adhere to zero-cost abstraction principles.
