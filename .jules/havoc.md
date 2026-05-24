@@ -98,3 +98,13 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+**[Macro Engine DoS Hang]**
+**The Trigger:** A WAIT command with u64::MAX frames in the MCP macro engine (`WAIT 18446744073709551615`).
+**The Stack Trace:**
+```
+thread 'havoc_crash_mcp_dos_wait_frames' panicked at crates/nes-mcp/tests/havoc_macro_dos.rs:18:10:
+timeout: Timeout
+```
+**Reproduction:** Run `cargo test --test havoc_macro_dos`.
+**Comment:** The core simulator trusts the macro parser to wait up to an eternity, bringing the host thread completely down.
