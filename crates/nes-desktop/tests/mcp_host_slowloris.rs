@@ -1,3 +1,4 @@
+#![cfg(feature = "mcp-host")]
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
