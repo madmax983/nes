@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flattening `if let` blocks violating clippy::collapsible-if]**
+**Learning:** Found nested `if let Some(x) = y` statements in `gamepad.rs` and `main.rs` that triggered `clippy::collapsible_if` warnings. Suppressing the warning with `#[allow(clippy::collapsible_if)]` is an anti-pattern as it preserves the nested structure.
+**Action:** Use guard clauses (`let Some(x) = y else { return/continue; };`) to unpack variables sequentially and return early, preventing indentation build-up and satisfying the linter without unstable `let_chains` features.

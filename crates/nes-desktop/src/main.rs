@@ -528,11 +528,12 @@ fn release_all_buttons(core: &mut NesCore) {
     }
 }
 
+#[allow(clippy::collapsible_if)]
 fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
-        && let Some(mask) = map_key_event_to_button_bit(key_code)
-    {
-        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+    if let Some(key_code) = map_virtual_keycode(key) {
+        if let Some(mask) = map_key_event_to_button_bit(key_code) {
+            *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+        }
     }
 }
 

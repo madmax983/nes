@@ -84,6 +84,7 @@ pub fn connected_gamepad_ids(
 /// assert_eq!(next[0], Some(id0));
 /// assert_eq!(next[1], Some(id1));
 /// ```
+#[allow(clippy::collapsible_if)]
 pub fn select_active_gamepad_ids(
     connected: &[GamepadId],
     current: [Option<GamepadId>; 2],
@@ -91,11 +92,10 @@ pub fn select_active_gamepad_ids(
     let mut next = [None::<GamepadId>; 2];
 
     for player in 0..next.len() {
-        if let Some(gamepad_id) = current[player]
-            && connected.contains(&gamepad_id)
-            && !next.contains(&Some(gamepad_id))
-        {
-            next[player] = Some(gamepad_id);
+        if let Some(gamepad_id) = current[player] {
+            if connected.contains(&gamepad_id) && !next.contains(&Some(gamepad_id)) {
+                next[player] = Some(gamepad_id);
+            }
         }
     }
 

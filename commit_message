@@ -1,0 +1,6 @@
+⚒️ Forge: Flatten nested if let blocks
+
+🚰 Smell: In `crates/nes-desktop/src/main.rs` and `crates/nes-desktop/src/gamepad.rs`, there were nested `if let` blocks using unstable `let_chains` feature syntax (`if let ... && let ...`).
+✨ Solution: Replaced the unstable syntax and nested blocks with Guard Clauses (`let Some(x) = y else { return; }`) to unpack variables sequentially and return/continue early without indentation buildup.
+🧼 Benefit: Resolves clippy warnings and standardizes code to stable Rust without needing `clippy::collapsible_if` suppression or unstable features, improving readability and maintainability.
+🛡️ Verification: Tests passed. No logic changed.
