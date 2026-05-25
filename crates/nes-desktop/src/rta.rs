@@ -1166,14 +1166,13 @@ impl RtaManager {
     where
         F: FnMut(u16) -> u8,
     {
-        let Some(runtime) = self
-            .triggers
-            .iter_mut()
-            .find_map(|(s, r)| if *s == slot { Some(r) } else { None })
-        else {
-            return false;
-        };
-        runtime.evaluate(&mut read_u8)
+        // ⚡ Bolt Optimization: Replace `iter_mut().find_map(...)` closure allocation and `Option` wrapping overhead with a raw, short-circuiting `for` loop in this highly sensitive hot path.
+        for (s, r) in self.triggers.iter_mut() {
+            if *s == slot {
+                return r.evaluate(&mut read_u8);
+            }
+        }
+        false
     }
 
     /// Acts as the strict referee, penalizing actions that compromise the run's legitimacy.

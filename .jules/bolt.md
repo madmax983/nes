@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**Eliminate `find_map` allocations in hot paths**
+**Learning:** Using `iter_mut().find_map(|x| ...)` chaining inside highly sensitive emulation hot paths allocates closures and adds `Option` wrapping overhead.
+**Action:** Replace functional iterator chains with raw, short-circuiting `for` loops in extremely hot paths to guarantee zero-allocation execution.
