@@ -81,8 +81,8 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 
     let rom_path = runtime_args
         .rom_path
-        .or_else(|| config.desktop.rom_path.clone())
-        .or_else(|| config.roms.smb.clone())
+        .or(config.desktop.rom_path)
+        .or(config.roms.smb)
         .ok_or_else(|| {
             format!(
                 "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
@@ -116,11 +116,11 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     let netplay = if netplay_enabled {
         let relay_addr = runtime_args
             .netplay_relay_addr
-            .or_else(|| Some(config.netplay.relay_addr.clone()))
+            .or(Some(config.netplay.relay_addr))
             .unwrap_or_default();
         let room = runtime_args
             .netplay_room
-            .or_else(|| Some(config.netplay.room.clone()))
+            .or(Some(config.netplay.room))
             .unwrap_or_default();
         let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
         let input_delay_frames = runtime_args

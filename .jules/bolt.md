@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Eliminating Profile String Clones]**
+**Learning:** Found loops doing `first_match.clone()` and `match_iter.cloned()` in `rta.rs` just to print conflicting loaded profile matches, allocating significantly.
+**Action:** Used `std::iter` tools or created reference slices `&[&LoadedProfile]` to format profile lists without performing deep clones of the heavy `LoadedProfile` items. Used `.or(val)` over `.or_else(|| val.clone())` where `val` is already an `Option` and can safely transfer ownership without allocating.
