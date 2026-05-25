@@ -47,3 +47,7 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+**Timeout on Arithmetic Mutation**
+**Mutant:** Replaced `/` with `*` in AUDIO_CHUNK_SAMPLES computation (`crates/nes-core/src/constants.rs:21:69`)
+**Diagnosis:** The mutation changes the sample rate from a reasonable chunk size to a massive value (44100 * 60 = 2646000). This causes massive allocations in audio-related tests, leading to suite hangs and timeout mutants rather than explicit test failures.
+**Kill Shot:** Added an explicit test in `tests/sentinel_constants.rs` verifying `AUDIO_CHUNK_SAMPLES == 735` to immediately fail the test before downstream systems hang.

@@ -1,12 +1,15 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+1. Update journal in `.jules/sentinel.md` with the critical learnings from `constants.rs` timeouts.
+   - I will append the following exact text using a Heredoc:
+     ```
+     **Timeout on Arithmetic Mutation**
+     **Mutant:** Replaced `/` with `*` in AUDIO_CHUNK_SAMPLES computation (`crates/nes-core/src/constants.rs:21:69`)
+     **Diagnosis:** The mutation changes the sample rate from a reasonable chunk size to a massive value (44100 * 60 = 2646000). This causes massive allocations in audio-related tests, leading to suite hangs and timeout mutants rather than explicit test failures.
+     **Kill Shot:** Added an explicit test in `tests/sentinel_constants.rs` verifying `AUDIO_CHUNK_SAMPLES == 735` to immediately fail the test before downstream systems hang.
+     ```
+2. Verify journal update.
+   - I will execute `cat .jules/sentinel.md` to verify the entry was appended properly.
+3. Run linters and tests.
+   - I will execute `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo fmt --all`.
+4. Complete pre commit steps to ensure proper testing, verification, review, and reflection are done.
+5. Submit the change.
+   - I will submit the PR with branch `sentinel-core` and PR title `🤖 Sentinel: Strengthen test suite for nes-core bus and constants`. The description will follow Sentinel format.
