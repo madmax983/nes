@@ -1,0 +1,13 @@
+--- main.rs
++++ main.rs
+@@ -518,8 +518,12 @@
+     next_slot != current_slot
+ }
+
++fn should_resume_after_rewind_hold(held: bool) -> bool {
++    !held
++}
++
+ fn should_log_rollback(distance: u64) -> bool {
+     distance > 1
+ }
