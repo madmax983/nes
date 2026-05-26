@@ -462,7 +462,7 @@ mod tests {
         let before = make_mmc3_snapshot();
 
         let mut core = NesCore::new();
-        core.load_state(&before);
+        core.load_state(before.clone());
         core.write_cpu_bus(0xC000, 0x03);
         core.write_cpu_bus(0xC001, 0x00);
         core.write_cpu_bus(0xE001, 0x00);
@@ -480,7 +480,7 @@ mod tests {
         let before = make_cnrom_chr_ram_snapshot();
 
         let mut core = NesCore::new();
-        core.load_state(&before);
+        core.load_state(before.clone());
         write_ppu_data(&mut core, 0x0000, &[0x5A]);
         let after = core.save_state();
 
@@ -491,7 +491,7 @@ mod tests {
         fd.apply(&mut target);
 
         let mut restored = NesCore::new();
-        restored.load_state(&target);
+        restored.load_state(target.clone());
         assert_eq!(restored.save_state().ppu.chr[0], 0x5A);
     }
 

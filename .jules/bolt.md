@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Eliminate Deep Clones in CoreSnapshot Restoration]**
+**Learning:** `nes_core::NesCore::load_state` accepted `&CoreSnapshot`, forcing it to eagerly `.clone()` large nested structures (`PpuSnapshot`, `ApuSnapshot`, `LoadedMapper`) internally on the hot restoration path.
+**Action:** Update `load_state` to accept `CoreSnapshot` by value (transferring ownership) to eliminate internal clones, shifting the explicit clone overhead to the calling site only when strictly needed.

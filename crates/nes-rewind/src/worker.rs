@@ -202,7 +202,7 @@ impl TimeMachine {
             self.rx.recv_timeout(Duration::from_millis(16))
         {
             cursor.current_frame = frame_id;
-            core.load_state(&snapshot);
+            core.load_state(snapshot);
             self.state = TimeMachineState::Rewinding {
                 seconds_remaining: frame_id as f32 / 60.0,
             };

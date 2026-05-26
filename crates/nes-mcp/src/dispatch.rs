@@ -669,7 +669,7 @@ fn handle_load_state(
         return Err(DispatchError::StateSlotNotFound(slot));
     };
 
-    core.load_state(&snapshot);
+    core.load_state(snapshot);
     Ok(DispatchOutput::StateSlot { slot })
 }
 

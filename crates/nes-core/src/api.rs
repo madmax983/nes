@@ -985,21 +985,21 @@ impl NesCore {
     /// let snap = core.save_state();
     /// core.load_state(&snap);
     /// ```
-    pub fn load_state(&mut self, snapshot: &CoreSnapshot) {
+    pub fn load_state(&mut self, snapshot: CoreSnapshot) {
         self.paused = snapshot.paused;
         self.speed_permille = snapshot.speed_permille;
         self.ports.controllers[0].bits = snapshot.controller_bits;
         self.ports.controllers[1].bits = snapshot.controller2_bits;
         self.scheduler.restore(snapshot.scheduler);
-        self.ppu.restore(snapshot.ppu.clone());
-        self.apu.restore(snapshot.apu.clone());
+        self.ppu.restore(snapshot.ppu);
+        self.apu.restore(snapshot.apu);
         self.cpu.restore(snapshot.cpu);
         self.ports.controller_strobe = snapshot.controller_strobe;
         self.ports.controllers[0].shift = snapshot.controller_shift;
         self.ports.controllers[1].shift = snapshot.controller2_shift;
         self.pending_oam_dma_page = snapshot.pending_oam_dma_page;
-        self.mapper = snapshot.mapper.clone();
-        self.cheat_codes = snapshot.cheat_codes.clone();
+        self.mapper = snapshot.mapper;
+        self.cheat_codes = snapshot.cheat_codes;
         self.reset_pc = snapshot.reset_pc;
         self.sync_mapper_prg_window();
         self.sync_mapper_chr_window();

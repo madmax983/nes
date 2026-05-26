@@ -157,7 +157,7 @@ where
     ///
     /// Returns [`AiError`] if the emulator core rejects the state payload.
     pub fn reset(&mut self) -> Result<P::Features, AiError> {
-        self.core.load_state(&self.snapshot.snapshot);
+        self.core.load_state(self.snapshot.snapshot.clone());
         self.recorder = TasRecorder::new();
         self.recorder.start();
         self.episode_frames = 0;

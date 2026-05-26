@@ -696,7 +696,7 @@ impl RollbackEngine {
             .get(&start_frame)
             .cloned()
             .ok_or(RollbackError::MissingSnapshot(start_frame))?;
-        core.load_state(&snapshot);
+        core.load_state(snapshot);
         self.clear_from(start_frame);
 
         for frame in start_frame..self.next_frame {

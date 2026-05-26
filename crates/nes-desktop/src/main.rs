@@ -441,7 +441,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             }
             let slot_path = slot_path_for_selection(ctx.session, slot);
             let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
-            ctx.core.load_state(&snapshot);
+            ctx.core.load_state(snapshot);
             apply_session_cheats(ctx.core, ctx.session_cheats)?;
             reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;

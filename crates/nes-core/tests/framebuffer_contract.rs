@@ -125,7 +125,7 @@ fn timed_sta_to_ppuscroll_does_not_retroactively_rewrite_earlier_pixels() {
     snapshot.ppu.render_scroll_y = 0;
     snapshot.ppu.render_ctrl = 0;
     snapshot.ppu.render_capture_valid = false;
-    core.load_state(&snapshot);
+    core.load_state(snapshot.clone());
 
     let before = core.framebuffer_rgba();
     core.execute(Command::StepCpu).unwrap();

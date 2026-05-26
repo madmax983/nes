@@ -1,3 +1,4 @@
+#![cfg(feature = "mcp-host")]
 use nes_desktop::manual_state::load_state_file;
 
 #[test]

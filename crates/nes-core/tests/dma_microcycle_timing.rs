@@ -114,7 +114,7 @@ fn oam_dma_timing_remains_correct_across_cpu_cycle_wrap() {
 
     let mut snapshot = core.save_state();
     snapshot.scheduler.cpu_cycles = u64::MAX;
-    core.load_state(&snapshot);
+    core.load_state(snapshot.clone());
 
     core.execute(Command::StepCpu).unwrap(); // LDA
 
