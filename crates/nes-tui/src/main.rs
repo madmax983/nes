@@ -12,6 +12,8 @@ use crossterm::terminal::{
 };
 use image::{DynamicImage, Rgba, RgbaImage};
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig, parse_config_path_arg};
+#[cfg(feature = "nova")]
+use nes_core::experimental::homebrew_debugger::HomebrewDebugger;
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_tui::app::map_key_event_to_command;
 use nes_tui::render::{frame_lines_half_blocks, mini_palette_spans};
@@ -221,6 +223,8 @@ struct TuiRuntime {
     last_fps_sample_at: Instant,
     started_at: Instant,
     show_hud: bool,
+    #[cfg(feature = "nova")]
+    show_debugger: bool,
     video_backend: VideoBackend,
 }
 
@@ -256,6 +260,8 @@ fn run() -> Result<(), String> {
         last_fps_sample_at: Instant::now(),
         started_at: Instant::now(),
         show_hud: cli_options.show_hud,
+        #[cfg(feature = "nova")]
+        show_debugger: false,
         video_backend: VideoBackend::Halfblocks,
     };
     if let Some(config_path) = loaded_config_path.as_ref() {
@@ -356,6 +362,19 @@ fn handle_runtime_key_event(runtime: &mut TuiRuntime, key: KeyEvent) -> Result<L
         runtime.show_hud = !runtime.show_hud;
     }
 
+    #[cfg(feature = "nova")]
+    if key_is_pressed(key.kind) && key.code == KeyCode::Char('d') {
+        runtime.show_debugger = !runtime.show_debugger;
+        if runtime.show_debugger {
+            runtime.paused = true;
+            runtime.core.set_trace_enabled(true);
+        }
+    } else if key_is_pressed(key.kind) && key.code == KeyCode::Char('s') && runtime.show_debugger {
+        let _ = runtime.core.execute(Command::StepCpu);
+    } else if key_is_pressed(key.kind) && key.code == KeyCode::Char('f') && runtime.show_debugger {
+        let _ = runtime.core.execute(Command::StepFrame);
+    }
+
     if let Some(pressed) = key_pressed_state(key.kind)
         && let Some(mapped) = map_key_event_to_command(key.code, pressed)
     {
@@ -425,6 +444,42 @@ fn draw_frame(
                     render_pause_overlay(f, video_viewport.area);
                 }
 
+                return;
+            }
+
+                        #[cfg(feature = "nova")]
+            if runtime.show_debugger {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(3),
+                        Constraint::Length(3),
+                        Constraint::Min(16),
+                        Constraint::Length(1),
+                    ])
+                    .split(f.area());
+
+                let regs = HomebrewDebugger::format_registers(&runtime.core);
+                let regs_widget = Paragraph::new(regs).block(
+                    Block::default().title(" CPU Registers ").borders(Borders::ALL)
+                );
+                f.render_widget(regs_widget, chunks[0]);
+
+                let trace = HomebrewDebugger::format_disassembly(&runtime.core);
+                let trace_widget = Paragraph::new(trace).block(
+                    Block::default().title(" Disassembly ").borders(Borders::ALL)
+                );
+                f.render_widget(trace_widget, chunks[1]);
+
+                let debugger = HomebrewDebugger::new();
+                let mem_hex = debugger.format_memory_hex(&runtime.core).join("\n");
+                let mem_widget = Paragraph::new(mem_hex).block(
+                    Block::default().title(" Memory Viewer (Zero Page) ").borders(Borders::ALL)
+                );
+                f.render_widget(mem_widget, chunks[2]);
+
+                let footer = Paragraph::new("D: Toggle Debugger | S: Step CPU | F: Step Frame | P: Toggle Pause | I: Toggle HUD");
+                f.render_widget(footer, chunks[3]);
                 return;
             }
 
@@ -984,6 +1039,8 @@ mod tests {
             last_fps_sample_at: Instant::now(),
             started_at: Instant::now() - Duration::from_secs(2),
             show_hud,
+            #[cfg(feature = "nova")]
+            show_debugger: false,
             video_backend: VideoBackend::Halfblocks,
         }
     }

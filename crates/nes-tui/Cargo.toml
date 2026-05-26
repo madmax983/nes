@@ -10,3 +10,6 @@ nes-config = { path = "../nes-config" }
 nes-core = { path = "../nes-core" }
 ratatui = "0.29"
 ratatui-image = "8.0"
+
+[features]
+nova = ["nes-core/nova"]
