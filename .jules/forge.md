@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring or_else clones to or ownership transfers]**
+**Learning:** Found several instances where `.or_else(|| var.clone())` was used for Option fallbacks. If the fallback variable is an owned Option that can be safely consumed without partial moves or further use, this is a missed optimization that forces unnecessary heap allocations.
+**Action:** Replaced `.or_else(|| var.clone())` with `.or(var)` to directly transfer ownership of the fallback variable and eliminate cloning overhead.
