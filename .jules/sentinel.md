@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**[Strengthened accessor tests for CheatCode]**
+**Mutant:** Replaced `CheatCode::raw -> &str` with `""`, `CheatCode::address -> u16` with `0`, `CheatCode::value -> u8` with `0`, `CheatCode::compare -> Option<u8>` with `None`, `CheatCode::applies_to -> bool` with `true`/`false`.
+**Diagnosis:** Weak assertion. Existing tests decoded codes properly but did not explicitly check accessors or methods like `applies_to` across both `true` and `false` evaluations to prevent mutant replacements with fixed constants.
+**Kill Shot:** Appended `mutant_hunting` module inside `cheat_codes.rs` to assert explicit return values. Tests specifically verify `raw()`, `address()`, `value()`, `compare()`, and `applies_to()` logic.
