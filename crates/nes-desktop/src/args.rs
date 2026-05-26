@@ -1,7 +1,33 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
-pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
+pub const RUNTIME_USAGE: &str = r#"Usage: nes-desktop [OPTIONS] [rom_path]
+
+General Options:
+  --config <path>               Path to nes.toml configuration file
+  --cheat-code <code>           Game Genie or Raw cheat code (can be repeated)
+  --auto-player                 Enable AI auto-player (requires 'nova' feature)
+  -h, --help                    Print this help menu
+
+MCP Host Options:
+  --mcp-host                    Start an MCP server for external scripts
+  --mcp-bind <addr>             Address to bind MCP server to (default: 127.0.0.1:6502)
+
+Netplay Options:
+  --netplay                     Enable Netplay mode
+  --netplay-relay <addr>        Address of the Netplay Relay server
+  --netplay-room <room>         Room ID to join on the Relay server
+  --netplay-player <1|2>        Player slot to request (1 or 2)
+  --netplay-delay <frames>      Fixed input delay in frames (auto if omitted)
+  --netplay-max-rollback <f>    Maximum rollback frames to keep in history
+  --netplay-hash-every <f>      How often to sync state hashes (frames)
+
+RTA / Speedrunning Options:
+  --rta                         Enable Real-Time Attack (RTA) tracker
+  --rta-profile <id>            Select a specific RTA profile ID
+  --rta-profiles-dir <path>     Directory containing RTA JSON profiles
+  --rta-runs-dir <path>         Directory to save completed RTA run artifacts
+  --rta-calibrate               Run in Calibration Mode to generate a draft profile"#;
 
 /// Defines the configuration used by the desktop runtime.
 ///
