@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactor CPU bus access logic to use bus mappings instead of hardcoded ranges]**
+**Learning:** Using domain-specific mappings via `crate::bus::map_region(addr)` in `crates/nes-core/src/api.rs` instead of explicitly hardcoded 16-bit address ranges (`0x2000..=0x3FFF`, `0x4000..=0x4017`, `0x8000`) encapsulates the logic inside `bus::BusRegion`.
+**Action:** Replace range-based `if` statements over `u16` addresses with `match crate::bus::map_region(addr)` and specific `BusRegion` variants to eliminate magic numbers and align with domain abstractions.

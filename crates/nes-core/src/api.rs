@@ -1471,36 +1471,34 @@ impl NesCore {
     }
 
     fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
+        let mut remap_needed = false;
+        let mut ppu_changed = false;
 
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
-            self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
-            true
-        } else {
-            false
-        };
-
-        if (0x4000..=0x4017).contains(&addr) {
-            if addr == 0x4014 {
-                self.pending_oam_dma_page = Some(value);
-            } else if addr == 0x4016 {
-                self.ports.write_controller_strobe(value);
-            } else {
-                self.apu.write_register(addr, value);
+        match crate::bus::map_region(addr) {
+            crate::bus::BusRegion::CartridgePrgRom => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+                    let chr_window = self.ppu.chr_window_snapshot();
+                    mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                    mapper.write_prg(addr, value);
+                    remap_needed = true;
+                }
             }
+            crate::bus::BusRegion::PpuRegisters => {
+                self.ppu
+                    .write_register(normalize_ppu_register_addr(addr), value);
+                ppu_changed = true;
+            }
+            crate::bus::BusRegion::ApuIo => {
+                if addr == 0x4014 {
+                    self.pending_oam_dma_page = Some(value);
+                } else if addr == 0x4016 {
+                    self.ports.write_controller_strobe(value);
+                } else {
+                    self.apu.write_register(addr, value);
+                }
+            }
+            _ => {}
         }
 
         if remap_needed {
@@ -1564,16 +1562,22 @@ impl NesCore {
     }
 
     fn apply_cpu_read_side_effect(&mut self, addr: u16) {
-        match addr {
-            0x2002 => self.ppu.on_status_read(),
-            0x2007 => {
-                let _ = self.ppu.consume_data_read();
-            }
-            0x4015 => {
-                let _ = self.apu.read_status();
-            }
-            0x4016 => self.ports.consume_controller_read(Player::One),
-            0x4017 => self.ports.consume_controller_read(Player::Two),
+        match crate::bus::map_region(addr) {
+            crate::bus::BusRegion::PpuRegisters => match addr {
+                0x2002 => self.ppu.on_status_read(),
+                0x2007 => {
+                    let _ = self.ppu.consume_data_read();
+                }
+                _ => {}
+            },
+            crate::bus::BusRegion::ApuIo => match addr {
+                0x4015 => {
+                    let _ = self.apu.read_status();
+                }
+                0x4016 => self.ports.consume_controller_read(Player::One),
+                0x4017 => self.ports.consume_controller_read(Player::Two),
+                _ => {}
+            },
             _ => {}
         }
     }
