@@ -98,3 +98,15 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+**👺 Havoc: MCP Host Slowloris Deadlock**
+🧨 **The Trigger:** Sending a massive Content-Length header and holding the TCP stream open stalls all other clients.
+📉 **The Stack Trace:** (Server blocked on `read_line` in single-threaded loop)
+🧪 **Reproduction:** Run `cargo test --test havoc_mcp_host --features mcp-host -- --ignored`
+😈 **Comment:** You assumed every network client was acting in good faith. You were wrong.
+
+**👺 Havoc: Audio Output Buffer DOS**
+🧨 **The Trigger:** `publish_audio_with` accepts an unbounded `len` parameter and performs `buffer.resize(len, 0)`, allocating arbitrary amounts of memory.
+📉 **The Stack Trace:** `memory allocation of 2199023255552 bytes failed / process abort signal`
+🧪 **Reproduction:** Run `cargo test --test havoc_mcp_output_dos -- --ignored`
+😈 **Comment:** You let anyone ask for a terabyte of RAM without checking your wallet. You were wrong.
