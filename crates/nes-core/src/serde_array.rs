@@ -119,4 +119,12 @@ mod tests {
             "invalid length 99, expected a byte array of length 42"
         );
     }
+    #[test]
+    fn test_deserialize_too_long() {
+        let invalid_json = r#"{"data":[1,2,3,4,5]}"#;
+        let result: Result<TestStruct, _> = serde_json::from_str(invalid_json);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("invalid length 5, expected a byte array of length 4"));
+    }
 }
