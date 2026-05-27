@@ -5,6 +5,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+
+
 use serde::Deserialize;
 
 /// Default path to the configuration file.
@@ -270,6 +273,23 @@ where
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn format_rom_read_error_handles_not_found() {
+        let err = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let msg = super::format_rom_read_error("foo.nes", &err);
+        assert!(msg.contains("Could not find the ROM file"));
+        assert!(msg.contains("foo.nes"));
+    }
+
+    #[test]
+    fn format_rom_read_error_handles_other_errors() {
+        let err = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let msg = super::format_rom_read_error("foo.nes", &err);
+        assert!(msg.contains("Failed to read ROM"));
+        assert!(msg.contains("foo.nes"));
+    }
+
     use std::fs;
     use std::path::PathBuf;
 
@@ -488,4 +508,44 @@ window_scal = 7
         assert!(err.contains("unknown field"));
         assert!(err.contains("window_scal"));
     }
+}
+
+/// Formats a ROM read error nicely in a table for user-facing output
+pub fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    table.set_header(vec![
+        Cell::new("Error").fg(TableColor::Red),
+        Cell::new("Value").fg(TableColor::White),
+    ]);
+
+    if err.kind() == std::io::ErrorKind::NotFound {
+        table.add_row(vec![
+            Cell::new("Message"),
+            Cell::new("Could not find the ROM file.").fg(TableColor::Red),
+        ]);
+        table.add_row(vec![
+            Cell::new("Path"),
+            Cell::new(rom_path).fg(TableColor::Yellow),
+        ]);
+        table.add_row(vec![
+            Cell::new("Hint"),
+            Cell::new("Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes").fg(TableColor::Cyan),
+        ]);
+    } else {
+        table.add_row(vec![
+            Cell::new("Message"),
+            Cell::new("Failed to read ROM.").fg(TableColor::Red),
+        ]);
+        table.add_row(vec![
+            Cell::new("Path"),
+            Cell::new(rom_path).fg(TableColor::Yellow),
+        ]);
+        table.add_row(vec![
+            Cell::new("Detail"),
+            Cell::new(err.to_string()).fg(TableColor::Red),
+        ]);
+    }
+
+    table.to_string()
 }

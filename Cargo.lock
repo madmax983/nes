@@ -3208,6 +3208,7 @@ dependencies = [
  "burn-tensor",
  "comfy-table",
  "crossterm 0.29.0",
+ "nes-config",
  "nes-core",
  "rand 0.8.5",
  "serde",
@@ -3222,6 +3223,7 @@ dependencies = [
 name = "nes-config"
 version = "0.1.0"
 dependencies = [
+ "comfy-table",
  "serde",
  "toml",
 ]
@@ -3279,6 +3281,7 @@ dependencies = [
  "comfy-table",
  "crossterm 0.28.1",
  "loom",
+ "nes-config",
  "nes-core",
  "nes-dsl",
  "proptest",

@@ -19,6 +19,7 @@ burn-nn = { version = "0.19.1", default-features = false, features = ["std"] }
 burn-tensor = { version = "0.19.1", default-features = false, features = ["std"] }
 comfy-table = "7.2.2"
 crossterm = "0.29.0"
+nes-config = { version = "0.1.0", path = "../nes-config" }
 nes-core = { path = "../nes-core", features = ["tas"] }
 rand = "0.8.5"
 serde = { version = "1", features = ["derive"] }
