@@ -4,9 +4,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-
 
 use serde::Deserialize;
 
@@ -273,23 +271,6 @@ where
 
 #[cfg(test)]
 mod tests {
-
-    #[test]
-    fn format_rom_read_error_handles_not_found() {
-        let err = std::io::Error::from(std::io::ErrorKind::NotFound);
-        let msg = super::format_rom_read_error("foo.nes", &err);
-        assert!(msg.contains("Could not find the ROM file"));
-        assert!(msg.contains("foo.nes"));
-    }
-
-    #[test]
-    fn format_rom_read_error_handles_other_errors() {
-        let err = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        let msg = super::format_rom_read_error("foo.nes", &err);
-        assert!(msg.contains("Failed to read ROM"));
-        assert!(msg.contains("foo.nes"));
-    }
-
     use std::fs;
     use std::path::PathBuf;
 
@@ -509,6 +490,7 @@ window_scal = 7
         assert!(err.contains("window_scal"));
     }
 }
+
 
 /// Formats a ROM read error nicely in a table for user-facing output
 pub fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {

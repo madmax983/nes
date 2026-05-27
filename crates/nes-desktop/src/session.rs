@@ -1,8 +1,7 @@
-
+use crossterm::style::{Color, Stylize};
 use nes_core::{NesCore, RomLoadInfo};
 use std::fs;
 use std::path::{Path, PathBuf};
-use nes_config::format_rom_read_error;
 
 use nes_desktop::manual_state::{
     SaveSlotMetadata, SaveSlotStatus, read_slot_metadata, slot_path_for_rom, slot_paths_for_rom,
@@ -111,6 +110,23 @@ pub(crate) fn window_title(session: &LoadedRomSession, overlay_open: bool) -> St
     )
 }
 
+pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
+            "Error:".with(Color::Red).bold(),
+            rom_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read ROM at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            rom_path.with(Color::Yellow),
+            err
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -130,14 +146,14 @@ mod tests {
     #[test]
     fn format_rom_read_error_handles_not_found() {
         let err = std::io::Error::from(std::io::ErrorKind::NotFound);
-        let msg = nes_config::format_rom_read_error("foo.nes", &err);
+        let msg = format_rom_read_error("foo.nes", &err);
         assert!(msg.contains("Could not find the ROM file"));
     }
 
     #[test]
     fn format_rom_read_error_handles_other_errors() {
         let err = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        let msg = nes_config::format_rom_read_error("foo.nes", &err);
+        let msg = format_rom_read_error("foo.nes", &err);
         assert!(msg.contains("Failed to read ROM"));
     }
 
