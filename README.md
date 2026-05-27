@@ -43,6 +43,8 @@ cargo llvm-cov --workspace --all-features --all-targets --lcov --output-path lco
 Runtime and ROM paths are configured through `nes.toml` at the workspace root.
 Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
+Linux users: `nes-desktop` requires a graphical environment (Wayland/X11) and `alsa` sound libraries (`libasound2-dev`). `nes-tui` works in any terminal.
+
 Desktop/TUI launch commands:
 
 First, copy the example configuration:
@@ -62,6 +64,8 @@ cargo run -p nes-tui -- --config ./nes.toml
 RTA mode (speedrunner-focused):
 
 ```powershell
+# Note: For real games, first copy the example profile (e.g. cp config/rta/profiles/smb-any.example.toml config/rta/profiles/smb-any.toml)
+
 # Strict RTA mode (auto-select profile by ROM hash)
 cargo run -p nes-desktop --release -- --rta --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes
 
@@ -155,11 +159,15 @@ For in-process automation, `nes_core::tas` is now the stable foundation when `ne
 `nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
 
 ```powershell
-# 1. Prepare the fixed SMB 1-1 control snapshot (using the bundled homebrew ROM for demonstration)
+# Note: For these steps to work, you MUST provide a valid Super Mario Bros ROM.
+# 1. Prepare the fixed SMB 1-1 control snapshot
 cargo run -p nes-ai --bin prepare_smb_control -- `
-  "./roms/homebrew/homebrew.nes" `
+  "./roms/Super Mario Bros.nes" `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
+
+# First copy the example profile:
+cp config/ai/profiles/smb-control.example.toml config/ai/profiles/smb-control.toml
 
 # 2. Train from the local profile
 cargo run -p nes-ai --bin train_smb_control -- `
