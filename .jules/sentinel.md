@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**Sentinel: Missed Mutant in `cheat_codes.rs`**
+**Mutant:** Replaced `|` with `^` in `crates/nes-core/src/cheat_codes.rs:105:13: replace | with ^ in <impl FromStr for CheatCode>::from_str`
+**Diagnosis:** Equivalent mutant. The bitwise OR (`|`) operations combine non-overlapping bits representing different parts of a decoded address, value, and compare byte. Cargo-mutants mutated the `|` operator to XOR (`^`). Because the bits don't overlap, XOR produces the exact same numeric result as OR. Thus, the mutation does not change the behavior and cannot be killed by any test.
+**Kill Shot:** None. This is an equivalent mutant and is unkillable. The test suite correctly exercises the boundary but cannot distinguish between `|` and `^` here.
