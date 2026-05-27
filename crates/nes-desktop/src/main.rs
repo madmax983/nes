@@ -2150,12 +2150,30 @@ mod tests {
 
     #[test]
     fn test_menu_action_enabled_more2() {
-        assert_eq!(menu_action_enabled(AppAction::OpenRom, false, false, false), rom_picker_supported());
+        assert_eq!(
+            menu_action_enabled(AppAction::OpenRom, false, false, false),
+            rom_picker_supported()
+        );
         assert!(!menu_action_enabled(AppAction::OpenRom, false, true, false));
         assert!(!menu_action_enabled(AppAction::OpenRom, false, false, true));
-        assert!(menu_action_enabled(AppAction::OpenCheats, false, false, false));
-        assert!(!menu_action_enabled(AppAction::OpenCheats, false, true, false));
-        assert!(!menu_action_enabled(AppAction::OpenCheats, false, false, true));
+        assert!(menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            true,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            true
+        ));
     }
 
     #[test]
