@@ -98,3 +98,9 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## YYYY-MM-DD - Test Harness OOM via /dev/zero
+🧨 **The Trigger:** `Path::new("/dev/zero")` provided to the `read_pcm_i16le` function that uses `std::fs::read`.
+📉 **The Stack Trace:** (Process sent SIGKILL due to Out of Memory).
+🧪 **Reproduction:** Run a test that passes `/dev/zero` to `nes_test_harness::read_pcm_i16le`.
+😈 **Comment:** You assumed the user would only pass finite PCM files to the test harness. You were wrong.
