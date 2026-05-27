@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Extract Audio Utilities into Dedicated Module**
+**Tangle:** The `crates/nes-test-harness/src/lib.rs` module was bloated with 350+ lines of audio processing and analysis utilities, including structs like `AudioStats` and `WaveformComparison`, alongside test ROM loader functions and general integration utilities. This violated single responsibility and high cohesion principles, representing a "Blob" anti-pattern in the integration test library.
+**Blueprint:** Extracted the audio processing structs, functions, and their tests into a dedicated `crates/nes-test-harness/src/audio.rs` module, and re-exported them in `lib.rs`. This cleanly separates the audio analysis domain from the integration harness setup logic without breaking the public interface.
