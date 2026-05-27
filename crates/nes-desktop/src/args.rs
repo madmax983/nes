@@ -304,14 +304,16 @@ where
         };
         apply(parse(val, flag)?);
         *idx += 2;
-        Ok(true)
-    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
+        return Ok(true);
+    }
+
+    if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
         apply(parse(val, flag)?);
         *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
+        return Ok(true);
     }
+
+    Ok(false)
 }
 
 fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {

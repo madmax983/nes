@@ -341,21 +341,15 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
     match action {
-        AppAction::ToggleOverlay => {
+        AppAction::ToggleOverlay | AppAction::Resume => {
+            let open = if matches!(action, AppAction::ToggleOverlay) {
+                !ctx.overlay.is_open()
+            } else {
+                false
+            };
             set_overlay_open(
                 ctx.overlay,
-                !ctx.overlay.is_open(),
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::Resume => {
-            set_overlay_open(
-                ctx.overlay,
-                false,
+                open,
                 ctx.core,
                 ctx.audio_output,
                 ctx.window,

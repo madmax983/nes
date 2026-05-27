@@ -51,3 +51,19 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Refactoring iter.filter.map.find.or_else in nes-desktop/src/rta.rs**
+**Learning:** Found a convoluted `infer_candidates` implementation in `rta.rs` where the method manually implemented early returns inside a loop through assignment and breaking instead of standard Iterator functions.
+**Action:** Transformed the loop-based search mechanism into idiomatic Rust iterator chains utilizing `filter`, `map`, `find`, and `or_else` along with `.last()` as a fallback when earlier `.find()` is not met. This removed manual breaks, mutability and reduced the lines of code while retaining behavior.
+
+**Refactoring repetitive parsing logic**
+**Learning:** Argument parsing routines with many options often devolve into a "pyramid of doom" consisting of nearly identical `if arg == ...` and `if let Some(value) = arg.strip_prefix(...)` blocks, causing unnecessary scrolling and boilerplate.
+**Action:** Extract a helper function (e.g., `parse_arg`) that abstracts the common shape of checking for both exact matches (e.g. `--flag`) and prefix matches (e.g. `--flag=value`), taking a closure to apply the specific field mutations cleanly. Also replacing `else if let` inside those functions with sequential early returns.
+
+**Refactoring duplicate branch logic into match arms**
+**Learning:** Functions evaluating match enumerations often duplicate exact function calls across arms. This causes the function to grow large with identical boilerplate logic.
+**Action:** Combined `AppAction::ToggleOverlay` and `AppAction::Resume` arms in `execute_app_action` into a single `AppAction::ToggleOverlay | AppAction::Resume => { ... }` block, utilizing conditional assignment to resolve minor logic differences.
+
+**Refactoring redundant conditionals into matches in nes-mcp macro_engine.rs**
+**Learning:** Argument and command parsing routines with string matching often devolve into a "pyramid of doom" consisting of nearly identical `if arg == ...` and `else if arg == ...` blocks.
+**Action:** Replace `else if` conditionals with idiomatic `match` expressions when evaluating the same variable against multiple string literals. In `nes-mcp/src/macro_engine.rs` the execution script loop was checking the command using `eq_ignore_ascii_case` inside multiple `else if` blocks, which was extracted and folded into a cleaner `match command.to_ascii_uppercase().as_str() { ... }` construct, decreasing repetition and nesting depth.

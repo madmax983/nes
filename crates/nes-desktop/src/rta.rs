@@ -1740,25 +1740,38 @@ impl CalibrationRecorder {
             }
             let prev = &self.frames[index - 1].work_ram;
             let curr = &self.frames[index].work_ram;
-            let mut selected = None::<(usize, u8, f32)>;
-            for address in 0..curr.len() {
-                if prev[address] == curr[address] {
-                    continue;
-                }
-                let value = curr[address];
-                let stable_after = self
-                    .frames
-                    .iter()
-                    .skip(index + 1)
-                    .take(5)
-                    .all(|frame| frame.work_ram[address] == value);
-                let confidence = if stable_after { 0.95 } else { 0.55 };
-                selected = Some((address, value, confidence));
-                if stable_after {
-                    break;
-                }
-            }
-            if let Some((address, value, confidence)) = selected {
+            let selected = (0..curr.len())
+                .filter(|&address| prev[address] != curr[address])
+                .map(|address| {
+                    let value = curr[address];
+                    let stable_after = self
+                        .frames
+                        .iter()
+                        .skip(index + 1)
+                        .take(5)
+                        .all(|frame| frame.work_ram[address] == value);
+                    let confidence = if stable_after { 0.95 } else { 0.55 };
+                    (address, value, confidence, stable_after)
+                })
+                .find(|&(_, _, _, stable)| stable)
+                .or_else(|| {
+                    (0..curr.len())
+                        .filter(|&address| prev[address] != curr[address])
+                        .map(|address| {
+                            let value = curr[address];
+                            let stable_after = self
+                                .frames
+                                .iter()
+                                .skip(index + 1)
+                                .take(5)
+                                .all(|frame| frame.work_ram[address] == value);
+                            let confidence = if stable_after { 0.95 } else { 0.55 };
+                            (address, value, confidence, stable_after)
+                        })
+                        .next_back()
+                });
+
+            if let Some((address, value, confidence, _)) = selected {
                 out.push(DraftCandidate {
                     split_name: &split.name,
                     address: address as u16,
