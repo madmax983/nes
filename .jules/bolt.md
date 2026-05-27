@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**PPU Sprite Palette Evaluation**
+**Learning:** Using chained iterator methods (like `.iter().take()`) in extremely hot paths (like PPU per-pixel rendering) can introduce measurable overhead due to closure and iterator state machine allocations.
+**Action:** Replaced the iterator chain in `sprite_palette_index_cached` with a direct `for` loop over a pre-computed bound (`self.sprite_scanline_cache.len`).

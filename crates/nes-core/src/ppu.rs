@@ -1229,6 +1229,8 @@ impl Ppu {
         ];
     }
 
+    /// **⚡ Bolt Optimization:** Avoids allocating an iterator chain in `sprite_palette_index_cached`
+    /// which runs per-pixel during PPU rendering, by using a raw `for` loop over a pre-computed array length.
     fn sprite_palette_index_cached(&mut self, x: usize, y: usize, bg_opaque: bool) -> Option<u8> {
         if self.mask & MASK_SHOW_SPRITES == 0 {
             return None;
@@ -1238,12 +1240,8 @@ impl Ppu {
         }
 
         self.ensure_sprite_scanline_cache(y);
-        for sprite in self
-            .sprite_scanline_cache
-            .entries
-            .iter()
-            .take(self.sprite_scanline_cache.len)
-        {
+        for i in 0..self.sprite_scanline_cache.len {
+            let sprite = &self.sprite_scanline_cache.entries[i];
             let sprite_x = usize::from(sprite.x);
             if x < sprite_x || x >= sprite_x + 8 {
                 continue;
