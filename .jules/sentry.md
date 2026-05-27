@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2026-05-27 - [Fixing mcp_host.rs infinite loop mutant and covering main.rs private functions]
+**Learning:** `cargo mutants` replacing `read == 0` with `read != 0` in loop conditions causes integration tests to hang in an infinite loop instead of failing immediately. Additionally, testing functions within binary crates (`main.rs`) directly requires injecting tests via `#[cfg(test)] mod tests` rather than testing from the `tests/` directory due to visibility rules.
+**Action:** Use idiomatic string checks like `line.is_empty()` instead of integer comparisons like `read == 0` to limit harmful `cargo mutants` substitutions and avoid hanging the test suite. Always test private binary logic in an inline test module.

@@ -360,10 +360,10 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
     loop {
         line.clear();
 
-        let read = reader
+        let _read = reader
             .read_line(&mut line)
             .map_err(|err| format!("failed reading header line: {err}"))?;
-        if read == 0 {
+        if line.is_empty() {
             if content_length.is_none() {
                 return Ok(None);
             }

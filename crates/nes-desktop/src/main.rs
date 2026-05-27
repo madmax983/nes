@@ -2147,4 +2147,23 @@ mod tests {
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
     }
+
+    #[test]
+    fn test_menu_action_enabled_more2() {
+        assert_eq!(menu_action_enabled(AppAction::OpenRom, false, false, false), rom_picker_supported());
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, true, false));
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, false, true));
+        assert!(menu_action_enabled(AppAction::OpenCheats, false, false, false));
+        assert!(!menu_action_enabled(AppAction::OpenCheats, false, true, false));
+        assert!(!menu_action_enabled(AppAction::OpenCheats, false, false, true));
+    }
+
+    #[test]
+    fn test_command_marks_rta_invalidation() {
+        use crate::Command;
+        assert!(crate::command_marks_rta_invalidation(Command::Reset).is_none());
+        assert!(crate::command_marks_rta_invalidation(Command::StepCpu).is_some());
+        assert!(crate::command_marks_rta_invalidation(Command::StepScanline).is_some());
+        assert!(crate::command_marks_rta_invalidation(Command::StepFrame).is_some());
+    }
 }
