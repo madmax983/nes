@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Optimized RtaManager Allocations]**
+**Learning:** `TriggerRule` and `RtaProfile` struct members were unnecessarily cloned during `RtaManager` initialization on the hot path, causing heap allocations.
+**Action:** Used `std::mem::take` to pass ownership of properties out of the `mut profile` instead of cloning them. Iterated over `profile.splits.iter_mut()` instead of `.iter()`.

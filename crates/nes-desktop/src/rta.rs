@@ -802,21 +802,26 @@ impl RtaManager {
     ) -> Self {
         let mut triggers =
             Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(4 + profile.splits.len());
+        // **⚡ Bolt Optimization:** Transfers ownership via `std::mem::take` to avoid cloning `TriggerRule` fields on the hot path.
+        let mut profile = profile;
         triggers.push((
             TriggerSlot::Start,
-            TriggerRuntime::new(profile.start.clone()),
+            TriggerRuntime::new(std::mem::take(&mut profile.start)),
         ));
-        triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end.clone())));
-        if let Some(rule) = profile.pause.clone() {
+        triggers.push((
+            TriggerSlot::End,
+            TriggerRuntime::new(std::mem::take(&mut profile.end)),
+        ));
+        if let Some(rule) = std::mem::take(&mut profile.pause) {
             triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule)));
         }
-        if let Some(rule) = profile.resume.clone() {
+        if let Some(rule) = std::mem::take(&mut profile.resume) {
             triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule)));
         }
-        for (idx, split) in profile.splits.iter().enumerate() {
+        for (idx, split) in profile.splits.iter_mut().enumerate() {
             triggers.push((
                 TriggerSlot::Split(idx),
-                TriggerRuntime::new(split.trigger.clone()),
+                TriggerRuntime::new(std::mem::take(&mut split.trigger)),
             ));
         }
 

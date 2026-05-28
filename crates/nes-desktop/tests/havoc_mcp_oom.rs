@@ -1,3 +1,4 @@
+#![cfg(feature = "mcp-host")]
 use nes_desktop::mcp_host::read_framed_message;
 use std::io::Cursor;
 
