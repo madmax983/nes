@@ -98,3 +98,16 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+## 2024-05-28 - MCP Output Mutex Poisoning
+
+**🧨 The Trigger:** If a panic occurs during `publish_frame_with` or `publish_audio_with` in the `nes-mcp` output crate (e.g. from an out-of-bounds error or user logic bug), the globally shared static `Mutex<OutputState>` becomes poisoned.
+
+**📉 The Stack Trace:**
+```
+thread 'havoc_test_mutex_poison' panicked at crates/nes-mcp/src/output.rs:273:43:
+output state lock: PoisonError { .. }
+```
+
+**🧪 Reproduction:** Run `cargo test -p nes-mcp --test havoc_mcp_deadlock`
+
+**😈 Comment:** You assumed the `publish_frame_with` closure would never panic, but if it does, it poisons the global state lock forever, bringing down all subsequent requests and crashing the MCP host. You were wrong.
