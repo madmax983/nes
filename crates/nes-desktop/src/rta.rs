@@ -489,11 +489,10 @@ pub fn select_profile(
         ));
     }
 
-    let selected = first_match.clone();
-    check_draft(&selected)?;
+    check_draft(first_match)?;
 
     Ok(ProfileSelection {
-        selected,
+        selected: first_match.clone(),
         source: ProfileSelectionSource::AutoByRomHash,
     })
 }

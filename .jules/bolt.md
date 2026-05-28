@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+## 2024-05-28 - [Delay clone in select_profile]
+**Learning:** Found that `select_profile` in `rta.rs` clones a matched profile before checking if it passes `check_draft`. If `check_draft` returns an `Err`, the cloned struct is immediately dropped and the allocation is wasted.
+**Action:** Delay the `.clone()` until after the `check_draft` call, right where `Ok` is constructed, saving a heap allocation on failure paths.
