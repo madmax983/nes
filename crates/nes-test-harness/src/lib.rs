@@ -498,8 +498,7 @@ mod tests {
         );
 
         let hash = apu_write_hash(&writes);
-        assert_ne!(hash, 0);
-        assert_ne!(hash, 1);
+        assert_eq!(hash, 8772347683793967841);
 
         let mut writes = writes;
 
