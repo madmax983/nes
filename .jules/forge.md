@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring exact memory address matches to use bus::map_region]**
+**Learning:** Found exact matching of memory ranges (e.g. `0x2000..=0x3FFF`) or mirroring calculations scattered across `api.rs`, `cpu/engine.rs`, and `ppu.rs`. This leaked the domain model of memory mapping outside of the dedicated `bus.rs` mapping functions, creating coupling.
+**Action:** Refactored these components to rely on `crate::bus::map_region(addr)` when determining which hardware component to interact with. For internal routing like PPU registers, we used `.map_region()` to handle domain classification, preserving exact zero-change behavior by safely substituting the address match branches.

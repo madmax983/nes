@@ -2410,12 +2410,23 @@ impl Cpu {
         // Track MMIO reads unconditionally so apply_cpu_reads can fire side-effects
         // ($2002 VBlank clear, $2007 PPU data, $4015 APU status, $4016/$4017 controllers)
         // regardless of trace_enabled.
-        match resolved {
-            0x2002 | 0x2007 | 0x4015 | 0x4016 | 0x4017 => {
-                self.mmio_reads.borrow_mut().push(CpuMmioRead {
-                    addr: resolved,
-                    bus_cycle,
-                });
+        match crate::bus::map_region(resolved) {
+            crate::bus::BusRegion::PpuRegisters => {
+                let normalized = 0x2000 + ((resolved - 0x2000) & 0x0007);
+                if normalized == 0x2002 || normalized == 0x2007 {
+                    self.mmio_reads.borrow_mut().push(CpuMmioRead {
+                        addr: resolved,
+                        bus_cycle,
+                    });
+                }
+            }
+            crate::bus::BusRegion::ApuIo => {
+                if resolved == 0x4015 || resolved == 0x4016 || resolved == 0x4017 {
+                    self.mmio_reads.borrow_mut().push(CpuMmioRead {
+                        addr: resolved,
+                        bus_cycle,
+                    });
+                }
             }
             _ => {}
         }
@@ -2860,12 +2871,10 @@ fn page_crossed(base: u16, indexed: u16) -> bool {
 }
 
 #[must_use]
-const fn normalize_cpu_addr(addr: u16) -> u16 {
-    match addr {
-        // 2KB internal RAM mirrored through $1FFF.
-        0x0000..=0x1FFF => addr & 0x07FF,
-        // PPU register mirrors every 8 bytes through $3FFF.
-        0x2000..=0x3FFF => 0x2000 + ((addr - 0x2000) & 0x0007),
+fn normalize_cpu_addr(addr: u16) -> u16 {
+    match crate::bus::map_region(addr) {
+        crate::bus::BusRegion::CpuRam => addr & 0x07FF,
+        crate::bus::BusRegion::PpuRegisters => 0x2000 + ((addr - 0x2000) & 0x0007),
         _ => addr,
     }
 }

@@ -741,13 +741,24 @@ impl NesCore {
     /// Reads CPU-visible memory with MMIO-aware behavior.
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
-        match addr {
-            0x2002 => self.ppu.status(),
-            0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
-            0x2007 => self.ppu.peek_data_for_cpu_read(),
-            0x4015 => self.apu.peek_status(),
-            0x4016 => self.ports.controller_port_sample(Player::One),
-            0x4017 => self.ports.controller_port_sample(Player::Two),
+        match crate::bus::map_region(addr) {
+            crate::bus::BusRegion::PpuRegisters => {
+                let normalized = 0x2000 + ((addr - 0x2000) & 0x0007);
+                match normalized {
+                    0x2002 => self.ppu.status(),
+                    0x2004 => self.ppu.peek_oam_data_for_cpu_read(),
+                    0x2007 => self.ppu.peek_data_for_cpu_read(),
+                    _ => self.cpu.read_byte(addr),
+                }
+            }
+            crate::bus::BusRegion::ApuIo => {
+                match addr {
+                    0x4015 => self.apu.peek_status(),
+                    0x4016 => self.ports.controller_port_sample(Player::One),
+                    0x4017 => self.ports.controller_port_sample(Player::Two),
+                    _ => self.cpu.read_byte(addr),
+                }
+            }
             _ => self.cpu.read_byte(addr),
         }
     }
@@ -1485,9 +1496,10 @@ impl NesCore {
             false
         };
 
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
+        let ppu_changed = if crate::bus::map_region(addr) == crate::bus::BusRegion::PpuRegisters {
+            let normalized = 0x2000 + ((addr - 0x2000) & 0x0007);
             self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
+                .write_register(normalized, value);
             true
         } else {
             false
@@ -1564,16 +1576,27 @@ impl NesCore {
     }
 
     fn apply_cpu_read_side_effect(&mut self, addr: u16) {
-        match addr {
-            0x2002 => self.ppu.on_status_read(),
-            0x2007 => {
-                let _ = self.ppu.consume_data_read();
+        match crate::bus::map_region(addr) {
+            crate::bus::BusRegion::PpuRegisters => {
+                let normalized = 0x2000 + ((addr - 0x2000) & 0x0007);
+                match normalized {
+                    0x2002 => self.ppu.on_status_read(),
+                    0x2007 => {
+                        let _ = self.ppu.consume_data_read();
+                    }
+                    _ => {}
+                }
             }
-            0x4015 => {
-                let _ = self.apu.read_status();
+            crate::bus::BusRegion::ApuIo => {
+                match addr {
+                    0x4015 => {
+                        let _ = self.apu.read_status();
+                    }
+                    0x4016 => self.ports.consume_controller_read(Player::One),
+                    0x4017 => self.ports.consume_controller_read(Player::Two),
+                    _ => {}
+                }
             }
-            0x4016 => self.ports.consume_controller_read(Player::One),
-            0x4017 => self.ports.consume_controller_read(Player::Two),
             _ => {}
         }
     }
@@ -1659,11 +1682,6 @@ impl NesCore {
         };
         self.advance_hardware_cycles(stall_cycles);
     }
-}
-
-#[must_use]
-fn normalize_ppu_register_addr(addr: u16) -> u16 {
-    0x2000 + ((addr - 0x2000) % 8)
 }
 
 impl Default for NesCore {
