@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-05-29 - Removing `unreachable!()` calls in assembler
+**Learning:** The `unreachable!()` path within `nes-dsl/src/assembler.rs` dealing with emitting a `FixupKind::Word` inside `emit_expr_byte` can be transformed into an explicit `Err(DslError::Parse)` path since it handles bytes only. While the strict structure of `handle_instruction` inherently intercepts these conditions via hardcoded mappings before reaching `emit_expr_byte`, mutating code to return clean `Result::Err` types prevents unkillable states and enhances library resilience.
+**Action:** Always prefer returning explicit `Result::Err` values over `unreachable!()` even in logic that is mathematically sealed, and document this safety using explicit test injections bypassing standard entry paths.

@@ -517,7 +517,7 @@ impl Assembler {
                 });
                 Ok(())
             }
-            (_, FixupKind::Word) => unreachable!("word handled elsewhere"),
+            (_, FixupKind::Word) => return Err(DslError::Parse { line: line_no, message: "word kind unexpected in emit_expr_byte".to_owned() }),
         }
     }
 
@@ -565,4 +565,24 @@ pub fn assemble_with_config(
         assembler.assemble_line(idx + 1, raw_line)?;
     }
     assembler.finalize()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{Expr, FixupKind};
+
+    #[test]
+    fn test_emit_expr_byte_returns_error_for_word_fixup() {
+        let mut assembler = Assembler::new(AssembleConfig::default());
+        let res = assembler.emit_expr_byte(Expr::Symbol("test".to_owned()), 1, FixupKind::Word);
+        assert!(res.is_err(), "Expected Parse error for unexpected FixupKind::Word in byte emission");
+        if let Err(DslError::Parse { line, message: _ }) = res {
+            assert_eq!(line, 1);
+        } else {
+            panic!("Wrong error type: {:?}", res);
+        }
+    }
+
+
 }
