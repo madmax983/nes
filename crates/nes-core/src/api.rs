@@ -187,6 +187,16 @@ pub enum Command {
 
 /// Queries that can be sent to the [`NesCore`] to inspect its current state
 /// without advancing the emulation.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{CoreQuery, NesCore};
+///
+/// let core = NesCore::new();
+/// let query = CoreQuery::Memory(0x2002);
+/// let result = core.query(query);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreQuery {
     /// Returns paused/speed/controller state.
@@ -203,6 +213,20 @@ pub enum CoreQuery {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Lightweight machine status query response.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::EmulatorState;
+///
+/// let state = EmulatorState {
+///     paused: false,
+///     speed_permille: 1000,
+///     controller_bits: 0,
+///     controller2_bits: 0,
+/// };
+/// assert!(!state.paused);
+/// ```
 pub struct EmulatorState {
     /// Pause state.
     pub paused: bool,
@@ -215,6 +239,18 @@ pub struct EmulatorState {
 }
 
 /// The result of executing a [`CoreQuery`] on the [`NesCore`].
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{CoreQuery, QueryResult, NesCore};
+///
+/// let core = NesCore::new();
+/// let result = core.query(CoreQuery::FpsMilli);
+/// if let QueryResult::FpsMilli(fps) = result {
+///     assert_eq!(fps, 60_000);
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryResult {
     /// [`CoreQuery::EmulatorState`] response.
@@ -279,6 +315,22 @@ enum MapperDeltaKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Metadata returned after successfully loading a ROM.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, RomLoadInfo};
+///
+/// let mut core = NesCore::new();
+/// let dummy_rom = vec![
+///     0x4E, 0x45, 0x53, 0x1A, 0x01, 0x01, 0x00, 0x00,
+///     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+/// ];
+/// let mut rom = dummy_rom.clone();
+/// rom.extend(vec![0x00; 16 * 1024 + 8 * 1024]);
+/// let info = core.load_ines_rom(&rom).unwrap();
+/// assert_eq!(info.mapper_id, 0);
+/// ```
 pub struct RomLoadInfo {
     /// Mapper ID from iNES header.
     pub mapper_id: u8,
@@ -573,6 +625,17 @@ pub struct NesCore {
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, Command, CoreError};
+///
+/// let mut core = NesCore::new();
+/// // Try to set speed to 0
+/// let result = core.execute(Command::SetSpeed(0));
+/// assert_eq!(result.unwrap_err(), CoreError::InvalidSpeed(0));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
     /// Command is not currently supported by the runtime mode.
@@ -739,6 +802,16 @@ impl NesCore {
     }
 
     /// Reads CPU-visible memory with MMIO-aware behavior.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// // Read internal RAM at 0x0000
+    /// let val = core.read_memory(0x0000);
+    /// assert_eq!(val, 0);
+    /// ```
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
         match addr {
@@ -753,6 +826,14 @@ impl NesCore {
     }
 
     /// Reads `$4015` APU status and mirrors the result into CPU memory.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let mut core = NesCore::new();
+    /// let _status = core.read_apu_status();
+    /// ```
     pub fn read_apu_status(&mut self) -> u8 {
         let status = self.apu.read_status();
         self.cpu.write_byte(0x4015, status);
