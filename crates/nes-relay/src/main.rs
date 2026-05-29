@@ -139,7 +139,7 @@ fn build_startup_table(args: &RelayArgs) -> Table {
 fn run() -> Result<(), String> {
     let args = parse_args(std::env::args().skip(1).collect())?;
     let listener = TcpListener::bind(&args.bind_addr)
-        .map_err(|err| format!("failed to bind {}: {err}", args.bind_addr))?;
+        .map_err(|err| format!("{} failed to bind {}: {err}", "Error:".with(Color::Red).bold(), args.bind_addr))?;
 
     println!("{}", "nes-relay".with(Color::Cyan).bold());
     println!("\n{}", build_startup_table(&args));
