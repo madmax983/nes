@@ -449,12 +449,7 @@ impl Assembler {
                 self.emit_u8(hi)
             }
             Expr::Symbol(symbol) => {
-                if let Some(value) = self.resolve_symbol(&symbol) {
-                    let value = fit_u16(value, line_no)?;
-                    let [lo, hi] = value.to_le_bytes();
-                    self.emit_u8(lo)?;
-                    self.emit_u8(hi)?;
-                } else {
+                let Some(value) = self.resolve_symbol(&symbol) else {
                     let fixup_addr = self.current_addr;
                     self.emit_u8(0)?;
                     self.emit_u8(0)?;
@@ -464,7 +459,12 @@ impl Assembler {
                         expr: Expr::Symbol(symbol),
                         kind: FixupKind::Word,
                     });
-                }
+                    return Ok(());
+                };
+                let value = fit_u16(value, line_no)?;
+                let [lo, hi] = value.to_le_bytes();
+                self.emit_u8(lo)?;
+                self.emit_u8(hi)?;
                 Ok(())
             }
         }
@@ -492,9 +492,7 @@ impl Assembler {
                 self.emit_u8((delta as i8) as u8)
             }
             (Expr::Symbol(symbol), FixupKind::Byte) => {
-                if let Some(value) = self.resolve_symbol(symbol) {
-                    self.emit_u8(fit_u8(value, line_no)?)
-                } else {
+                let Some(value) = self.resolve_symbol(symbol) else {
                     let fixup_addr = self.current_addr;
                     self.emit_u8(0)?;
                     self.fixups.push(Fixup {
@@ -503,8 +501,9 @@ impl Assembler {
                         expr,
                         kind,
                     });
-                    Ok(())
-                }
+                    return Ok(());
+                };
+                self.emit_u8(fit_u8(value, line_no)?)
             }
             (Expr::Symbol(_), FixupKind::Relative) => {
                 let fixup_addr = self.current_addr;

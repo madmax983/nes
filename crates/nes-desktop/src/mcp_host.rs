@@ -288,10 +288,9 @@ fn handle_tools_call(
             "tools/call requires string field 'name'",
         ));
     };
-    let args = if let Some(Value::Object(map)) = params_obj.remove("arguments") {
-        map
-    } else {
-        Default::default()
+    let args = match params_obj.remove("arguments") {
+        Some(Value::Object(map)) => map,
+        _ => Default::default(),
     };
 
     let (reply_tx, reply_rx) = mpsc::channel();
