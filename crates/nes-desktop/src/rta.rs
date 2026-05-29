@@ -807,11 +807,11 @@ impl RtaManager {
             TriggerRuntime::new(profile.start.clone()),
         ));
         triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end.clone())));
-        if let Some(rule) = profile.pause.clone() {
-            triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule)));
+        if let Some(ref rule) = profile.pause {
+            triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule.clone())));
         }
-        if let Some(rule) = profile.resume.clone() {
-            triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule)));
+        if let Some(ref rule) = profile.resume {
+            triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule.clone())));
         }
         for (idx, split) in profile.splits.iter().enumerate() {
             triggers.push((

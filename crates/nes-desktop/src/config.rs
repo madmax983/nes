@@ -81,8 +81,8 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
 
     let rom_path = runtime_args
         .rom_path
-        .or_else(|| config.desktop.rom_path.clone())
-        .or_else(|| config.roms.smb.clone())
+        .or(config.desktop.rom_path)
+        .or(config.roms.smb)
         .ok_or_else(|| {
             format!(
                 "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
@@ -116,12 +116,8 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     let netplay = if netplay_enabled {
         let relay_addr = runtime_args
             .netplay_relay_addr
-            .or_else(|| Some(config.netplay.relay_addr.clone()))
-            .unwrap_or_default();
-        let room = runtime_args
-            .netplay_room
-            .or_else(|| Some(config.netplay.room.clone()))
-            .unwrap_or_default();
+            .unwrap_or(config.netplay.relay_addr);
+        let room = runtime_args.netplay_room.unwrap_or(config.netplay.room);
         let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
         let input_delay_frames = runtime_args
             .netplay_input_delay_frames
@@ -153,17 +149,15 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         || runtime_args.rta_calibrate;
     let rta = if rta_enabled {
         Some(RtaRuntimeConfig {
-            profile_id_override: runtime_args.rta_profile_id.clone(),
+            profile_id_override: runtime_args.rta_profile_id,
             profiles_dir: PathBuf::from(
                 runtime_args
                     .rta_profiles_dir
-                    .clone()
                     .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
             ),
             runs_dir: PathBuf::from(
                 runtime_args
                     .rta_runs_dir
-                    .clone()
                     .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
             ),
             calibrate: runtime_args.rta_calibrate,
