@@ -35,47 +35,67 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// Defines the immutable `DEFAULT_RTA_PROFILES_DIR` value used across the crate.
 pub const DEFAULT_RTA_PROFILES_DIR: &str = "config/rta/profiles";
+/// Defines the immutable `DEFAULT_RTA_RUNS_DIR` value used across the crate.
 pub const DEFAULT_RTA_RUNS_DIR: &str = "runs/rta";
 
+/// Contains configuration and state for `RtaRuntimeConfig` operations.
 #[derive(Debug, Clone)]
 pub struct RtaRuntimeConfig {
+    /// Stores the `ofile_id_overrid` property required for execution.
     pub profile_id_override: Option<String>,
+    /// Stores the `ofiles_di` property required for execution.
     pub profiles_dir: PathBuf,
+    /// Stores the `uns_di` property required for execution.
     pub runs_dir: PathBuf,
+    /// Stores the `lib` property required for execution.
     pub calibrate: bool,
 }
 
+/// Categorizes the different modes or states for `ProfileStatus`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileStatus {
+    /// Stores the `Draf` property required for execution.
     Draft,
+    /// Stores the `Published` property required for execution.
     #[default]
     Published,
 }
 
+/// Categorizes the different modes or states for `TimerClock`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TimerClock {
+    /// Stores the `Wall` property required for execution.
     #[default]
     Wall,
 }
 
+/// Categorizes the different modes or states for `FocusLossPolicy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum FocusLossPolicy {
+    /// Stores the `AutoPaus` property required for execution.
     AutoPause,
+    /// Stores the `Invalid` property required for execution.
     Invalidate,
+    /// Stores the `Continu` property required for execution.
     #[default]
     Continue,
 }
 
+/// Categorizes the different modes or states for `ForbiddenAction`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum ForbiddenAction {
+    /// Stores the `Rewind` property required for execution.
     #[default]
     Rewind,
+    /// Stores the `SaveLoad` property required for execution.
     SaveLoad,
+    /// Stores the `FrameS` property required for execution.
     FrameStep,
 }
 
@@ -89,35 +109,53 @@ impl ForbiddenAction {
     }
 }
 
+/// Categorizes the different modes or states for `TriggerWidth`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TriggerWidth {
+    /// Stores the `U8` property required for execution.
     #[default]
     U8,
+    /// Stores the `U16` property required for execution.
     U16,
+    /// Stores the `U32` property required for execution.
     U32,
 }
 
+/// Categorizes the different modes or states for `TriggerOp`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TriggerOp {
+    /// Stores the `Eq` property required for execution.
     #[default]
     Eq,
+    /// Stores the `N` property required for execution.
     Ne,
+    /// Stores the `G` property required for execution.
     Gt,
+    /// Stores the `G` property required for execution.
     Gte,
+    /// Stores the `L` property required for execution.
     Lt,
+    /// Stores the `L` property required for execution.
     Lte,
+    /// Stores the `BitS` property required for execution.
     BitSet,
+    /// Stores the `BitCl` property required for execution.
     BitClear,
+    /// Stores the `Changed` property required for execution.
     Changed,
 }
 
+/// Contains configuration and state for `TimerPolicy` operations.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct TimerPolicy {
+    /// Stores the `lock` property required for execution.
     pub clock: TimerClock,
+    /// Stores the `focus_loss` property required for execution.
     pub focus_loss: FocusLossPolicy,
+    /// Stores the `manual_fallback` property required for execution.
     pub manual_fallback: bool,
 }
 
@@ -131,9 +169,11 @@ impl Default for TimerPolicy {
     }
 }
 
+/// Contains configuration and state for `InvalidationPolicy` operations.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct InvalidationPolicy {
+    /// Stores the `invalidate_on` property required for execution.
     pub invalidate_on: Vec<ForbiddenAction>,
 }
 
@@ -149,10 +189,13 @@ impl Default for InvalidationPolicy {
     }
 }
 
+/// Contains configuration and state for `SplitPolicy` operations.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
 pub struct SplitPolicy {
+    /// Stores the `ppend_only` property required for execution.
     pub append_only: bool,
+    /// Stores the `manual_hotkey` property required for execution.
     pub manual_hotkey: String,
 }
 
@@ -165,20 +208,29 @@ impl Default for SplitPolicy {
     }
 }
 
+/// Contains configuration and state for `LoggingPolicy` operations.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct LoggingPolicy {
+    /// Stores the `save_input_log` property required for execution.
     pub save_input_log: bool,
 }
 
+/// Contains configuration and state for `TriggerRule` operations.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TriggerRule {
+    /// Stores the `ddress` property required for execution.
     pub address: u16,
+    /// Stores the `width` property required for execution.
     pub width: TriggerWidth,
+    /// Stores the `o` property required for execution.
     pub op: TriggerOp,
+    /// Stores the `valu` property required for execution.
     pub value: u32,
+    /// Stores the `debounce_frames` property required for execution.
     pub debounce_frames: u32,
+    /// Stores the `quire_consecutiv` property required for execution.
     pub require_consecutive: u32,
 }
 
@@ -309,21 +361,30 @@ impl Default for RtaProfile {
     }
 }
 
+/// Contains configuration and state for `LoadedProfile` operations.
 #[derive(Debug, Clone)]
 pub struct LoadedProfile {
+    /// Stores the `h` property required for execution.
     pub path: PathBuf,
+    /// Stores the `ofil` property required for execution.
     pub profile: RtaProfile,
 }
 
+/// Categorizes the different modes or states for `ProfileSelectionSource`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProfileSelectionSource {
+    /// Stores the `AutoByRomHash` property required for execution.
     AutoByRomHash,
+    /// Stores the `ManualOverrid` property required for execution.
     ManualOverride,
 }
 
+/// Contains configuration and state for `ProfileSelection` operations.
 #[derive(Debug, Clone)]
 pub struct ProfileSelection {
+    /// Stores the `selected` property required for execution.
     pub selected: LoadedProfile,
+    /// Stores the `sou` property required for execution.
     pub source: ProfileSelectionSource,
 }
 
@@ -498,12 +559,18 @@ pub fn select_profile(
     })
 }
 
+/// Categorizes the different modes or states for `RtaSessionState`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RtaSessionState {
+    /// Stores the `Idl` property required for execution.
     Idle,
+    /// Stores the `Armed` property required for execution.
     Armed,
+    /// Stores the `Running` property required for execution.
     Running,
+    /// Stores the `Finished` property required for execution.
     Finished,
+    /// Stores the `InvalidPracti` property required for execution.
     InvalidPractice,
 }
 
@@ -624,41 +691,64 @@ where
     }
 }
 
+/// Categorizes the different modes or states for `SplitSource`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum SplitSource {
+    /// Stores the `Automati` property required for execution.
     Automatic,
+    /// Stores the `Manual` property required for execution.
     Manual,
 }
 
+/// Contains configuration and state for `SplitEvent` operations.
 #[derive(Debug, Clone, Serialize)]
 pub struct SplitEvent {
+    /// Stores the `nam` property required for execution.
     pub name: String,
+    /// Stores the `sou` property required for execution.
     pub source: SplitSource,
+    /// Stores the `fram` property required for execution.
     pub frame: u64,
+    /// Stores the `lapsed_ms` property required for execution.
     pub elapsed_ms: u128,
 }
 
+/// Contains configuration and state for `InputLogFrame` operations.
 #[derive(Debug, Clone, Serialize)]
 pub struct InputLogFrame {
+    /// Stores the `fram` property required for execution.
     pub frame: u64,
+    /// Stores the `ontroller1_bits` property required for execution.
     pub controller1_bits: u8,
+    /// Stores the `ontroller2_bits` property required for execution.
     pub controller2_bits: u8,
+    /// Stores the `lapsed_ms` property required for execution.
     pub elapsed_ms: u128,
 }
 
+/// Categorizes the different modes or states for `RtaEvent`.
 #[derive(Debug, Clone)]
 pub enum RtaEvent {
+    /// Stores the `Started` property required for execution.
     Started,
+    /// Stores the `Paused` property required for execution.
     Paused,
+    /// Stores the `Resumed` property required for execution.
     Resumed,
+    /// Stores the `Split(SplitEvent)` property required for execution.
     Split(SplitEvent),
+    /// Stores the `Invalidated(String)` property required for execution.
     Invalidated(String),
+    /// Stores the `Finished(Duration)` property required for execution.
     Finished(Duration),
 }
 
+/// Contains configuration and state for `RunArtifactPaths` operations.
 #[derive(Debug, Clone)]
 pub struct RunArtifactPaths {
+    /// Stores the `un_json_path` property required for execution.
     pub run_json_path: PathBuf,
+    /// Stores the `input_log_path` property required for execution.
     pub input_log_path: Option<PathBuf>,
 }
 
@@ -674,6 +764,7 @@ struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     splits: &'a [SplitEvent],
 }
 
+/// Stores the `mod serde_iter {` property required for execution.
 pub mod serde_iter {
     use serde::{Serialize, Serializer};
 
@@ -1492,9 +1583,12 @@ struct DraftReport<'a> {
     candidates: Vec<DraftCandidate<'a>>,
 }
 
+/// Contains configuration and state for `DraftOutput` operations.
 #[derive(Debug, Clone)]
 pub struct DraftOutput {
+    /// Stores the `ofile_path` property required for execution.
     pub profile_path: PathBuf,
+    /// Stores the `port_path` property required for execution.
     pub report_path: PathBuf,
 }
 
@@ -1510,6 +1604,7 @@ struct CalibrationSplitMark {
     frame: u64,
 }
 
+/// Contains configuration and state for `CalibrationRecorder` operations.
 #[derive(Debug, Clone)]
 pub struct CalibrationRecorder {
     profile_id: String,

@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// Defines the immutable `DEFAULT_MCP_BIND_ADDR` value used across the crate.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// Defines the immutable `RUNTIME_USAGE` value used across the crate.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,21 +24,37 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// Stores the `om_path` property required for execution.
     pub rom_path: Option<String>,
+    /// Stores the `heat_codes` property required for execution.
     pub cheat_codes: Vec<String>,
+    /// Stores the `mcp_enabled` property required for execution.
     pub mcp_enabled: bool,
+    /// Stores the `mcp_bind_add` property required for execution.
     pub mcp_bind_addr: String,
+    /// Stores the `netplay_enabled` property required for execution.
     pub netplay_enabled: bool,
+    /// Stores the `netplay_relay_add` property required for execution.
     pub netplay_relay_addr: Option<String>,
+    /// Stores the `netplay_room` property required for execution.
     pub netplay_room: Option<String>,
+    /// Stores the `netplay_play` property required for execution.
     pub netplay_player: Option<u8>,
+    /// Stores the `netplay_input_delay_frames` property required for execution.
     pub netplay_input_delay_frames: Option<u32>,
+    /// Stores the `netplay_max_rollback_frames` property required for execution.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// Stores the `netplay_hash_check_every_frames` property required for execution.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// Stores the `_enabled` property required for execution.
     pub rta_enabled: bool,
+    /// Stores the `_profile_id` property required for execution.
     pub rta_profile_id: Option<String>,
+    /// Stores the `_profiles_di` property required for execution.
     pub rta_profiles_dir: Option<String>,
+    /// Stores the `_runs_di` property required for execution.
     pub rta_runs_dir: Option<String>,
+    /// Stores the `_calib` property required for execution.
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
     pub auto_player_enabled: bool,

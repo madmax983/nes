@@ -3,6 +3,13 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Returns the configured path for the Super Mario Bros ROM.
+///
+/// ## Examples
+/// ```no_run
+/// use nes_test_harness::rom_paths::smb_rom_path;
+/// let path = smb_rom_path();
+/// ```
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +25,13 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Returns the configured path for the nestest ROM.
+///
+/// ## Examples
+/// ```no_run
+/// use nes_test_harness::rom_paths::nestest_rom_path;
+/// let path = nestest_rom_path();
+/// ```
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +41,13 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Returns the configured path for Blargg's CPU tests.
+///
+/// ## Examples
+/// ```no_run
+/// use nes_test_harness::rom_paths::blargg_cpu_rom_path;
+/// let path = blargg_cpu_rom_path();
+/// ```
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +59,13 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Returns paths to all ROMs in the bbbradsmith audio test suite.
+///
+/// ## Examples
+/// ```no_run
+/// use nes_test_harness::rom_paths::bbbradsmith_audio_suite_rom_paths;
+/// let paths = bbbradsmith_audio_suite_rom_paths();
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +96,13 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Returns the path to golden audio reference files.
+///
+/// ## Examples
+/// ```no_run
+/// use nes_test_harness::rom_paths::bbbradsmith_audio_golden_dir_path;
+/// let dir = bbbradsmith_audio_golden_dir_path();
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();

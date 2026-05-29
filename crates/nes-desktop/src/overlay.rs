@@ -24,50 +24,70 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// Stores the `MainMen` property required for execution.
     MainMenu,
+    /// Stores the `Cheats` property required for execution.
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainMenuSelection {
+    /// Stores the `Resum` property required for execution.
     Resume,
+    /// Stores the `OpenRom` property required for execution.
     OpenRom,
+    /// Stores the `OpenCheats` property required for execution.
     OpenCheats,
+    /// Stores the `SaveSlot(u8)` property required for execution.
     SaveSlot(u8),
+    /// Stores the `LoadSlot(u8)` property required for execution.
     LoadSlot(u8),
+    /// Stores the `Res` property required for execution.
     Reset,
+    /// Stores the `Qui` property required for execution.
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatsSelection {
+    /// Stores the `AddCod` property required for execution.
     AddCode,
+    /// Stores the `Cheat(usize)` property required for execution.
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlaySelection {
+    /// Stores the `Main(MainMenuSelection)` property required for execution.
     Main(MainMenuSelection),
+    /// Stores the `Cheats(CheatsSelection)` property required for execution.
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// Stores the `AppAction(AppAction)` property required for execution.
     AppAction(AppAction),
+    /// Stores the `ToggleCheat(usize)` property required for execution.
     ToggleCheat(usize),
+    /// Stores the `RemoveCheat(usize)` property required for execution.
     RemoveCheat(usize),
+    /// Stores the `SubmitCheatCode(String)` property required for execution.
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// Stores the `slo` property required for execution.
     pub slot: u8,
+    /// Stores the `status_label` property required for execution.
     pub status_label: &'static str,
+    /// Stores the `modified_unix_secs` property required for execution.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -86,7 +106,9 @@ impl OverlaySlotSummary {
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// Stores the `w_cod` property required for execution.
     pub raw_code: &'a str,
+    /// Stores the `nabled` property required for execution.
     pub enabled: bool,
 }
 

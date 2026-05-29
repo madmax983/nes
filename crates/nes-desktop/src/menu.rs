@@ -21,11 +21,25 @@ pub struct DesktopMenu {
 }
 
 impl DesktopMenu {
+    /// Executes the `entries` routine to update the system state.
+    ///
+    /// ## Examples
+    /// ```no_run
+/// // Example usage of entries
+/// let _ = "entries";
+/// ```
     #[must_use]
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
     }
 
+    /// Executes the `install_for_window` routine to update the system state.
+    ///
+    /// ## Examples
+    /// ```no_run
+/// // Example usage of install_for_window
+/// let _ = "install_for_window";
+/// ```
     #[cfg(not(test))]
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
@@ -45,6 +59,13 @@ impl DesktopMenu {
         Ok(())
     }
 
+    /// Executes the `poll_action` routine to update the system state.
+    ///
+    /// ## Examples
+    /// ```no_run
+/// // Example usage of poll_action
+/// let _ = "poll_action";
+/// ```
     #[cfg(not(test))]
     #[must_use]
     pub fn poll_action(&self) -> Option<AppAction> {
@@ -59,6 +80,13 @@ impl DesktopMenu {
         None
     }
 
+    /// Executes the `set_action_enabled` routine to update the system state.
+    ///
+    /// ## Examples
+    /// ```no_run
+/// // Example usage of set_action_enabled
+/// let _ = "set_action_enabled";
+/// ```
     #[cfg(not(test))]
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -72,6 +100,13 @@ impl DesktopMenu {
         let _ = (action, enabled);
     }
 
+    /// Executes the `sync_runtime_state` routine to update the system state.
+    ///
+    /// ## Examples
+    /// ```no_run
+/// // Example usage of sync_runtime_state
+/// let _ = "sync_runtime_state";
+/// ```
     #[cfg(not(test))]
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);
@@ -98,10 +133,15 @@ impl DesktopMenu {
 /// Declarative menu node used to keep menu semantics testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesktopMenuEntry {
+    /// Stores the `Item(MenuItemSpec)` property required for execution.
     Item(MenuItemSpec),
+    /// Stores the `Separato` property required for execution.
     Separator,
+    /// Stores the `Submenu {` property required for execution.
     Submenu {
+        /// Stores the `label` property required for execution.
         label: &'static str,
+        /// Stores the `ntries` property required for execution.
         entries: Vec<DesktopMenuEntry>,
     },
 }
@@ -109,7 +149,9 @@ pub enum DesktopMenuEntry {
 /// Shared metadata for actionable menu items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuItemSpec {
+    /// Stores the `id` property required for execution.
     pub id: String,
+    /// Stores the `label` property required for execution.
     pub label: String,
 }
 
@@ -171,6 +213,13 @@ pub const fn native_menu_supported() -> bool {
     true
 }
 
+/// Executes the `native_menu_supported` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of native_menu_supported
+/// let _ = "native_menu_supported";
+/// ```
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
 pub const fn native_menu_supported() -> bool {
@@ -183,6 +232,13 @@ pub const fn rom_picker_supported() -> bool {
     true
 }
 
+/// Executes the `rom_picker_supported` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of rom_picker_supported
+/// let _ = "rom_picker_supported";
+/// ```
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
 pub const fn rom_picker_supported() -> bool {

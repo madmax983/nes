@@ -1,11 +1,20 @@
 use nes_core::{Button, Command};
 
+/// Contains configuration and state for `BridgeCommand` operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BridgeCommand {
+    /// Stores the `o` property required for execution.
     pub core: Command,
 }
 
 impl BridgeCommand {
+    /// Executes the `tool_name` routine to update the system state.
+    ///
+    /// ## Examples
+    /// ```no_run
+/// // Example usage of tool_name
+/// let _ = "tool_name";
+/// ```
     #[must_use]
     pub fn tool_name(self) -> &'static str {
         match self.core {
@@ -16,6 +25,13 @@ impl BridgeCommand {
     }
 }
 
+/// Executes the `map_key_event_to_command` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of map_key_event_to_command
+/// let _ = "map_key_event_to_command";
+/// ```
 #[must_use]
 pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
     let button = map_key_event_to_button(key_code)?;
@@ -29,6 +45,13 @@ pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeC
     Some(BridgeCommand { core })
 }
 
+/// Executes the `map_key_event_to_button` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of map_key_event_to_button
+/// let _ = "map_key_event_to_button";
+/// ```
 #[must_use]
 pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     match key_code {
@@ -44,6 +67,13 @@ pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     }
 }
 
+/// Executes the `map_key_event_to_button_bit` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of map_key_event_to_button_bit
+/// let _ = "map_key_event_to_button_bit";
+/// ```
 #[must_use]
 pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
     map_key_event_to_button(key_code).map(Button::bit_mask)

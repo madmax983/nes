@@ -18,19 +18,29 @@ struct SaveStateFile {
     snapshot: CoreSnapshot,
 }
 
+/// Categorizes the different modes or states for `SaveSlotStatus`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SaveSlotStatus {
+    /// Stores the `Empty` property required for execution.
     Empty,
+    /// Stores the `Saved` property required for execution.
     Saved,
+    /// Stores the `Corrup` property required for execution.
     Corrupt,
+    /// Stores the `IncompatibleRom` property required for execution.
     IncompatibleRom,
 }
 
+/// Contains configuration and state for `SaveSlotMetadata` operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveSlotMetadata {
+    /// Stores the `slo` property required for execution.
     pub slot: u8,
+    /// Stores the `h` property required for execution.
     pub path: PathBuf,
+    /// Stores the `status` property required for execution.
     pub status: SaveSlotStatus,
+    /// Stores the `modified_unix_secs` property required for execution.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -123,6 +133,13 @@ fn slot_number_from_path(path: &Path) -> Result<u8, String> {
     })
 }
 
+/// Executes the `slot_path_for_rom` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of slot_path_for_rom
+/// let _ = "slot_path_for_rom";
+/// ```
 #[must_use]
 pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
@@ -132,6 +149,13 @@ pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     ))
 }
 
+/// Executes the `slot_paths_for_rom` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of slot_paths_for_rom
+/// let _ = "slot_paths_for_rom";
+/// ```
 #[must_use]
 pub fn slot_paths_for_rom(
     rom_path: &Path,
@@ -143,6 +167,13 @@ pub fn slot_paths_for_rom(
         .collect()
 }
 
+/// Executes the `quicksave_path_for_rom` routine to update the system state.
+///
+/// ## Examples
+/// ```no_run
+/// // Example usage of quicksave_path_for_rom
+/// let _ = "quicksave_path_for_rom";
+/// ```
 #[must_use]
 pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);

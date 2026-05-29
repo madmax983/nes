@@ -1,13 +1,21 @@
 /// Shared high-level intents emitted by the native menu, overlay, and hotkeys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppAction {
+    /// Stores the `ToggleOverlay` property required for execution.
     ToggleOverlay,
+    /// Stores the `Resum` property required for execution.
     Resume,
+    /// Stores the `OpenRom` property required for execution.
     OpenRom,
+    /// Stores the `OpenCheats` property required for execution.
     OpenCheats,
+    /// Stores the `SaveSlot(u8)` property required for execution.
     SaveSlot(u8),
+    /// Stores the `LoadSlot(u8)` property required for execution.
     LoadSlot(u8),
+    /// Stores the `Res` property required for execution.
     Reset,
+    /// Stores the `Qui` property required for execution.
     Quit,
 }
 
