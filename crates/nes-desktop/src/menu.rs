@@ -25,9 +25,9 @@ impl DesktopMenu {
     ///
     /// ## Examples
     /// ```no_run
-/// // Example usage of entries
-/// let _ = "entries";
-/// ```
+    /// // Example usage of entries
+    /// let _ = "entries";
+    /// ```
     #[must_use]
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
@@ -37,9 +37,9 @@ impl DesktopMenu {
     ///
     /// ## Examples
     /// ```no_run
-/// // Example usage of install_for_window
-/// let _ = "install_for_window";
-/// ```
+    /// // Example usage of install_for_window
+    /// let _ = "install_for_window";
+    /// ```
     #[cfg(not(test))]
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
@@ -63,9 +63,9 @@ impl DesktopMenu {
     ///
     /// ## Examples
     /// ```no_run
-/// // Example usage of poll_action
-/// let _ = "poll_action";
-/// ```
+    /// // Example usage of poll_action
+    /// let _ = "poll_action";
+    /// ```
     #[cfg(not(test))]
     #[must_use]
     pub fn poll_action(&self) -> Option<AppAction> {
@@ -84,9 +84,9 @@ impl DesktopMenu {
     ///
     /// ## Examples
     /// ```no_run
-/// // Example usage of set_action_enabled
-/// let _ = "set_action_enabled";
-/// ```
+    /// // Example usage of set_action_enabled
+    /// let _ = "set_action_enabled";
+    /// ```
     #[cfg(not(test))]
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -104,9 +104,9 @@ impl DesktopMenu {
     ///
     /// ## Examples
     /// ```no_run
-/// // Example usage of sync_runtime_state
-/// let _ = "sync_runtime_state";
-/// ```
+    /// // Example usage of sync_runtime_state
+    /// let _ = "sync_runtime_state";
+    /// ```
     #[cfg(not(test))]
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);

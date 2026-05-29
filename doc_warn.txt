@@ -1,3 +1,0 @@
- Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.88s
-   Generated /app/target/doc/nes_ai/index.html and 18 other files

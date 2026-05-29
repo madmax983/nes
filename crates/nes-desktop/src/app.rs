@@ -12,9 +12,9 @@ impl BridgeCommand {
     ///
     /// ## Examples
     /// ```no_run
-/// // Example usage of tool_name
-/// let _ = "tool_name";
-/// ```
+    /// // Example usage of tool_name
+    /// let _ = "tool_name";
+    /// ```
     #[must_use]
     pub fn tool_name(self) -> &'static str {
         match self.core {
