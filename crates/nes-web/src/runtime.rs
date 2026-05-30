@@ -530,17 +530,5 @@ impl Default for WebRuntime {
 }
 
 fn parse_button(button: &str) -> Result<Button, String> {
-    match button {
-        "A" => Ok(Button::A),
-        "B" => Ok(Button::B),
-        "Select" => Ok(Button::Select),
-        "Start" => Ok(Button::Start),
-        "Up" => Ok(Button::Up),
-        "Down" => Ok(Button::Down),
-        "Left" => Ok(Button::Left),
-        "Right" => Ok(Button::Right),
-        _ => Err(format!(
-            "unknown button '{button}'. expected one of: A, B, Select, Start, Up, Down, Left, Right"
-        )),
-    }
+    button.parse::<Button>().map_err(|_| format!("unknown button '{button}'. expected one of: A, B, Select, Start, Up, Down, Left, Right"))
 }

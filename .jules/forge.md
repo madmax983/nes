@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract Button FromStr**
+**Learning:** Found duplicate manual parsing logic for `Button` across multiple crates (`nes-mcp` and `nes-web`). Replacing this with the standard library `FromStr` trait eliminates the boilerplate.
+**Action:** Implemented `std::str::FromStr` directly on the `Button` enum in `nes-core` and updated the `parse_button` helper functions to delegate to it instead of duplicating the match block. This centralizes the parsing while maintaining the idiomatic error handling without sacrificing readability via inline code golf.

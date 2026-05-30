@@ -738,19 +738,7 @@ fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
         ));
     };
 
-    match button {
-        "A" => Ok(Button::A),
-        "B" => Ok(Button::B),
-        "Select" => Ok(Button::Select),
-        "Start" => Ok(Button::Start),
-        "Up" => Ok(Button::Up),
-        "Down" => Ok(Button::Down),
-        "Left" => Ok(Button::Left),
-        "Right" => Ok(Button::Right),
-        _ => Err(DispatchError::InvalidParams(format!(
-            "unknown button '{button}'"
-        ))),
-    }
+    button.parse::<Button>().map_err(DispatchError::InvalidParams)
 }
 
 fn parse_u8(params: &ToolParams, key: &str) -> Result<u8, DispatchError> {

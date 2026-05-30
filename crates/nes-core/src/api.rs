@@ -76,6 +76,24 @@ impl Button {
     }
 }
 
+impl std::str::FromStr for Button {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "A" => Ok(Button::A),
+            "B" => Ok(Button::B),
+            "Select" => Ok(Button::Select),
+            "Start" => Ok(Button::Start),
+            "Up" => Ok(Button::Up),
+            "Down" => Ok(Button::Down),
+            "Left" => Ok(Button::Left),
+            "Right" => Ok(Button::Right),
+            _ => Err(format!("unknown button '{s}'")),
+        }
+    }
+}
+
 /// Represents the controller port for a player.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Player {
@@ -2220,5 +2238,25 @@ mod tests_rom_loader_internal {
             err,
             CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
         ));
+    }
+
+    #[test]
+    fn button_from_str_supports_all_button_names() {
+        for (name, expected) in [
+            ("A", Button::A),
+            ("B", Button::B),
+            ("Select", Button::Select),
+            ("Start", Button::Start),
+            ("Up", Button::Up),
+            ("Down", Button::Down),
+            ("Left", Button::Left),
+            ("Right", Button::Right),
+        ] {
+            let button: Button = name.parse().expect("valid button");
+            assert_eq!(button, expected);
+        }
+
+        let err = "Invalid".parse::<Button>().unwrap_err();
+        assert_eq!(err, "unknown button 'Invalid'");
     }
 }
