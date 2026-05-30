@@ -856,10 +856,12 @@ fn resolve_rom_path() -> Result<(String, Option<PathBuf>, TuiCliOptions), String
             None
         }
     });
-    let config = NesConfig::load_or_default(config_path.as_deref())?;
+    // **⚡ Bolt Optimization:** Avoid heap allocation by taking strings via `std::mem::take`
+    // within `or_else` instead of eagerly cloning string values.
+    let mut config = NesConfig::load_or_default(config_path.as_deref())?;
     let rom_path = rom_path_arg
-        .or_else(|| config.desktop.rom_path.clone())
-        .or_else(|| config.roms.smb.clone())
+        .or_else(|| std::mem::take(&mut config.desktop.rom_path))
+        .or_else(|| std::mem::take(&mut config.roms.smb))
         .ok_or_else(|| {
             format!("{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}.",
                 "Error:".with(crossterm::style::Color::Red).bold(),

@@ -77,12 +77,14 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
             None
         }
     });
-    let config = NesConfig::load_or_default(config_path.as_deref())?;
+    // **⚡ Bolt Optimization:** Extract `config` properties via `std::mem::take` inside `or_else`
+    // to consume strings by transferring ownership instead of performing unnecessary deep heap `.clone()`s.
+    let mut config = NesConfig::load_or_default(config_path.as_deref())?;
 
     let rom_path = runtime_args
         .rom_path
-        .or_else(|| config.desktop.rom_path.clone())
-        .or_else(|| config.roms.smb.clone())
+        .or_else(|| std::mem::take(&mut config.desktop.rom_path))
+        .or_else(|| std::mem::take(&mut config.roms.smb))
         .ok_or_else(|| {
             format!(
                 "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
@@ -116,11 +118,11 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
     let netplay = if netplay_enabled {
         let relay_addr = runtime_args
             .netplay_relay_addr
-            .or_else(|| Some(config.netplay.relay_addr.clone()))
+            .or_else(|| Some(std::mem::take(&mut config.netplay.relay_addr)))
             .unwrap_or_default();
         let room = runtime_args
             .netplay_room
-            .or_else(|| Some(config.netplay.room.clone()))
+            .or_else(|| Some(std::mem::take(&mut config.netplay.room)))
             .unwrap_or_default();
         let player = runtime_args.netplay_player.unwrap_or(config.netplay.player);
         let input_delay_frames = runtime_args

@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Option Take vs Clone**
+**Learning:** `std::mem::take` inside `or_else` avoids cloning struct fields while maintaining ownership of the parent structure, preventing heap allocations.
+**Action:** When extracting data from `Option` struct fields that will no longer be used (like during config load or transformation), use `std::mem::take` inside an `or_else` block instead of `.clone()` for zero-cost abstraction. However, ensure that taking this data won't corrupt the struct if it needs to be retained.
