@@ -160,7 +160,15 @@ cargo run -p nes-ai --bin prepare_smb_control -- `
   "./roms/homebrew/homebrew.nes" `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
+```
 
+Then copy the example configuration:
+
+```powershell
+cp config/ai/profiles/smb-control.example.toml config/ai/profiles/smb-control.toml
+```
+
+```powershell
 # 2. Train from the local profile
 cargo run -p nes-ai --bin train_smb_control -- `
   ./config/ai/profiles/smb-control.toml `
