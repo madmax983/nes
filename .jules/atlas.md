@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Extract AppAction handling from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` was bloated and contained app action dispatch logic (`execute_app_action`, `dispatch_app_action`).
+**Blueprint:** Extracted the application action dispatch logic into a new `actions_impl.rs` module.
