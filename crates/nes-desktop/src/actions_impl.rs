@@ -361,3 +361,38 @@ pub(crate) fn reconcile_core_pause_with_overlay(
         )
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::{Command, NesCore};
+
+    #[test]
+    fn rollback_disables_stateful_menu_actions() {
+        let err = validate_action_allowed(AppAction::OpenRom, true)
+            .expect_err("open rom should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+
+        let err = validate_action_allowed(AppAction::OpenCheats, true)
+            .expect_err("open cheats should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+
+        let err = validate_action_allowed(AppAction::SaveSlot(2), true)
+            .expect_err("save slot should be blocked during rollback");
+        assert!(err.contains("unavailable while netplay/rollback is active"));
+    }
+    #[test]
+    fn reconcile_core_pause_with_overlay_matches_overlay_visibility() {
+        let mut core = NesCore::new();
+        core.execute(Command::Pause)
+            .expect("pause command should succeed");
+
+        reconcile_core_pause_with_overlay(&mut core, false)
+            .expect("closed overlay should force resume");
+        assert!(!core.is_paused());
+
+        reconcile_core_pause_with_overlay(&mut core, true)
+            .expect("open overlay should force pause");
+        assert!(core.is_paused());
+    }
+}

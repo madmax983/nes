@@ -1197,11 +1197,11 @@ mod tests {
         element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
         menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        recommended_input_delay_frames, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+        update_button_bits, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1397,21 +1397,6 @@ mod tests {
     }
 
     #[test]
-    fn rollback_disables_stateful_menu_actions() {
-        let err = validate_action_allowed(AppAction::OpenRom, true)
-            .expect_err("open rom should be blocked during rollback");
-        assert!(err.contains("unavailable while netplay/rollback is active"));
-
-        let err = validate_action_allowed(AppAction::OpenCheats, true)
-            .expect_err("open cheats should be blocked during rollback");
-        assert!(err.contains("unavailable while netplay/rollback is active"));
-
-        let err = validate_action_allowed(AppAction::SaveSlot(2), true)
-            .expect_err("save slot should be blocked during rollback");
-        assert!(err.contains("unavailable while netplay/rollback is active"));
-    }
-
-    #[test]
     fn open_rom_menu_action_requires_platform_picker_support() {
         assert_eq!(
             menu_action_enabled(AppAction::OpenRom, false, false, false),
@@ -1443,21 +1428,6 @@ mod tests {
         use nes_desktop::menu::build_native_menu;
         let menu = build_native_menu(3);
         sync_native_menu_state(&menu, false, false, false);
-    }
-
-    #[test]
-    fn reconcile_core_pause_with_overlay_matches_overlay_visibility() {
-        let mut core = NesCore::new();
-        core.execute(Command::Pause)
-            .expect("pause command should succeed");
-
-        reconcile_core_pause_with_overlay(&mut core, false)
-            .expect("closed overlay should force resume");
-        assert!(!core.is_paused());
-
-        reconcile_core_pause_with_overlay(&mut core, true)
-            .expect("open overlay should force pause");
-        assert!(core.is_paused());
     }
 
     #[test]
