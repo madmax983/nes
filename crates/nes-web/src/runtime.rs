@@ -530,5 +530,9 @@ impl Default for WebRuntime {
 }
 
 fn parse_button(button: &str) -> Result<Button, String> {
-    button.parse::<Button>().map_err(|_| format!("unknown button '{button}'. expected one of: A, B, Select, Start, Up, Down, Left, Right"))
+    button.parse::<Button>().map_err(|_| {
+        format!(
+            "unknown button '{button}'. expected one of: A, B, Select, Start, Up, Down, Left, Right"
+        )
+    })
 }

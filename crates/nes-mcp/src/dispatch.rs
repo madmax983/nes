@@ -738,7 +738,9 @@ fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
         ));
     };
 
-    button.parse::<Button>().map_err(DispatchError::InvalidParams)
+    button
+        .parse::<Button>()
+        .map_err(DispatchError::InvalidParams)
 }
 
 fn parse_u8(params: &ToolParams, key: &str) -> Result<u8, DispatchError> {
