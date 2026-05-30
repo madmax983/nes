@@ -63,3 +63,19 @@ proptest! {
         let _ = parse_args(args).unwrap();
     }
 }
+
+#[test]
+#[should_panic(expected = "capacity overflow")]
+#[ignore = "Havoc OOM Attack"]
+fn havoc_test_room_state_oom() {
+    use std::collections::HashMap;
+
+    let mut rooms: HashMap<String, ()> = HashMap::new();
+
+    // A memory allocation loop trying to crash the system via sheer capacity requests
+    for i in 0..100_000_000 {
+        let room_name = format!("attacker_room_{}", i);
+        // This will eventually panic with "capacity overflow" on systems with limited memory
+        rooms.insert(room_name, ());
+    }
+}
