@@ -360,10 +360,10 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
     loop {
         line.clear();
 
-        let read = reader
+        let _read = reader
             .read_line(&mut line)
             .map_err(|err| format!("failed reading header line: {err}"))?;
-        if read == 0 {
+        if line.is_empty() {
             if content_length.is_none() {
                 return Ok(None);
             }
@@ -673,6 +673,28 @@ mod tests {
 
 #[cfg(test)]
 mod coverage_tests {
+
+    #[test]
+    fn test_read_framed_message_empty_content_length() {
+        let payload = b"\r\n";
+        let mut cursor = Cursor::new(payload);
+        let result = read_framed_message(&mut cursor);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "missing Content-Length header");
+    }
+
+    #[test]
+    fn test_read_framed_message_eof_in_header() {
+        let payload = b"Content-Length: 10\r\n";
+        let mut cursor = Cursor::new(payload);
+        let result = read_framed_message(&mut cursor);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "unexpected EOF while reading MCP headers"
+        );
+    }
+
     use super::*;
     use std::io::Cursor;
 
