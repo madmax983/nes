@@ -26,3 +26,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2025-06-25 - Workspace Missing Documentation
+**Confusion:** Rustdoc throws warnings for missing documentation on many public structs, functions, struct fields, and enum variants in `nes-test-harness` and `nes-desktop`. The user explicitly sets `-D missing_docs` causing build failures.
+**Clarification:** Added thorough `///` comments to all previously undocumented public items, ensuring descriptions provide meaningful context rather than just repeating names.

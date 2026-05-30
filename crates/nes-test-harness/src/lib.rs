@@ -34,27 +34,42 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// A recorded write to an APU register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle when the write occurred.
     pub cpu_cycle: u64,
+    /// The 16-bit bus address written to.
     pub addr: u16,
+    /// The 8-bit value written.
     pub value: u8,
 }
 
+/// Statistical properties of a PCM audio waveform.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
+    /// The total number of samples analyzed.
     pub sample_count: usize,
+    /// The Root Mean Square of the signal, representing its perceived loudness.
     pub rms: f64,
+    /// The maximum absolute amplitude found in the signal.
     pub peak: i16,
+    /// The average amplitude of the signal, indicating DC bias.
     pub dc_offset: f64,
+    /// The fraction of samples that hit the maximum or minimum representable 16-bit values.
     pub clipping_ratio: f64,
 }
 
+/// The result of comparing two PCM audio waveforms.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
+    /// The number of samples compared (the minimum length of the two input slices).
     pub samples_compared: usize,
+    /// The Pearson correlation coefficient between the two waveforms (-1.0 to 1.0).
     pub correlation: f64,
+    /// The ratio of the LHS RMS to the RHS RMS.
     pub rms_ratio: f64,
+    /// The mean absolute difference in decibels across the frequency bins.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -98,6 +113,7 @@ pub fn collect_apu_register_writes(
 }
 
 #[must_use]
+/// Used to verify that emulator refactors do not change the timing or values of audio register writes.
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for event in writes {
@@ -178,6 +194,7 @@ pub fn capture_audio_window(
 }
 
 #[must_use]
+/// Computes a deterministic hash of a raw PCM waveform.
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for sample in samples {
@@ -188,6 +205,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
 }
 
 #[must_use]
+/// Calculates statistical properties of a PCM audio waveform.
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
         return AudioStats {
@@ -226,6 +244,7 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
 }
 
 #[must_use]
+/// The envelope is computed using non-overlapping windows of `window_samples`.
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
         return Vec::new();
@@ -328,6 +347,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
 }
 
 #[must_use]
+/// Returns a detailed `WaveformComparison` containing correlation and frequency-domain differences.
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
     if n == 0 {
@@ -373,6 +393,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 }
 
 #[must_use]
+/// Uses a Hann window to reduce spectral leakage. Note: This implementation is O(N^2) and intended for testing, not real-time use.
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
         return Vec::new();
@@ -415,6 +436,7 @@ fn hann_window(idx: usize, len: usize) -> f64 {
 }
 
 #[must_use]
+/// Returns `None` if the slice is too small or lacks the correct 'NES' magic number.
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
         return None;
@@ -432,6 +454,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 }
 
 #[must_use]
+/// Returns `true` if the given mapper ID is supported by the `nes-core` emulator.
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)
 }

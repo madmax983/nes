@@ -24,50 +24,70 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// The primary top-level menu view.
     MainMenu,
+    /// The view for managing cheat codes.
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainMenuSelection {
+    /// Requests the emulation to resume running.
     Resume,
+    /// Requests the application to open a new ROM file.
     OpenRom,
+    /// Requests navigation to the cheats management view.
     OpenCheats,
+    /// Requests saving state to the specified slot number.
     SaveSlot(u8),
+    /// Requests loading state from the specified slot number.
     LoadSlot(u8),
+    /// Requests a hard reset of the emulator.
     Reset,
+    /// Requests the application to exit.
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatsSelection {
+    /// Interaction representing the user's intent to add a new cheat code.
     AddCode,
+    /// Interaction with a specific existing cheat code.
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlaySelection {
+    /// An action generated from the main menu view.
     Main(MainMenuSelection),
+    /// An action generated from the cheats view.
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// A high-level application action to be handled by the host.
     AppAction(AppAction),
+    /// Requests toggling the active state of a specific cheat code.
     ToggleCheat(usize),
+    /// Requests the permanent removal of a specific cheat code.
     RemoveCheat(usize),
+    /// Requests the addition of a new cheat code string.
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// The numerical identifier of the slot.
     pub slot: u8,
+    /// A short, human-readable label indicating the slot's status (e.g., 'Empty').
     pub status_label: &'static str,
+    /// The last modified time of the slot, if available.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -86,7 +106,9 @@ impl OverlaySlotSummary {
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// The raw text of the cheat code (e.g., Game Genie format).
     pub raw_code: &'a str,
+    /// Whether the cheat is currently active and applied to the emulator.
     pub enabled: bool,
 }
 
