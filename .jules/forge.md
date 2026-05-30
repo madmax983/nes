@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract setup_rta_manager from God Function**
+**Learning:** Found that `run()` in `crates/nes-desktop/src/main.rs` had grown into a 700+ line God Function, with the RTA manager initialization alone taking up ~60 lines of deeply nested logic. Also learned that when extracting functions into a binary crate (e.g., `src/main.rs`) that accept types defined in the workspace library, ensure the parameter types reference the fully public path (e.g., `nes_desktop::rta::RtaRuntimeConfig`) rather than private internal module aliases to avoid visibility errors (`E0603`).
+**Action:** Extracted the block into a helper `setup_rta_manager(rta_config_opt: Option<&nes_desktop::rta::RtaRuntimeConfig>, rom_hash: &str) -> Result<Option<RtaManager>, String>` and used guard clauses to flatten it.
