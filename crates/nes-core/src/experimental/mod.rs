@@ -35,6 +35,9 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Visualizes APU audio samples as an oscilloscope waveform.
+#[cfg(feature = "nova")]
+pub mod apu_visualizer;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
