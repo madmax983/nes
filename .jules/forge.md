@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+## 2026-05-31 - [Flattening classify_keyboard_input]
+**Learning:** Found deeply nested matches and isolated if expressions in `classify_keyboard_input` function in `nes-desktop/src/input.rs`. Independent conditionals can be easily grouped using Rust's `match` with guard expressions which improves readability.
+**Action:** Use a single flat `match` statement with guards (`if pressed`, etc) instead of a series of top-level `if` statements.
