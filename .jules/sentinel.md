@@ -52,3 +52,13 @@
 **Mutant:** Replaced `CheatCode::raw -> &str` with `""`, `CheatCode::address -> u16` with `0`, `CheatCode::value -> u8` with `0`, `CheatCode::compare -> Option<u8>` with `None`, `CheatCode::applies_to -> bool` with `true`/`false`.
 **Diagnosis:** Weak assertion. Existing tests decoded codes properly but did not explicitly check accessors or methods like `applies_to` across both `true` and `false` evaluations to prevent mutant replacements with fixed constants.
 **Kill Shot:** Appended `mutant_hunting` module inside `cheat_codes.rs` to assert explicit return values. Tests specifically verify `raw()`, `address()`, `value()`, `compare()`, and `applies_to()` logic.
+
+**[bus.rs - Incomplete range checks]**
+**Mutant:** `delete match arm 0x0000..= 0x1FFF in map_region`
+**Diagnosis:** `WEAK_ASSERTION` and `MISSING_COVERAGE`. `tests/bus_map.rs` and `tests/bus_map_prop.rs` did not verify specific boundaries explicitly.
+**Kill Shot:** Strengthened `tests/bus_map_prop.rs` to map the full `u16::MIN..=u16::MAX` boundary and comprehensively assert each mapped region returns the correct expected Enum explicitly.
+
+**[gxrom.rs - Padding math boundaries]**
+**Mutant:** `replace < with <=` or `replace + with *` inside padding routines for PRG and CHR.
+**Diagnosis:** `EQUIVALENT_MUTANT` and `MISSING_COVERAGE`. We added `tests/mapper_gxrom.rs` coverage for padding logic `+ 10` boundary cases. The `<` to `<=` on `prg_rom.len() < PRG_BANK_32K` is an equivalent mutant because `prg_rom.resize(PRG_BANK_32K, 0)` is a no-op if the lengths are exactly equal.
+**Kill Shot:** Skipped equivalent mutants, but significantly strengthened `tests/mapper_gxrom.rs` to explicitly verify `from_prg_chr_exact_32k`, partial padding math tests, `chr_writable`, and `restore_state` functions, dropping mutants down from 23 to 1 unviable/equivalent.

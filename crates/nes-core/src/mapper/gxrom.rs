@@ -152,6 +152,87 @@ impl Mapper for Gxrom {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gxrom_from_prg_chr_more_math_operators() {
+        // Less than 32k
+        let mapper = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024 - 1], vec![]);
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), 32 * 1024);
+
+        // Slightly over 32k.
+        let mapper3 = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024 + 1], vec![]);
+        assert_eq!(mapper3.prg_bank_count, 2);
+        assert_eq!(mapper3.prg_rom.len(), 64 * 1024);
+
+        // CHR slightly over 8k.
+        let mapper4 = Gxrom::from_prg_chr(vec![], vec![0_u8; 8 * 1024 + 1]);
+        assert_eq!(mapper4.chr_bank_count, 2);
+        assert_eq!(mapper4.chr_data.len(), 16 * 1024);
+
+        // Ensure less than 8k logic works.
+        let mapper5 = Gxrom::from_prg_chr(vec![], vec![0_u8; 8 * 1024 - 1]);
+        assert_eq!(mapper5.chr_bank_count, 1);
+        assert_eq!(mapper5.chr_data.len(), 8 * 1024);
+
+        // Exactly 8k
+        let mapper6 = Gxrom::from_prg_chr(vec![], vec![0_u8; 8 * 1024]);
+        assert_eq!(mapper6.chr_bank_count, 1);
+        assert_eq!(mapper6.chr_data.len(), 8 * 1024);
+    }
+
+    #[test]
+    fn gxrom_from_prg_chr_more_math_operators3() {
+        // Less than 32k
+        let mapper = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024 - 1], vec![]);
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), 32 * 1024);
+
+        // Exact 32k.
+        let mapper2 = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024], vec![]);
+        assert_eq!(mapper2.prg_bank_count, 1);
+        assert_eq!(mapper2.prg_rom.len(), 32 * 1024);
+
+        // Ensure less than PRG_BANK_32K logic `<=` works.
+        // It requires an EXACT 32k input, but if `if prg_rom.len() <= PRG_BANK_32K`
+        // was evaluated, it would unnecessarily pad it or do operations resulting in a different state
+        // under Cargo Mutants logic if `resize` works correctly? Wait, resize doesn't do anything if
+        // the target length is the same. Wait, if it's `<`, resize is skipped for `== 32 * 1024`.
+        // If it's `<=`, it's executed, but `resize(32768)` on a vec of len `32768` is a no-op!
+        // This is an **equivalent mutant**.
+    }
+
+    #[test]
+    fn gxrom_from_prg_chr_more_math_operators2() {
+        // Less than 32k
+        let mapper = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024 - 1], vec![]);
+        assert_eq!(mapper.prg_bank_count, 1);
+        assert_eq!(mapper.prg_rom.len(), 32 * 1024);
+
+        // Exact 32k.
+        let mapper2 = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024], vec![]);
+        assert_eq!(mapper2.prg_bank_count, 1);
+        assert_eq!(mapper2.prg_rom.len(), 32 * 1024);
+
+        // Slightly over 32k.
+        let mapper3 = Gxrom::from_prg_chr(vec![0_u8; 32 * 1024 + 1], vec![]);
+        assert_eq!(mapper3.prg_bank_count, 2);
+        assert_eq!(mapper3.prg_rom.len(), 64 * 1024);
+
+        // CHR slightly over 8k.
+        let mapper4 = Gxrom::from_prg_chr(vec![], vec![0_u8; 8 * 1024 + 1]);
+        assert_eq!(mapper4.chr_bank_count, 2);
+        assert_eq!(mapper4.chr_data.len(), 16 * 1024);
+
+        // Ensure less than 8k logic works.
+        let mapper5 = Gxrom::from_prg_chr(vec![], vec![0_u8; 8 * 1024 - 1]);
+        assert_eq!(mapper5.chr_bank_count, 1);
+        assert_eq!(mapper5.chr_data.len(), 8 * 1024);
+
+        // Exactly 8k
+        let mapper6 = Gxrom::from_prg_chr(vec![], vec![0_u8; 8 * 1024]);
+        assert_eq!(mapper6.chr_bank_count, 1);
+        assert_eq!(mapper6.chr_data.len(), 8 * 1024);
+    }
 
     #[test]
     fn gxrom_read_and_write_prg() {
