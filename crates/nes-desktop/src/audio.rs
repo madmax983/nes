@@ -324,7 +324,7 @@ pub(crate) mod tests {
         let (sink, mut queue_rx) = Sink::new_idle();
         let adapter = RodioSinkAdapter { inner: sink };
 
-        adapter.append_i16(&vec![i16::MAX; 5_000]);
+        adapter.append_i16(&[i16::MAX; 5_000]);
         assert_eq!(
             queue_rx.next(),
             Some(0.999_969_5),
