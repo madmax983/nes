@@ -29,6 +29,7 @@ struct ApuWriteTraceSummary {
 #[ignore = "requires roms.bbbradsmith_audio_suite_dir in nes.toml"]
 fn bbbradsmith_audio_suite_write_trace_is_deterministic_per_rom() {
     let rom_paths = bbbradsmith_audio_suite_rom_paths();
+    if rom_paths.is_empty() { return; }
     let mut tested_roms = 0_usize;
     let mut skipped = Vec::new();
     for rom_path in rom_paths {
@@ -71,6 +72,7 @@ fn bbbradsmith_audio_suite_write_trace_is_deterministic_per_rom() {
 #[ignore = "requires roms.bbbradsmith_audio_suite_dir in nes.toml"]
 fn bbbradsmith_audio_suite_audio_windows_are_deterministic_and_well_formed() {
     let rom_paths = bbbradsmith_audio_suite_rom_paths();
+    if rom_paths.is_empty() { return; }
     let expected_samples = AUDIO_CAPTURE_FRAMES as usize * AUDIO_CHUNK_SAMPLES;
     let mut audible_roms = 0_usize;
     let mut tested_roms = 0_usize;
@@ -131,6 +133,7 @@ fn bbbradsmith_audio_suite_audio_windows_are_deterministic_and_well_formed() {
 #[ignore = "requires roms.bbbradsmith_audio_suite_dir and roms.bbbradsmith_audio_golden_dir in nes.toml"]
 fn bbbradsmith_audio_suite_matches_golden_pcm_tolerances() {
     let rom_paths = bbbradsmith_audio_suite_rom_paths();
+    if rom_paths.is_empty() { return; }
     let golden_dir = bbbradsmith_audio_golden_dir_path();
     let mut checked_roms = 0_usize;
     let mut skipped = Vec::new();

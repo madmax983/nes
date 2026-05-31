@@ -98,3 +98,23 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## YYYY-MM-DD - Rewind Deltas Slice Out of Bounds
+🧨 **The Trigger:** Fuzzing `apply_deltas` with a small `target` slice and malicious binary delta encoding that implies reads/writes past the length.
+📉 **The Stack Trace:**
+```
+thread 'havoc_fuzz_apply_deltas' panicked at crates/nes-rewind/src/delta.rs:61:15:
+range end index 3 out of range for slice of length 0
+```
+🧪 **Reproduction:** Run `cargo test -p nes-rewind --test havoc_apply_deltas -- --ignored`.
+😈 **Comment:** You assumed the delta index boundaries would be safe. You were wrong.
+
+## YYYY-MM-DD - BMP Encoding Slice Out of Bounds
+🧨 **The Trigger:** Fuzzing `encode_bmp` with an invalid tiny `rgba` slice buffer that is shorter than required pixel encoding length.
+📉 **The Stack Trace:**
+```
+thread 'havoc_encode_bmp_panics_on_small_buffer' panicked at crates/nes-core/src/bmp.rs:43:5:
+slice index starts at 4 but ends at 3
+```
+🧪 **Reproduction:** Run `cargo test -p nes-core --test havoc_bmp -- --ignored`.
+😈 **Comment:** You assumed the RGB(A) slice provided would always match the explicit width and height dimensions. You were wrong.
