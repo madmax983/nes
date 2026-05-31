@@ -4,6 +4,8 @@ This repository hosts a Rust NES emulator workspace focused on systems learning,
 
 ## Workspace
 
+> **⚠️ REQUIRES FEATURE NOVA:** Experimental "Nova" features (like `story_demo` and `NarrativeGenerator`) require the `nova` feature flag to be enabled during compilation.
+
 - `crates/nes-core`: deterministic emulation core, command/query API, and stable TAS movie/recorder primitives.
 - `crates/nes-mcp`: MCP tool surface mapped to core APIs.
 - `crates/nes-desktop`: desktop input bridge and runtime adapter.
