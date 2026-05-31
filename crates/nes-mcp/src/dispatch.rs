@@ -991,7 +991,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_button_supports_all_button_names() {
+    fn parse_button_supports_all_button_names() -> Result<(), Box<dyn std::error::Error>> {
         for (name, expected) in [
             ("A", Button::A),
             ("B", Button::B),
@@ -1002,9 +1002,10 @@ mod tests {
             ("Left", Button::Left),
             ("Right", Button::Right),
         ] {
-            let button = parse_button(&params(&[("button", name)])).expect("valid button");
+            let button = parse_button(&params(&[("button", name)]))?;
             assert_eq!(button, expected);
         }
+        Ok(())
     }
 
     #[test]
@@ -1019,9 +1020,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_speed_permille_validates_and_converts_multiplier() {
+    fn parse_speed_permille_validates_and_converts_multiplier()
+    -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            parse_speed_permille(&params(&[("multiplier", "1.5")])).expect("valid multiplier"),
+            parse_speed_permille(&params(&[("multiplier", "1.5")]))?,
             1500
         );
 
@@ -1052,16 +1054,18 @@ mod tests {
             out_of_range.to_string(),
             "invalid params: multiplier is out of supported range"
         );
+        Ok(())
     }
 
     #[test]
-    fn parse_player2_maps_player_slot_values() {
-        assert!(!parse_player2(&ToolParams::new()).expect("default player"));
-        assert!(!parse_player2(&params(&[("player", "1")])).expect("player one"));
-        assert!(parse_player2(&params(&[("player", "2")])).expect("player two"));
+    fn parse_player2_maps_player_slot_values() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(!parse_player2(&ToolParams::new())?);
+        assert!(!parse_player2(&params(&[("player", "1")]))?);
+        assert!(parse_player2(&params(&[("player", "2")]))?);
 
         let err = parse_player2(&params(&[("player", "3")])).expect_err("invalid player");
         assert!(matches!(err, DispatchError::InvalidParams(_)));
+        Ok(())
     }
 
     #[test]
@@ -1071,24 +1075,24 @@ mod tests {
     }
 
     #[test]
-    fn parse_dsl_rom_options_supports_mirroring_and_chr_hex() {
-        let defaults = parse_dsl_rom_options(&ToolParams::new()).expect("default options");
+    fn parse_dsl_rom_options_supports_mirroring_and_chr_hex()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let defaults = parse_dsl_rom_options(&ToolParams::new())?;
         assert_eq!(defaults.mirroring, Mirroring::Horizontal);
         assert_eq!(defaults.chr_rom.len(), 8 * 1024);
 
-        let horizontal = parse_dsl_rom_options(&params(&[("mirroring", "horizontal")]))
-            .expect("horizontal options");
+        let horizontal = parse_dsl_rom_options(&params(&[("mirroring", "horizontal")]))?;
         assert_eq!(horizontal.mirroring, Mirroring::Horizontal);
 
         let vertical =
-            parse_dsl_rom_options(&params(&[("mirroring", "vertical"), ("chr_hex", "AA 55")]))
-                .expect("vertical options");
+            parse_dsl_rom_options(&params(&[("mirroring", "vertical"), ("chr_hex", "AA 55")]))?;
         assert_eq!(vertical.mirroring, Mirroring::Vertical);
         assert_eq!(vertical.chr_rom, vec![0xAA, 0x55]);
 
         let err = parse_dsl_rom_options(&params(&[("mirroring", "diagonal")]))
             .expect_err("invalid mirroring");
         assert!(matches!(err, DispatchError::InvalidParams(_)));
+        Ok(())
     }
 
     #[test]
@@ -1103,9 +1107,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_hex_bytes_supports_mixed_case_whitespace_and_underscores() {
-        let parsed = parse_hex_bytes("de ad_BE ef").expect("valid mixed hex");
+    fn parse_hex_bytes_supports_mixed_case_whitespace_and_underscores()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let parsed = parse_hex_bytes("de ad_BE ef")?;
         assert_eq!(parsed, vec![0xDE, 0xAD, 0xBE, 0xEF]);
+        Ok(())
     }
 
     #[test]
@@ -1148,15 +1154,16 @@ mod tests {
     }
 
     #[test]
-    fn handle_get_ppu_oam_returns_256_bytes() {
+    fn handle_get_ppu_oam_returns_256_bytes() -> Result<(), Box<dyn std::error::Error>> {
         let core = NesCore::new();
-        let result = super::handle_get_ppu_oam(&core).expect("Should successfully retrieve OAM");
+        let result = super::handle_get_ppu_oam(&core)?;
         match result {
             super::DispatchOutput::PpuOam { oam_bytes } => {
                 assert_eq!(oam_bytes.len(), 256);
             }
             _ => panic!("Expected DispatchOutput::PpuOam"),
         }
+        Ok(())
     }
 }
 #[cfg(test)]

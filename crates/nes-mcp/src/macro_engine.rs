@@ -152,19 +152,21 @@ mod tests {
     use nes_core::NesCore;
 
     #[test]
-    fn test_execute_macro_script_wait() {
+    fn test_execute_macro_script_wait() -> Result<(), Box<dyn std::error::Error>> {
         let mut core = NesCore::new();
         let initial_frames = core.ppu_frame_counter();
 
         let script = "WAIT 5";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None)?;
 
         assert_eq!(elapsed, 5);
         assert_eq!(core.ppu_frame_counter(), initial_frames + 5);
+        Ok(())
     }
 
     #[test]
-    fn test_execute_macro_script_with_progress_callback() {
+    fn test_execute_macro_script_with_progress_callback() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut core = NesCore::new();
         let script = "
             WAIT 1
@@ -181,14 +183,15 @@ mod tests {
             assert!(current <= total);
         };
 
-        execute_macro_script(&mut core, script, Some(&mut callback)).unwrap();
+        execute_macro_script(&mut core, script, Some(&mut callback))?;
 
         assert_eq!(lines_reported, 5);
         assert_eq!(max_total_lines, 5);
+        Ok(())
     }
 
     #[test]
-    fn test_execute_macro_script_buttons() {
+    fn test_execute_macro_script_buttons() -> Result<(), Box<dyn std::error::Error>> {
         let mut core = NesCore::new();
         assert_eq!(core.controller_bits(), 0);
 
@@ -196,7 +199,7 @@ mod tests {
             PRESS A
             PRESS Start
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None)?;
         assert_eq!(elapsed, 0); // PRESS doesn't wait
         assert_eq!(
             core.controller_bits(),
@@ -204,13 +207,15 @@ mod tests {
         );
 
         let script2 = "RELEASE A";
-        let elapsed2 = execute_macro_script(&mut core, script2, None).unwrap();
+        let elapsed2 = execute_macro_script(&mut core, script2, None)?;
         assert_eq!(elapsed2, 0);
         assert_eq!(core.controller_bits(), Button::Start.bit_mask());
+        Ok(())
     }
 
     #[test]
-    fn test_execute_macro_script_comments_and_whitespace() {
+    fn test_execute_macro_script_comments_and_whitespace() -> Result<(), Box<dyn std::error::Error>>
+    {
         let mut core = NesCore::new();
         let script = "
             # This is a comment
@@ -220,9 +225,10 @@ mod tests {
             WAIT 1
             RELEASE B
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None)?;
         assert_eq!(elapsed, 1);
         assert_eq!(core.controller_bits(), 0);
+        Ok(())
     }
 
     #[test]
@@ -247,7 +253,8 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_macro_script_accepts_trailing_tokens_for_known_commands() {
+    fn test_execute_macro_script_accepts_trailing_tokens_for_known_commands()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut core = NesCore::new();
         let initial_frames = core.ppu_frame_counter();
         let script = "
@@ -255,15 +262,16 @@ mod tests {
             PRESS A trailing
             RELEASE A trailing
         ";
-        let elapsed =
-            execute_macro_script(&mut core, script, None).expect("script with extra args");
+        let elapsed = execute_macro_script(&mut core, script, None)?;
         assert_eq!(elapsed, 2);
         assert_eq!(core.ppu_frame_counter(), initial_frames + 2);
         assert_eq!(core.controller_bits(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_execute_macro_script_reset_and_directional_buttons() {
+    fn test_execute_macro_script_reset_and_directional_buttons()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut core = NesCore::new();
         let script = "
             PRESS Select
@@ -273,13 +281,15 @@ mod tests {
             PRESS Right
             RESET
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).expect("script executes");
+        let elapsed = execute_macro_script(&mut core, script, None)?;
         assert_eq!(elapsed, 0);
         assert_eq!(core.controller_bits(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_execute_macro_script_hold_alias_and_lowercase_buttons() {
+    fn test_execute_macro_script_hold_alias_and_lowercase_buttons()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut core = NesCore::new();
         assert_eq!(core.controller_bits(), 0);
 
@@ -287,7 +297,7 @@ mod tests {
             HOLD a
             HOLD start
         ";
-        let elapsed = execute_macro_script(&mut core, script, None).unwrap();
+        let elapsed = execute_macro_script(&mut core, script, None)?;
         assert_eq!(elapsed, 0);
         assert_eq!(
             core.controller_bits(),
@@ -295,9 +305,10 @@ mod tests {
         );
 
         let script2 = "RELEASE a";
-        let elapsed2 = execute_macro_script(&mut core, script2, None).unwrap();
+        let elapsed2 = execute_macro_script(&mut core, script2, None)?;
         assert_eq!(elapsed2, 0);
         assert_eq!(core.controller_bits(), Button::Start.bit_mask());
+        Ok(())
     }
 
     #[test]

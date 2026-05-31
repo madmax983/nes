@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-05-31 - [Test Coverage Improvement]
+**Learning:** Found testing code using unwrap and expect, creating panic risks and not covering the error cases nicely. Tests for helper functions and logic should check explicit outputs.
+**Action:** Replaced `.expect()` and `.unwrap()` in test files `crates/nes-mcp/src/macro_engine.rs` and `crates/nes-mcp/src/dispatch.rs` by updating the tests to return `Result<(), Box<dyn std::error::Error>>` and replacing with the `?` operator to verify outputs more thoroughly without panicking.
