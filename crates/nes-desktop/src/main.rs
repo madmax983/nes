@@ -1060,7 +1060,7 @@ fn run() -> Result<(), String> {
             }
 
             let now = Instant::now();
-            let missed_deadline = match evaluate_frame_deadline(now, next_frame_deadline, TARGET_FRAME_TIME) {
+            let missed_deadline = match crate::input::evaluate_frame_deadline(now, next_frame_deadline, TARGET_FRAME_TIME) {
                 FrameDecision::WaitUntil(deadline) => {
                     *control_flow = ControlFlow::WaitUntil(deadline);
                     return;
@@ -1519,17 +1519,17 @@ mod tests {
 
     use super::{
         FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats,
-        StepMode, WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
+        StepMode, advance_core_for_host_frame, apply_gamepad_delta_commands,
         apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
-        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        connected_gamepad_ids, controller_state_delta_for_player, element_state_pressed,
+        format_rom_read_error, gamepad_assignments_changed, gamepad_slot_changed,
+        gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode, menu_action_enabled,
+        merge_local_input_bits, overlay_input_requires_redraw, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+        update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1537,10 +1537,7 @@ mod tests {
     use nes_desktop::overlay::OverlayModel;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use winit::dpi::PhysicalSize;
-    use winit::event::{
-        DeviceId, ElementState, KeyboardInput, ModifiersState, VirtualKeyCode, WindowEvent,
-    };
+    use winit::event::{ElementState, VirtualKeyCode};
 
     fn sample_ines(mapper_id: u8, prg_banks: u8) -> Vec<u8> {
         let mut rom = vec![0_u8; 16 + prg_banks as usize * 16 * 1024];
@@ -1625,59 +1622,6 @@ mod tests {
             Some("ArrowRight")
         );
         assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn classify_window_event_maps_window_variants_to_decisions() {
-        assert_eq!(
-            classify_window_event(&WindowEvent::CloseRequested),
-            WindowEventDecision::CloseRequested
-        );
-
-        let key_event = WindowEvent::KeyboardInput {
-            // SAFETY: winit explicitly exposes dummy IDs for unit testing.
-            device_id: unsafe { DeviceId::dummy() },
-            input: KeyboardInput {
-                scancode: 0,
-                state: ElementState::Pressed,
-                virtual_keycode: Some(VirtualKeyCode::Z),
-                modifiers: ModifiersState::empty(),
-            },
-            is_synthetic: false,
-        };
-        assert_eq!(
-            classify_window_event(&key_event),
-            WindowEventDecision::KeyboardInput {
-                key: Some(VirtualKeyCode::Z),
-                pressed: true
-            }
-        );
-
-        let resized = WindowEvent::Resized(PhysicalSize::new(640, 480));
-        assert_eq!(
-            classify_window_event(&resized),
-            WindowEventDecision::Resized {
-                width: 640,
-                height: 480
-            }
-        );
-
-        let mut scale_size = PhysicalSize::new(800, 600);
-        let scale_changed = WindowEvent::ScaleFactorChanged {
-            scale_factor: 1.25,
-            new_inner_size: &mut scale_size,
-        };
-        assert_eq!(
-            classify_window_event(&scale_changed),
-            WindowEventDecision::ScaleFactorChanged {
-                width: 800,
-                height: 600
-            }
-        );
-
-        let ignored = WindowEvent::Focused(true);
-        assert_eq!(classify_window_event(&ignored), WindowEventDecision::Ignore);
     }
 
     #[test]

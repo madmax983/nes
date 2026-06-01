@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Remove Duplicated WindowEventDecision and evaluate_frame_deadline**
+**Tangle:** The `WindowEventDecision` enum, `classify_window_event` method, and `evaluate_frame_deadline` method were moved into `crates/nes-desktop/src/input.rs` in a previous refactoring, but were still being imported directly or their tests remained in `crates/nes-desktop/src/main.rs`. This duplicated imports and test code without providing value.
+**Blueprint:** Cleaned up unused imports in `crates/nes-desktop/src/main.rs`, used the `crate::input::classify_window_event` explicitly to avoid module resolution confusion, and removed the duplicate/unused tests in `main.rs` that are now tested within `input.rs`.
