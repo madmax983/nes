@@ -103,6 +103,7 @@ Desktop netplay metrics now include `net_rtt_ms`, `net_jitter_ms`, `net_rollback
 WebAssembly build:
 
 ```powershell
+rustup target add wasm32-unknown-unknown
 cargo build -p nes-web --target wasm32-unknown-unknown
 ```
 
