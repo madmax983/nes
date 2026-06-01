@@ -18,6 +18,7 @@ pub mod ppm;
 mod ppu;
 mod rom;
 mod scheduler;
+pub mod serde_arc;
 /// Workarounds for Serde's limitations with large arrays. Because sometimes you just need to serialize a 64KB block of RAM.
 pub mod serde_array;
 /// Stable TAS movie/recorder primitives built on top of the deterministic core.

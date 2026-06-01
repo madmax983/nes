@@ -13,7 +13,11 @@ pub struct Mmc1 {
     shift_register: u8,
     shift_count: u8,
     selected_prg_bank: u8,
-    prg_rom: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    prg_rom: std::sync::Arc<[u8]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,7 +46,7 @@ impl Mmc1 {
             shift_register: Self::SHIFT_RESET,
             shift_count: 0,
             selected_prg_bank: 0,
-            prg_rom,
+            prg_rom: prg_rom.into(),
         }
     }
 
@@ -57,7 +61,7 @@ impl Mmc1 {
             shift_register: Self::SHIFT_RESET,
             shift_count: 0,
             selected_prg_bank: 0,
-            prg_rom,
+            prg_rom: prg_rom.into(),
         }
     }
 
@@ -241,13 +245,13 @@ mod tests {
     fn mmc1_prg_mode_0_and_1_switch_32kb_banks() {
         let mut m = Mmc1::new(4, 8); // 4 PRG banks (64KB total)
         // Set first byte of bank 0
-        m.prg_rom[0] = 0x11;
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0] = 0x11;
         // Set first byte of bank 1 (0x4000)
-        m.prg_rom[0x4000] = 0x22;
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0x4000] = 0x22;
         // Set first byte of bank 2 (0x8000)
-        m.prg_rom[0x8000] = 0x33;
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0x8000] = 0x33;
         // Set first byte of bank 3 (0xC000)
-        m.prg_rom[0xC000] = 0x44;
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0xC000] = 0x44;
 
         // Write control register (0x8000) to set PRG mode 0 (bits 2,3 = 0)
         m.write_prg(0x8000, 0x00);
@@ -293,10 +297,10 @@ mod tests {
     #[test]
     fn mmc1_prg_mode_2_fixes_first_bank_and_switches_second() {
         let mut m = Mmc1::new(4, 8); // 4 PRG banks (64KB total)
-        m.prg_rom[0] = 0x11; // Bank 0
-        m.prg_rom[0x4000] = 0x22; // Bank 1
-        m.prg_rom[0x8000] = 0x33; // Bank 2
-        m.prg_rom[0xC000] = 0x44; // Bank 3
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0] = 0x11; // Bank 0
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0x4000] = 0x22; // Bank 1
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0x8000] = 0x33; // Bank 2
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0xC000] = 0x44; // Bank 3
 
         // Write control register to set PRG mode 2 (bits 2,3 = 1,0)
         m.write_prg(0x8000, 0x00);
@@ -330,10 +334,10 @@ mod tests {
     #[test]
     fn mmc1_prg_mode_3_switches_first_bank_and_fixes_last() {
         let mut m = Mmc1::new(4, 8); // 4 PRG banks (64KB total)
-        m.prg_rom[0] = 0x11; // Bank 0
-        m.prg_rom[0x4000] = 0x22; // Bank 1
-        m.prg_rom[0x8000] = 0x33; // Bank 2
-        m.prg_rom[0xC000] = 0x44; // Bank 3
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0] = 0x11; // Bank 0
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0x4000] = 0x22; // Bank 1
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0x8000] = 0x33; // Bank 2
+        std::sync::Arc::make_mut(&mut m.prg_rom)[0xC000] = 0x44; // Bank 3
 
         // Write control register to set PRG mode 3 (bits 2,3 = 1,1)
         m.write_prg(0x8000, 0x00);

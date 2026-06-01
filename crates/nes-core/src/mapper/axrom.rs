@@ -11,7 +11,11 @@ pub struct Axrom {
     bank_count: u8,
     selected_bank: u8,
     selected_nametable_bank: u8,
-    prg_rom: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    prg_rom: std::sync::Arc<[u8]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,7 +39,7 @@ impl Axrom {
             bank_count: bank_count.max(1),
             selected_bank: 0,
             selected_nametable_bank: 0,
-            prg_rom,
+            prg_rom: prg_rom.into(),
         }
     }
 

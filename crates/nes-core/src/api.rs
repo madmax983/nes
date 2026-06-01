@@ -1328,7 +1328,10 @@ impl NesCore {
                 prg_rom.len(),
             )));
         }
-        Ok(LoadedMapper::Mmc1(Mmc1::from_prg_rom(prg_rom.to_vec(), 1)))
+        Ok(LoadedMapper::Mmc1(Mmc1::from_prg_rom(
+            prg_rom.to_vec(),
+            1,
+        )))
     }
 
     fn build_axrom(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {

@@ -8,7 +8,11 @@ const PRG_BANK_BYTES: usize = 16 * 1024;
 pub struct Uxrom {
     bank_count: usize,
     selected_bank: usize,
-    prg_rom: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    prg_rom: std::sync::Arc<[u8]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,7 +33,7 @@ impl Uxrom {
         Self {
             bank_count: effective_bank_count,
             selected_bank: 0,
-            prg_rom,
+            prg_rom: prg_rom.into(),
         }
     }
 
@@ -47,7 +51,7 @@ impl Uxrom {
         Self {
             bank_count,
             selected_bank: 0,
-            prg_rom,
+            prg_rom: prg_rom.into(),
         }
     }
 

@@ -14,9 +14,17 @@ const PPUCTRL_SPRITE_SIZE_8X16: u8 = 0x20;
 /// Mapper 4 (MMC3): banked PRG/CHR with scanline IRQ support.
 pub struct Mmc3 {
     prg_bank_count_8k: u8,
-    prg_rom: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    prg_rom: std::sync::Arc<[u8]>,
     chr_bank_count_1k: u16,
-    chr_data: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    chr_data: std::sync::Arc<[u8]>,
     chr_writable: bool,
     bank_select: u8,
     bank_registers: [u8; 8],
@@ -66,9 +74,9 @@ impl Mmc3 {
 
         Self {
             prg_bank_count_8k: prg_banks,
-            prg_rom,
+            prg_rom: prg_rom.into(),
             chr_bank_count_1k: chr_banks,
-            chr_data,
+            chr_data: chr_data.into(),
             chr_writable: false,
             bank_select: 0,
             bank_registers: [0, 2, 4, 5, 0, 0, 0, 1],
@@ -114,9 +122,9 @@ impl Mmc3 {
 
         Self {
             prg_bank_count_8k,
-            prg_rom,
+            prg_rom: prg_rom.into(),
             chr_bank_count_1k,
-            chr_data,
+            chr_data: chr_data.into(),
             chr_writable,
             bank_select: 0,
             bank_registers: [0, 2, 4, 5, 0, 0, 0, 1],
@@ -292,7 +300,7 @@ impl Mmc3 {
             if let Some(src_offset) = src_offset {
                 let dst_start = bank_index * CHR_BANK_1K;
                 let dst_end = dst_start + CHR_BANK_1K;
-                self.chr_data[dst_start..dst_end]
+                std::sync::Arc::make_mut(&mut self.chr_data)[dst_start..dst_end]
                     .copy_from_slice(&window[src_offset..src_offset + CHR_BANK_1K]);
             }
         }

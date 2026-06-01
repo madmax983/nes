@@ -8,8 +8,16 @@ const CHR_WINDOW_BYTES: usize = 8 * 1024;
 pub struct Cnrom {
     selected_chr_bank: u8,
     chr_bank_count: usize,
-    prg_rom: Vec<u8>,
-    chr_data: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    prg_rom: std::sync::Arc<[u8]>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    chr_data: std::sync::Arc<[u8]>,
     chr_writable: bool,
 }
 
@@ -45,8 +53,8 @@ impl Cnrom {
         Self {
             selected_chr_bank: 0,
             chr_bank_count,
-            prg_rom,
-            chr_data,
+            prg_rom: prg_rom.into(),
+            chr_data: chr_data.into(),
             chr_writable,
         }
     }
@@ -94,7 +102,7 @@ impl Cnrom {
 
         let start = usize::from(self.selected_chr_bank) * CHR_WINDOW_BYTES;
         let end = start + CHR_WINDOW_BYTES;
-        self.chr_data[start..end].copy_from_slice(window);
+        std::sync::Arc::make_mut(&mut self.chr_data)[start..end].copy_from_slice(window);
     }
 
     /// Reads PRG using fixed CNROM PRG mapping.

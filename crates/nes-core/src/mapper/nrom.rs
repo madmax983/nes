@@ -7,7 +7,11 @@ const PRG_32K_BYTES: usize = 32 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 0 (NROM): fixed PRG mapping with optional 16K mirroring.
 pub struct Nrom {
-    prg_rom: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_arc::serialize_arc_u8_slice",
+        deserialize_with = "crate::serde_arc::deserialize_arc_u8_slice"
+    )]
+    prg_rom: std::sync::Arc<[u8]>,
 }
 
 impl Nrom {
@@ -20,7 +24,9 @@ impl Nrom {
         for (idx, byte) in prg_rom.iter_mut().enumerate() {
             *byte = (idx & 0xFF) as u8;
         }
-        Self { prg_rom }
+        Self {
+            prg_rom: prg_rom.into(),
+        }
     }
 
     /// Builds NROM from raw PRG ROM bytes.
@@ -38,7 +44,9 @@ impl Nrom {
         } else {
             prg_rom.truncate(PRG_32K_BYTES);
         }
-        Self { prg_rom }
+        Self {
+            prg_rom: prg_rom.into(),
+        }
     }
 
     /// Reads PRG using NROM fixed mapping.
