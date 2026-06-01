@@ -483,4 +483,9 @@ mod tests {
             "Sample content should match what was published"
         );
     }
+
+    #[test]
+    fn should_return_none_for_frame_len_overflow() {
+        assert_eq!(expected_frame_len(u32::MAX, u32::MAX), None);
+    }
 }

@@ -25,3 +25,7 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+
+## 2025-06-18 - Replacing Naked unreachable! Calls and Integer Overflow
+**Learning:** `unreachable!()` calls without context can make crash logs obtuse. Also, checking for dimension overflow (`width * height`) in output handlers protects the system from integer truncation crashes.
+**Action:** Always provide descriptive string literals to `unreachable!()` macros describing *why* the path is unreachable (e.g. "Color index bounded by 2-bit palette"). Explicitly test boundary conditions for buffer size limits.

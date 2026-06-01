@@ -40,7 +40,9 @@ impl CpuHotspotProfiler {
         // Safe because length is strictly 65536
         let execution_counts = match counts.try_into() {
             Ok(arr) => arr,
-            Err(_) => unreachable!(),
+            Err(_) => unreachable!(
+                "Boxed slice size of exactly 65536 is mathematically guaranteed to fit [u64; 65536]"
+            ),
         };
 
         Self { execution_counts }

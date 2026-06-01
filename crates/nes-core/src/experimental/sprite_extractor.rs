@@ -73,7 +73,7 @@ impl SpriteExtractor {
                             1 => 85,
                             2 => 170,
                             3 => 255,
-                            _ => unreachable!(),
+                            _ => unreachable!("Color index bounded by 2-bit palette"),
                         };
 
                         rgba[pixel_idx] = color_val;

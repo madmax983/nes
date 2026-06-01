@@ -2654,7 +2654,7 @@ impl Cpu {
                 );
                 (addr, 3, trace)
             }
-            _ => unreachable!(),
+            _ => unreachable!("All valid unofficial RMW opcodes handled explicitly"),
         }
     }
 
@@ -2960,5 +2960,21 @@ mod tests_format {
             format_args!("{}", long),
         );
         assert!(out2.contains(long));
+    }
+
+    #[test]
+    #[should_panic(expected = "internal error: entered unreachable code")]
+    fn test_decode_unofficial_rmw_addressing_unreachable() {
+        let cpu = Cpu::new(0xC000);
+        let snapshot = TraceSnapshot {
+            a: 0,
+            x: 0,
+            y: 0,
+            p: 0,
+            sp: 0,
+            pc: 0,
+        };
+        // Opcode 0x00 has lowest 5 bits 0x00, which is not handled by the match (handles 0x03, 0x07, 0x0F, 0x13, 0x17, 0x1B, 0x1F)
+        cpu.decode_unofficial_rmw_addressing(snapshot, 0x00, "UNK");
     }
 }

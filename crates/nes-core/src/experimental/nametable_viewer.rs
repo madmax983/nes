@@ -63,12 +63,12 @@ impl NametableViewer {
                         NametableMirroring::Horizontal => match nt_idx {
                             0 | 1 => 0,
                             2 | 3 => 1,
-                            _ => unreachable!(),
+                            _ => unreachable!("Internal logic enforces valid combinations bounds"),
                         },
                         NametableMirroring::Vertical => match nt_idx {
                             0 | 2 => 0,
                             1 | 3 => 1,
-                            _ => unreachable!(),
+                            _ => unreachable!("Internal logic enforces valid combinations bounds"),
                         },
                         NametableMirroring::OneScreenLower => 0,
                         NametableMirroring::OneScreenUpper => 1,
@@ -99,7 +99,9 @@ impl NametableViewer {
                                 1 => 85,
                                 2 => 170,
                                 3 => 255,
-                                _ => unreachable!(),
+                                _ => unreachable!(
+                                    "Internal logic enforces valid combinations bounds"
+                                ),
                             };
 
                             let pixel_x = base_x_px + tile_x * 8 + col;
