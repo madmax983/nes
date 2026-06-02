@@ -21,53 +21,73 @@ const COLOR_SUBTEXT: [u8; 4] = [170, 178, 194, 255];
 const COLOR_HIGHLIGHT: [u8; 4] = [74, 122, 197, 255];
 const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 
-/// Which overlay screen is currently visible.
+/// Identifies which top-level modal overlay screen is currently active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// The primary in-game pause menu.
     MainMenu,
+    /// The cheat code manager.
     Cheats,
 }
 
-/// Selectable entries in the main pause menu.
+/// Represents a specific user selection from the main pause menu overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainMenuSelection {
+    /// Return to gameplay.
     Resume,
+    /// Open the native file picker to load a new ROM.
     OpenRom,
+    /// Navigate to the cheats sub-menu.
     OpenCheats,
+    /// Save emulator state to the specified slot.
     SaveSlot(u8),
+    /// Load emulator state from the specified slot.
     LoadSlot(u8),
+    /// Hard reset the emulator core.
     Reset,
+    /// Terminate the application entirely.
     Quit,
 }
 
-/// Selectable entries in the cheats panel.
+/// Represents a specific user selection from the cheats overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatsSelection {
+    /// Open the prompt to enter a new Game Genie code.
     AddCode,
+    /// Select a specific existing cheat from the list by index.
     Cheat(usize),
 }
 
-/// Unified selection state for the active overlay panel.
+/// Standardizes the various overlay-specific selections into a single event type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlaySelection {
+    /// An event originating from the main menu.
     Main(MainMenuSelection),
+    /// An event originating from the cheats menu.
     Cheats(CheatsSelection),
 }
 
-/// Commands emitted from the overlay state machine.
+/// Describes the ultimate side-effect required after an overlay interaction completes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// Broadcast a generic application action.
     AppAction(AppAction),
+    /// Toggle the active state of a specific cheat code.
     ToggleCheat(usize),
+    /// Delete a specific cheat code from the list.
     RemoveCheat(usize),
+    /// Attempt to parse and add a new Game Genie string.
     SubmitCheatCode(String),
 }
 
-/// Lightweight slot summary used by the overlay renderer.
+/// Data required to render a single save state slot in the UI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// The slot index.
     pub slot: u8,
+    /// A human-readable text label describing the slot's validity.
     pub status_label: &'static str,
+    /// The last modified time for the underlying file.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -83,10 +103,12 @@ impl OverlaySlotSummary {
     }
 }
 
-/// Lightweight cheat summary used by the overlay renderer.
+/// Data required to render a single cheat code toggle in the UI.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// The raw Game Genie character string.
     pub raw_code: &'a str,
+    /// Whether the cheat is currently active in the emulator core.
     pub enabled: bool,
 }
 

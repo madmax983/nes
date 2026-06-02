@@ -22,10 +22,16 @@ pub struct DesktopMenu {
 
 impl DesktopMenu {
     #[must_use]
+    /// Returns a slice of the top-level menu entries (e.g. "File", "Emulation", "View").
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
     }
 
+    /// Attaches the constructed native OS menu to the provided window.
+    ///
+    /// On macOS, this will replace the global application menu bar. On Windows/Linux,
+    /// it attaches directly beneath the window's title bar. Returns `Ok` if menus
+    /// are not supported or disabled via configuration.
     #[cfg(not(test))]
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
@@ -45,6 +51,10 @@ impl DesktopMenu {
         Ok(())
     }
 
+    /// Non-blockingly checks if the user has clicked a menu item since the last frame.
+    ///
+    /// The underlying menu library (`muda`) uses a channel to queue these events.
+    /// Returns the corresponding `AppAction` to be executed by the main loop.
     #[cfg(not(test))]
     #[must_use]
     pub fn poll_action(&self) -> Option<AppAction> {
@@ -59,6 +69,9 @@ impl DesktopMenu {
         None
     }
 
+    /// Dynamically enables or greys-out a specific menu item based on current application state.
+    ///
+    /// For example, "Reset" should be disabled until a ROM is actually loaded.
     #[cfg(not(test))]
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -73,22 +86,27 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// A bulk update function called every frame to ensure menu checkmarks and enabled/disabled
+    /// states accurately reflect the emulator's current reality.
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);
     }
 
+    /// Mock implementation of `install_for_window` for test environments.
     #[cfg(test)]
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         let _ = window;
         Ok(())
     }
 
+    /// Mock implementation of `poll_action` for tests.
     #[cfg(test)]
     #[must_use]
     pub fn poll_action(&self) -> Option<AppAction> {
         None
     }
 
+    /// Mock implementation of `set_action_enabled` for tests.
     #[cfg(test)]
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         let _ = (action, enabled);
@@ -97,19 +115,27 @@ impl DesktopMenu {
 
 /// Declarative menu node used to keep menu semantics testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Represents a single structural node in the desktop menu hierarchy.
 pub enum DesktopMenuEntry {
+    /// An actionable, clickable button that emits an `AppAction`.
     Item(MenuItemSpec),
+    /// A visual divider line between groups of items.
     Separator,
+    /// A nested folder containing more entries.
     Submenu {
+        /// The text displayed for this submenu.
         label: &'static str,
+        /// The children contained within this submenu.
         entries: Vec<DesktopMenuEntry>,
     },
 }
 
-/// Shared metadata for actionable menu items.
+/// The definition and routing information for a concrete menu item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuItemSpec {
+    /// A unique internal identifier for this menu item.
     pub id: String,
+    /// The human-readable text shown in the UI.
     pub label: String,
 }
 
@@ -165,24 +191,40 @@ pub fn action_from_menu_event_id(id: &str) -> Option<AppAction> {
     action_from_menu_id(id)
 }
 
+/// Evaluates whether the current target platform supports native OS menus.
+///
+/// Native menus are enabled for standard desktop targets (macOS, Windows, Linux)
+/// but disabled for WASM or mobile targets.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
 pub const fn native_menu_supported() -> bool {
     true
 }
 
+/// Evaluates whether the current target platform supports native OS menus.
+///
+/// Native menus are enabled for standard desktop targets (macOS, Windows, Linux)
+/// but disabled for WASM or mobile targets.
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
 pub const fn native_menu_supported() -> bool {
     false
 }
 
+/// Evaluates whether the current platform can spawn a native File Open dialog.
+///
+/// This is typically disabled on WASM builds, where ROMs must be side-loaded
+/// via HTML file inputs or drag-and-drop instead.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
 pub const fn rom_picker_supported() -> bool {
     true
 }
 
+/// Evaluates whether the current platform can spawn a native File Open dialog.
+///
+/// This is typically disabled on WASM builds, where ROMs must be side-loaded
+/// via HTML file inputs or drag-and-drop instead.
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
 pub const fn rom_picker_supported() -> bool {

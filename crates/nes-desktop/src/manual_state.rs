@@ -18,19 +18,29 @@ struct SaveStateFile {
     snapshot: CoreSnapshot,
 }
 
+/// Indicates the viability of a specific save state slot on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SaveSlotStatus {
+    /// No file exists for this slot.
     Empty,
+    /// A valid save state file exists and matches the currently loaded ROM.
     Saved,
+    /// A file exists but cannot be deserialized correctly.
     Corrupt,
+    /// A valid save state exists, but it belongs to a completely different game ROM.
     IncompatibleRom,
 }
 
+/// Aggregated metadata about a specific save state slot for UI presentation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveSlotMetadata {
+    /// The slot index (e.g. 1-9).
     pub slot: u8,
+    /// The underlying file path on disk.
     pub path: PathBuf,
+    /// The current status of the file relative to the running emulator.
     pub status: SaveSlotStatus,
+    /// The last modified timestamp of the save file, if it exists.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -124,6 +134,7 @@ fn slot_number_from_path(path: &Path) -> Result<u8, String> {
 }
 
 #[must_use]
+/// Resolves the canonical file path for a specific numbered save slot for a given ROM.
 pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);
@@ -133,6 +144,7 @@ pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
 }
 
 #[must_use]
+/// Resolves a batch of canonical file paths for multiple numbered save slots.
 pub fn slot_paths_for_rom(
     rom_path: &Path,
     rom_hash: &str,
@@ -144,6 +156,7 @@ pub fn slot_paths_for_rom(
 }
 
 #[must_use]
+/// Resolves the canonical file path for the dedicated F5 quicksave slot.
 pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);

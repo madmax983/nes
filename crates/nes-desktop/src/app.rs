@@ -1,11 +1,14 @@
 use nes_core::{Button, Command};
 
+/// Represents a normalized user input action bound for both the UI layer and emulation core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BridgeCommand {
+    /// Action bound for the emulation core (e.g. step frame).
     pub core: Command,
 }
 
 impl BridgeCommand {
+    /// Retrieves the human-readable name of the specific debug tool window.
     #[must_use]
     pub fn tool_name(self) -> &'static str {
         match self.core {
@@ -17,6 +20,7 @@ impl BridgeCommand {
 }
 
 #[must_use]
+/// Maps a raw Winit keyboard code to a high-level emulator command.
 pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
     let button = map_key_event_to_button(key_code)?;
 
@@ -30,6 +34,7 @@ pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeC
 }
 
 #[must_use]
+/// Maps a raw Winit keyboard code to a virtual NES controller button.
 pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     match key_code {
         "KeyZ" => Some(Button::A),
@@ -45,6 +50,7 @@ pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
 }
 
 #[must_use]
+/// Maps a raw Winit keyboard code directly to the NES controller bitmask value.
 pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
     map_key_event_to_button(key_code).map(Button::bit_mask)
 }
