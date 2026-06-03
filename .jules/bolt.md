@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**E0277 with Borrow<&str> on HashMap lookups**
+**Learning:** When changing a function to return a string slice (`&str`) instead of an owned `String` to reduce allocations, you must update subsequent `HashMap::get()` calls. Passing `&key` when `key` is already `&str` creates `&&str`, which fails the `K: Borrow<Q>` bounds since `String` implements `Borrow<str>`, not `Borrow<&str>`.
+**Action:** Always verify `HashMap::get()` call sites after converting a variable to a string slice, ensuring it is passed directly as `map.get(key)` instead of `map.get(&key)`.
