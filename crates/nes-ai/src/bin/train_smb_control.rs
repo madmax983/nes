@@ -14,7 +14,7 @@ use nes_ai::{
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(crossterm::style::Color::Red).bold());
         std::process::exit(1);
     }
 }
@@ -29,8 +29,7 @@ fn run() -> Result<(), String> {
     }
     if args.len() < 2 || args.len() > 5 {
         return Err(format!(
-            "{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
-            "Error:".with(Color::Red).bold()
+            "missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]"
         ));
     }
 

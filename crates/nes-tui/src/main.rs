@@ -226,7 +226,7 @@ struct TuiRuntime {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
     }
 }
 
@@ -259,7 +259,7 @@ fn run() -> Result<(), String> {
         video_backend: VideoBackend::Halfblocks,
     };
     if let Some(config_path) = loaded_config_path.as_ref() {
-        eprintln!("Config: {}", config_path.display());
+        println!("{} Config: {}", "nes-tui".with(crossterm::style::Color::Cyan).bold(), config_path.display());
     }
 
     let mut stdout = io::stdout();
@@ -274,7 +274,7 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("Failed to clear terminal: {err}"))?;
 
     runtime.video_backend = detect_video_backend();
-    eprintln!("Video backend: {}", runtime.video_backend.label());
+    // Video backend string is shown inside the TUI instead
 
     let mut event_source = CrosstermEventSource::new();
     let mut loop_timer = SystemLoopTimer::new();

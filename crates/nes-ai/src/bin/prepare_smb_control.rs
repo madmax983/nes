@@ -12,7 +12,7 @@ use nes_core::{NesCore, tas::TasMovie};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(crossterm::style::Color::Red).bold());
         std::process::exit(1);
     }
 }
@@ -42,7 +42,11 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() != 4 {
-        eprintln!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
+        eprintln!(
+            "{} missing or invalid number of arguments.
+Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>",
+            "Error:".with(Color::Red).bold()
+        );
         std::process::exit(1);
     }
 

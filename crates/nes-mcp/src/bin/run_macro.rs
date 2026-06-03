@@ -20,7 +20,11 @@ fn main() {
         std::process::exit(0);
     }
     if args.len() != 3 {
-        eprintln!("Usage: nes-mcp-run-macro <rom_path> <script_path>");
+        eprintln!(
+            "{} missing or invalid number of arguments.
+Usage: nes-mcp-run-macro <rom_path> <script_path>",
+            "Error:".with(Color::Red).bold()
+        );
         std::process::exit(1);
     }
 
@@ -28,7 +32,7 @@ fn main() {
     let script_path = &args[2];
 
     if let Err(err) = run(rom_path, script_path) {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(Color::Red).bold());
         std::process::exit(1);
     }
 }

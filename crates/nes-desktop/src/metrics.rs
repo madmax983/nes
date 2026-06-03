@@ -131,8 +131,9 @@ impl PerfMetrics {
             let status = core.read_memory(0x2002);
             let sprite0_y = core.ppu_oam_byte(0);
             let sprite0_x = core.ppu_oam_byte(3);
-            eprintln!(
-                "[warn] long pc stall detected: pc=${:04X} stall_frames={} ppu_frame={} scanline={} dot={} status={:02X} sprite0=({}, {})",
+            println!(
+                "{} [warn] long pc stall detected: pc=${:04X} stall_frames={} ppu_frame={} scanline={} dot={} status={:02X} sprite0=({}, {})",
+                "Warning:".with(crossterm::style::Color::Yellow).bold(),
                 pc,
                 self.pc_stall_frames,
                 core.ppu_frame_counter(),

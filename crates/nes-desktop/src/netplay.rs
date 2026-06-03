@@ -5,6 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use nes_netplay::{ClientMessage, ServerMessage};
+use crossterm::style::Stylize;
 
 /// Configuration settings to launch a netplay session.
 ///
@@ -419,8 +420,9 @@ pub fn handle_netplay_server_message(
             if player != netplay_local_player {
                 let ingest = rollback_engine.ingest_remote_input(frame, bits);
                 if ingest.rollback_queued {
-                    eprintln!(
-                        "[netplay] queued rollback from frame {} due to late remote input",
+                    println!(
+                        "{} [netplay] queued rollback from frame {} due to late remote input",
+                        "Info:".with(crossterm::style::Color::Cyan).bold(),
                         frame
                     );
                 }
@@ -435,8 +437,9 @@ pub fn handle_netplay_server_message(
                 match rollback_engine.compare_remote_hash(frame, state_hash) {
                     nes_netplay::HashComparison::Match => {}
                     nes_netplay::HashComparison::Mismatch => {
-                        eprintln!(
-                            "[netplay] desync detected at frame {} (remote hash {:016X})",
+                        println!(
+                            "{} [netplay] desync detected at frame {} (remote hash {:016X})",
+                            "Warning:".with(crossterm::style::Color::Yellow).bold(),
                             frame, state_hash
                         );
                         if let Some(stats) = netplay_stats.as_mut() {

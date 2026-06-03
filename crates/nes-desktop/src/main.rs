@@ -56,7 +56,7 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
     }
 }
 
@@ -623,8 +623,9 @@ fn run() -> Result<(), String> {
                 Ok(selection) => selection.selected.profile,
                 Err(err) => {
                     if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
-                        eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
+                        println!(
+                            "{} [rta] calibration creating profile template '{}' ({err})",
+                            "Info:".with(Color::Cyan).bold(),
                             profile_id
                         );
                         RtaProfile {
@@ -677,8 +678,9 @@ fn run() -> Result<(), String> {
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
     println!("\n{table}");
     if cfg!(debug_assertions) {
-        eprintln!(
-            "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
+        println!(
+            "{} Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>",
+            "Warning:".with(Color::Yellow).bold()
         );
     }
 
@@ -787,13 +789,13 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Continuing without audio output.");
+                println!("{} {}", "Warning:".with(Color::Yellow).bold(), err);
+                println!("{} Continuing without audio output.", "Hint:".with(Color::Cyan).bold());
                 None
             }
         }
     } else {
-        eprintln!("Audio disabled by config.");
+        println!("{} Audio disabled by config.", "Info:".with(Color::Cyan).bold());
         None
     };
 
@@ -1136,8 +1138,9 @@ fn run() -> Result<(), String> {
                 match rollback_engine.advance_frame(&mut core) {
                     Ok(step) => {
                         if should_log_rollback(step.rollback_distance) {
-                            eprintln!(
-                                "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
+                            println!(
+                                "{} [netplay] rollback={} frame={} local={:02X} remote={:02X}",
+                                "Info:".with(Color::Cyan).bold(),
                                 step.rollback_distance, step.frame, step.local_bits, step.remote_bits
                             );
                             if let Some(stats) = netplay_stats.as_mut() {
@@ -1169,8 +1172,9 @@ fn run() -> Result<(), String> {
                             }
                             if let Some(stats) = netplay_stats.as_mut() {
                                 stats.input_delay_frames = target_delay;
-                                eprintln!(
-                                    "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                                println!(
+                                    "{} [netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                                    "Info:".with(Color::Cyan).bold(),
                                     current_delay,
                                     target_delay,
                                     stats.latest_rtt_ms_or_zero(),
