@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**Avoid Unnecessary Allocations with Option Defaults**
+**Learning:** `Option::unwrap_or_else(|| String::from("default"))` forces a closure execution and heap allocation on the fallback path, while `.unwrap_or("default")` can be used to return a borrowed string slice `&str` instead, avoiding the allocation entirely when ownership is not required.
+**Action:** When extracting values from data structures like `HashMap`, favor returning borrowed references (e.g. `&str`) instead of owned types (`String`). Only convert to an owned type using `.to_owned()` at the exact boundary where it's needed, such as inserting into another map.
