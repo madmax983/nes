@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**Timeout Mutant in `mcp_host::read_framed_message`**
+**Mutant:** Replaced `==` with `!=` in `if read == 0` check within `read_framed_message`.
+**Diagnosis:** `MISSING_COVERAGE` / `TIMEOUT` – The mutated logic `if read != 0` evaluates to false upon reaching EOF (`read == 0`). This skips the return statement and causes `read_line` to be called repeatedly on EOF, creating a CPU-bound infinite loop. Since existing tests rely on `read_framed_message` correctly breaking on EOF, the mutant causes the entire test suite to hang. This hang correctly manifests as a `TIMEOUT` in `cargo-mutants`.
+**Kill Shot:** An explicitly designed mock test `test_read_framed_message_kill_mutant` was added using a custom `BufRead` implementation (`FailsOnLoop`) that limits the number of retry loops. When the mutant is applied, the limited reader forces an explicit `panic!` (a test failure), safely catching the mutant rather than hanging the test runner for a full timeout duration.
