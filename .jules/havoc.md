@@ -98,3 +98,7 @@ thread 'havoc_test_poisoned_mutex_on_audio_panic' panicked at crates/nes-mcp/src
 output state lock: PoisonError { .. }
 **Reproduction:** Run `cargo test --test havoc_mcp_output_poison --all-features`.
 **Comment:** You assumed closures would never panic while holding a global lock. You were wrong.
+
+## 2026-05-10 - OOM vulnerabilities in String parsing and Base64 routines
+**The Vulnerability:** Multiple inputs such as `rom_hex` in `nes-mcp` or `source` in `nes-dsl` lacked input bound checks on string parsers (`parse_hex_bytes`, `decode_string_literal`) which blindly allocate standard Rust `Vec` objects up to capacity based on the length of input.
+**The Chaos:** Created a test providing an incredibly massive 2 GB string `repeat("00")` to the system which instantly triggers memory allocation overload in `Vec::with_capacity` causing a "capacity overflow" panic. Faked panics are not allowed, the SUT must be directly invoked.
