@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Extract Domain Models from nes-test-harness**
+**Tangle:** The `crates/nes-test-harness/src/lib.rs` file was a massive bloat (>600 lines) that contained several independent domain responsibilities loosely thrown together: audio analysis math, audio I/O logic, APU register tracing, and ROM metadata parsing. This resulted in low cohesion and poor maintainability as anyone working on audio analysis had to parse through ROM metadata logic.
+**Blueprint:** Extracted the distinct domains into their own modules: `audio::analysis`, `audio::io`, `audio::capture`, `apu_trace`, and `rom::metadata`. Refactored `lib.rs` to serve as a strict Facade pattern, re-exporting the moved functions to preserve the external public API without regressions.
