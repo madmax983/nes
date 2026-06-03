@@ -2578,84 +2578,133 @@ impl Cpu {
         mnemonic: &str,
     ) -> (u16, u16, String) {
         match opcode & 0x1F {
-            0x03 => {
-                let zp = self.read(snapshot.pc.wrapping_add(1));
-                let ptr = zp.wrapping_add(snapshot.x);
-                let addr = self.read_u16_zp(ptr);
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, zp],
-                    format_args!("{mnemonic} (${zp:02X},X)"),
-                );
-                (addr, 2, trace)
-            }
-            0x07 => {
-                let zp = self.read(snapshot.pc.wrapping_add(1));
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, zp],
-                    format_args!("{mnemonic} ${zp:02X}"),
-                );
-                (zp as u16, 2, trace)
-            }
-            0x0F => {
-                let low = self.read(snapshot.pc.wrapping_add(1));
-                let high = self.read(snapshot.pc.wrapping_add(2));
-                let addr = u16::from_le_bytes([low, high]);
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, low, high],
-                    format_args!("{mnemonic} ${addr:04X}"),
-                );
-                (addr, 3, trace)
-            }
-            0x13 => {
-                let zp = self.read(snapshot.pc.wrapping_add(1));
-                let base = self.read_u16_zp(zp);
-                let addr = base.wrapping_add(snapshot.y as u16);
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, zp],
-                    format_args!("{mnemonic} (${zp:02X}),Y"),
-                );
-                (addr, 2, trace)
-            }
-            0x17 => {
-                let zp = self.read(snapshot.pc.wrapping_add(1));
-                let addr = zp.wrapping_add(snapshot.x) as u16;
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, zp],
-                    format_args!("{mnemonic} ${zp:02X},X"),
-                );
-                (addr, 2, trace)
-            }
-            0x1B => {
-                let low = self.read(snapshot.pc.wrapping_add(1));
-                let high = self.read(snapshot.pc.wrapping_add(2));
-                let base = u16::from_le_bytes([low, high]);
-                let addr = base.wrapping_add(snapshot.y as u16);
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, low, high],
-                    format_args!("{mnemonic} ${base:04X},Y"),
-                );
-                (addr, 3, trace)
-            }
-            0x1F => {
-                let low = self.read(snapshot.pc.wrapping_add(1));
-                let high = self.read(snapshot.pc.wrapping_add(2));
-                let base = u16::from_le_bytes([low, high]);
-                let addr = base.wrapping_add(snapshot.x as u16);
-                let trace = self.maybe_trace(
-                    snapshot,
-                    &[opcode, low, high],
-                    format_args!("{mnemonic} ${base:04X},X"),
-                );
-                (addr, 3, trace)
-            }
+            0x03 => self.decode_indirect_x(snapshot, opcode, mnemonic),
+            0x07 => self.decode_zero_page(snapshot, opcode, mnemonic),
+            0x0F => self.decode_absolute(snapshot, opcode, mnemonic),
+            0x13 => self.decode_indirect_y(snapshot, opcode, mnemonic),
+            0x17 => self.decode_zero_page_x(snapshot, opcode, mnemonic),
+            0x1B => self.decode_absolute_y(snapshot, opcode, mnemonic),
+            0x1F => self.decode_absolute_x(snapshot, opcode, mnemonic),
             _ => unreachable!(),
         }
+    }
+
+    fn decode_indirect_x(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let zp = self.read(snapshot.pc.wrapping_add(1));
+        let ptr = zp.wrapping_add(snapshot.x);
+        let addr = self.read_u16_zp(ptr);
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, zp],
+            format_args!("{mnemonic} (${zp:02X},X)"),
+        );
+        (addr, 2, trace)
+    }
+
+    fn decode_zero_page(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let zp = self.read(snapshot.pc.wrapping_add(1));
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, zp],
+            format_args!("{mnemonic} ${zp:02X}"),
+        );
+        (zp as u16, 2, trace)
+    }
+
+    fn decode_absolute(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let low = self.read(snapshot.pc.wrapping_add(1));
+        let high = self.read(snapshot.pc.wrapping_add(2));
+        let addr = u16::from_le_bytes([low, high]);
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, low, high],
+            format_args!("{mnemonic} ${addr:04X}"),
+        );
+        (addr, 3, trace)
+    }
+
+    fn decode_indirect_y(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let zp = self.read(snapshot.pc.wrapping_add(1));
+        let base = self.read_u16_zp(zp);
+        let addr = base.wrapping_add(snapshot.y as u16);
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, zp],
+            format_args!("{mnemonic} (${zp:02X}),Y"),
+        );
+        (addr, 2, trace)
+    }
+
+    fn decode_zero_page_x(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let zp = self.read(snapshot.pc.wrapping_add(1));
+        let addr = zp.wrapping_add(snapshot.x) as u16;
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, zp],
+            format_args!("{mnemonic} ${zp:02X},X"),
+        );
+        (addr, 2, trace)
+    }
+
+    fn decode_absolute_y(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let low = self.read(snapshot.pc.wrapping_add(1));
+        let high = self.read(snapshot.pc.wrapping_add(2));
+        let base = u16::from_le_bytes([low, high]);
+        let addr = base.wrapping_add(snapshot.y as u16);
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, low, high],
+            format_args!("{mnemonic} ${base:04X},Y"),
+        );
+        (addr, 3, trace)
+    }
+
+    fn decode_absolute_x(
+        &self,
+        snapshot: TraceSnapshot,
+        opcode: u8,
+        mnemonic: &str,
+    ) -> (u16, u16, String) {
+        let low = self.read(snapshot.pc.wrapping_add(1));
+        let high = self.read(snapshot.pc.wrapping_add(2));
+        let base = u16::from_le_bytes([low, high]);
+        let addr = base.wrapping_add(snapshot.x as u16);
+        let trace = self.maybe_trace(
+            snapshot,
+            &[opcode, low, high],
+            format_args!("{mnemonic} ${base:04X},X"),
+        );
+        (addr, 3, trace)
     }
 
     fn absolute_operand_base(&self, snapshot: TraceSnapshot) -> u16 {
