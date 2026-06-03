@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring excessive if let Some() nesting in API and PPU cache paths]**
+**Learning:** Found several places where `if let Some(x)` was unnecessarily nesting code. For example, `sprite.unwrap_or_else(|| if bg_opaque ...)` can be simplified to `unwrap_or` for literal values, and nested `if let Some(mapper) = ...` can be flattened using `let Some(mapper) = ... else { return }` or avoiding eager tuple evaluations like `(true, Some(mapper))`. Also returning early inside `match` statements skips logic after the `match`.
+**Action:** Used guard clauses where safe and flattened expressions using `unwrap_or`, eliminating indentation bloat without changing behavior.

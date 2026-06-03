@@ -496,21 +496,24 @@ impl CoreSnapshot {
     }
 
     /// Applies a mapper-specific delta to this snapshot in-place.
+    fn apply_non_replacement_mapper_delta(&mut self, delta: &MapperDelta) {
+        let Some(mapper) = self.mapper.as_mut() else {
+            debug_assert!(
+                false,
+                "non-replacement mapper delta requires existing mapper"
+            );
+            return;
+        };
+        mapper.apply_delta(delta, &self.ppu.chr);
+    }
+
+    /// Applies a mapper-specific delta to this snapshot in-place.
     pub fn apply_mapper_delta(&mut self, delta: &MapperDelta) {
         match &delta.kind {
             MapperDeltaKind::Replace(mapper) => {
                 self.mapper = mapper.clone();
             }
-            _ => {
-                if let Some(mapper) = self.mapper.as_mut() {
-                    mapper.apply_delta(delta, &self.ppu.chr);
-                } else {
-                    debug_assert!(
-                        false,
-                        "non-replacement mapper delta requires existing mapper"
-                    );
-                }
-            }
+            _ => self.apply_non_replacement_mapper_delta(delta),
         }
     }
 }
@@ -1470,20 +1473,22 @@ impl NesCore {
         }
     }
 
-    fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
+    fn handle_mapper_write(&mut self, addr: u16, value: u8) -> bool {
+        if addr < 0x8000 {
+            return false;
+        }
+        let Some(mapper) = self.mapper.as_mut() else {
+            return false;
         };
+        // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+        let chr_window = self.ppu.chr_window_snapshot();
+        mapper.sync_chr_ram_from_ppu_window(&chr_window);
+        mapper.write_prg(addr, value);
+        true
+    }
+
+    fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
+        let remap_needed = self.handle_mapper_write(addr, value);
 
         let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
             self.ppu

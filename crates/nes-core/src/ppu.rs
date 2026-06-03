@@ -1142,13 +1142,11 @@ impl Ppu {
         let (bg_palette_color, bg_opaque) = self.background_palette_index_cached(x, y);
         let sprite = self.sprite_palette_index_cached(x, y, bg_opaque);
 
-        let palette_index = if let Some(sprite_color) = sprite {
-            sprite_color
-        } else if bg_opaque {
+        let palette_index = sprite.unwrap_or(if bg_opaque {
             bg_palette_color
         } else {
             universal
-        };
+        });
 
         NES_PALETTE_RGB[(palette_index & 0x3F) as usize]
     }
