@@ -1,6 +1,17 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Resolves the absolute path to the pre-compiled `homebrew.nes` artifact.
+///
+/// Because running an emulator without a ROM is like driving a car without an engine,
+/// integration tests rely heavily on this minimal, deterministic ROM built dynamically by the DSL.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// assert!(default_homebrew_rom_path().exists());
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

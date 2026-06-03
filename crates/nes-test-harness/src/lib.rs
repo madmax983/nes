@@ -34,27 +34,57 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// A flight recorder event for the Audio Processing Unit.
+///
+/// When writing cycle-accurate emulators, you cannot simply listen to the audio output to verify correctness.
+/// Instead, you must trap the exact CPU cycles where the game alters the APU registers and compare this
+/// trace against a known-good emulation. This struct captures a single frame-perfect hardware mutation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
+    /// The absolute, continuous CPU cycle since power-on. This defines the exact moment in time the APU state mutated.
     pub cpu_cycle: u64,
+    /// The memory-mapped I/O address hit by the CPU (typically in the `0x4000` to `0x4017` range).
     pub addr: u16,
+    /// The raw byte blasted into the register, dictating duty cycles, sweeps, envelopes, or period limits.
     pub value: u8,
 }
 
+/// A statistical profile of a captured audio window.
+///
+/// Sometimes tests do not demand cycle-perfect hashes. If a test just needs to ensure a square wave
+/// is *loud* or that silence has no DC offset, this struct provides the macroscopic physical characteristics
+/// of the output waveform without drowning in the micro-details of individual samples.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
+    /// The total volume of discrete samples ingested to calculate these statistics.
     pub sample_count: usize,
+    /// Root Mean Square. Represents the continuous power (perceived volume) of the signal.
     pub rms: f64,
+    /// The absolute maximum excursion of the waveform from zero. Useful for detecting clipping thresholds.
     pub peak: i16,
+    /// The arithmetic mean. A perfect AC signal averages to `0.0`. A high offset implies a silent channel
+    /// was left held high, which can cause violent "pops" when mixed into hardware.
     pub dc_offset: f64,
+    /// The percentage of samples living dangerously close to the `i16` ceiling (`32,760`). If this is high,
+    /// your mixer is digitally distorting and sounds terrible.
     pub clipping_ratio: f64,
 }
 
+/// The scientific verdict comparing an emulator's audio output against a golden "perfect" recording.
+///
+/// When asserting that an audio change hasn't broken things, humans are bad judges. This struct uses
+/// time-domain (Pearson correlation) and frequency-domain (FFT) analysis to prove mathematically that
+/// the emulator sounds identical to the hardware, ignoring negligible floating-point rounding errors.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
+    /// How many samples were aligned and cross-examined.
     pub samples_compared: usize,
+    /// Time-domain similarity. `1.0` means they trace the exact same shape. `0.0` is pure noise. `-1.0` is inverted.
     pub correlation: f64,
+    /// Power similarity. If `1.0`, both are equally loud. If `0.5`, the emulator is outputting at half volume.
     pub rms_ratio: f64,
+    /// Frequency-domain similarity. The average difference in Decibels across all frequency bins.
+    /// Low numbers mean the "timbre" and "pitch" match perfectly, even if the wave is phase-shifted.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -97,6 +127,19 @@ pub fn collect_apu_register_writes(
     Ok(writes)
 }
 
+/// Crushes a massive sequence of APU mutations into a single cryptographic-style snapshot.
+///
+/// This allows tests to execute millions of CPU cycles and verify the exact timing of thousands of audio
+/// events using a single assertion against a hardcoded `u64` hash.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{ApuWriteEvent, apu_write_hash};
+///
+/// let events = [ApuWriteEvent { cpu_cycle: 1, addr: 0x4000, value: 0xFF }];
+/// assert_ne!(apu_write_hash(&events), 0);
+/// ```
 #[must_use]
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -177,6 +220,16 @@ pub fn capture_audio_window(
         .map_err(|err| format!("audio capture failed after warmup: {err}"))
 }
 
+/// Hashes raw PCM audio for strict, bit-for-bit regression snapshot testing.
+///
+/// Only use this when you guarantee deterministic rendering (e.g. no asynchronous host sample rate conversion).
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::waveform_hash;
+/// assert_ne!(waveform_hash(&[0, 10, -10, 0]), 0);
+/// ```
 #[must_use]
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -187,6 +240,19 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
     hash
 }
 
+/// Sweeps a raw PCM buffer and extracts its physical profile (power, peaks, DC offset).
+///
+/// Useful for making intelligent assertions like "This waveform should be perfectly silent" without
+/// writing `assert_eq!(sample, 0)` ten thousand times.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::audio_stats;
+/// let stats = audio_stats(&[100, -100]);
+/// assert_eq!(stats.peak, 100);
+/// assert_eq!(stats.dc_offset, 0.0);
+/// ```
 #[must_use]
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
@@ -225,6 +291,18 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
     }
 }
 
+/// Slices a massive audio stream into chunks and measures the power (RMS) of each chunk.
+///
+/// This allows a test to verify the "envelope" of a sound—proving that a note starts loud and
+/// decays exponentially, rather than analyzing individual high-frequency oscillations.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rms_envelope;
+/// let decay = rms_envelope(&[100, 100, 10, 10, 0, 0], 2);
+/// assert!(decay[0] > decay[1]);
+/// ```
 #[must_use]
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
@@ -327,6 +405,20 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     Ok(samples)
 }
 
+/// Executes a comprehensive forensic analysis between two audio streams.
+///
+/// If a test fails this comparison, your emulator has either dropped samples, drifted in pitch, or
+/// violently altered its volume logic.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::compare_waveforms;
+/// let a = [0, 10, 0, -10];
+/// let b = [0, 10, 0, -10];
+/// let result = compare_waveforms(&a, &b, 4);
+/// assert_eq!(result.correlation, 1.0);
+/// ```
 #[must_use]
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
@@ -372,6 +464,18 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
     }
 }
 
+/// Converts time-domain PCM samples into a frequency-domain spectrogram.
+///
+/// This proves whether the APU is emitting the correct *musical pitch* by measuring the decibel strength
+/// of distinct frequency bins. Uses a naive O(N^2) Discrete Fourier Transform, so keep `fft_size` small in tests.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::fft_log_mag_db;
+/// let spectrum = fft_log_mag_db(&[0, 32000, 0, -32000], 4);
+/// assert!(!spectrum.is_empty());
+/// ```
 #[must_use]
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
@@ -414,6 +518,20 @@ fn hann_window(idx: usize, len: usize) -> f64 {
     0.5 - 0.5 * phase.cos()
 }
 
+/// Interrogates the raw binary header of an iNES ROM file to extract its Mapper ID.
+///
+/// The Mapper ID dictates the physical cartridge hardware the emulator must simulate (e.g. MMC3 vs UXROM).
+/// This function protects the emulator from trying to execute a ROM it lacks the silicon for.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::detect_mapper_id;
+/// let mut rom = [0; 16];
+/// rom[0..4].copy_from_slice(b"NES\x1A");
+/// rom[6] = 0x40; // Mapper 4
+/// assert_eq!(detect_mapper_id(&rom), Some(4));
+/// ```
 #[must_use]
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
@@ -431,6 +549,16 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     }
 }
 
+/// The whitelist of memory mappers currently implemented in the `nes-core` simulation.
+///
+/// Returns `true` if the emulator knows how to bank-switch this cartridge.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::mapper_supported_by_core;
+/// assert!(mapper_supported_by_core(0)); // NROM is always safe.
+/// ```
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)

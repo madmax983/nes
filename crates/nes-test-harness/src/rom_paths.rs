@@ -3,6 +3,12 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Resolves the path to the user's Super Mario Bros. ROM via the `nes.toml` configuration.
+///
+/// Required for heavy integration tests that use real games.
+///
+/// ## Panics
+/// Panics if the user has not configured the ROM path or if the file is missing.
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +24,12 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Resolves the path to the infamous `nestest.nes` CPU diagnostic ROM.
+///
+/// This ROM is the gold standard for proving CPU instruction parity.
+///
+/// ## Panics
+/// Panics if the user has not configured the ROM path or if the file is missing.
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +39,12 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Resolves the path to Blargg's CPU cycle timing diagnostic ROM.
+///
+/// Proves that instructions take the exact correct amount of hardware clock cycles.
+///
+/// ## Panics
+/// Panics if the user has not configured the ROM path or if the file is missing.
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +56,12 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Scans and returns all `.nes` diagnostic ROMs in the Brad Smith audio testing suite.
+///
+/// These ROMs test edge cases in APU emulation, like phase resets and sweep behaviors.
+///
+/// ## Panics
+/// Panics if the directory is misconfigured or contains no valid ROM files.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +92,12 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Resolves the path to the directory housing the "golden" `.pcm` audio recordings.
+///
+/// These represent the physical hardware truth that the emulator must perfectly match.
+///
+/// ## Panics
+/// Panics if the user has not configured the directory path or if it does not exist.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
