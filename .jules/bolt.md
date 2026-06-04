@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+## 2024-05-18 - Avoid heap allocations on hot path iterators
+**Learning:** Returning references rather than cloning `String` objects when formatting iterator chains removes redundant allocations, specifically when error formatting or conflict resolution occurs during hot paths.
+**Action:** Used `Vec::with_capacity` in structs initialized often (like `RtaManager` and `CalibrationRecorder`), reducing default empty `Vec` reallocations. Always prefer `.next()` on iterators and returning references rather than `.collect::<Vec<_>>()` followed by `.clone()`.

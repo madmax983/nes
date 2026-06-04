@@ -481,9 +481,19 @@ pub fn select_profile(
     };
 
     if let Some(second_match) = match_iter.next() {
-        let mut conflict_profiles = vec![first_match.clone(), second_match.clone()];
-        conflict_profiles.extend(match_iter.cloned());
-        let conflict = format_profile_names(&conflict_profiles);
+        // Collect references instead of cloning `LoadedProfile` to avoid deep allocations.
+        let mut conflict_profiles = vec![first_match, second_match];
+        conflict_profiles.extend(match_iter);
+
+        let len: usize = conflict_profiles.iter().map(|p| p.profile.id.len() + 2).sum();
+        let mut conflict = String::with_capacity(len);
+        for (i, p) in conflict_profiles.iter().enumerate() {
+            if i > 0 {
+                conflict.push_str(", ");
+            }
+            conflict.push_str(&p.profile.id);
+        }
+
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
@@ -834,7 +844,8 @@ impl RtaManager {
             split_counter: 0,
             split_events,
             triggers,
-            input_log: Vec::new(),
+            // **⚡ Bolt Optimization:** Pre-allocate input_log capacity to avoid frequent reallocations.
+            input_log: Vec::with_capacity(3600), // ~60 seconds at 60fps
             runs_dir,
             artifacts_written: None,
             calibration,
@@ -1538,7 +1549,8 @@ impl CalibrationRecorder {
         Self {
             profile_id,
             frames: VecDeque::with_capacity(30_000),
-            splits: Vec::new(),
+            // **⚡ Bolt Optimization:** Pre-allocates capacity for 16 splits to prevent reallocation.
+            splits: Vec::with_capacity(16),
             max_frames: 30_000,
         }
     }
