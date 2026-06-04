@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Deferring Heap Allocation in Parsing Functions]**
+**Learning:** Returning an owned `String` from parsing functions (like `parse_slot` defaulting to `"default".to_owned()`) forces heap allocations on every call, even if the result is only used for lookups in collections (`HashMap::get`) or immediately discarded during an early error exit.
+**Action:** Refactor these helpers to return a borrowed `&str` and use `.unwrap_or("default")`. Defer the `.to_owned()` allocation strictly to the boundaries where ownership is needed (e.g., `HashMap::insert` or wrapping in an owned `Error` variant).
