@@ -485,7 +485,10 @@ pub fn select_profile(
         let mut conflict_profiles = vec![first_match, second_match];
         conflict_profiles.extend(match_iter);
 
-        let len: usize = conflict_profiles.iter().map(|p| p.profile.id.len() + 2).sum();
+        let len: usize = conflict_profiles
+            .iter()
+            .map(|p| p.profile.id.len() + 2)
+            .sum();
         let mut conflict = String::with_capacity(len);
         for (i, p) in conflict_profiles.iter().enumerate() {
             if i > 0 {
