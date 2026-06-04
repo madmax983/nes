@@ -2157,7 +2157,10 @@ mod config_tests {
     fn resolve_runtime_config_handles_missing_rom_path_with_crossterm_formatting() {
         // Just verify that we don't regress test coverage for the error formatter.
         let msg = format!(
-            "{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {}", "Error:".with(crossterm::style::Color::Red).bold(), "Hint:".with(crossterm::style::Color::Cyan).bold(), nes_config::DEFAULT_CONFIG_PATH
+            "{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {}",
+            "Error:".with(crossterm::style::Color::Red).bold(),
+            "Hint:".with(crossterm::style::Color::Cyan).bold(),
+            nes_config::DEFAULT_CONFIG_PATH
         );
         assert!(msg.contains("ROM path not configured"));
         assert!(msg.contains("Provide a positional ROM argument"));
