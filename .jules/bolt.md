@@ -35,3 +35,11 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Eliminate parsing allocation in map lookups]
+**Learning:** [A helper function used to parse a key (e.g. ) from dynamic params was eagerly mapping an  to  and then using  to return a  inside the loop. This forced a heap allocation on every single fetch, even when the key was only being passed into  which can take a borrowed  directly via the  trait.]
+**Action:** [Return  and use  in the helper. Only convert to an owned  at the exact boundary where ownership is strictly required (e.g. ), preventing unnecessary intermediate heap allocations on the hot path.]
+
+**[Eliminate parsing allocation in map lookups]**
+**Learning:** A helper function used to parse a key (e.g. `parse_slot`) from dynamic params was eagerly mapping an `Option<&str>` to `Option<String>` and then using `unwrap_or_else(|| "default".to_owned())` to return a `String` inside the loop. This forced a heap allocation on every single fetch, even when the key was only being passed into `HashMap::get()` which can take a borrowed `&str` directly via the `Borrow` trait.
+**Action:** Return `&str` and use `.unwrap_or("default")` in the helper. Only convert to an owned `String` at the exact boundary where ownership is strictly required (e.g. `slots.insert(slot.to_owned(), ...)`), preventing unnecessary intermediate heap allocations on the hot path.
