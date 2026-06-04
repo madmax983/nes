@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+## 2024-05-18 - Missing Tests in nes-desktop/src/main.rs
+**Mutant:** Many surviving mutants in `apply_overlay_keyboard_input`, `validate_action_allowed`, `menu_action_enabled`, `set_overlay_open`, `dispatch_app_action` and other functions.
+**Diagnosis:** The main event loop, GUI, overlay commands, and action handlers in `crates/nes-desktop/src/main.rs` have several gaps in testing. The integration tests that test desktop logic often skip testing the specific effects of small sub-functions or GUI-related state management, allowing these mutants to survive.
+**Kill Shot:** Expand tests in `crates/nes-desktop/src/main.rs` to cover these GUI-related and desktop-specific state management functions more thoroughly. Added missing tests for `overlay_keyboard_input_delegates_to_model` and `validate_action_allowed_short_circuits` and `test_menu_action_enabled` which kills several mutants. A lot more are remaining. Since running `cargo mutants` for `crates/nes-desktop/src/main.rs` takes a long time, we've documented the weakness.

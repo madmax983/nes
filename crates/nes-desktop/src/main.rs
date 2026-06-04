@@ -1725,6 +1725,119 @@ mod tests {
     }
 
     #[test]
+    fn overlay_keyboard_input_delegates_to_model() {
+        let mut overlay = OverlayModel::new(5);
+        let mut keyboard_bits = 0;
+        let _ = apply_overlay_keyboard_input(
+            &mut overlay,
+            VirtualKeyCode::Escape,
+            true,
+            0,
+            &mut keyboard_bits,
+        );
+        let cmd = apply_overlay_keyboard_input(
+            &mut overlay,
+            VirtualKeyCode::Up,
+            true,
+            0,
+            &mut keyboard_bits,
+        );
+        assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn overlay_input_requires_redraw_short_circuits_unpressed() {
+        assert!(!overlay_input_requires_redraw(
+            VirtualKeyCode::Escape,
+            false
+        ));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::K, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::G, true));
+    }
+
+    #[test]
+    fn validate_action_allowed_short_circuits() {
+        assert!(validate_action_allowed(AppAction::Reset, false).is_ok());
+        assert!(validate_action_allowed(AppAction::Reset, true).is_ok());
+        assert!(validate_action_allowed(AppAction::OpenRom, false).is_ok());
+    }
+
+    #[test]
+    fn test_menu_action_enabled() {
+        assert!(menu_action_enabled(AppAction::Resume, true, false, false));
+        assert!(!menu_action_enabled(AppAction::Resume, false, false, false));
+
+        // OpenRom requires rom_picker_supported() which may be false on some platforms in tests
+        let rom_supported = rom_picker_supported();
+        assert_eq!(
+            menu_action_enabled(AppAction::OpenRom, false, false, false),
+            rom_supported
+        );
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, true, false));
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, false, true));
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, true, true));
+
+        assert!(menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            true,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            true
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            true,
+            true
+        ));
+
+        assert!(!menu_action_enabled(
+            AppAction::SaveSlot(1),
+            false,
+            true,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::LoadSlot(1),
+            false,
+            true,
+            false
+        ));
+        assert!(menu_action_enabled(
+            AppAction::SaveSlot(1),
+            false,
+            false,
+            false
+        ));
+        assert!(menu_action_enabled(
+            AppAction::LoadSlot(1),
+            false,
+            false,
+            false
+        ));
+
+        assert!(menu_action_enabled(
+            AppAction::ToggleOverlay,
+            false,
+            true,
+            true
+        ));
+        assert!(menu_action_enabled(AppAction::Reset, false, true, true));
+        assert!(menu_action_enabled(AppAction::Quit, false, true, true));
+    }
+
+    #[test]
     fn rollback_disables_stateful_menu_actions() {
         let err = validate_action_allowed(AppAction::OpenRom, true)
             .expect_err("open rom should be blocked during rollback");

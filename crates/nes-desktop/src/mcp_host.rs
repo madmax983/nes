@@ -705,5 +705,37 @@ mod coverage_tests {
                 10 * 1024 * 1024
             ))
         );
+
+        // Test exactly one byte under boundary limit
+        let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024 - 1);
+        let mut reader = std::io::BufReader::new(Cursor::new(payload));
+        let result = read_framed_message(&mut reader);
+        assert_eq!(
+            result,
+            Err("failed reading payload body: failed to fill whole buffer".to_owned())
+        );
+    }
+
+    struct FailWriter;
+    impl std::io::Write for FailWriter {
+        fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("write error"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::other("flush error"))
+        }
+    }
+
+    #[test]
+    fn test_write_framed_message_success_and_error() {
+        // Test successful write
+        let mut writer = Vec::new();
+        let value = json!({"status": "ok"});
+        let result = write_framed_message(&mut writer, &value);
+        assert_eq!(result, Ok(()));
+
+        let mut bad_writer = FailWriter;
+        let err = write_framed_message(&mut bad_writer, &value).unwrap_err();
+        assert!(err.contains("failed writing framed response: write error"));
     }
 }
