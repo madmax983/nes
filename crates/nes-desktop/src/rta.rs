@@ -1068,9 +1068,11 @@ impl RtaManager {
             calibration.record_frame(frame, &mut read_u8);
         }
 
-        // Avoids `Vec::new()` without capacity on the hot path (called every frame).
-        // RTA events per frame rarely exceed 2.
-        let mut events = Vec::<RtaEvent>::with_capacity(2);
+        // **Performance optimization:** Avoids `Vec::with_capacity()` on the hot path (called every frame).
+        // `Vec::new()` defers heap allocation until elements are actually pushed. Since RTA events
+        // occur extremely rarely (e.g., once every few minutes), this eliminates ~60 unnecessary heap
+        // allocations per second.
+        let mut events = Vec::<RtaEvent>::new();
 
         self.tick_start(now, &mut read_u8, &mut events);
 
