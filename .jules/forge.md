@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+## 2025-06-18 - Avoid unnecessary heap allocations in string parameters
+**Learning:** Functions that parse dictionary values into strings (like `parse_slot`) often return owned `String`s via `.map(ToOwned::to_owned).unwrap_or_else(|| "default".to_owned())`. This forces unnecessary heap allocations even when the caller only needs to read the string.
+**Action:** When extracting values from collections, return borrowed `&str` using `.map(|s| s.as_str()).unwrap_or("default")`. Defer the `.to_string()` allocation exclusively to the boundaries where ownership is strictly required (like inserting into a `HashMap` or an owned struct variant).

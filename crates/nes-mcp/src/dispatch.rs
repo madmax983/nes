@@ -333,7 +333,7 @@ pub fn dispatch_tool(
 fn handle_step_cpu(core: &mut NesCore) -> Result<DispatchOutput, DispatchError> {
     execute_command(core, Command::StepCpu)?;
     Ok(DispatchOutput::CpuStep {
-        trace: core.last_cpu_trace().map(ToOwned::to_owned),
+        trace: core.last_cpu_trace().map(|s| s.to_string()),
         cpu_cycles: core.total_cycles(),
     })
 }
@@ -650,8 +650,10 @@ fn handle_save_state(
     let mut slots = saved_states()
         .lock()
         .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-    slots.insert(slot.clone(), core.save_state());
-    Ok(DispatchOutput::StateSlot { slot })
+    slots.insert(slot.to_string(), core.save_state());
+    Ok(DispatchOutput::StateSlot {
+        slot: slot.to_string(),
+    })
 }
 
 fn handle_load_state(
@@ -663,14 +665,16 @@ fn handle_load_state(
         let slots = saved_states()
             .lock()
             .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-        slots.get(&slot).cloned()
+        slots.get(slot).cloned()
     };
     let Some(snapshot) = snapshot else {
-        return Err(DispatchError::StateSlotNotFound(slot));
+        return Err(DispatchError::StateSlotNotFound(slot.to_string()));
     };
 
     core.load_state(&snapshot);
-    Ok(DispatchOutput::StateSlot { slot })
+    Ok(DispatchOutput::StateSlot {
+        slot: slot.to_string(),
+    })
 }
 
 fn handle_load_rom(
@@ -821,11 +825,8 @@ fn parse_player2(params: &ToolParams) -> Result<bool, DispatchError> {
     }
 }
 
-fn parse_slot(params: &ToolParams) -> String {
-    params
-        .get("slot")
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| "default".to_owned())
+fn parse_slot(params: &ToolParams) -> &str {
+    params.get("slot").map(|s| s.as_str()).unwrap_or("default")
 }
 
 fn parse_integer(raw: &str) -> Result<u64, DispatchError> {
