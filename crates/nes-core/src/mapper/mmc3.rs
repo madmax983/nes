@@ -598,6 +598,29 @@ mod tests {
     }
 
     #[test]
+    fn mmc3_write_prg_coverage() {
+        let mut m = Mmc3::new(4, 4);
+
+        m.write_prg(0x7FFF, 0x00);
+
+        m.bank_select = 0xFF;
+        m.write_prg(0x8001, 0x05);
+        assert_eq!(m.bank_select, 0xFF);
+
+        m.mirroring = NametableMirroring::Vertical;
+        m.write_prg(0xA001, 0x01);
+        assert_eq!(m.mirroring, NametableMirroring::Vertical);
+
+        m.irq_latch = 0;
+        m.write_prg(0xC001, 0x12);
+        assert_eq!(m.irq_latch, 0);
+
+        m.irq_enabled = true;
+        m.write_prg(0xE001, 0x00);
+        assert!(m.irq_enabled);
+    }
+
+    #[test]
     fn mmc3_from_prg_chr_pads_unaligned_roms() {
         let prg = vec![0_u8; 8192 * 4 + 1];
         let chr = vec![0_u8; 1024 * 8 + 1];

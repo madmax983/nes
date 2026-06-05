@@ -365,6 +365,69 @@ mod tests {
     }
 
     #[test]
+    fn mmc1_write_prg_coverage() {
+        let mut m = Mmc1::new(16, 8);
+
+        // Write value with bit 7 not set to push a bit, should increment count
+        m.write_prg(0x8000, 0b0000_0001);
+        assert_eq!(m.shift_count, 1);
+
+        // Write value with bit 7 set to trigger reset
+        m.write_prg(0x8000, 0b1000_0000);
+        assert!(m.shift_is_reset());
+        assert_eq!(m.shift_count, 0);
+
+        // Push 4 bits
+        m.write_prg(0x8000, 0b0000_0001);
+        m.write_prg(0x8000, 0b0000_0001);
+        m.write_prg(0x8000, 0b0000_0001);
+        m.write_prg(0x8000, 0b0000_0001);
+        assert_eq!(m.shift_count, 4);
+
+        // Push 5th bit
+        m.write_prg(0xE000, 0b0000_0001);
+        assert_eq!(m.shift_count, 0); // resets after commit
+    }
+
+    #[test]
+    fn mmc1_read_prg_coverage() {
+        let mut m = Mmc1::new(4, 8); // 4 PRG banks
+        m.prg_rom[0] = 0x11; // Bank 0
+        m.prg_rom[0x4000] = 0x22; // Bank 1
+        m.prg_rom[0x8000] = 0x33; // Bank 2
+        m.prg_rom[0xC000] = 0x44; // Bank 3
+
+        // Mode 0: switch 32KB
+        m.control = 0b0000_0000;
+        m.selected_prg_bank = 2; // select bank 2 (even)
+        assert_eq!(m.read_prg(0x8000), 0x33);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+
+        // Mode 1: switch 32KB
+        m.control = 0b0000_0100;
+        m.selected_prg_bank = 2; // select bank 2 (even)
+        assert_eq!(m.read_prg(0x8000), 0x33);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+
+        // Mode 2: fix first bank, switch second
+        m.control = 0b0000_1000;
+        m.selected_prg_bank = 2;
+        assert_eq!(m.read_prg(0x8000), 0x11);
+        assert_eq!(m.read_prg(0xC000), 0x33);
+
+        // Mode 3: switch first bank, fix last
+        m.control = 0b0000_1100;
+        m.selected_prg_bank = 1;
+        assert_eq!(m.read_prg(0x8000), 0x22);
+        assert_eq!(m.read_prg(0xC000), 0x44);
+
+        // Mode 3: address < 0xC000, selected bank returned (which is 1)
+        assert_eq!(m.read_prg(0x8000), 0x22);
+        // Mode 3: address >= 0xC000, bank_count - 1 returned (which is 3)
+        assert_eq!(m.read_prg(0xC000), 0x44);
+    }
+
+    #[test]
     fn mmc1_commit_to_unhandled_range_does_not_panic() {
         let mut m = Mmc1::new(16, 8);
         // Address 0xA000 is CHR bank 0, unhandled in our current simplified mmc1
