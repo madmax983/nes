@@ -1,12 +1,7 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+1. *Write test to cover `to_js_error` in `nes-web/src/lib.rs`*
+   - Add a unit test to `nes-web/src/lib.rs` verifying that `to_js_error` maps a given string to a `JsValue`.
+2. *Write tests to cover `seed_entropy` in `nes-relay/src/main.rs`*
+   - Currently, `seed_entropy_varies_and_mixes_bits_with_pid_component` is ignored due to `#[ignore = "havoc target"]`.
+   - Remove `#[ignore = "havoc target"]` if possible, or add another unit test verifying that `seed_entropy()` generates a valid non-zero u64 output correctly without relying on timing if it's considered flaky.
+3. *Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.*
+4. *Submit the change.*

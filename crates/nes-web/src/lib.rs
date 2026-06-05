@@ -507,3 +507,17 @@ impl Default for NesWebEmulator {
 fn to_js_error(err: String) -> JsValue {
     JsValue::from_str(&err)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_js_error_preserves_string() {
+        let is_wasm = cfg!(target_arch = "wasm32");
+        if is_wasm {
+            let js_val = to_js_error("Custom error".to_string());
+            assert!(format!("{:?}", js_val).contains("Custom error"));
+        }
+    }
+}

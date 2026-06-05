@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2024-06-05 - Test Coverage Improvement
+**Learning:** We can test code intended to be converted to `JsValue` safely on non-WASM32 targets by inspecting the debug representation (`format!("{:?}", js_val)`) and bypassing WASM methods that may panic or be missing. We also successfully identified and patched a missed mutant related to deterministic output from `seed_entropy` generation inside the network simulation tool.
+**Action:** Use debug formatting strings (`{:?}`) to safely test WASM types under standard Rust CI checks when `wasm_bindgen_test` configuration isn't strictly necessary. Be sure to check `havoc target` skipped tests to see if they could actually be covered by safe, fast tests instead of leaving them completely exposed to logic mutations.

@@ -982,4 +982,11 @@ mod tests {
             net_sim.sample_delay_ms();
         }
     }
+
+    #[test]
+    fn seed_entropy_returns_valid_non_zero_value() {
+        let seed = super::seed_entropy();
+        assert_ne!(seed, 0, "seed_entropy should not return exactly 0");
+        assert_ne!(seed, 1, "seed_entropy should not return exactly 1");
+    }
 }
