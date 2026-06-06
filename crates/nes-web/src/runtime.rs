@@ -544,3 +544,24 @@ fn parse_button(button: &str) -> Result<Button, String> {
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::Button;
+
+    #[test]
+    fn test_parse_button() {
+        assert_eq!(parse_button("A"), Ok(Button::A));
+        assert_eq!(parse_button("B"), Ok(Button::B));
+        assert_eq!(parse_button("Select"), Ok(Button::Select));
+        assert_eq!(parse_button("Start"), Ok(Button::Start));
+        assert_eq!(parse_button("Up"), Ok(Button::Up));
+        assert_eq!(parse_button("Down"), Ok(Button::Down));
+        assert_eq!(parse_button("Left"), Ok(Button::Left));
+        assert_eq!(parse_button("Right"), Ok(Button::Right));
+
+        let err = parse_button("Invalid").unwrap_err();
+        assert!(err.contains("unknown button 'Invalid'"));
+    }
+}

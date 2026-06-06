@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**[nes-web: parse_button mutant coverage]**
+**Mutant:** deleted match arms for button strings ("B", "Select", "Start", "Up", "Down", "Left", "Right") in `parse_button` function inside `crates/nes-web/src/runtime.rs`
+**Diagnosis:** MISSING_COVERAGE - The test suite only covered the "A" button matching and fallback parsing error, leaving all other inputs untested. This means a bug changing button parsing strings wouldn't have been caught.
+**Kill Shot:** Created targeted test `test_parse_button` within `crates/nes-web/src/runtime.rs` verifying every exact string maps to the correct `Button` enum variant.
