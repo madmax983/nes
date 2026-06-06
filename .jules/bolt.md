@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Eliminate JSON-RPC payload heap allocations]**
+**Learning:** `read_stdio_message` and `read_framed_message` in the MCP host and daemon parsed Content-Length then allocated a brand new `Vec<u8>` for every payload body via `vec![0_u8; len]`. This caused rapid heap allocations when streaming many small RPC messages over IO sockets.
+**Action:** Reused the payload buffer by changing the signature to `fn read_framed_message(..., payload: &mut Vec<u8>)` and calling `payload.resize(len, 0)`.

@@ -173,7 +173,8 @@ fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Res
             .map_err(|err| format!("failed to clone client socket: {err}"))?,
     );
 
-    while let Some(payload) = read_framed_message(&mut reader)? {
+    let mut payload = Vec::new();
+    while read_framed_message(&mut reader, &mut payload)? {
         let Some(response) = handle_message(&payload, request_tx) else {
             continue;
         };
@@ -350,10 +351,18 @@ fn handle_tools_call(
 /// # use std::io::Cursor;
 /// let data = b"Content-Length: 13\r\n\r\n{\"key\":\"val\"}";
 /// let mut reader = Cursor::new(data);
-/// let result = read_framed_message(&mut reader).unwrap();
-/// assert_eq!(result.unwrap(), b"{\"key\":\"val\"}");
+/// let mut payload = Vec::new();
+/// let success = read_framed_message(&mut reader, &mut payload).unwrap();
+/// assert!(success);
+/// assert_eq!(payload, b"{\"key\":\"val\"}");
 /// ```
-pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+/// **Performance optimization:** Reads the framed JSON-RPC message into an existing
+/// pre-allocated `Vec<u8>` buffer instead of instantiating a new `Vec` via `vec![0_u8; len]`.
+/// This eliminates continuous heap allocations during hot-path IO loops processing rapid incoming messages.
+pub fn read_framed_message(
+    reader: &mut impl BufRead,
+    payload: &mut Vec<u8>,
+) -> Result<bool, String> {
     let mut content_length = None::<usize>;
     let mut line = String::new();
 
@@ -365,7 +374,7 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
             .map_err(|err| format!("failed reading header line: {err}"))?;
         if read == 0 {
             if content_length.is_none() {
-                return Ok(None);
+                return Ok(false);
             }
             return Err("unexpected EOF while reading MCP headers".to_owned());
         }
@@ -390,11 +399,11 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
         ));
     }
 
-    let mut payload = vec![0_u8; len];
+    payload.resize(len, 0);
     reader
-        .read_exact(&mut payload)
+        .read_exact(payload)
         .map_err(|err| format!("failed reading payload body: {err}"))?;
-    Ok(Some(payload))
+    Ok(true)
 }
 
 /// Writes a framed JSON-RPC message to the provided writer.
@@ -436,11 +445,12 @@ mod tests {
         context: &str,
     ) -> Vec<u8> {
         let deadline = Instant::now() + Duration::from_secs(2);
+        let mut payload = Vec::new();
         loop {
             host.drain(core);
-            match read_framed_message(reader) {
-                Ok(Some(payload)) => return payload,
-                Ok(None) => panic!("{context}: connection closed before response"),
+            match read_framed_message(reader, &mut payload) {
+                Ok(true) => return payload,
+                Ok(false) => panic!("{context}: connection closed before response"),
                 Err(err) if Instant::now() < deadline && is_retryable_read_error(&err) => {
                     thread::sleep(Duration::from_millis(10));
                 }
@@ -577,15 +587,17 @@ mod tests {
         write_framed_message(&mut wire, &value).expect("framed write should succeed");
 
         let mut reader = BufReader::new(Cursor::new(wire));
-        let payload = read_framed_message(&mut reader)
-            .expect("framed read should succeed")
-            .expect("payload should exist");
+        let mut payload = Vec::new();
+        let success =
+            read_framed_message(&mut reader, &mut payload).expect("framed read should succeed");
+        assert!(success, "payload should exist");
         let parsed: Value = serde_json::from_slice(&payload).expect("payload JSON should decode");
         assert_eq!(parsed, value);
 
         let mut bad_reader = BufReader::new(Cursor::new(b"{}\r\n\r\n".to_vec()));
-        let err =
-            read_framed_message(&mut bad_reader).expect_err("missing Content-Length should fail");
+        let mut payload = Vec::new();
+        let err = read_framed_message(&mut bad_reader, &mut payload)
+            .expect_err("missing Content-Length should fail");
         assert!(err.contains("missing Content-Length"));
     }
 
@@ -614,9 +626,10 @@ mod tests {
             "method": "ping"
         });
         write_framed_message(&mut stream, &ping_request).expect("write ping");
-        let ping_payload = read_framed_message(&mut reader)
-            .expect("read ping response")
-            .expect("ping payload");
+        let mut ping_payload = Vec::new();
+        let ping_success =
+            read_framed_message(&mut reader, &mut ping_payload).expect("read ping response");
+        assert!(ping_success, "ping payload");
         let ping_response: Value =
             serde_json::from_slice(&ping_payload).expect("decode ping response");
         assert_eq!(ping_response["id"], 1);
@@ -628,9 +641,10 @@ mod tests {
             "method": "tools/list"
         });
         write_framed_message(&mut stream, &tools_list_request).expect("write tools/list");
-        let list_payload = read_framed_message(&mut reader)
-            .expect("read tools/list response")
-            .expect("tools/list payload");
+        let mut list_payload = Vec::new();
+        let list_success =
+            read_framed_message(&mut reader, &mut list_payload).expect("read tools/list response");
+        assert!(list_success, "tools/list payload");
         let list_response: Value =
             serde_json::from_slice(&list_payload).expect("decode tools/list response");
         assert!(list_response["result"]["tools"].is_array());
@@ -684,10 +698,11 @@ mod coverage_tests {
 
     #[test]
     fn test_mcp_host_payload_size_limit() {
+        let mut buf = Vec::new();
         // Test exactly at the boundary limit
         let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024);
         let mut reader = std::io::BufReader::new(Cursor::new(payload));
-        let result = read_framed_message(&mut reader);
+        let result = read_framed_message(&mut reader, &mut buf);
         assert_eq!(
             result,
             Err("failed reading payload body: failed to fill whole buffer".to_owned())
@@ -696,7 +711,7 @@ mod coverage_tests {
         // Test one byte over the boundary limit
         let payload = format!("Content-Length: {}\r\n\r\n", 10 * 1024 * 1024 + 1);
         let mut reader = std::io::BufReader::new(Cursor::new(payload));
-        let result = read_framed_message(&mut reader);
+        let result = read_framed_message(&mut reader, &mut buf);
         assert_eq!(
             result,
             Err(format!(

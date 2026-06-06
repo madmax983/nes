@@ -41,5 +41,6 @@ fn havoc_mcp_host_oom_on_massive_content_length() {
     let mut reader = BufReader::new(Cursor::new(
         b"Content-Length: 18446744073709551615\r\n\r\n".to_vec(),
     ));
-    let _ = nes_desktop::mcp_host::read_framed_message(&mut reader);
+    let mut payload = Vec::new();
+    let _ = nes_desktop::mcp_host::read_framed_message(&mut reader, &mut payload);
 }

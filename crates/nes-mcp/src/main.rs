@@ -110,7 +110,8 @@ fn run() -> Result<(), McpError> {
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("\n{table}");
 
-    while let Some(payload) = read_stdio_message(&mut reader)? {
+    let mut payload = Vec::new();
+    while read_stdio_message(&mut reader, &mut payload)? {
         let Some(response) = handle_message(&mut state, &payload) else {
             continue;
         };
@@ -275,7 +276,10 @@ fn handle_tools_call(
     Ok(Some(call_result))
 }
 
-fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpError> {
+/// **Performance optimization:** Reads the framed JSON-RPC message into an existing
+/// pre-allocated `Vec<u8>` buffer instead of instantiating a new `Vec` via `vec![0_u8; len]`.
+/// This eliminates continuous heap allocations during hot-path IO loops processing rapid incoming messages.
+fn read_stdio_message(reader: &mut impl BufRead, payload: &mut Vec<u8>) -> Result<bool, McpError> {
     let mut content_length = None::<usize>;
     let mut line = String::new();
 
@@ -287,7 +291,7 @@ fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpE
             .map_err(|err| McpError::Protocol(format!("failed reading header line: {err}")))?;
         if read == 0 {
             if content_length.is_none() {
-                return Ok(None);
+                return Ok(false);
             }
             return Err(McpError::Protocol(
                 "unexpected EOF while reading MCP headers".to_owned(),
@@ -312,11 +316,11 @@ fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpE
             "Content-Length {len} exceeds maximum allowed size of {MAX_PAYLOAD_SIZE} bytes"
         )));
     }
-    let mut payload = vec![0_u8; len];
+    payload.resize(len, 0);
     reader
-        .read_exact(&mut payload)
+        .read_exact(payload)
         .map_err(|err| McpError::Protocol(format!("failed reading payload body: {err}")))?;
-    Ok(Some(payload))
+    Ok(true)
 }
 
 /// Writes a framed JSON-RPC message to stdio.
@@ -503,26 +507,27 @@ mod tests {
 
     #[test]
     fn read_stdio_message_handles_errors() {
+        let mut payload = Vec::new();
         let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut payload).unwrap_err();
         assert!(
             err.to_string()
                 .contains("invalid Content-Length value 'abc'")
         );
 
         let mut reader = b"Something else\r\n\r\n".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut payload).unwrap_err();
         assert!(err.to_string().contains("missing Content-Length header"));
 
         let mut reader = b"Content-Length: 100\r\nEOF".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut payload).unwrap_err();
         assert!(
             err.to_string()
                 .contains("unexpected EOF while reading MCP headers")
         );
 
         let mut reader = b"Content-Length: 100\r\n\r\nshort".as_slice();
-        let err = read_stdio_message(&mut reader).unwrap_err();
+        let err = read_stdio_message(&mut reader, &mut payload).unwrap_err();
         assert!(err.to_string().contains("failed reading payload body"));
     }
 }
