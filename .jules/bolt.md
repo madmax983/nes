@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**PPU Live CHR Window Update Optimization**
+**Learning:** Replaced `Vec<u8>` with `Box<[u8; CHR_BYTES]>` in `PendingLiveChrWindowUpdate` struct. This avoids unconditional heap allocations of a `Vec` for every CHR window update and matches the target type `live_chr: Box<[u8; CHR_BYTES]>`, allowing simple pointer assignment instead of `copy_from_slice` loops. Required adding serialization helpers.
+**Action:** Use Box for large byte arrays that have a predetermined size to enable move semantics, rather than using `to_vec()` and `copy_from_slice()` on intermediate representations.

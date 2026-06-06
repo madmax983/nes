@@ -68,6 +68,34 @@ where
         .map_err(|values: Vec<u8>| D::Error::invalid_length(values.len(), &ExpectedLength(N)))
 }
 
+
+
+/// Serializes a boxed fixed-size byte array `Box<[u8; N]>`.
+#[allow(clippy::borrowed_box)]
+pub fn serialize_boxed_u8_array<S, const N: usize>(
+    value: &Box<[u8; N]>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    value.as_slice().serialize(serializer)
+}
+
+/// Deserializes a boxed fixed-size byte array `Box<[u8; N]>`.
+pub fn deserialize_boxed_u8_array<'de, D, const N: usize>(
+    deserializer: D,
+) -> Result<Box<[u8; N]>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let values = Vec::<u8>::deserialize(deserializer)?;
+    let array: [u8; N] = values
+        .try_into()
+        .map_err(|values: Vec<u8>| D::Error::invalid_length(values.len(), &ExpectedLength(N)))?;
+    Ok(Box::new(array))
+}
+
 struct ExpectedLength(usize);
 
 impl serde::de::Expected for ExpectedLength {

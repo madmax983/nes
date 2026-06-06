@@ -142,7 +142,11 @@ pub struct PpuSnapshot {
     /// Whether CHR writes are allowed (CHR RAM mode).
     pub chr_writable: bool,
     /// CHR view used by the live background renderer.
-    pub live_chr: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_array::serialize_boxed_u8_array",
+        deserialize_with = "crate::serde_array::deserialize_boxed_u8_array"
+    )]
+    pub live_chr: Box<[u8; CHR_BYTES]>,
     /// Delayed live background CHR swaps waiting on the fetch pipeline.
     pending_live_chr_updates: VecDeque<PendingLiveChrWindowUpdate>,
     /// PPUCTRL shadow used by the live background renderer.
@@ -283,7 +287,11 @@ struct SpriteScanlineCache {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PendingLiveChrWindowUpdate {
     due_cycle_in_frame: u32,
-    chr: Vec<u8>,
+    #[serde(
+        serialize_with = "crate::serde_array::serialize_boxed_u8_array",
+        deserialize_with = "crate::serde_array::deserialize_boxed_u8_array"
+    )]
+    chr: Box<[u8; CHR_BYTES]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -388,7 +396,7 @@ impl Ppu {
             self.pending_live_chr_updates
                 .push_back(PendingLiveChrWindowUpdate {
                     due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
-                    chr: self.chr.to_vec(),
+                    chr: Box::new(self.chr),
                 });
         } else {
             *self.live_chr = self.chr;
@@ -513,7 +521,7 @@ impl Ppu {
             mirroring: self.mirroring,
             chr: self.chr,
             chr_writable: self.chr_writable,
-            live_chr: self.live_chr.to_vec(),
+            live_chr: self.live_chr.clone(),
             pending_live_chr_updates: self.pending_live_chr_updates.clone(),
             live_ctrl: self.live_ctrl,
             live_scroll_x: self.live_scroll_x,
@@ -893,9 +901,7 @@ impl Ppu {
             .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
         {
             let update = self.pending_live_chr_updates.pop_front().unwrap();
-            self.live_chr.fill(0);
-            let copy_len = update.chr.len().min(CHR_BYTES);
-            self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
+            self.live_chr = update.chr;
             applied = true;
         }
         if applied {
