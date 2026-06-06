@@ -68,8 +68,6 @@ where
         .map_err(|values: Vec<u8>| D::Error::invalid_length(values.len(), &ExpectedLength(N)))
 }
 
-
-
 /// Serializes a boxed fixed-size byte array `Box<[u8; N]>`.
 #[allow(clippy::borrowed_box)]
 pub fn serialize_boxed_u8_array<S, const N: usize>(
