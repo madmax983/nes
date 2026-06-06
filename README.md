@@ -1,5 +1,8 @@
 # NES Emulator (Proof-Forward + MCP-First)
 
+> **⚠️ IMPORTANT:** Experimental 'Nova' tools require compiling with `--features nova`.
+
+
 This repository hosts a Rust NES emulator workspace focused on systems learning, deterministic behavior, and strong correctness checks.
 
 ## Workspace
