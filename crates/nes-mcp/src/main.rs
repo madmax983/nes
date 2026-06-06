@@ -525,4 +525,19 @@ mod tests {
         let err = read_stdio_message(&mut reader).unwrap_err();
         assert!(err.to_string().contains("failed reading payload body"));
     }
+
+    #[test]
+    fn read_stdio_message_enforces_payload_limit() {
+        let exact_limit = 10 * 1024 * 1024;
+        let massive = exact_limit + 1;
+        let payload = format!("Content-Length: {}\r\n\r\n", massive);
+        let mut reader = payload.as_bytes();
+
+        let err = read_stdio_message(&mut reader).unwrap_err();
+        assert!(
+            err.to_string().contains("exceeds maximum allowed size"),
+            "Expected size limit error, got: {}",
+            err
+        );
+    }
 }
