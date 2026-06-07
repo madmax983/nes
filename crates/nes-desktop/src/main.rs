@@ -56,7 +56,21 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        if err.contains("Hint:") {
+            let parts: Vec<&str> = err.splitn(2, "\nHint:").collect();
+            if parts.len() == 2 {
+                eprintln!("\n{} {}\n{} {}",
+                    "Error:".with(crossterm::style::Color::Red).bold(),
+                    parts[0],
+                    "Hint:".with(crossterm::style::Color::Cyan).bold(),
+                    parts[1]
+                );
+            } else {
+                eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
+            }
+        } else {
+            eprintln!("\n{}", err);
+        }
     }
 }
 

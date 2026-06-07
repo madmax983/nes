@@ -4,7 +4,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use crossterm::style::Stylize;
 
 use serde::Deserialize;
 
@@ -182,10 +181,8 @@ impl NesConfig {
         let bytes = fs::read_to_string(path).map_err(|err| {
             if err.kind() == std::io::ErrorKind::NotFound {
                 format!(
-                    "{} failed to read config '{}': file not found.\n{} copy the example profile (e.g. cp nes.example.toml nes.toml)",
-                    "Error:".with(crossterm::style::Color::Red).bold(),
+                    "failed to read config '{}': file not found.\nHint: copy the example profile (e.g. cp nes.example.toml nes.toml)",
                     path.display(),
-                    "Hint:".with(crossterm::style::Color::Cyan).bold()
                 )
             } else {
                 format!("failed to read config '{}': {err}", path.display())
@@ -335,7 +332,7 @@ room = "arena"
         let path = temp_config_path("missing");
         let err = NesConfig::load(&path).expect_err("missing config should fail");
         assert!(err.contains("failed to read config"));
-        assert!(err.contains("copy the example profile"));
+        assert!(err.contains("Hint: copy the example profile"));
     }
 
     #[test]
@@ -343,7 +340,7 @@ room = "arena"
         let path = std::path::Path::new("."); // Reading a directory should cause IsADirectory or similar OS error
         let err = NesConfig::load(path).expect_err("loading a directory should fail");
         assert!(err.contains("failed to read config"));
-        assert!(!err.contains("copy the example profile"));
+        assert!(!err.contains("Hint: copy the example profile"));
     }
 
     #[test]
