@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2026-06-07 - ROM/TAS Parsing and Missing Edge Cases
+**Learning:** Adding test coverage for zero-frame TAS executions and parsing of less-common error code formats is essential for correctly validating NES emulators. `cargo llvm-cov` output provides the definitive report for what paths are missing coverage.
+**Action:** When inspecting code for test gaps, focus on error variants defined in Enums and edge-case behaviors (like a movie with a 0 frame length). Run `cargo llvm-cov` and parse the output JSON to systematically target uncovered line ranges.
