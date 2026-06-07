@@ -484,3 +484,34 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod mutant_tests_for_output {
+    use super::*;
+
+    #[test]
+    fn test_publish_frame_mutants() {
+        let _guard = reset_output_state_for_test();
+        let mut called = false;
+
+        // Tests the != with == mutant in publish_frame_with
+        publish_frame_with(256, 240, |buf| {
+            assert_eq!(buf.len(), 256 * 240 * 4);
+            called = true;
+        });
+        assert!(called);
+    }
+
+    #[test]
+    fn test_publish_audio_mutants() {
+        let _guard = reset_output_state_for_test();
+        let mut called = false;
+
+        // Tests the != with == mutant in publish_audio_with
+        publish_audio_with(100, |buf| {
+            assert_eq!(buf.len(), 100);
+            called = true;
+        });
+        assert!(called);
+    }
+}
