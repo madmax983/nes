@@ -148,13 +148,17 @@ pub struct Cpu {
     sp: u8,
     status: Status,
     memory: [u8; 0x1_0000],
+    /// Pre-allocated to avoid heap reallocations during execution cycles.
     writes: Vec<CpuWrite>,
+    /// Pre-allocated to avoid heap reallocations during execution cycles.
     prg_writes: Vec<CpuPrgWrite>,
     /// Addresses read by the CPU during the last instruction, used by the outer
     /// core to apply MMIO read side-effects ($2002, $2007, $4015–$4017).
     /// Always populated regardless of `trace_enabled`. Uses interior mutability
     /// so `read()` can push without requiring `&mut self`.
+    /// Pre-allocated to avoid heap reallocations during execution cycles.
     mmio_reads: RefCell<Vec<CpuMmioRead>>,
+    /// Pre-allocated to avoid heap reallocations during execution cycles.
     bus_trace: RefCell<Vec<CpuBusAccess>>,
     bus_cycle: Cell<u8>,
     /// When `false`, skips bus-trace recording and trace-string formatting.
@@ -182,10 +186,10 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
-            writes: Vec::new(),
-            prg_writes: Vec::new(),
-            mmio_reads: RefCell::new(Vec::new()),
-            bus_trace: RefCell::new(Vec::new()),
+            writes: Vec::with_capacity(32),
+            prg_writes: Vec::with_capacity(32),
+            mmio_reads: RefCell::new(Vec::with_capacity(8)),
+            bus_trace: RefCell::new(Vec::with_capacity(12)),
             bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }

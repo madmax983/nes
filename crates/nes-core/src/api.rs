@@ -567,8 +567,11 @@ pub struct NesCore {
     apu: Apu,
     pending_oam_dma_page: Option<u8>,
     last_cpu_trace: Option<String>,
+    /// Pre-allocated to avoid heap reallocations during trace collection on the hot path.
     last_cpu_bus_trace: Vec<CpuBusAccess>,
+    /// Pre-allocated to avoid heap reallocations when temporarily recording writes.
     scratch_writes: Vec<CpuWrite>,
+    /// Pre-allocated to avoid heap reallocations when temporarily recording reads.
     scratch_mmio_reads: Vec<CpuMmioRead>,
 }
 
@@ -617,15 +620,15 @@ impl NesCore {
             ppu: Ppu::new(),
             ports: ControllerPorts::default(),
             mapper: None,
-            cheat_codes: Vec::new(),
+            cheat_codes: Vec::with_capacity(8),
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
             apu: Apu::new(),
             pending_oam_dma_page: None,
             last_cpu_trace: None,
-            last_cpu_bus_trace: Vec::new(),
-            scratch_writes: Vec::new(),
-            scratch_mmio_reads: Vec::new(),
+            last_cpu_bus_trace: Vec::with_capacity(12),
+            scratch_writes: Vec::with_capacity(32),
+            scratch_mmio_reads: Vec::with_capacity(8),
         }
     }
 
