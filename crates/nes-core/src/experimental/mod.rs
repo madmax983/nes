@@ -35,6 +35,9 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Detects motion in the NES framebuffer by comparing consecutive frames.
+pub mod motion_detector;
+
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
