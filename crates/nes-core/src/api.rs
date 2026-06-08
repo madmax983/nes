@@ -620,7 +620,7 @@ impl NesCore {
             ppu: Ppu::new(),
             ports: ControllerPorts::default(),
             mapper: None,
-            cheat_codes: Vec::with_capacity(8),
+            cheat_codes: Vec::new(),
             reset_pc: DEFAULT_START_PC,
             cpu: Cpu::new(DEFAULT_START_PC),
             apu: Apu::new(),
@@ -2019,6 +2019,10 @@ mod tests {
     fn test_nescore_default() {
         let core = NesCore::default();
         assert!(core.mapper.is_none());
+        assert!(core.cheat_codes.is_empty());
+        assert!(core.last_cpu_bus_trace.is_empty());
+        assert!(core.scratch_writes.is_empty());
+        assert!(core.scratch_mmio_reads.is_empty());
     }
 
     #[test]
@@ -2029,6 +2033,9 @@ mod tests {
 
         let p_frame = core.query(CoreQuery::PpuFrameCounter);
         assert!(matches!(p_frame, QueryResult::PpuFrameCounter(_)));
+
+        assert_eq!(core.is_paused(), false);
+        assert_eq!(core.speed_permille(), 1000);
     }
 
     #[test]
