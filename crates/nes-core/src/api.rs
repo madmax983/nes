@@ -623,9 +623,11 @@ impl NesCore {
             apu: Apu::new(),
             pending_oam_dma_page: None,
             last_cpu_trace: None,
-            last_cpu_bus_trace: Vec::new(),
-            scratch_writes: Vec::new(),
-            scratch_mmio_reads: Vec::new(),
+            // ⚡ Bolt: Pre-allocate capacity for buffers to avoid repetitive small heap allocations
+            // in the hot path. These are cleared and re-used extensively per frame.
+            last_cpu_bus_trace: Vec::with_capacity(16),
+            scratch_writes: Vec::with_capacity(16),
+            scratch_mmio_reads: Vec::with_capacity(16),
         }
     }
 

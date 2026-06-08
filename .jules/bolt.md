@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Incompatible doc comment position]**
+**Learning:** Using `///` doc comments on fields inside a struct initialization block (e.g., inside `NesCore { ... }` or `Cpu { ... }`) results in `unused_doc_comments` warnings from clippy because rustdoc cannot generate documentation for expressions.
+**Action:** Always use standard `//` line comments instead of `///` when annotating individual fields inside struct instantiations.
