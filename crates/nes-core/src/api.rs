@@ -623,9 +623,10 @@ impl NesCore {
             apu: Apu::new(),
             pending_oam_dma_page: None,
             last_cpu_trace: None,
-            last_cpu_bus_trace: Vec::new(),
-            scratch_writes: Vec::new(),
-            scratch_mmio_reads: Vec::new(),
+            // Pre-allocate to avoid repeated allocations during first frames
+            last_cpu_bus_trace: Vec::with_capacity(16),
+            scratch_writes: Vec::with_capacity(16),
+            scratch_mmio_reads: Vec::with_capacity(16),
         }
     }
 
