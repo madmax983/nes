@@ -1,12 +1,17 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. **Optimize `Vec::new()` to `Vec::with_capacity()` in `nes-core/src/api.rs` and `nes-core/src/cpu/engine.rs`**
+   - The memory arrays like `writes`, `prg_writes`, `mmio_reads`, and `bus_trace` are used as temporary buffers inside hot execution loops and are continuously swapped and cleared via `std::mem::swap`.
+   - In `Cpu::new` (in `crates/nes-core/src/cpu/engine.rs`) and `NesCore::new` (in `crates/nes-core/src/api.rs`), these vectors are instantiated using `Vec::new()`, which allocates 0 capacity initially.
+   - When the emulation starts, and for the first few instructions, pushing to these vectors incurs multiple reallocations on the heap until the vectors naturally grow to their steady-state capacity.
+   - The optimization is to change these `Vec::new()` calls to `Vec::with_capacity(N)` in the constructors, avoiding the upfront allocations and keeping memory allocations strictly zero at runtime.
+   - We will use `Vec::with_capacity(4)` or similar small numbers for the writes/reads since an instruction typically does not perform many writes/reads.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+2. **Verify Performance Improvement**
+   - Run tests to make sure there are no regressions.
+   - Ensure the code passes `cargo clippy`, `cargo fmt`, and `cargo test`.
+   - Add journal entries if needed.
 
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+3. **Complete pre-commit steps**
+   - Run the pre commit instructions and check logic.
 
-4. **Submit the PR**
+4. **Submit PR**
+   - Submit PR with title "⚡ Bolt: [Zero-cost allocation optimization for Cpu buffers]"

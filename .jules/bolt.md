@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Avoid `Vec::new()` Allocation Penalty on Swapped Temporary Buffers]**
+**Learning:** Initializing `Vec::new()` for buffers (`writes`, `prg_writes`, `mmio_reads`, `bus_trace`) inside the CPU engine and core APIs that are continuously swapped and cleared forces repeated heap reallocations during the first few frames until the capacity naturally stabilizes.
+**Action:** Use `Vec::with_capacity(16)` (or a suitable small boundary) for these initialization paths to ensure that the swap-and-clear pattern operates with zero allocations on the hot execution path right from the very first frame.

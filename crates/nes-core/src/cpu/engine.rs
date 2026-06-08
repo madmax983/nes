@@ -182,10 +182,12 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
-            writes: Vec::new(),
-            prg_writes: Vec::new(),
-            mmio_reads: RefCell::new(Vec::new()),
-            bus_trace: RefCell::new(Vec::new()),
+            // ⚡ Bolt Optimization: Pre-allocate hot-path swap buffers to prevent initial heap
+            // reallocations during the first few frames before vector capacity naturally stabilizes.
+            writes: Vec::with_capacity(16),
+            prg_writes: Vec::with_capacity(16),
+            mmio_reads: RefCell::new(Vec::with_capacity(16)),
+            bus_trace: RefCell::new(Vec::with_capacity(16)),
             bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }
