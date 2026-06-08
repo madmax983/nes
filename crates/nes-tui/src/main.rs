@@ -800,8 +800,8 @@ fn fit_nes_viewport(area: Rect) -> Option<VideoViewport> {
     })
 }
 
-fn usage_line() -> &'static str {
-    "Usage: nes-tui [--config <path>] [--hud|--high-res] [rom_path]"
+fn usage_line() -> String {
+    format!("{} nes-tui [--config <path>] [--hud|--high-res] [rom_path]", "Usage:".with(crossterm::style::Color::Cyan).bold())
 }
 
 fn usage_message() -> String {
@@ -1108,16 +1108,13 @@ mod tests {
 
     #[test]
     fn usage_line_matches_cli_contract() {
-        assert_eq!(
-            usage_line(),
-            "Usage: nes-tui [--config <path>] [--hud|--high-res] [rom_path]"
-        );
+        assert!(usage_line().contains("nes-tui [--config <path>] [--hud|--high-res] [rom_path]"));
     }
 
     #[test]
     fn usage_message_includes_usage_line_and_default_path() {
         let message = usage_message();
-        assert!(message.contains(usage_line()));
+        assert!(message.contains(&usage_line()));
         assert!(message.contains("Default config path:"));
     }
 

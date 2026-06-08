@@ -26,18 +26,19 @@ fn run() -> Result<(), String> {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!(
-                    "Usage: build_homebrew_rom [--out <path>]\nDefault output: {}",
+                    "{} build_homebrew_rom [--out <path>]\nDefault output: {}",
+                    "Usage:".with(Color::Cyan).bold(),
                     out_path.display()
                 );
                 return Ok(());
             }
             "--out" => {
                 let Some(path) = args.next() else {
-                    return Err("missing value after --out".to_owned());
+                    return Err(format!("{} missing value after --out", "Error:".with(Color::Red).bold()));
                 };
                 out_path = PathBuf::from(path);
             }
-            _ => return Err(format!("unknown argument '{arg}'")),
+            _ => return Err(format!("{} unknown argument '{arg}'", "Error:".with(Color::Red).bold())),
         }
     }
 

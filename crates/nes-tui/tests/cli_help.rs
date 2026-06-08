@@ -12,6 +12,6 @@ fn help_flag_prints_usage_and_default_config_path() {
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Usage: nes-tui"));
+    assert!(stderr.contains("nes-tui [--config <path>]"));
     assert!(stderr.contains("Default config path:"));
 }

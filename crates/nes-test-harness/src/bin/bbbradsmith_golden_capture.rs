@@ -102,7 +102,7 @@ fn main() {
 fn run(stdout: &mut impl Write) -> Result<(), String> {
     let raw_args = env::args().skip(1).collect::<Vec<_>>();
     if raw_args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        println!("Usage: bbbradsmith_golden_capture [--config <path>] [--force]");
+        println!("{} bbbradsmith_golden_capture [--config <path>] [--force]", "Usage:".with(Color::Cyan).bold());
         std::process::exit(0);
     }
 
@@ -111,7 +111,8 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     for arg in &pass_through {
         if arg != "--force" {
             return Err(format!(
-                "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
+                "{} unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force",
+                "Error:".with(Color::Red).bold()
             ));
         }
     }

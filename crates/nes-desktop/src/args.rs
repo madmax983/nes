@@ -1,7 +1,10 @@
+use crossterm::style::{Color, Stylize};
 use nes_config::DEFAULT_CONFIG_PATH;
 
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
-pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
+pub fn runtime_usage() -> String {
+    format!("{} nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]", "Usage:".with(Color::Cyan).bold())
+}
 
 /// Defines the configuration used by the desktop runtime.
 ///
@@ -86,7 +89,8 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
             return Err(format!(
-                "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "{}\nDefault config path: {DEFAULT_CONFIG_PATH}",
+                runtime_usage()
             ));
         }
 
@@ -129,7 +133,7 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             continue;
         }
         if arg.starts_with("--") {
-            return Err(format!("unknown flag: {arg}"));
+        return Err(format!("{} unknown flag: {arg}", "Error:".with(Color::Red).bold()));
         }
         if let Some(path) = &parsed.rom_path {
             return Err(format!("multiple ROM paths provided: {} and {}", path, arg));
@@ -474,7 +478,7 @@ mod tests {
     fn parse_runtime_args_help_and_validation_paths() {
         let help = parse_runtime_args_with_timeout(vec!["--help".to_owned()])
             .expect_err("help returns usage");
-        assert!(help.contains("Usage: nes-desktop"));
+        assert!(help.contains("nes-desktop [--config <path>]"));
         assert!(help.contains("Default config path"));
         assert!(help.contains("--cheat-code <code>"));
 

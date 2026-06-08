@@ -1,3 +1,5 @@
+use crossterm::style::{Color, Stylize};
+
 /// Configures simulated network degradation for testing netcode resilience.
 ///
 /// This struct allows you to inject artificial latency, jitter, packet loss, and reordering
@@ -79,7 +81,7 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     while idx < args.len() {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
-            return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
+            return Err(format!("{} nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545", "Usage:".with(Color::Cyan).bold()));
         }
 
         if parse_arg(&args, &mut idx, "--bind", |value| {
@@ -118,7 +120,9 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
         }
 
         return Err(format!(
-            "unknown argument '{arg}'. Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]"
+            "{} unknown argument '{arg}'. {} nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]",
+            "Error:".with(Color::Red).bold(),
+            "Usage:".with(Color::Cyan).bold()
         ));
     }
     Ok(parsed)
