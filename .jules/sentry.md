@@ -25,3 +25,7 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+
+## 2026-06-08 - Edge Cases in PPM Encoding Large Dimensions
+**Learning:** Checking for dimensions overflow needs to account for values that might be within `usize` limit for `width * height` but exceed when multiplied by `4` bytes per pixel. Also, extremely large values of `width` alone can overflow during `width.checked_mul(height)`.
+**Action:** Added a test targeting `encode_ppm(usize::MAX, 1, &[])` to verify the early-exit condition effectively catches this dimension edge case.
