@@ -861,6 +861,7 @@ fn resolve_rom_path() -> Result<(String, Option<PathBuf>, TuiCliOptions), String
         .or_else(|| config.desktop.rom_path.clone())
         .or_else(|| config.roms.smb.clone())
         .ok_or_else(|| {
+            use crossterm::style::Stylize;
             format!("{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}.",
                 "Error:".with(crossterm::style::Color::Red).bold(),
                 "Hint:".with(crossterm::style::Color::Cyan).bold())

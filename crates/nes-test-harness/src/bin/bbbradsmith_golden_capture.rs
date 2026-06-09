@@ -118,10 +118,18 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite".to_owned()
+        format!(
+            "{} Missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite.\n{} Add this path to your nes.toml.",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output".to_owned()
+        format!(
+            "{} Missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output.\n{} Add this path to your nes.toml.",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
