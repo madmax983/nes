@@ -2,7 +2,7 @@ use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
-use nes_desktop::mcp_host::{McpHost, read_framed_message};
+use nes_desktop::mcp_host::{McpHost, read_framed_message_into};
 
 #[test]
 fn havoc_mcp_slowloris_dos() {
@@ -41,7 +41,8 @@ fn havoc_mcp_slowloris_dos() {
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
-    let response = read_framed_message(&mut reader2)
+    let mut response = Vec::new();
+    read_framed_message_into(&mut reader2, &mut response)
         .expect("should read response")
         .expect("response should not be empty");
 

@@ -1,13 +1,13 @@
 #[cfg(feature = "mcp-host")]
 #[test]
 fn havoc_mcp_host_oom() {
-    use nes_desktop::mcp_host::read_framed_message;
+    use nes_desktop::mcp_host::read_framed_message_into;
     use std::io::BufReader;
 
     // usize::MAX string representation
     let input = b"Content-Length: 18446744073709551615\r\n\r\n";
     let mut reader = BufReader::new(&input[..]);
-    let result = read_framed_message(&mut reader);
+    let result = read_framed_message_into(&mut reader, &mut Vec::new());
 
     assert!(
         result.is_err(),

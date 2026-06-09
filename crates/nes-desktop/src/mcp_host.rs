@@ -173,7 +173,8 @@ fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Res
             .map_err(|err| format!("failed to clone client socket: {err}"))?,
     );
 
-    while let Some(payload) = read_framed_message(&mut reader)? {
+    let mut payload = Vec::new();
+    while let Some(()) = read_framed_message_into(&mut reader, &mut payload)? {
         let Some(response) = handle_message(&payload, request_tx) else {
             continue;
         };
@@ -354,6 +355,14 @@ fn handle_tools_call(
 /// assert_eq!(result.unwrap(), b"{\"key\":\"val\"}");
 /// ```
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
+    let mut payload = Vec::new();
+    read_framed_message_into(reader, &mut payload).map(|opt| opt.map(|_| payload))
+}
+
+pub fn read_framed_message_into(
+    reader: &mut impl BufRead,
+    payload: &mut Vec<u8>,
+) -> Result<Option<()>, String> {
     let mut content_length = None::<usize>;
     let mut line = String::new();
 
@@ -390,11 +399,11 @@ pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>,
         ));
     }
 
-    let mut payload = vec![0_u8; len];
+    payload.resize(len, 0);
     reader
-        .read_exact(&mut payload)
+        .read_exact(payload)
         .map_err(|err| format!("failed reading payload body: {err}"))?;
-    Ok(Some(payload))
+    Ok(Some(()))
 }
 
 /// Writes a framed JSON-RPC message to the provided writer.

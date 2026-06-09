@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**Eliminating allocation churn on framed streams**
+**Learning:** In Rust, passing `&mut Vec::new()` as an out-parameter to a function provides a mutable temporary buffer but discards the data after the statement completes. To retain and use the populated data subsequently, instantiate the vector in a separate binding (e.g., `let mut buffer = Vec::new();`) before passing its mutable reference. Additionally, using `payload.resize(len, 0)` followed by `read_exact` avoids repeated allocations on hot loops compared to `vec![0_u8; len]`.
+**Action:** Always hoist receive buffers out of hot processing loops and pass them in via mutable reference (`&mut Vec<u8>`).
