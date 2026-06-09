@@ -1228,4 +1228,24 @@ mod tests {
         assert_eq!(dmc.bytes_remaining, 0);
         assert!(dmc.irq_pending, "finishing the sample should latch DMC IRQ");
     }
+
+    // Added by Sentry
+
+    #[test]
+    fn soft_limit_sample_compresses_extreme_values() {
+        assert_eq!(soft_limit_sample(1000), 1000);
+        assert_eq!(soft_limit_sample(-1000), -1000);
+        assert_eq!(soft_limit_sample(SOFT_CLIP_KNEE), SOFT_CLIP_KNEE);
+        assert_eq!(soft_limit_sample(-SOFT_CLIP_KNEE), -SOFT_CLIP_KNEE);
+
+        let expected_compressed = SOFT_CLIP_KNEE + (32768 >> SOFT_CLIP_RATIO_SHIFT);
+        assert_eq!(
+            soft_limit_sample(SOFT_CLIP_KNEE + 32768),
+            expected_compressed
+        );
+        assert_eq!(
+            soft_limit_sample(-(SOFT_CLIP_KNEE + 32768)),
+            -expected_compressed
+        );
+    }
 }

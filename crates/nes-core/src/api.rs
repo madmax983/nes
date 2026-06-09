@@ -2221,4 +2221,89 @@ mod tests_rom_loader_internal {
             CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
         ));
     }
+
+    // Added by Sentry
+
+    #[test]
+    fn controller_ports_handles_strobe_and_shifting() {
+        let mut ports = ControllerPorts {
+            controller_strobe: false,
+            ..Default::default()
+        };
+
+        ports.controller_strobe = false;
+        ports.set_controller_bits(0b1100_1010, Player::One);
+        assert_eq!(ports.controllers[0].bits, 0b1100_1010);
+        assert_eq!(ports.controllers[0].shift, 0);
+
+        ports.write_controller_strobe(1);
+        assert!(ports.controller_strobe);
+        ports.set_controller_bits(0b0101_0101, Player::Two);
+        assert_eq!(ports.controllers[1].bits, 0b0101_0101);
+        assert_eq!(ports.controllers[1].shift, 0b0101_0101);
+
+        assert_eq!(ports.controller_port_sample(Player::Two) & 1, 1);
+        ports.consume_controller_read(Player::Two); // shouldn't shift
+        assert_eq!(ports.controllers[1].shift, 0b0101_0101);
+
+        ports.write_controller_strobe(0);
+        assert!(!ports.controller_strobe);
+
+        ports.consume_controller_read(Player::Two);
+        assert_eq!(ports.controllers[1].shift, 0b1010_1010);
+
+        assert_eq!(ports.controller_port_sample(Player::Two) & 1, 0);
+        ports.consume_controller_read(Player::Two);
+        assert_eq!(ports.controllers[1].shift, 0b1101_0101);
+    }
+
+    #[test]
+    fn loaded_mapper_irq_pending() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert!(!mapper.irq_pending());
+
+        let mmc1 = Mmc1::from_prg_rom(vec![0; 16 * 1024], 0);
+        let mapper = LoadedMapper::Mmc1(mmc1);
+        assert!(!mapper.irq_pending());
+
+        let uxrom = Uxrom::from_prg_rom(vec![0; 16 * 1024]);
+        let mapper = LoadedMapper::Uxrom(uxrom);
+        assert!(!mapper.irq_pending());
+
+        let axrom = Axrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Axrom(axrom);
+        assert!(!mapper.irq_pending());
+
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Gxrom(gxrom);
+        assert!(!mapper.irq_pending());
+
+        let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Cnrom(cnrom);
+        assert!(!mapper.irq_pending());
+    }
+
+    #[test]
+    fn loaded_mapper_mirroring_override() {
+        let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Nrom(nrom);
+        assert_eq!(mapper.mirroring_override(), None);
+
+        let mmc1 = Mmc1::from_prg_rom(vec![0; 16 * 1024], 0);
+        let mapper = LoadedMapper::Mmc1(mmc1);
+        assert_eq!(mapper.mirroring_override(), None);
+
+        let uxrom = Uxrom::from_prg_rom(vec![0; 16 * 1024]);
+        let mapper = LoadedMapper::Uxrom(uxrom);
+        assert_eq!(mapper.mirroring_override(), None);
+
+        let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Cnrom(cnrom);
+        assert_eq!(mapper.mirroring_override(), None);
+
+        let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Gxrom(gxrom);
+        assert_eq!(mapper.mirroring_override(), None);
+    }
 }

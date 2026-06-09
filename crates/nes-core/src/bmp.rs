@@ -176,4 +176,15 @@ mod tests {
         let err = encode_bmp(2, 1, &[1, 2, 3, 255]).unwrap_err();
         assert_eq!(err, "rgba buffer length does not match dimensions");
     }
+
+    // Added by Sentry
+
+    #[test]
+    fn encode_bmp_dimension_overflows() {
+        let rgba: &[u8] = &[];
+        assert_eq!(
+            encode_bmp(usize::MAX, usize::MAX, rgba).unwrap_err(),
+            "bmp dimensions overflow"
+        );
+    }
 }

@@ -397,4 +397,37 @@ mod tests {
             Status::OVERFLOW_BIT | Status::DECIMAL_BIT | Status::UNUSED_BIT | Status::BREAK_BIT
         );
     }
+
+    // Added by Sentry
+
+    #[test]
+    fn bit_getter_and_overflow() {
+        let status = Status::with_bits(Status::OVERFLOW_BIT);
+        assert_eq!(status.bits(), Status::OVERFLOW_BIT);
+        assert!(status.overflow());
+        assert!(!status.carry());
+
+        let status2 = Status::with_bits(0);
+        assert!(!status2.overflow());
+    }
+
+    #[test]
+    fn interrupt_disable_flag() {
+        let mut status = Status::with_bits(Status::INTERRUPT_DISABLE_BIT);
+        assert!(status.interrupt_disable());
+        status.set_interrupt_disable(false);
+        assert!(!status.interrupt_disable());
+    }
+
+    #[test]
+    fn restore_from_stack_clears_break_and_sets_unused() {
+        let mut status = Status::default();
+        status.restore_from_stack(0xFF);
+        let expected = !Status::BREAK_BIT | Status::UNUSED_BIT;
+        assert_eq!(status.bits(), expected);
+
+        status.restore_from_stack(0x00);
+        let expected2 = Status::UNUSED_BIT;
+        assert_eq!(status.bits(), expected2);
+    }
 }

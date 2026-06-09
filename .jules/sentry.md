@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-05-24 - [API Controller Coverage]
+**Learning:** `api.rs` logic surrounding the `ControllerPorts` components, including the internal shift registers and strobe edge cases, was previously untested and prone to silently failing or breaking macros if the controller data representation shifted.
+**Action:** When tracking emulator controller internals, verify that strobe writes immediately copy the state into the internal shift register instead of ignoring it, and ensure controller reads cycle the shift register appropriately.

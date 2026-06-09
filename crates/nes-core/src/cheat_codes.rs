@@ -400,4 +400,12 @@ mod tests {
         // compare = 0x70 | 0x80 | 0x07 | 0x08 = 0xFF
         assert_eq!(code_n7_n6_n5.compare(), Some(0xFF));
     }
+
+    // Added by Sentry
+
+    #[test]
+    fn alphabet_digit_invalid() {
+        assert_eq!(alphabet_digit('1'), None);
+        assert_eq!(alphabet_digit(' '), None);
+    }
 }
