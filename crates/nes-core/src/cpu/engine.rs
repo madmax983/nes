@@ -182,10 +182,12 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
-            writes: Vec::new(),
-            prg_writes: Vec::new(),
-            mmio_reads: RefCell::new(Vec::new()),
-            bus_trace: RefCell::new(Vec::new()),
+            // Pre-allocate temporary buffers to avoid multiple heap reallocations
+            // and latency spikes during initial frames before capacity stabilizes.
+            writes: Vec::with_capacity(64),
+            prg_writes: Vec::with_capacity(64),
+            mmio_reads: RefCell::new(Vec::with_capacity(64)),
+            bus_trace: RefCell::new(Vec::with_capacity(64)),
             bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }
@@ -2960,5 +2962,31 @@ mod tests_format {
             format_args!("{}", long),
         );
         assert!(out2.contains(long));
+    }
+}
+
+#[cfg(test)]
+mod tests_bolt {
+    use super::*;
+
+    #[test]
+    fn test_cpu_vector_capacities() {
+        let cpu = Cpu::new(0x0000);
+        assert!(
+            cpu.writes.capacity() >= 64,
+            "writes vector should be pre-allocated"
+        );
+        assert!(
+            cpu.prg_writes.capacity() >= 64,
+            "prg_writes vector should be pre-allocated"
+        );
+        assert!(
+            cpu.mmio_reads.borrow().capacity() >= 64,
+            "mmio_reads vector should be pre-allocated"
+        );
+        assert!(
+            cpu.bus_trace.borrow().capacity() >= 64,
+            "bus_trace vector should be pre-allocated"
+        );
     }
 }

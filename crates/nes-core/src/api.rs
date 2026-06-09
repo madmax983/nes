@@ -623,9 +623,11 @@ impl NesCore {
             apu: Apu::new(),
             pending_oam_dma_page: None,
             last_cpu_trace: None,
-            last_cpu_bus_trace: Vec::new(),
-            scratch_writes: Vec::new(),
-            scratch_mmio_reads: Vec::new(),
+            // Pre-allocate temporary buffers to avoid multiple heap reallocations
+            // and latency spikes during initial frames before capacity stabilizes.
+            last_cpu_bus_trace: Vec::with_capacity(64),
+            scratch_writes: Vec::with_capacity(64),
+            scratch_mmio_reads: Vec::with_capacity(64),
         }
     }
 
@@ -2220,5 +2222,27 @@ mod tests_rom_loader_internal {
             err,
             CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests_bolt_api {
+    use super::*;
+
+    #[test]
+    fn test_api_vector_capacities() {
+        let core = NesCore::new();
+        assert!(
+            core.scratch_writes.capacity() >= 64,
+            "scratch_writes vector should be pre-allocated"
+        );
+        assert!(
+            core.scratch_mmio_reads.capacity() >= 64,
+            "scratch_mmio_reads vector should be pre-allocated"
+        );
+        assert!(
+            core.last_cpu_bus_trace.capacity() >= 64,
+            "last_cpu_bus_trace vector should be pre-allocated"
+        );
     }
 }
