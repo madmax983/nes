@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Struct Extraction context lifetimes]
+**Learning:** Extracting large loop bodies into functions with 15 arguments is an anti-pattern. Instead, define a temporary Context struct containing mutable references to locals (e.g. `struct StepContext<'a> { core: &'a mut NesCore, ... }`).
+**Action:** Use context structs to group variables and pass a single `&mut Context` to extracted functions, safely satisfying the borrow checker while vastly improving readability.
