@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Pre-allocated Vector Buffers for Temporary Hot Paths]**
+**Learning:** Temporary vectors that are cleared and reused every frame (like `writes`, `mmio_reads`, and `bus_trace` during core execution) suffer from unnecessary heap reallocations during the initial frames if initialized with `Vec::new()`.
+**Action:** Initialize hot path temporary vectors with a small initial capacity (e.g., `Vec::with_capacity(8)`) so that initial insertions do not trigger multiple slow reallocations.
