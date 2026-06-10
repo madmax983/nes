@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Avoid Heap Allocation and Copies when Reading RPC Messages**
+**Learning:** `Vec::new()` followed by an exact allocation to receive JSON-RPC payloads was slow because `read_exact(&mut payload)` required allocating an entirely new vector on every incoming message.
+**Action:** In highly frequently called code, specifically hot paths involving reading framed payload from a socket/stdio, passing a `&mut Vec<u8>` and reusing `resize` drastically reduces heap allocations and significantly increases throughput.

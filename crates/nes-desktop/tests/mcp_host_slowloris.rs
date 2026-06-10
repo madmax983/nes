@@ -41,9 +41,9 @@ fn havoc_mcp_slowloris_dos() {
     let mut reader2 = BufReader::new(stream2);
 
     let start = Instant::now();
-    let response = read_framed_message(&mut reader2)
-        .expect("should read response")
-        .expect("response should not be empty");
+    let mut payload = Vec::new();
+    let success = read_framed_message(&mut reader2, &mut payload).expect("should read response");
+    assert!(success, "response should not be empty");
 
     let elapsed = start.elapsed();
     assert!(
@@ -51,6 +51,6 @@ fn havoc_mcp_slowloris_dos() {
         "Second client blocked waiting for first client!"
     );
 
-    let value: serde_json::Value = serde_json::from_slice(&response).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&payload).unwrap();
     assert_eq!(value["result"], serde_json::json!({}));
 }
