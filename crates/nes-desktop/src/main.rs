@@ -3,19 +3,19 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+pub(crate) mod app_context;
 #[cfg(feature = "nova")]
 mod auto_player;
 pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
+pub(crate) mod main_helpers;
 pub(crate) mod metrics;
 mod netplay;
 pub(crate) mod session;
-pub(crate) mod app_context;
-pub(crate) mod main_helpers;
 use crate::app_context::{AppContext, dispatch_app_action, resync_restored_inputs};
-use crate::main_helpers::{apply_gamepad_delta_commands, slot_action_for_hotkey};
 use crate::config::*;
+use crate::main_helpers::{apply_gamepad_delta_commands, slot_action_for_hotkey};
 use crate::metrics::PerfMetrics;
 use crate::session::*;
 
@@ -63,8 +63,6 @@ fn main() {
     }
 }
 
-
-
 fn apply_overlay_keyboard_input(
     overlay: &mut OverlayModel,
     key: VirtualKeyCode,
@@ -74,8 +72,6 @@ fn apply_overlay_keyboard_input(
 ) -> Option<OverlayCommand> {
     overlay.handle_key(key, pressed, cheat_count)
 }
-
-
 
 fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
     pressed
@@ -152,21 +148,15 @@ fn sync_native_menu_state(
     set_enabled(AppAction::Quit);
 }
 
-
-
-
-
-
-
-
-
 fn dispatch_overlay_command(
     command: OverlayCommand,
     ctx: &mut crate::app_context::AppContext<'_>,
     control_flow: &mut ControlFlow,
 ) -> bool {
     match command {
-        OverlayCommand::AppAction(action) => crate::app_context::dispatch_app_action(action, ctx, control_flow),
+        OverlayCommand::AppAction(action) => {
+            crate::app_context::dispatch_app_action(action, ctx, control_flow)
+        }
         OverlayCommand::ToggleCheat(index) => {
             let Some(raw_code) = ctx
                 .session_cheats
@@ -240,10 +230,6 @@ fn dispatch_overlay_command(
     }
 }
 
-
-
-
-
 fn command_marks_rta_invalidation(command: Command) -> Option<ForbiddenAction> {
     match command {
         Command::StepCpu | Command::StepScanline | Command::StepFrame => {
@@ -279,8 +265,6 @@ fn should_resume_after_rewind_hold(held: bool) -> bool {
     !held
 }
 
-
-
 fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
     if let Some(key_code) = map_virtual_keycode(key)
         && let Some(mask) = map_key_event_to_button_bit(key_code)
@@ -288,8 +272,6 @@ fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits
         *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
     }
 }
-
-
 
 fn is_player_two_slot(player_index: usize) -> bool {
     player_index == 1
@@ -326,8 +308,6 @@ fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
         current & !mask
     }
 }
-
-
 
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
@@ -1259,13 +1239,12 @@ mod tests {
         element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
         gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
         menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay,
+        recommended_input_delay_frames, rom_picker_supported, scaled_window_dimensions,
+        select_active_gamepad_ids, should_capture_frame, should_log_rollback,
+        should_resume_after_rewind_hold, should_trace_frame, should_update_input_delay,
         track_keyboard_bits_for_key, update_button_bits, write_frame_ppm,
     };
-    use crate::app_context::{validate_action_allowed, resync_restored_inputs};
+    use crate::app_context::resync_restored_inputs;
     use crate::main_helpers::{reconcile_core_pause_with_overlay, slot_action_for_hotkey};
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};

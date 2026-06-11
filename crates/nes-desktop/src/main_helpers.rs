@@ -1,13 +1,16 @@
-use nes_desktop::audio::AudioOutput;
-use nes_desktop::overlay::OverlayModel;
+use crate::gamepad::controller_state_delta_for_player;
 use crate::session::LoadedRomSession;
 use crate::session::window_title;
-use crate::gamepad::controller_state_delta_for_player;
 use nes_core::{Command, NesCore};
-use winit::window::Window;
 use nes_desktop::actions::AppAction;
+use nes_desktop::audio::AudioOutput;
+use nes_desktop::overlay::OverlayModel;
+use winit::window::Window;
 
-pub(crate) fn reconcile_core_pause_with_overlay(core: &mut NesCore, overlay_open: bool) -> Result<(), String> {
+pub(crate) fn reconcile_core_pause_with_overlay(
+    core: &mut NesCore,
+    overlay_open: bool,
+) -> Result<(), String> {
     let command = if overlay_open {
         Command::Pause
     } else {

@@ -1,20 +1,23 @@
 use crate::config::RuntimeConfig;
+use crate::main_helpers::{reconcile_core_pause_with_overlay, set_overlay_open};
 use crate::metrics::PerfMetrics;
-use crate::session::{LoadedRomSession, refresh_slot_metadata, slot_path_for_selection, window_title, load_rom_session};
+use crate::session::apply_session_cheats;
+use crate::session::{
+    LoadedRomSession, load_rom_session, refresh_slot_metadata, slot_path_for_selection,
+    window_title,
+};
+use nes_core::{Command, NesCore};
 use nes_desktop::actions::AppAction;
 use nes_desktop::audio::AudioOutput;
 use nes_desktop::manual_state::{load_state_file, save_state_file};
-use nes_desktop::menu::{rom_picker_supported, pick_rom_path};
+use nes_desktop::menu::{pick_rom_path, rom_picker_supported};
 use nes_desktop::overlay::OverlayModel;
 use nes_desktop::rta::{ForbiddenAction, RtaManager};
 use nes_desktop::session_cheats::SessionCheats;
-use nes_core::{Command, NesCore};
 use nes_rewind::worker::{TimeMachine, TimeMachineConfig};
 use std::time::Instant;
-use winit::window::Window;
 use winit::event_loop::ControlFlow;
-use crate::main_helpers::{set_overlay_open, reconcile_core_pause_with_overlay};
-use crate::session::apply_session_cheats;
+use winit::window::Window;
 
 pub(crate) struct AppContext<'a> {
     pub core: &'a mut NesCore,
@@ -34,7 +37,10 @@ pub(crate) struct AppContext<'a> {
     pub frame_index: u64,
 }
 
-pub(crate) fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<(), String> {
+pub(crate) fn validate_action_allowed(
+    action: AppAction,
+    rollback_enabled: bool,
+) -> Result<(), String> {
     if rollback_enabled
         && matches!(
             action,
@@ -91,7 +97,10 @@ pub(crate) fn resync_restored_inputs(
     crate::main_helpers::apply_gamepad_delta_commands(core, 0, keyboard_bits, nes_core::Player::One)
 }
 
-pub(crate) fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<bool, String> {
+pub(crate) fn execute_app_action(
+    action: AppAction,
+    ctx: &mut AppContext<'_>,
+) -> Result<bool, String> {
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
     match action {
