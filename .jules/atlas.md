@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Extract AppContext from main.rs**
+**Tangle:** The `main.rs` file in `nes-desktop` was bloated, primarily due to the `AppContext` struct and large helper functions like `dispatch_app_action`, `execute_app_action`, and `reset_ephemeral_state` handling high-level application events directly within the main module.
+**Blueprint:** Extracted the `AppContext` struct and its directly related application action routing methods into a new `app_context.rs` internal module. General helper functions such as `reconcile_core_pause_with_overlay`, `set_overlay_open`, and input resync logic were extracted to `main_helpers.rs` to break up the 2000+ line monolith. `main.rs` now properly defers to these modules.
