@@ -182,10 +182,14 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
-            writes: Vec::new(),
-            prg_writes: Vec::new(),
-            mmio_reads: RefCell::new(Vec::new()),
-            bus_trace: RefCell::new(Vec::new()),
+            // Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+            writes: Vec::with_capacity(32),
+            // Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+            prg_writes: Vec::with_capacity(32),
+            // Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+            mmio_reads: RefCell::new(Vec::with_capacity(32)),
+            // Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+            bus_trace: RefCell::new(Vec::with_capacity(32)),
             bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }
@@ -2960,5 +2964,31 @@ mod tests_format {
             format_args!("{}", long),
         );
         assert!(out2.contains(long));
+    }
+}
+
+#[cfg(test)]
+mod tests_bolt {
+    use super::*;
+
+    #[test]
+    fn test_cpu_buffers_preallocated() {
+        let cpu = Cpu::new(0x0000);
+        assert!(
+            cpu.writes.capacity() >= 8,
+            "writes vector must be pre-allocated"
+        );
+        assert!(
+            cpu.prg_writes.capacity() >= 8,
+            "prg_writes vector must be pre-allocated"
+        );
+        assert!(
+            cpu.mmio_reads.borrow().capacity() >= 8,
+            "mmio_reads vector must be pre-allocated"
+        );
+        assert!(
+            cpu.bus_trace.borrow().capacity() >= 8,
+            "bus_trace vector must be pre-allocated"
+        );
     }
 }

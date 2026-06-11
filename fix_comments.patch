@@ -1,0 +1,30 @@
+--- crates/nes-core/src/api.rs
++++ crates/nes-core/src/api.rs
+@@ -623,8 +623,11 @@
+             apu: Apu::new(),
+             pending_oam_dma_page: None,
+             last_cpu_trace: None,
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations when starting execution or capturing data.
+             last_cpu_bus_trace: Vec::with_capacity(32),
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations when starting execution or capturing data.
+             scratch_writes: Vec::with_capacity(32),
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations when starting execution or capturing data.
+             scratch_mmio_reads: Vec::with_capacity(32),
+         }
+     }
+--- crates/nes-core/src/cpu/engine.rs
++++ crates/nes-core/src/cpu/engine.rs
+@@ -182,9 +182,13 @@
+             sp: 0xFD,
+             status: Status::with_bits(0x24),
+             memory: [0; 0x1_0000],
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+             writes: Vec::with_capacity(32),
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+             prg_writes: Vec::with_capacity(32),
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+             mmio_reads: RefCell::new(Vec::with_capacity(32)),
++            /// Performance optimization: Pre-allocate hot path buffers to prevent multiple heap reallocations during frame starts or execution tracing.
+             bus_trace: RefCell::new(Vec::with_capacity(32)),
+             bus_cycle: Cell::new(0),
+             trace_enabled: cfg!(debug_assertions),

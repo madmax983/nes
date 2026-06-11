@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Pre-allocate Core Simulation Hot Path Buffers**
+**Learning:** Instantiating temporary buffer vectors via `Vec::new()` without explicit capacity creates rapid, multiple heap reallocations during the first few frames of initialization until vectors reach a stable internal capacity (typically small values <32 elements like `writes`, `prg_writes`, and `mmio_reads`). This overhead happens synchronously within the execution hot path.
+**Action:** Replace `Vec::new()` with `Vec::with_capacity(32)` inside the instantiation methods for CPU (`engine.rs`) and outer `NesCore` APIs to provide a stable, zero-allocation environment during steady-state `clear-and-swap` buffer reuse routines.
