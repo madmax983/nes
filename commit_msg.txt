@@ -1,0 +1,7 @@
+🗣️ Echo: README commands fail on Linux/macOS terminals
+
+🤦 **The Confusion:** Tried to run the AI Control Training and web build commands from `README.md` by copy-pasting them into my terminal. Bash threw errors like `bash: ./config/ai/profiles/smb-control.toml: No such file or directory` and `bash: Push-Location: command not found`, and the commands failed to run.
+
+🕵️ **The Reality:** The `README.md` examples are written exclusively using PowerShell syntax (e.g., using `\`` for line continuation, `Push-Location`, and `.\` paths). On standard Linux/Mac terminals (bash/zsh), backticks trigger command substitution instead of line continuation, completely breaking the commands.
+
+💡 **The Fix:** Provide standard bash/sh equivalent commands in the READMEs using `\` for line continuation and standard `cd` commands, or at least explicitly warn users that the commands are strictly for PowerShell.
