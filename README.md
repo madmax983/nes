@@ -51,6 +51,12 @@ First, copy the example configuration:
 cp nes.example.toml nes.toml
 ```
 
+Next, build the included homebrew ROM so you have something to run:
+
+```powershell
+cargo run -p nes-test-harness --bin build_homebrew_rom
+```
+
 Then, launch the emulator:
 
 ```powershell
