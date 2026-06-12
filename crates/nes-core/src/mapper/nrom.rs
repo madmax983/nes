@@ -111,4 +111,18 @@ mod tests {
         nrom.write_prg(0x8000, 0xAA);
         <Nrom as Mapper>::write_prg(&mut nrom, 0x8000, 0xAA);
     }
+
+    #[test]
+    fn test_nrom_from_prg_rom_partial_16k() {
+        let prg_rom = vec![0; PRG_16K_BYTES - 1];
+        let nrom = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(nrom.prg_rom.len(), PRG_16K_BYTES);
+    }
+
+    #[test]
+    fn test_nrom_from_prg_rom_partial_32k() {
+        let prg_rom = vec![0; PRG_16K_BYTES + 1];
+        let nrom = Nrom::from_prg_rom(prg_rom);
+        assert_eq!(nrom.prg_rom.len(), PRG_32K_BYTES);
+    }
 }

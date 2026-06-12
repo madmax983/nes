@@ -2148,3 +2148,20 @@ mod tests {
         let _ = fs::remove_file(bmp_path);
     }
 }
+
+#[cfg(test)]
+mod tests_sentinel_main {
+    use super::*;
+
+    #[test]
+    fn test_validate_action_allowed() {
+        assert!(validate_action_allowed(AppAction::OpenRom, true).is_err());
+        assert!(validate_action_allowed(AppAction::OpenRom, false).is_ok());
+    }
+
+    #[test]
+    fn test_menu_action_enabled_rta() {
+        assert!(!menu_action_enabled(AppAction::OpenCheats, false, false, true));
+        assert!(menu_action_enabled(AppAction::SaveSlot(1), false, false, true));
+    }
+}
