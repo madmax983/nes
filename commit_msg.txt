@@ -1,0 +1,6 @@
+⚡ Bolt: Pre-allocate hot path buffers
+
+💡 What: Updated `Cpu::new` and `NesCore::new` to initialize `writes`, `prg_writes`, `mmio_reads`, `bus_trace`, `last_cpu_bus_trace`, `scratch_writes`, and `scratch_mmio_reads` using `Vec::with_capacity(8)` instead of `Vec::new()`.
+🎯 Why: These temporary buffers are used heavily on hot paths (e.g., `step_single_instruction`) and are frequently emptied using a clear-and-swap pattern. Pre-allocating prevents multiple heap reallocations and latency spikes during the initial frames before the vectors reach their stable required capacity.
+📊 Impact: Removes multiple heap allocations during the initial setup and early emulation frames per execution loop, improving deterministic performance.
+🔭 Measurement: Verify memory allocations in a performance profiler or by reviewing the updated clear-and-swap behavior in `Cpu` and `NesCore`.

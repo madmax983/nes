@@ -623,9 +623,12 @@ impl NesCore {
             apu: Apu::new(),
             pending_oam_dma_page: None,
             last_cpu_trace: None,
-            last_cpu_bus_trace: Vec::new(),
-            scratch_writes: Vec::new(),
-            scratch_mmio_reads: Vec::new(),
+            // Pre-allocating these buffers avoids multiple heap reallocations
+            // and latency spikes during the initial frames before the capacity stabilizes
+            // during the clear-and-swap pattern.
+            last_cpu_bus_trace: Vec::with_capacity(8),
+            scratch_writes: Vec::with_capacity(8),
+            scratch_mmio_reads: Vec::with_capacity(8),
         }
     }
 
