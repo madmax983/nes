@@ -40,7 +40,7 @@ impl CpuHotspotProfiler {
         // Safe because length is strictly 65536
         let execution_counts = match counts.try_into() {
             Ok(arr) => arr,
-            Err(_) => unreachable!(),
+            Err(_) => return Self { execution_counts: Box::new([0; 65536]) },
         };
 
         Self { execution_counts }
@@ -55,7 +55,7 @@ impl CpuHotspotProfiler {
     /// ```
     /// # use nes_core::experimental::hotspot_profiler::CpuHotspotProfiler;
     /// # use nes_core::NesCore;
-    /// let mut core = NesCore::new();
+    /// let core = NesCore::new();
     /// let mut profiler = CpuHotspotProfiler::new();
     ///
     /// // Track the current PC
@@ -132,5 +132,32 @@ mod tests {
         assert_eq!(top.len(), 2);
         assert_eq!(top[0], (0xC000, 100));
         assert_eq!(top[1], (0x8000, 50));
+    }
+
+    #[test]
+    fn hotspot_profiler_truncates_correctly_when_n_exceeds_hotspots() {
+        let mut profiler = CpuHotspotProfiler::new();
+        profiler.execution_counts[0x1234] = 10;
+        let top = profiler.top_hotspots(5);
+        assert_eq!(top.len(), 1);
+        assert_eq!(top[0], (0x1234, 10));
+    }
+
+    #[test]
+    fn hotspot_profiler_record_step_increments_correct_address() {
+        let core = NesCore::new();
+        let mut profiler = CpuHotspotProfiler::new();
+
+        let initial_pc = core.cpu_pc();
+        profiler.record_step(&core);
+        assert_eq!(profiler.get_count(initial_pc), 1);
+    }
+
+    #[test]
+    fn test_top_hotspots_bounds_check() {
+        let mut profiler = CpuHotspotProfiler::new();
+        profiler.execution_counts[0] = 1;
+        let top = profiler.top_hotspots(0);
+        assert_eq!(top.len(), 0);
     }
 }
