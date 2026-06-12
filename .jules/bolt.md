@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+## 2024-11-20 - [Vec::with_capacity overhead on hot paths]
+**Learning:** [Using `Vec::with_capacity(2)` inside a hot loop (like `RtaManager::tick` running 60 times a second) forces an unnecessary heap allocation on every single frame, even when no events are pushed. In Rust, `Vec::new()` is fundamentally a zero-allocation operation until the first element is pushed.]
+**Action:** [Use `Vec::new()` instead of `Vec::with_capacity(N)` for small, short-lived vectors on hot paths where pushing elements is extremely rare, completely eliminating the heap allocation in the typical empty case.]

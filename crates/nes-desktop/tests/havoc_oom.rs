@@ -1,3 +1,4 @@
+#![cfg(feature = "mcp-host")]
 #[cfg(feature = "mcp-host")]
 #[test]
 fn havoc_mcp_host_oom() {
