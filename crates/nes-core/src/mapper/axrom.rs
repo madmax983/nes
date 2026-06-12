@@ -137,4 +137,22 @@ mod tests {
         mapper.write_prg(0x8000, 0x10);
         assert_eq!(mapper.mirroring(), NametableMirroring::OneScreenUpper);
     }
+
+    #[test]
+    fn axrom_from_prg_rom_pads_short_rom() {
+        let prg = vec![0_u8; 16 * 1024];
+        let mapper = Axrom::from_prg_rom(prg);
+        assert_eq!(mapper.prg_rom.len(), 32 * 1024);
+    }
+
+    #[test]
+    fn axrom_read_and_write_via_methods_calls_trait() {
+        let mut mapper = Axrom::from_prg_rom(vec![0_u8; 64 * 1024]);
+        mapper.prg_rom[32 * 1024] = 0xAA; // Start of bank 1
+
+        mapper.write_prg(0x8000, 0x01); // Switch to bank 1
+        assert_eq!(mapper.selected_bank(), 1);
+
+        assert_eq!(mapper.read_prg(0x8000), 0xAA);
+    }
 }

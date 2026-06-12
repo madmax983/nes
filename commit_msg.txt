@@ -1,0 +1,6 @@
+🛡️ Sentry: [test coverage improvement]
+
+🎯 Target: `crates/nes-core/src/bus.rs`, `crates/nes-core/src/mapper/nrom.rs`, `crates/nes-core/src/mapper/axrom.rs`
+💣 Risk: Missed mutation coverage in PRG rom initialization (truncation and padding logic) and implicit trait executions. Memory bounds in BusRegion mappings could hide unseen gap edge cases. Tests in `nes-desktop` would fail when executed via `cargo test` without the `--all-features` flag due to the missing `#![cfg(feature = "mcp-host")]`.
+🧪 Strategy: Explicitly target exact boundary logic for byte padding and array sizing in mapper constructions. Bolstered memory address test checks inside `bus.rs` for intermediate gaps rather than just ranges. Appended configuration feature flags safely on external integration test files.
+🔬 Verification: `cargo test --all-features` and `cargo clippy --all-targets --all-features -- -D warnings`
