@@ -645,7 +645,12 @@ impl Assembler {
             match kind {
                 FixupKind::Byte => self.emit_expr_byte(expr, line_no, FixupKind::Byte)?,
                 FixupKind::Word => self.emit_expr_word(expr, line_no)?,
-                FixupKind::Relative => return Err(DslError::Parse { line: line_no, message: "internal error: relative mode handled earlier".to_owned() }),
+                FixupKind::Relative => {
+                    return Err(DslError::Parse {
+                        line: line_no,
+                        message: "internal error: relative mode handled earlier".to_owned(),
+                    });
+                }
             }
         }
 

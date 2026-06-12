@@ -40,7 +40,11 @@ impl CpuHotspotProfiler {
         // Safe because length is strictly 65536
         let execution_counts = match counts.try_into() {
             Ok(arr) => arr,
-            Err(_) => return Self { execution_counts: Box::new([0; 65536]) },
+            Err(_) => {
+                return Self {
+                    execution_counts: Box::new([0; 65536]),
+                };
+            }
         };
 
         Self { execution_counts }
