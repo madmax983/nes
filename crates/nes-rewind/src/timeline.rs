@@ -136,12 +136,9 @@ impl CompressedTimeline {
                     oldest.frame_id = delta.frame_id;
                 }
             } else {
-                // No deltas anchored to oldest keyframe — drop it and any
-                // orphaned deltas that preceded the next keyframe.
+                // No deltas anchored to oldest keyframe — drop it.
+                // (Any deltas would have frame_id >= next_kf_id, so they are kept).
                 self.keyframes.pop_front();
-                while self.deltas.front().is_some_and(|d| d.frame_id < next_kf_id) {
-                    self.deltas.pop_front();
-                }
             }
         }
     }
@@ -225,5 +222,250 @@ mod tests {
         // Reconstruct frame 0 — should have frame_counter 0.
         let restored = tl.reconstruct(0).unwrap();
         assert_eq!(restored.ppu.frame_counter, 0);
+    }
+}
+
+#[cfg(test)]
+mod tests_sentry_timeline {
+    use super::*;
+    use crate::policy::KeyframePolicy;
+    use nes_core::NesCore;
+
+    fn make_core() -> NesCore {
+        let mut core = NesCore::new();
+        let _ = core.load_ines_rom(&[0; 16]);
+        core
+    }
+
+    #[test]
+    fn test_is_empty_false_when_only_keyframes_present() {
+        let mut timeline = CompressedTimeline::new(10, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: core.save_state(),
+        });
+        assert!(
+            !timeline.is_empty(),
+            "Timeline should not be empty if it has a keyframe"
+        );
+    }
+
+    #[test]
+    fn test_is_empty_false_when_only_deltas_present() {
+        let mut timeline = CompressedTimeline::new(10, KeyframePolicy::new(60, 1024));
+        let old = make_core().save_state();
+        let new = make_core().save_state();
+        timeline
+            .deltas
+            .push_back(crate::delta::FrameDelta::compute(&old, &new));
+        assert!(
+            !timeline.is_empty(),
+            "Timeline should not be empty if it has a delta"
+        );
+    }
+
+    #[test]
+    fn test_prune_boundary_condition() {
+        let mut timeline = CompressedTimeline::new(2, KeyframePolicy::new(60, 1024)); // Max frames = 2
+        let core = make_core();
+        timeline.push(0, core.save_state()); // len = 1
+        timeline.push(1, core.save_state()); // len = 2
+
+        assert_eq!(timeline.len(), 2);
+        timeline.prune(); // Should not prune
+        assert_eq!(timeline.len(), 2);
+
+        timeline.push(2, core.save_state()); // len = 3 -> should auto prune down to 2
+        assert_eq!(timeline.len(), 2, "Push should auto-prune to max length 2");
+    }
+
+    #[test]
+    fn test_prune_orphan_deltas_exclusion() {
+        let mut timeline = CompressedTimeline::new(3, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+        let snap = core.save_state();
+
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: snap.clone(),
+        });
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 3,
+            snapshot: snap.clone(),
+        });
+
+        // Delta 0, 1, 2
+        let mut delta1 = crate::delta::FrameDelta::compute(&snap, &snap);
+        delta1.frame_id = 1;
+        let mut delta2 = crate::delta::FrameDelta::compute(&snap, &snap);
+        delta2.frame_id = 2;
+        timeline.deltas.push_back(delta1);
+        timeline.deltas.push_back(delta2);
+
+        // This makes len() = 4 > max_frames(3)
+        // prune() should be called. It sees deltas before next_kf_id (3), so it absorbs delta 1
+        timeline.prune();
+
+        assert_eq!(timeline.keyframes.len(), 2);
+        assert_eq!(
+            timeline.deltas.len(),
+            1,
+            "Should have absorbed exactly 1 delta"
+        );
+        assert_eq!(
+            timeline.keyframes.front().unwrap().frame_id,
+            1,
+            "Oldest keyframe should advance to frame 1"
+        );
+    }
+
+    #[test]
+    fn test_reconstruct_exact_match() {
+        let mut timeline = CompressedTimeline::new(10, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+        timeline.push(0, core.save_state());
+        timeline.push(1, core.save_state());
+
+        let reconstructed = timeline.reconstruct(0);
+        assert!(reconstructed.is_some());
+
+        // Also check missing boundary
+        let reconstructed2 = timeline.reconstruct(2);
+        assert!(reconstructed2.is_none());
+    }
+
+    #[test]
+    fn test_reconstruct_greater_than_or_equal_mutant_real() {
+        let mut timeline = CompressedTimeline::new(10, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+
+        let snap0 = core.save_state();
+        let mut snap1 = snap0.clone();
+        snap1.ppu.frame_counter = 1;
+
+        let mut snap_wrong = snap0.clone();
+        snap_wrong.ppu.frame_counter = 999;
+
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 1,
+            snapshot: snap1.clone(),
+        });
+        timeline.last_frame_id = Some(2);
+
+        // A delta for frame 1 that would set frame_counter to 999.
+        let mut delta1 = crate::delta::FrameDelta::compute(&snap0, &snap_wrong);
+        delta1.frame_id = 1;
+        timeline.deltas.push_back(delta1);
+
+        let mut snap2 = snap1.clone();
+        snap2.ppu.frame_counter = 2;
+        let mut delta2 = crate::delta::FrameDelta::compute(&snap1, &snap2);
+        delta2.frame_id = 2;
+        timeline.deltas.push_back(delta2);
+
+        // Reconstruct frame 2. Keyframe is 1.
+        // It should apply delta 2. It should NOT apply delta 1 (because delta1.frame_id = 1, kf.frame_id = 1, 1 > 1 is false).
+        // If mutated to >=, 1 >= 1 is true, so delta1 is applied, setting frame_counter to 999.
+        let restored2 = timeline.reconstruct(2).unwrap();
+        assert_eq!(
+            restored2.ppu.frame_counter, 2,
+            "If > was mutated to >=, this would be 999"
+        );
+    }
+
+    #[test]
+    fn test_is_empty_mutants() {
+        let mut timeline = CompressedTimeline::new(10, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+
+        assert!(timeline.is_empty());
+
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: core.save_state(),
+        });
+        assert!(
+            !timeline.is_empty(),
+            "Timeline should not be empty with just a keyframe"
+        );
+
+        timeline.keyframes.clear();
+        let old = core.save_state();
+        let new = core.save_state();
+        timeline
+            .deltas
+            .push_back(crate::delta::FrameDelta::compute(&old, &new));
+        assert!(
+            !timeline.is_empty(),
+            "Timeline should not be empty with just a delta"
+        );
+    }
+
+    #[test]
+    fn test_prune_less_than_mutants_real() {
+        // Line 129: `if self.deltas.front().is_some_and(|d| d.frame_id < next_kf_id)`
+        let mut timeline = CompressedTimeline::new(3, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+        let snap = core.save_state();
+
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: snap.clone(),
+        });
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 3,
+            snapshot: snap.clone(),
+        });
+
+        let mut delta = crate::delta::FrameDelta::compute(&snap, &snap);
+        delta.frame_id = 3;
+        timeline.deltas.push_back(delta);
+
+        let mut delta2 = crate::delta::FrameDelta::compute(&snap, &snap);
+        delta2.frame_id = 4;
+        timeline.deltas.push_back(delta2);
+
+        timeline.prune();
+
+        assert_eq!(
+            timeline.deltas.len(),
+            2,
+            "Delta 3 should not be popped if < next_kf_id is strictly checked"
+        );
+        assert_eq!(timeline.deltas.front().unwrap().frame_id, 3);
+    }
+
+    #[test]
+    fn test_prune_less_than_mutants_real_gt_eq() {
+        let mut timeline = CompressedTimeline::new(3, KeyframePolicy::new(60, 1024));
+        let core = make_core();
+        let snap = core.save_state();
+
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: snap.clone(),
+        });
+        timeline.keyframes.push_back(Keyframe {
+            frame_id: 3,
+            snapshot: snap.clone(),
+        });
+
+        let mut delta = crate::delta::FrameDelta::compute(&snap, &snap);
+        delta.frame_id = 4; // strictly >
+        timeline.deltas.push_back(delta);
+
+        let mut delta2 = crate::delta::FrameDelta::compute(&snap, &snap);
+        delta2.frame_id = 5;
+        timeline.deltas.push_back(delta2);
+
+        timeline.prune();
+
+        assert_eq!(
+            timeline.deltas.len(),
+            2,
+            "Delta 4 should not be popped if < next_kf_id is strictly checked"
+        );
+        assert_eq!(timeline.deltas.front().unwrap().frame_id, 4);
     }
 }

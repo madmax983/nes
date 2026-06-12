@@ -47,3 +47,7 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**Equivalent Mutant via Infinite Loop**
+**Mutant:** `crates/nes-rewind/src/timeline.rs:129:63: replace < with == or > in CompressedTimeline::prune`
+**Diagnosis:** Replacing `<` with `==` or `>` causes the `prune` loop to infinite-loop (timeout) because the oldest keyframe never advances or drops, meaning `self.len() as u64 > self.max_frames` stays true indefinitely. This triggers the test suite's timeout, acting as an implicit test failure, so no additional specific tests are strictly needed, but added tests verify correct boundary retention.
