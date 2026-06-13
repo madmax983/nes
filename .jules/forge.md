@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract Input and Gamepad Functions out of main.rs God File**
+**Learning:** Extracting functions and their exact associated unit tests out of a dense, highly coupled test module in a God File (like `main.rs`) using regex or string replacements is error-prone and can easily lead to duplicate definitions, orphaned test attributes (`cannot test inner items`), and complex unresolved import webs (`E0252`, `E0432`). It requires careful tracking of `#[test]` attributes, accurate removal of duplicate lines, and precise dependency resolution for both the source and target files.
+**Action:** Always verify that both the extracted function code and the entirety of its `#[test]` block are fully and precisely removed from the source file. Pay close attention to module-level imports, taking care not to duplicate existing `use` statements or miss moving required constants (like `CONTROLLER_BUTTONS`) alongside the functions that depend on them.

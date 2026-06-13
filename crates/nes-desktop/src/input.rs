@@ -1,5 +1,6 @@
 use nes_core::Command;
 use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+use nes_desktop::overlay::{OverlayCommand, OverlayModel};
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
@@ -70,6 +71,50 @@ pub(crate) fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecis
         }
         _ => WindowEventDecision::Ignore,
     }
+}
+
+pub(crate) fn apply_overlay_keyboard_input(
+    overlay: &mut OverlayModel,
+    key: VirtualKeyCode,
+    pressed: bool,
+    cheat_count: usize,
+    _keyboard_bits: &mut u8,
+) -> Option<OverlayCommand> {
+    overlay.handle_key(key, pressed, cheat_count)
+}
+
+pub(crate) fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
+    pressed
+        && (matches!(
+            key,
+            VirtualKeyCode::Up
+                | VirtualKeyCode::Down
+                | VirtualKeyCode::Escape
+                | VirtualKeyCode::Return
+                | VirtualKeyCode::Space
+                | VirtualKeyCode::Delete
+                | VirtualKeyCode::Back
+                | VirtualKeyCode::F5
+                | VirtualKeyCode::F8
+        ) || matches!(
+            key,
+            VirtualKeyCode::A
+                | VirtualKeyCode::E
+                | VirtualKeyCode::G
+                | VirtualKeyCode::I
+                | VirtualKeyCode::K
+                | VirtualKeyCode::L
+                | VirtualKeyCode::N
+                | VirtualKeyCode::O
+                | VirtualKeyCode::P
+                | VirtualKeyCode::S
+                | VirtualKeyCode::T
+                | VirtualKeyCode::U
+                | VirtualKeyCode::V
+                | VirtualKeyCode::X
+                | VirtualKeyCode::Y
+                | VirtualKeyCode::Z
+        ))
 }
 
 pub(crate) fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
@@ -155,8 +200,41 @@ pub(crate) fn element_state_pressed(state: ElementState) -> bool {
 mod tests {
     use super::*;
     use nes_core::Button;
+    use nes_desktop::overlay::OverlayModel;
     use winit::dpi::PhysicalSize;
     use winit::event::{ElementState, KeyboardInput, WindowEvent};
+
+    #[test]
+    fn overlay_blocks_gameplay_button_commands_while_open() {
+        let mut overlay = OverlayModel::new(5);
+        overlay.open();
+        let mut keyboard_bits = 0_u8;
+
+        let action = apply_overlay_keyboard_input(
+            &mut overlay,
+            VirtualKeyCode::Z,
+            true,
+            0,
+            &mut keyboard_bits,
+        );
+
+        assert_eq!(action, None);
+        assert_eq!(keyboard_bits, 0);
+    }
+
+    #[test]
+    fn overlay_input_requires_redraw_for_navigation_action_and_text_entry_keys() {
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Up, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Down, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Escape, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Return, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Space, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Delete, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::F5, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::F8, true));
+        assert!(overlay_input_requires_redraw(VirtualKeyCode::Z, true));
+        assert!(!overlay_input_requires_redraw(VirtualKeyCode::Up, false));
+    }
 
     #[test]
     fn map_virtual_keycode_maps_all_keys() {
