@@ -36,16 +36,17 @@ fn main() {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            "{} File Not Found: '{}'.
+{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
+            "Error:".with(crossterm::style::Color::Red).bold(),
+            rom_path.with(crossterm::style::Color::Yellow),
+            "Hint:".with(crossterm::style::Color::Cyan).bold()
         )
     } else {
         format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
+            "{} Read Failed at '{}': {}",
+            "Error:".with(crossterm::style::Color::Red).bold(),
+            rom_path.with(crossterm::style::Color::Yellow),
             err
         )
     }
@@ -160,7 +161,7 @@ mod tests {
     fn run_reports_missing_rom_file_errors() {
         let err = run("__missing_rom__.nes", "__missing_script__.txt")
             .expect_err("missing files should fail");
-        assert!(err.contains("Could not find the ROM file at"));
+        assert!(err.contains("File Not Found:"));
         assert!(err.contains("__missing_rom__.nes"));
     }
 

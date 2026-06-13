@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::style::Stylize;
+
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
@@ -916,14 +917,15 @@ fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
+            "{} File Not Found: '{}'.
+{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
             "Error:".with(crossterm::style::Color::Red).bold(),
             rom_path.with(crossterm::style::Color::Yellow),
             "Hint:".with(crossterm::style::Color::Cyan).bold()
         )
     } else {
         format!(
-            "{} Failed to read ROM at '{}': {}",
+            "{} Read Failed at '{}': {}",
             "Error:".with(crossterm::style::Color::Red).bold(),
             rom_path.with(crossterm::style::Color::Yellow),
             err
@@ -1147,13 +1149,13 @@ mod tests {
     fn format_rom_read_error_handles_not_found_and_other_errors() {
         let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
         let msg = format_rom_read_error("bad.nes", &not_found);
-        assert!(msg.contains("Could not find the ROM file at"));
+        assert!(msg.contains("File Not Found:"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("homebrew.nes"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);
-        assert!(msg.contains("Failed to read ROM at"));
+        assert!(msg.contains("Read Failed at"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("permission denied"));
     }

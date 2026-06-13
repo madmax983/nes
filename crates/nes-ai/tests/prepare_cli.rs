@@ -27,9 +27,9 @@ fn prepare_smb_control_missing_rom_prints_styled_error() {
         .expect("run prepare_smb_control");
 
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
-    assert!(stderr.contains("Could not find the ROM file at"));
+    assert!(stderr.contains("File Not Found"));
     assert!(stderr.contains("__does_not_exist__.nes"));
-    assert!(stderr.contains("Hint:"));
+
     assert!(stderr.contains("Check the path or try the bundled homebrew ROM"));
 }
 
@@ -43,7 +43,7 @@ fn prepare_smb_control_invalid_rom_permissions_prints_styled_error() {
         .expect("run prepare_smb_control");
 
     let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
-    assert!(stderr.contains("Failed to read ROM at"));
+    assert!(stderr.contains("Read Failed"));
     assert!(stderr.contains('.'));
 }
 

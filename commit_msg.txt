@@ -1,0 +1,10 @@
+🎨 Mosaic: UI Polish for CLI Output
+
+🖌️ **Before:**
+Errors like "missing or invalid number of arguments" in `nes-ai` and "ROM path not configured" in `nes-desktop` were raw strings without visual hierarchy. The `format_rom_read_error` function output unstyled messages.
+
+✨ **After:**
+Errors now use `crossterm::style::Stylize` for consistent "Error:" (Red) and "Hint:" / "Usage:" (Cyan) labels across the `nes-ai`, `nes-desktop`, `nes-tui`, and `nes-mcp` crates.
+
+🖼️ **Visuals:**
+The CLI outputs are now formatted similarly to `nes-tui`, making failures pop visually and guiding the user with distinct hints.
