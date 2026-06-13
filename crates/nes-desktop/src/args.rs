@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// The default IP address and port that the MCP server binds to if not overridden.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// A standardized help string documenting all available command line arguments.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,21 +24,37 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// The file path to the NES ROM to be loaded.
     pub rom_path: Option<String>,
+    /// A list of Game Genie or Pro Action Replay codes to apply at startup.
     pub cheat_codes: Vec<String>,
+    /// Flag indicating whether the Model Context Protocol (MCP) server should start.
     pub mcp_enabled: bool,
+    /// The address and port to bind the MCP server to.
     pub mcp_bind_addr: String,
+    /// Flag indicating whether Netplay multiplayer mode is active.
     pub netplay_enabled: bool,
+    /// The WebSocket address of the `nes-relay` server.
     pub netplay_relay_addr: Option<String>,
+    /// The room ID used for matchmaking on the relay server.
     pub netplay_room: Option<String>,
+    /// The assigned player slot (1 for host, 2 for client).
     pub netplay_player: Option<u8>,
+    /// Number of frames of input delay to apply to mitigate rollbacks.
     pub netplay_input_delay_frames: Option<u32>,
+    /// The maximum number of frames the netplay engine is permitted to roll back.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// How often (in frames) to broadcast memory hashes to detect desyncs.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// Flag indicating whether the Real-Time Attack (RTA) tournament mode is enabled.
     pub rta_enabled: bool,
+    /// Override to force load a specific RTA profile ID instead of auto-detecting by ROM hash.
     pub rta_profile_id: Option<String>,
+    /// Custom directory path to look for RTA `.toml` profile definitions.
     pub rta_profiles_dir: Option<String>,
+    /// Custom directory path to save completed `.run.json` artifacts.
     pub rta_runs_dir: Option<String>,
+    /// Flag indicating if RTA is in Calibration Mode (drafting new profiles).
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
     pub auto_player_enabled: bool,

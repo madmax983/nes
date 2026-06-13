@@ -18,19 +18,29 @@ struct SaveStateFile {
     snapshot: CoreSnapshot,
 }
 
+/// Represents the integrity and usability of a save state slot on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SaveSlotStatus {
+    /// The slot is empty or does not exist.
     Empty,
+    /// The slot contains a valid, compatible save state.
     Saved,
+    /// The file on disk exists but could not be parsed.
     Corrupt,
+    /// The save state belongs to a different game than the one currently running.
     IncompatibleRom,
 }
 
+/// Summary data about a save slot, used for displaying state in the UI without loading the full snapshot into memory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveSlotMetadata {
+    /// The numeric slot ID (typically 0-9).
     pub slot: u8,
+    /// The file path where this save state is located.
     pub path: PathBuf,
+    /// The current status of the slot.
     pub status: SaveSlotStatus,
+    /// The Unix timestamp when the file was last modified.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -124,6 +134,8 @@ fn slot_number_from_path(path: &Path) -> Result<u8, String> {
 }
 
 #[must_use]
+/// Resolves the absolute file path for a specific save slot given the ROM path and its hash.
+/// The hash ensures that even if ROMs are renamed, save states remain tied to the correct game version.
 pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);
@@ -133,6 +145,7 @@ pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
 }
 
 #[must_use]
+/// Generates a list of file paths for all save slots in the provided range for a given ROM.
 pub fn slot_paths_for_rom(
     rom_path: &Path,
     rom_hash: &str,
@@ -144,6 +157,7 @@ pub fn slot_paths_for_rom(
 }
 
 #[must_use]
+/// Resolves the file path for the dedicated quicksave (typically bound to F5/F7).
 pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);

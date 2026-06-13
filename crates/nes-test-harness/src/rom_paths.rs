@@ -3,6 +3,8 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Resolves the absolute path to the Super Mario Bros ROM.
+/// Panics if the path is not configured or does not exist.
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +20,8 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Resolves the absolute path to the nestest ROM.
+/// Panics if the path is not configured or does not exist.
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +31,8 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Resolves the absolute path to the Blargg CPU test ROM.
+/// Panics if the path is not configured or does not exist.
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +44,8 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Retrieves a list of absolute paths to all NES ROMs in the bbbradsmith audio suite directory.
+/// Panics if the directory is missing or empty.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +76,8 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Resolves the absolute path to the directory containing golden audio waveforms for the bbbradsmith suite.
+/// Panics if the directory is missing.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();

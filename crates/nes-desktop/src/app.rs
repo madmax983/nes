@@ -1,12 +1,15 @@
 use nes_core::{Button, Command};
 
+/// Represents a command intended for the emulator core, bridged from the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BridgeCommand {
+    /// The underlying emulator core command.
     pub core: Command,
 }
 
 impl BridgeCommand {
     #[must_use]
+    /// Returns a string identifier for the command type, useful for telemetry.
     pub fn tool_name(self) -> &'static str {
         match self.core {
             Command::PressButton(_) => "press_button",
@@ -16,6 +19,14 @@ impl BridgeCommand {
     }
 }
 
+/// Converts a W3C DOM KeyboardEvent code into an actionable bridge command.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_desktop::app::map_key_event_to_command;
+/// let cmd = map_key_event_to_command("KeyZ", true).unwrap();
+/// ```
 #[must_use]
 pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
     let button = map_key_event_to_button(key_code)?;
@@ -29,6 +40,15 @@ pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeC
     Some(BridgeCommand { core })
 }
 
+/// Maps a W3C DOM KeyboardEvent code directly to a NES controller button.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_desktop::app::map_key_event_to_button;
+/// use nes_core::Button;
+/// assert_eq!(map_key_event_to_button("ArrowUp"), Some(Button::Up));
+/// ```
 #[must_use]
 pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     match key_code {
@@ -44,6 +64,14 @@ pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     }
 }
 
+/// Converts a W3C DOM KeyboardEvent code into the raw 8-bit mask of the corresponding NES button.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_desktop::app::map_key_event_to_button_bit;
+/// assert_eq!(map_key_event_to_button_bit("KeyZ"), Some(0b0000_0001)); // A button
+/// ```
 #[must_use]
 pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
     map_key_event_to_button(key_code).map(Button::bit_mask)
