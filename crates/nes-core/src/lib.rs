@@ -4,8 +4,6 @@ mod api;
 mod apu;
 /// BMP image encoding utilities.
 pub mod bmp;
-/// CPU bus region helpers and address classification.
-pub mod bus;
 /// NES cheat code decoding and patch metadata.
 pub mod cheat_codes;
 pub mod constants;

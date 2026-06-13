@@ -1,0 +1,9 @@
+🗺️ Atlas: [Remove unused bus module]
+
+🕸️ Tangle: The `crates/nes-core/src/bus.rs` file contained `BusRegion` enum and a `map_region` function that mapped CPU addresses to regions. However, this was entirely unused anywhere else in the main source tree (only in tests and formal proofs), indicating over-engineering and dead code that was unnecessarily increasing the surface area of the codebase (YAGNI violation).
+
+📐 Blueprint: Deleted `crates/nes-core/src/bus.rs` entirely and removed its registration from `crates/nes-core/src/lib.rs`. Also deleted the associated test files in `crates/nes-core/tests/` and proof files in `crates/nes-proof/src/` to fully clear out the unused abstractions.
+
+🧱 Stability: Reduced codebase size, eliminated unused module overhead, and enforced YAGNI principles by removing dead abstractions.
+
+🔬 Verification: Ran `cargo check --all-targets` and `cargo test --all-features` to ensure no build or test failures were introduced by the removal.
