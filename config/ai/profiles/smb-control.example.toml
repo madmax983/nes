@@ -1,6 +1,6 @@
 game = "smb"
 id = "smb-control"
-rom_path = "./roms/Super Mario Bros.nes"
+rom_path = "./roms/homebrew/homebrew.nes"
 snapshot_path = "./artifacts/ai/snapshots/smb-1-1-control.state.json"
 bootstrap_tas_path = "./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json"
 frame_stack = 4

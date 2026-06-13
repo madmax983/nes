@@ -43,6 +43,14 @@ For a local browser demo, use:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_web_demo.ps1 -OpenBrowser
 ```
 
+Or run via Trunk directly:
+
+```bash
+cargo install trunk
+cd crates/nes-web
+trunk serve --open
+```
+
 The script uses `trunk serve` for the browser dev server.
 
 ## Local ROM Persistence

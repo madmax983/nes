@@ -112,6 +112,14 @@ Web demo build + local serve (Trunk):
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run_web_demo.ps1 -OpenBrowser
 ```
 
+Or run via Trunk directly:
+
+```bash
+cargo install trunk
+cd crates/nes-web
+trunk serve --open
+```
+
 Web host ROM persistence:
 - Uploaded ROMs are stored locally via IndexedDB for next launch.
 - The last saved ROM auto-restores on startup.
