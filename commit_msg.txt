@@ -1,0 +1,8 @@
+⚡ Bolt: Pre-allocate vectors in core emulator
+
+💡 What: Changed `Vec::new()` to `Vec::with_capacity(64)` for temporary buffers (`scratch_writes`, `last_cpu_bus_trace`, `mmio_reads`, etc.) in `NesCore::new` and `Cpu::new`.
+🎯 Why: These vectors are used heavily during CPU stepping in a clear-and-swap pattern. Not pre-allocating them causes multiple sequential heap allocations per vector during the first few frames until they reach their stable capacity.
+📊 Impact: Removes multiple hidden heap allocations on startup for every new emulator instance, preventing micro-stutters.
+🔬 Measurement: Run `cargo bench` or profile the execution graph.
+
+Tested by running `cargo test --all-features`.
