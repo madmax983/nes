@@ -1521,15 +1521,17 @@ mod tests {
         FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats,
         StepMode, WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
         apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
-        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
+        classify_window_event, command_marks_rta_invalidation, connected_gamepad_ids,
+        controller_state_delta_for_player, element_state_pressed, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, map_virtual_keycode, menu_action_enabled, merge_local_input_bits,
+        overlay_input_requires_redraw, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, release_all_buttons, resync_restored_inputs,
         rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
         should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
         should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        sync_native_menu_state, track_keyboard_bits_for_key, update_button_bits,
+        validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -2146,5 +2148,113 @@ mod tests {
 
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
+    }
+
+    #[test]
+    fn menu_action_enabled_handles_rollback_and_rta_restrictions() {
+        assert!(menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            true,
+            false
+        ));
+        assert!(!menu_action_enabled(
+            AppAction::OpenCheats,
+            false,
+            false,
+            true
+        ));
+
+        assert_eq!(
+            menu_action_enabled(AppAction::OpenRom, false, false, false),
+            rom_picker_supported()
+        );
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, true, false));
+        assert!(!menu_action_enabled(AppAction::OpenRom, false, false, true));
+    }
+
+    #[test]
+    fn command_marks_rta_invalidation_returns_expected_actions() {
+        use nes_desktop::rta::ForbiddenAction;
+        assert_eq!(
+            command_marks_rta_invalidation(Command::StepCpu),
+            Some(ForbiddenAction::FrameStep)
+        );
+        assert_eq!(
+            command_marks_rta_invalidation(Command::StepScanline),
+            Some(ForbiddenAction::FrameStep)
+        );
+        assert_eq!(
+            command_marks_rta_invalidation(Command::StepFrame),
+            Some(ForbiddenAction::FrameStep)
+        );
+        assert_eq!(command_marks_rta_invalidation(Command::Reset), None);
+        assert_eq!(command_marks_rta_invalidation(Command::Pause), None);
+    }
+
+    #[test]
+    fn release_all_buttons_clears_controller_state() {
+        let mut core = NesCore::new();
+        core.execute(Command::PressButton(Button::A)).unwrap();
+        core.execute(Command::PressButton(Button::B)).unwrap();
+        core.execute(Command::PressButton2(Button::Start)).unwrap();
+
+        assert_ne!(core.controller_bits(), 0);
+        assert_ne!(core.controller2_bits(), 0);
+
+        release_all_buttons(&mut core);
+
+        assert_eq!(core.controller_bits(), 0);
+        assert_eq!(core.controller2_bits(), 0);
+    }
+
+    #[test]
+    fn validate_action_allowed_allows_actions_when_rollback_disabled() {
+        assert_eq!(validate_action_allowed(AppAction::OpenRom, false), Ok(()));
+        assert_eq!(
+            validate_action_allowed(AppAction::OpenCheats, false),
+            Ok(())
+        );
+        assert_eq!(
+            validate_action_allowed(AppAction::SaveSlot(1), false),
+            Ok(())
+        );
+        assert_eq!(
+            validate_action_allowed(AppAction::LoadSlot(1), false),
+            Ok(())
+        );
+        assert_eq!(
+            validate_action_allowed(AppAction::ToggleOverlay, false),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn sync_native_menu_state_executes_without_panic_in_test_mode_advanced() {
+        let menu = nes_desktop::menu::build_native_menu(3);
+        sync_native_menu_state(&menu, false, true, false);
+        sync_native_menu_state(&menu, false, false, true);
+    }
+
+    #[test]
+    fn apply_overlay_keyboard_input_delegates_to_overlay() {
+        use winit::event::VirtualKeyCode;
+        let mut overlay = OverlayModel::new(5);
+        overlay.open();
+        let mut keyboard_bits = 0;
+        let action = apply_overlay_keyboard_input(
+            &mut overlay,
+            VirtualKeyCode::Up,
+            true,
+            0,
+            &mut keyboard_bits,
+        );
+        assert_eq!(action, None); // Should just move selection, returning None
     }
 }

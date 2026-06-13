@@ -47,3 +47,7 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+## 2024-05-18 - Infeasible Mutants for Winit Interactions
+**Mutant:** Many `execute_app_action`, `set_overlay_open`, `sync_native_menu_state`, `validate_action_allowed` variants.
+**Diagnosis:** The functions `set_overlay_open` and `execute_app_action` require `&mut AppContext` containing `winit::window::Window`. Since standard test contexts have no display server on linux headless environments, trying to create `WindowBuilder::new().build(&event_loop)` panics with `XOpenDisplayFailed` or `XdgRuntimeDirNotSet`. Many helper methods taking `AppAction` enum directly map to GUI changes or require state dependencies generated within the winit event loop closures.
+**Kill Shot:** It is impossible to unit test Winit visual logic headlessly without mocking the GUI layer completely, which is an Atlas/Forge architectural change. Skipped for Sentinel phase.
