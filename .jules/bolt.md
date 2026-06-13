@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+## 2024-06-13 - [Preallocate Vectors in Hot Loop]
+**Learning:** Initializing Vectors using `Vec::new()` without specifying capacity leads to multiple reallocations during runtime when vectors are continuously pushed to, negatively impacting performance, particularly in hot loops.
+**Action:** Replace `Vec::new()` with `Vec::with_capacity(N)` for reused buffers within hot execution loops (like the NES emulation loop in `engine.rs` and `api.rs`).
