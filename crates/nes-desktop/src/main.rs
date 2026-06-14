@@ -988,69 +988,17 @@ fn run() -> Result<(), String> {
             }
 
             if let Some(gilrs_state) = gilrs.as_mut() {
-                while gilrs_state.next_event().is_some() {}
-                let connected = connected_gamepad_ids(
-                    gilrs_state
-                        .gamepads()
-                        .map(|(id, gamepad)| (id, gamepad.is_connected())),
-                );
-                let next_active = select_active_gamepad_ids(&connected, active_gamepads);
-                if gamepad_assignments_changed(next_active, active_gamepads) {
-                    for player in 0..active_gamepads.len() {
-                        if gamepad_slot_changed(next_active, active_gamepads, player) {
-                            if let Some(gamepad_id) = next_active[player] {
-                                println!(
-                                    "Gamepad P{} active: {}",
-                                    player + 1,
-                                    gilrs_state.gamepad(gamepad_id).name()
-                                );
-                            } else if active_gamepads[player].is_some() {
-                                println!("Gamepad P{} disconnected", player + 1);
-                            }
-                        }
-                    }
-                    active_gamepads = next_active;
-                }
-
-                for player in 0..gamepad_bits.len() {
-                    let next_gamepad_bits = active_gamepads[player]
-                        .map(|gamepad_id| {
-                            let gamepad = gilrs_state.gamepad(gamepad_id);
-                            gamepad_snapshot_to_bits(GamepadSnapshot {
-                                connected: gamepad.is_connected(),
-                                south_pressed: gamepad.is_pressed(GamepadButton::South),
-                                east_pressed: gamepad.is_pressed(GamepadButton::East),
-                                west_pressed: gamepad.is_pressed(GamepadButton::West),
-                                north_pressed: gamepad.is_pressed(GamepadButton::North),
-                                select_pressed: gamepad.is_pressed(GamepadButton::Select),
-                                start_pressed: gamepad.is_pressed(GamepadButton::Start),
-                                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
-                                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
-                                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
-                                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
-                                left_x: gamepad.value(GamepadAxis::LeftStickX),
-                                left_y: gamepad.value(GamepadAxis::LeftStickY),
-                            })
-                        })
-                        .unwrap_or_default();
-                    if rollback.is_none()
-                        && !overlay.is_open()
-                        && let Err(err) = apply_gamepad_delta_commands(
-                            &mut core,
-                            gamepad_bits[player],
-                            next_gamepad_bits,
-                            if is_player_two_slot(player) {
-                                nes_core::Player::Two
-                            } else {
-                                nes_core::Player::One
-                            },
-                        )
-                    {
-                        eprintln!("{err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
-                    gamepad_bits[player] = next_gamepad_bits;
+                if let Err(err) = process_gamepad_events(
+                    gilrs_state,
+                    &mut active_gamepads,
+                    &mut gamepad_bits,
+                    &mut core,
+                    rollback.is_some(),
+                    overlay.is_open(),
+                ) {
+                    eprintln!("{err}");
+                    *control_flow = ControlFlow::Exit;
+                    return;
                 }
             }
 
@@ -1081,120 +1029,23 @@ fn run() -> Result<(), String> {
             }
 
             if let Some(rollback_engine) = rollback.as_mut() {
-                let local_gamepad_bits =
-                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
-                let scheduled = rollback_engine
-                    .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
-                if let Some(client) = netplay_client.as_ref()
-                    && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
-                {
-                    eprintln!("Netplay send input failed: {err}");
+                if let Err(err) = tick_netplay_and_rollback(
+                    rollback_engine,
+                    netplay_client.as_ref(),
+                    &mut core,
+                    gamepad_bits,
+                    keyboard_bits,
+                    netplay_local_player,
+                    now,
+                    &mut netplay_next_ping_at,
+                    &mut netplay_ping_nonce,
+                    &mut netplay_pending_pings,
+                    &mut netplay_stats,
+                    netplay_hash_check_every,
+                ) {
+                    eprintln!("{err}");
                     *control_flow = ControlFlow::Exit;
                     return;
-                }
-                if let Some(client) = netplay_client.as_ref() {
-                    if let Some(nonce) = crate::netplay::schedule_netplay_ping(
-                        now,
-                        &mut netplay_next_ping_at,
-                        &mut netplay_ping_nonce,
-                        &mut netplay_pending_pings,
-                        NETPLAY_PING_INTERVAL,
-                        128,
-                    ) && let Err(err) = client.send_ping(nonce)
-                    {
-                        eprintln!("Netplay send ping failed: {err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
-
-                    loop {
-                        let message = match client.try_recv() {
-                            Ok(next) => next,
-                            Err(err) => {
-                                eprintln!("Netplay receive failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                        };
-                        let Some(message) = message else {
-                            break;
-                        };
-                        if let Err(err) = crate::netplay::handle_netplay_server_message(
-                            message,
-                            rollback_engine,
-                            netplay_local_player,
-                            &mut netplay_stats,
-                            &mut netplay_pending_pings,
-                        ) {
-                            eprintln!("{err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
-                    }
-                }
-
-                match rollback_engine.advance_frame(&mut core) {
-                    Ok(step) => {
-                        if should_log_rollback(step.rollback_distance) {
-                            eprintln!(
-                                "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
-                                step.rollback_distance, step.frame, step.local_bits, step.remote_bits
-                            );
-                            if let Some(stats) = netplay_stats.as_mut() {
-                                stats.observe_rollback(step.rollback_distance);
-                            }
-                        }
-
-                        let current_delay = rollback_engine.input_delay_frames();
-                        let max_auto_delay = rollback_engine.max_rollback_frames().clamp(
-                            NETPLAY_AUTO_DELAY_MIN_FRAMES,
-                            NETPLAY_AUTO_DELAY_MAX_FRAMES,
-                        );
-                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
-                            recommended_input_delay_frames(
-                                stats.latest_rtt_ms,
-                                stats.jitter_ms,
-                                NETPLAY_AUTO_DELAY_MIN_FRAMES,
-                                max_auto_delay,
-                                current_delay,
-                            )
-                        } else {
-                            current_delay
-                        };
-                        if should_update_input_delay(target_delay, current_delay) {
-                            if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
-                                eprintln!("Netplay adaptive delay update failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                            if let Some(stats) = netplay_stats.as_mut() {
-                                stats.input_delay_frames = target_delay;
-                                eprintln!(
-                                    "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
-                                    current_delay,
-                                    target_delay,
-                                    stats.latest_rtt_ms_or_zero(),
-                                    stats.jitter_ms
-                                );
-                            }
-                        } else if let Some(stats) = netplay_stats.as_mut() {
-                            stats.input_delay_frames = current_delay;
-                        }
-
-                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
-                            && let Some(client) = netplay_client.as_ref()
-                            && let Err(err) = client.send_hash(step.frame, step.state_hash)
-                        {
-                            eprintln!("Netplay send hash failed: {err}");
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("Netplay rollback step failed: {err}");
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
                 }
             } else if rewind_held {
                 time_machine.rewind_step(&mut core);
@@ -2147,4 +1998,195 @@ mod tests {
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
     }
+}
+
+fn process_gamepad_events(
+    gilrs_state: &mut Gilrs,
+    active_gamepads: &mut [Option<GamepadId>; 2],
+    gamepad_bits: &mut [u8; 2],
+    core: &mut NesCore,
+    rollback_enabled: bool,
+    overlay_open: bool,
+) -> Result<(), String> {
+    while gilrs_state.next_event().is_some() {}
+    let connected = connected_gamepad_ids(
+        gilrs_state
+            .gamepads()
+            .map(|(id, gamepad)| (id, gamepad.is_connected())),
+    );
+    let next_active = select_active_gamepad_ids(&connected, *active_gamepads);
+    if gamepad_assignments_changed(next_active, *active_gamepads) {
+        for player in 0..active_gamepads.len() {
+            if gamepad_slot_changed(next_active, *active_gamepads, player) {
+                if let Some(gamepad_id) = next_active[player] {
+                    println!(
+                        "Gamepad P{} active: {}",
+                        player + 1,
+                        gilrs_state.gamepad(gamepad_id).name()
+                    );
+                } else if active_gamepads[player].is_some() {
+                    println!("Gamepad P{} disconnected", player + 1);
+                }
+            }
+        }
+        *active_gamepads = next_active;
+    }
+
+    for player in 0..gamepad_bits.len() {
+        let next_gamepad_bits = active_gamepads[player]
+            .map(|gamepad_id| {
+                let gamepad = gilrs_state.gamepad(gamepad_id);
+                gamepad_snapshot_to_bits(GamepadSnapshot {
+                    connected: gamepad.is_connected(),
+                    south_pressed: gamepad.is_pressed(GamepadButton::South),
+                    east_pressed: gamepad.is_pressed(GamepadButton::East),
+                    west_pressed: gamepad.is_pressed(GamepadButton::West),
+                    north_pressed: gamepad.is_pressed(GamepadButton::North),
+                    select_pressed: gamepad.is_pressed(GamepadButton::Select),
+                    start_pressed: gamepad.is_pressed(GamepadButton::Start),
+                    dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
+                    dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
+                    dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
+                    dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
+                    left_x: gamepad.value(GamepadAxis::LeftStickX),
+                    left_y: gamepad.value(GamepadAxis::LeftStickY),
+                })
+            })
+            .unwrap_or_default();
+        if !rollback_enabled
+            && !overlay_open
+            && let Err(err) = apply_gamepad_delta_commands(
+                core,
+                gamepad_bits[player],
+                next_gamepad_bits,
+                if is_player_two_slot(player) {
+                    nes_core::Player::Two
+                } else {
+                    nes_core::Player::One
+                },
+            )
+        {
+            return Err(err);
+        }
+        gamepad_bits[player] = next_gamepad_bits;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn tick_netplay_and_rollback(
+    rollback_engine: &mut nes_netplay::RollbackEngine,
+    netplay_client: Option<&crate::netplay::NetplayClient>,
+    core: &mut NesCore,
+    gamepad_bits: [u8; 2],
+    keyboard_bits: u8,
+    netplay_local_player: u8,
+    now: Instant,
+    netplay_next_ping_at: &mut Instant,
+    netplay_ping_nonce: &mut u64,
+    netplay_pending_pings: &mut BTreeMap<u64, Instant>,
+    netplay_stats: &mut Option<crate::netplay::NetplayRuntimeStats>,
+    netplay_hash_check_every: u64,
+) -> Result<(), String> {
+    let local_gamepad_bits =
+        crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+    let scheduled = rollback_engine
+        .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
+
+    if let Some(client) = netplay_client {
+        if let Err(err) = client.send_input(scheduled.frame, scheduled.bits) {
+            return Err(format!("Netplay send input failed: {err}"));
+        }
+
+        if let Some(nonce) = crate::netplay::schedule_netplay_ping(
+            now,
+            netplay_next_ping_at,
+            netplay_ping_nonce,
+            netplay_pending_pings,
+            NETPLAY_PING_INTERVAL,
+            128,
+        ) {
+            if let Err(err) = client.send_ping(nonce) {
+                return Err(format!("Netplay send ping failed: {err}"));
+            }
+        }
+
+        loop {
+            let message = match client.try_recv() {
+                Ok(Some(msg)) => msg,
+                Ok(None) => break,
+                Err(err) => return Err(format!("Netplay receive failed: {err}")),
+            };
+
+            if let Err(err) = crate::netplay::handle_netplay_server_message(
+                message,
+                rollback_engine,
+                netplay_local_player,
+                netplay_stats,
+                netplay_pending_pings,
+            ) {
+                return Err(err);
+            }
+        }
+    }
+
+    match rollback_engine.advance_frame(core) {
+        Ok(step) => {
+            if should_log_rollback(step.rollback_distance) {
+                eprintln!(
+                    "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
+                    step.rollback_distance, step.frame, step.local_bits, step.remote_bits
+                );
+                if let Some(stats) = netplay_stats.as_mut() {
+                    stats.observe_rollback(step.rollback_distance);
+                }
+            }
+
+            let current_delay = rollback_engine.input_delay_frames();
+            let max_auto_delay = rollback_engine
+                .max_rollback_frames()
+                .clamp(NETPLAY_AUTO_DELAY_MIN_FRAMES, NETPLAY_AUTO_DELAY_MAX_FRAMES);
+
+            let target_delay = if let Some(stats) = netplay_stats.as_ref() {
+                recommended_input_delay_frames(
+                    stats.latest_rtt_ms,
+                    stats.jitter_ms,
+                    NETPLAY_AUTO_DELAY_MIN_FRAMES,
+                    max_auto_delay,
+                    current_delay,
+                )
+            } else {
+                current_delay
+            };
+
+            if should_update_input_delay(target_delay, current_delay) {
+                if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
+                    return Err(format!("Netplay adaptive delay update failed: {err}"));
+                }
+                if let Some(stats) = netplay_stats.as_mut() {
+                    stats.input_delay_frames = target_delay;
+                    eprintln!(
+                        "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
+                        current_delay,
+                        target_delay,
+                        stats.latest_rtt_ms_or_zero(),
+                        stats.jitter_ms
+                    );
+                }
+            } else if let Some(stats) = netplay_stats.as_mut() {
+                stats.input_delay_frames = current_delay;
+            }
+
+            if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame) {
+                if let Some(client) = netplay_client {
+                    if let Err(err) = client.send_hash(step.frame, step.state_hash) {
+                        return Err(format!("Netplay send hash failed: {err}"));
+                    }
+                }
+            }
+        }
+        Err(err) => return Err(format!("Netplay rollback step failed: {err}")),
+    }
+
+    Ok(())
 }

@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract Event Loop Ticks into Helper Functions**
+**Learning:** Found massive, deeply-nested "God Blocks" inside the `run` loop of `nes-desktop/src/main.rs`. Logic for processing gamepad states and ticking netplay/rollback each spanned over 60-120 lines, pushing the cyclomatic complexity and max nesting depth past 8.
+**Action:** Extracted `process_gamepad_events` and `tick_netplay_and_rollback` into explicitly typed helper functions. By isolating these domains, the main loop's readability drastically improved without altering functionality. Remember to manually check variable types when creating signatures, as inline closures may silently default integer types (e.g., `u32` vs `u64`).
