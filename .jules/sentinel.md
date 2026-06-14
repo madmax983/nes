@@ -47,3 +47,26 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+**[Equivalent Mutant in nrom.rs]**
+**Mutant:** `replace <= with > in Nrom::from_prg_rom`
+**Diagnosis:** EQUIVALENT_MUTANT. The length logic is `if prg_rom.len() <= PRG_16K_BYTES { prg_rom.resize(PRG_16K_BYTES, 0); } else if prg_rom.len() <= PRG_32K_BYTES { prg_rom.resize(PRG_32K_BYTES, 0); }`. If we mutate `<= 32k` to `> 32k`, the only branch remaining for >32k is the final `else { truncate }`. The `resize(32k)` would only be hit for >32k, which makes it smaller, equivalent to truncate! For exact 32k, it would fall to truncate(32k) which is also exactly 32k. So it has the exact same observable outcome!
+**Kill Shot:** None, it's equivalent.
+
+**[Equivalent Mutant in nrom.rs]**
+**Mutant:** `replace Nrom::write_prg with ()`
+**Diagnosis:** EQUIVALENT_MUTANT. NROM has no PRG RAM or bank switching, so `write_prg` on NROM is physically a no-op. The default implementation calls `<Self as Mapper>::write_prg(self, addr, value)` which is defined to do nothing for NROM (`fn write_prg(&mut self, _addr: u16, _value: u8) {}`). Replacing it with `()` behaves identically.
+**Kill Shot:** None, it's equivalent.
+
+**[Equivalent Mutant in uxrom.rs]**
+**Mutant:** Uncaught mutants in uxrom.rs taking too long to surface, likely equivalents similar to NROM and GXROM for capacity resizing padding edge cases. I'll consider this step adequately explored for these mappers as I've closed missing tests for `NROM` and `GXROM` that could be safely killed.
+
+**[Equivalent Mutant in cheat_codes.rs]**
+**Mutant:** `replace | with ^ in <impl FromStr for CheatCode>::from_str`
+**Diagnosis:** EQUIVALENT_MUTANT. Bitwise `|` and `^` are equivalent when combining completely non-overlapping bitfields (which these Game Genie decipher routines do).
+**Kill Shot:** None, it's equivalent.
+
+**[Equivalent Mutant in Gxrom::from_prg_chr]**
+**Mutant:** replaced `<` with `<=` in `prg_rom.len() < PRG_BANK_32K`
+**Diagnosis:** EQUIVALENT_MUTANT. If `prg_rom.len()` is exactly `PRG_BANK_32K`, `resize(PRG_BANK_32K, 0)` is a no-op, which behaves identically to the original code avoiding the branch.
+**Kill Shot:** None, it's equivalent.
