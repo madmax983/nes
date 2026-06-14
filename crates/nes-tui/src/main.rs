@@ -235,9 +235,13 @@ fn run() -> Result<(), String> {
     let rom_bytes = fs::read(&rom_path).map_err(|err| format_rom_read_error(&rom_path, &err))?;
 
     let mut core = NesCore::new();
-    let info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {err}"))?;
+    let info = core.load_ines_rom(&rom_bytes).map_err(|err| {
+        format!(
+            "{} Failed to load ROM: {err}\n{} Ensure the file is a valid iNES formatted ROM.",
+            "Error:".with(crossterm::style::Color::Red).bold(),
+            "Hint:".with(crossterm::style::Color::Cyan).bold()
+        )
+    })?;
     let rom_name = Path::new(&rom_path)
         .file_name()
         .and_then(|name| name.to_str())

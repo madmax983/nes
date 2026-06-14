@@ -138,8 +138,15 @@ fn build_startup_table(args: &RelayArgs) -> Table {
 
 fn run() -> Result<(), String> {
     let args = parse_args(std::env::args().skip(1).collect())?;
-    let listener = TcpListener::bind(&args.bind_addr)
-        .map_err(|err| format!("failed to bind {}: {err}", args.bind_addr))?;
+    let listener = TcpListener::bind(&args.bind_addr).map_err(|err| {
+        format!(
+            "{} Failed to bind relay to '{}': {err}.
+{} The port may be in use, or the address is invalid.",
+            "Error:".with(Color::Red).bold(),
+            args.bind_addr.clone().with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    })?;
 
     println!("{}", "nes-relay".with(Color::Cyan).bold());
     println!("\n{}", build_startup_table(&args));
@@ -150,7 +157,7 @@ fn run() -> Result<(), String> {
         let stream = match accepted {
             Ok(stream) => stream,
             Err(err) => {
-                eprintln!("accept failed: {err}");
+                eprintln!("{} accept failed: {err}", "Error:".with(Color::Red).bold());
                 continue;
             }
         };
@@ -162,7 +169,10 @@ fn run() -> Result<(), String> {
         let net = Arc::clone(&net_sim);
         thread::spawn(move || {
             if let Err(err) = handle_client(stream, shared, net) {
-                eprintln!("client {peer} disconnected with error: {err}");
+                eprintln!(
+                    "{} client {peer} disconnected with error: {err}",
+                    "Error:".with(Color::Red).bold()
+                );
             }
         });
     }
@@ -191,7 +201,10 @@ fn handle_client(
             let encoded = match serde_json::to_string(&message) {
                 Ok(line) => line,
                 Err(err) => {
-                    eprintln!("failed to serialize message: {err}");
+                    eprintln!(
+                        "{} failed to serialize message: {err}",
+                        "Error:".with(Color::Red).bold()
+                    );
                     break;
                 }
             };

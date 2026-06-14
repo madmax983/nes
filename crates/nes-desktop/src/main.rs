@@ -756,7 +756,10 @@ fn run() -> Result<(), String> {
             Some(state)
         }
         Err(err) => {
-            eprintln!("Gamepad support unavailable: {err}");
+            eprintln!(
+                "{} Gamepad support unavailable: {err}",
+                "Error:".with(Color::Red).bold()
+            );
             None
         }
     };
@@ -787,8 +790,11 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Continuing without audio output.");
+                eprintln!(
+                    "{} {err}\n{} Continuing without audio output.",
+                    "Error:".with(Color::Red).bold(),
+                    "Hint:".with(Color::Cyan).bold()
+                );
                 None
             }
         }
@@ -1102,7 +1108,7 @@ fn run() -> Result<(), String> {
                         128,
                     ) && let Err(err) = client.send_ping(nonce)
                     {
-                        eprintln!("Netplay send ping failed: {err}");
+                        eprintln!("{} Netplay send ping failed: {err}", "Error:".with(Color::Red).bold());
                         *control_flow = ControlFlow::Exit;
                         return;
                     }
@@ -1111,7 +1117,7 @@ fn run() -> Result<(), String> {
                         let message = match client.try_recv() {
                             Ok(next) => next,
                             Err(err) => {
-                                eprintln!("Netplay receive failed: {err}");
+                                eprintln!("{} Netplay receive failed: {err}", "Error:".with(Color::Red).bold());
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
