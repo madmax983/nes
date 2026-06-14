@@ -1,0 +1,3 @@
+🤦 **The Confusion:** Tried to run the `cargo run -p nes-desktop --release -- ./roms/homebrew/homebrew.nes` command from the "Desktop/TUI launch commands" section. The emulator failed to start because the file `./roms/homebrew/homebrew.nes` doesn't exist by default.
+🕵️ **The Reality:** Turns out I needed to build the ROM first using `cargo run -p nes-test-harness --bin build_homebrew_rom`. Those instructions are hidden at the very bottom of the README under "Homebrew ROM", way after the launch commands.
+💡 **The Fix:** Move the "Homebrew ROM" build command instructions up before the "Desktop/TUI launch commands" section so I have a ROM to play with right away.
