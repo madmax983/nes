@@ -1,3 +1,6 @@
+//! Core Emulator Runtime
+//!
+//! This crate provides the deterministic execution engine for the NES.
 #![doc = include_str!("../README.md")]
 
 mod api;
@@ -8,6 +11,7 @@ pub mod bmp;
 pub mod bus;
 /// NES cheat code decoding and patch metadata.
 pub mod cheat_codes;
+/// Hardware constants and timing constraints.
 pub mod constants;
 /// 6502 CPU engine and status register helpers.
 pub mod cpu;
@@ -33,5 +37,6 @@ pub use constants::{
     AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH,
 };
 
+/// Experimental features and analysis tools (behind the `nova` feature flag).
 #[cfg(feature = "nova")]
 pub mod experimental;

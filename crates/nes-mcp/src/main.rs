@@ -1,3 +1,4 @@
+//! Main entry point for nes-mcp binary executable.
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};

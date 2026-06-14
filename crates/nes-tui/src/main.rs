@@ -1,3 +1,4 @@
+//! Main entry point for nes-tui binary executable.
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

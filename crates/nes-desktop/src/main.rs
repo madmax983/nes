@@ -1,3 +1,4 @@
+//! Main entry point for nes-desktop binary executable.
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

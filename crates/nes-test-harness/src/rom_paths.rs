@@ -1,8 +1,30 @@
+//! Common paths for test ROMs and resources used by the integration test suite.
+//!
+//! This module abstracts the lookup of configured ROM paths, allowing tests to access them without
+//! repeatedly parsing the workspace `nes.toml` configuration. It also provides validation to ensure
+//! tests fail quickly if a required resource is missing.
+
 use std::fs;
 use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Returns the path to the Super Mario Bros. ROM.
+///
+/// This checks `roms.smb` first, falling back to `desktop.rom_path` in `nes.toml`.
+///
+/// ## Panics
+/// Panics if the configuration is missing or the file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::panic::catch_unwind;
+/// use nes_test_harness::rom_paths::smb_rom_path;
+///
+/// // Example of attempting to read the ROM path in a test
+/// let result = catch_unwind(|| smb_rom_path());
+/// ```
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +40,12 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Returns the path to the `nestest` ROM.
+///
+/// Looks up `roms.nestest` in the workspace `nes.toml`.
+///
+/// ## Panics
+/// Panics if the configuration is missing or the file does not exist.
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +55,12 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Returns the path to the blargg CPU timing ROM.
+///
+/// Looks up `roms.blargg_cpu` in the workspace `nes.toml`.
+///
+/// ## Panics
+/// Panics if the configuration is missing or the file does not exist.
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +72,12 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Returns a sorted list of paths to all NES ROMs in the bbbradsmith audio suite.
+///
+/// This checks `roms.bbbradsmith_audio_suite_dir` in `nes.toml` and returns all `.nes` files within it.
+///
+/// ## Panics
+/// Panics if the directory is missing, cannot be read, or contains no `.nes` files.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +108,12 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Returns the path to the directory containing golden reference audio for the bbbradsmith suite.
+///
+/// Looks up `roms.bbbradsmith_audio_golden_dir` in the workspace `nes.toml`.
+///
+/// ## Panics
+/// Panics if the configuration is missing or the directory does not exist.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();

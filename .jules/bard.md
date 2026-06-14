@@ -26,3 +26,14 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2025-06-18 - Missing Binary and Root Crate-Level Docs
+**Confusion:** Rustdoc throws warnings for missing `//!` crate-level documentation on root `lib.rs` or `main.rs` binaries. It's not just modules that need `//!`.
+**Clarification:** Added explicit `//!` documentation to the top of `nes-core/src/lib.rs` and other executable `main.rs` entry points across the workspace.
+
+## 2025-06-18 - Missing Test-Harness Utilities Documentation
+**Confusion:** The `nes-test-harness` crate had public functions like `smb_rom_path()` without `///` doc comments. Even though these are test utilities, making them `pub` means they must be documented, or rustdoc will complain.
+**Clarification:** Added thorough `///` and `## Examples` doc tests for all `rom_paths.rs` helper functions.
+
+## 2025-06-18 - Missing Desktop App Input Bridge Documentation
+**Confusion:** The desktop runtime bridge methods like `BridgeCommand`, `map_key_event_to_button`, and `tool_name` lacked explicit public doc comments.
+**Clarification:** Added descriptive `///` comments explaining how raw physical keyboard strings (`"KeyZ"`) are mapped cleanly to deterministic `nes_core::Button` constructs.

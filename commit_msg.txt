@@ -1,0 +1,6 @@
+🎻 Bard: [documentation update]
+
+📖 Chapter: Added crate-level, module-level, and item-level docs across multiple files.
+🔦 Insight: Explained the 'why' behind functions in `nes-test-harness`, `nes-desktop`, and added `//!` crate docs to root `lib.rs` and `main.rs` files to fix warnings and enhance understanding. Fixed test features in `nes-desktop`.
+🧪 Example: Added multiple executable doctests for `BridgeCommand` and ROM paths.
+🖼️ Preview: All `cargo doc` outputs are now pristine without `missing documentation` warnings for core components.
