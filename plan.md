@@ -1,12 +1,8 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
+1. **Verify Drafted Specification**
+   - Use `run_in_bash_session` to execute `git status` and `cat docs/plans/vantage-spec-nova-feature-discoverability.md` to ensure the spec for Nova Feature Discoverability has been accurately drafted.
+2. **Run Workspace Checks**
+   - Use `run_in_bash_session` to run `cargo check --workspace --all-targets --all-features` and `cargo test --workspace --all-features` to ensure the repository remains stable and no regressions were introduced.
+3. **Pre-commit step**
    - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
 4. **Submit the PR**
+   - Use `run_in_bash_session` to execute `git add docs/plans/vantage-spec-nova-feature-discoverability.md`, `git commit -m "🔭 Vantage: Spec for Nova Feature Discoverability"`, and `gh pr create --title "🔭 Vantage: Spec for Nova Feature Discoverability" --body "Drafted spec for Nova feature discoverability."` to submit the new product specification.

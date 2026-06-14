@@ -1,29 +1,28 @@
-# 🔭 Vantage: Spec for Auto-Pause on Window Focus Loss
+# 🔭 Vantage: Spec for Auto-Pause on Focus Loss
 
 ## 👤 User Story
-"As a Player, I want the emulator to automatically pause gameplay when I switch to another window or application, so that I do not miss anything or die in the game while I am looking away."
+As a Desktop Player, I want the emulator to automatically pause when the window loses focus, so that I don't die or miss action while I am looking at another application or monitor.
 
 ## 💼 Business Problem (So What?)
-**What business problem does this solve?**
-Currently, when a user alt-tabs or clicks on a second monitor (e.g., to check Discord, read a walkthrough, or answer a message), the emulator continues to run in the background. In games without a built-in pause button, or if the user forgets to manually trigger the emulator's overlay, the game state advances out of their control. This leads to frustrating deaths and forces the user to reload a savestate, degrading the core desktop experience. Auto-pause reduces this friction and matches modern PC gaming standards.
+Missing out on gameplay due to distractions or managing other windows is a primary source of frustration in desktop gaming. A silent, unprompted death in the game degrades the user's trust and enjoyment. This feature prevents accidental progression and improves the perceived quality of the emulator's desktop experience.
 
 ## 📈 Success Metrics
-- **Reliability:** 100% of window focus loss events successfully trigger the pause state.
-- **Resumption:** Returning focus to the window instantly resumes gameplay without dropped inputs.
-- **Engagement:** Decrease in user reports complaining about "game running in background."
+- Zero unwanted gameplay progression when the emulator window is alt-tabbed or clicked away from.
+- Feature does not introduce input lag or stutter during normal play.
 
 ## 🕵️ Gap Analysis
-- **Market View:** Standard feature in nearly every modern desktop application and emulator (often a toggleable setting).
-- **Our Gap:** We only pause when the user explicitly opens the in-game overlay menu via `Escape` or selects it from the native menu bar. We do not listen to OS-level window focus events to halt the execution loop.
+- Market View: Most modern emulators and games pause automatically when minimized or when another application is focused to prevent unintended gameplay progression.
+- Our Gap: Our emulator currently continues running in the background, which can cause the player to die or miss important events if they switch windows.
 
 ## ✅ Acceptance Criteria
-- Must detect when the main emulator window loses OS focus.
-- Must pause emulation execution when focus is lost.
-- Must present a visual indicator (e.g., a "Paused" text overlay or slightly dimmed screen) so the user knows the state is frozen.
-- Must automatically resume emulation execution when the main emulator window regains focus.
-- Must provide an option in `nes.toml` (`[ui] auto_pause_on_focus_loss = true/false`) to disable this behavior for users who want background execution (e.g., during netplay waiting or listening to audio).
-- Must *not* auto-resume if the emulator was already manually paused (via the overlay menu) prior to losing focus.
+- The emulator must automatically enter a Paused state immediately upon the application window losing focus.
+- The emulator must automatically resume immediately upon the application window regaining focus.
+- The feature must be configurable and toggleable by the user (defaulting to true).
+- A visual indication (e.g., a "PAUSED" overlay) must be shown when auto-paused.
+- **Critical Caveat:** Auto-pause **must be forcibly disabled** during active Netplay sessions to prevent intentional or unintentional network desyncs and rollbacks.
+- **Critical Caveat:** Auto-pause **must be forcibly disabled** during active strict RTA (Speedrun) mode to preserve the integrity of the run timing.
 
 ## 🚫 Out of Scope
-- Muting audio in the background without pausing the game (Phase 2 setting).
-- Auto-pausing specifically for Netplay (Netplay handles its own sync; auto-pause may need to be strictly disabled during active netplay to prevent rollback storms).
+- Configurable auto-pause delays (e.g., "pause after 5 seconds of inactivity").
+- Muting audio specifically during auto-pause (the audio engine should naturally halt if the core is paused).
+- Auto-pause support for the Web/Trunk host in this iteration.
