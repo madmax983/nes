@@ -1,0 +1,13 @@
+⚒️ Forge: Extract required parameter parsing in MCP dispatch
+
+🚧 Smell
+The argument parsing logic for `ToolParams` in `crates/nes-mcp/src/dispatch.rs` was filled with copy-pasted pyramids of doom. Functions like `parse_u8`, `parse_u16`, `parse_button`, `parse_speed_permille`, `parse_dsl_source`, and `parse_required_string` all manually matched on `params.get(key)` and constructed the exact same error boilerplate if the key was missing.
+
+✨ Solution
+Extracted the missing key error validation into a single `get_required_param<'a>` helper function that returns the checked `&str` directly via early return or mapping. Updated all the redundant parameter parsing routines to use this inline helper.
+
+🧹 Benefit
+Dramatically flattens the nesting structure of multiple input parsers, reduces code duplication, and enforces DRY principles, making the top-level dispatch parameter parsing significantly easier to read at a glance.
+
+🛡️ Verification
+Ran all tests across the workspace via `cargo test --all-features`. Verified zero logic changes, as the errors produced by the helper exactly match the text of the previously hard-coded strings.

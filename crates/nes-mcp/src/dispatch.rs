@@ -731,12 +731,15 @@ fn write_frame_image(
         .map_err(|err| DispatchError::InvalidParams(format!("unable to write '{path}': {err}")))
 }
 
+fn get_required_param<'a>(params: &'a ToolParams, key: &str) -> Result<&'a str, DispatchError> {
+    params
+        .get(key)
+        .map(String::as_str)
+        .ok_or_else(|| DispatchError::InvalidParams(format!("{key} must be provided")))
+}
+
 fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
-    let Some(button) = params.get("button").map(String::as_str) else {
-        return Err(DispatchError::InvalidParams(
-            "button must be provided".to_owned(),
-        ));
-    };
+    let button = get_required_param(params, "button")?;
 
     match button {
         "A" => Ok(Button::A),
@@ -754,22 +757,14 @@ fn parse_button(params: &ToolParams) -> Result<Button, DispatchError> {
 }
 
 fn parse_u8(params: &ToolParams, key: &str) -> Result<u8, DispatchError> {
-    let Some(raw) = params.get(key) else {
-        return Err(DispatchError::InvalidParams(format!(
-            "{key} must be provided"
-        )));
-    };
+    let raw = get_required_param(params, key)?;
     let value = parse_integer(raw)?;
     u8::try_from(value)
         .map_err(|_| DispatchError::InvalidParams(format!("{key} must be an integer in [0, 255]")))
 }
 
 fn parse_u16(params: &ToolParams, key: &str) -> Result<u16, DispatchError> {
-    let Some(raw) = params.get(key) else {
-        return Err(DispatchError::InvalidParams(format!(
-            "{key} must be provided"
-        )));
-    };
+    let raw = get_required_param(params, key)?;
     let value = parse_integer(raw)?;
     u16::try_from(value).map_err(|_| {
         DispatchError::InvalidParams(format!("{key} must be an integer in [0, 65535]"))
@@ -782,11 +777,7 @@ fn parse_u64(params: &ToolParams, key: &str) -> Option<u64> {
 }
 
 fn parse_speed_permille(params: &ToolParams) -> Result<u16, DispatchError> {
-    let Some(raw) = params.get("multiplier") else {
-        return Err(DispatchError::InvalidParams(
-            "multiplier must be provided".to_owned(),
-        ));
-    };
+    let raw = get_required_param(params, "multiplier")?;
 
     let multiplier: f64 = raw.parse().map_err(|_| {
         DispatchError::InvalidParams("multiplier must be a positive number".to_owned())
@@ -854,11 +845,7 @@ fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
 }
 
 fn parse_dsl_source(params: &ToolParams) -> Result<&str, DispatchError> {
-    let Some(source) = params.get("source").map(String::as_str) else {
-        return Err(DispatchError::InvalidParams(
-            "source must be provided".to_owned(),
-        ));
-    };
+    let source = get_required_param(params, "source")?;
     if source.trim().is_empty() {
         return Err(DispatchError::InvalidParams(
             "source must not be empty".to_owned(),
@@ -890,11 +877,7 @@ fn parse_dsl_rom_options(params: &ToolParams) -> Result<RomBuildOptions, Dispatc
 }
 
 fn parse_required_string(params: &ToolParams, key: &str) -> Result<String, DispatchError> {
-    let Some(value) = params.get(key).cloned() else {
-        return Err(DispatchError::InvalidParams(format!(
-            "{key} must be provided"
-        )));
-    };
+    let value = get_required_param(params, key)?.to_owned();
     if value.trim().is_empty() {
         return Err(DispatchError::InvalidParams(format!(
             "{key} must not be empty"

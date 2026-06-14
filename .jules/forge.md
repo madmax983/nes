@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract require param parsing in nes-mcp]**
+**Learning:** Found massive duplicate logic in `crates/nes-mcp/src/dispatch.rs` where multiple `parse_*` functions implemented an identical `if let Some(...) = params.get(...) else { return Err(...) }` sequence, polluting the parameter extraction.
+**Action:** Abstracted this boilerplate into a single `get_required_param` helper function using `params.get(key).map(...).ok_or_else(...)`, which safely handles missing parameters with exactly the identical string-based error format, drastically reducing lines of code and visual clutter across multiple parser functions.
