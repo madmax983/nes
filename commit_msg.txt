@@ -1,0 +1,6 @@
+🛠️ Forge: Refactor KeyboardDecision match block
+
+🚮 Smell: The main event loop in `crates/nes-desktop/src/main.rs` contained a massive, deeply nested `match classify_keyboard_input(...)` block spanning over 75 lines to handle `KeyboardDecision` variants. This bloated the core event loop and made it difficult to read.
+✨ Solution: Extracted the entire `match` block into a standalone, well-named helper function `dispatch_keyboard_decision`. Since the event loop rebuilds `AppContext` on every iteration, we also explicitly pass `keyboard_bits` as a mutable reference to ensure state changes persist correctly.
+🧼 Benefit: Significantly flattens the main event loop, dramatically improving readability by hiding the detailed decision logic behind a descriptive function call.
+🛡️ Verification: Tests passed. No logic changed.
