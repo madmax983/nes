@@ -1,0 +1,9 @@
+🔭 Vantage: Spec for Copying Default Config from README
+
+👤 User Story:
+"As a New User, I want clear instructions to copy the example configuration, so that I don't run into a file not found error when I launch the emulator for the first time."
+
+✅ Acceptance Criteria:
+- A command to copy the example configuration must be added to the README.
+- The command must appear immediately before the first `cargo run` commands.
+- The command must clearly instruct the user to `cp nes.example.toml nes.toml`.
