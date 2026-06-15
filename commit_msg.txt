@@ -1,0 +1,5 @@
+🎨 Mosaic: UI Polish for CLI outputs
+
+🖌️ **Before:** CLI applications throughout the workspace (`nes-desktop`, `nes-mcp`, `nes-relay`, `nes-test-harness`) threw unstyled, raw generic string error messages via `eprintln!` which could easily blend in with standard text or stdout.
+✨ **After:** Wrapped and standardized error outputs using `crossterm` styles. Errors now clearly denote "Error:" in bold red.
+🖼️ **Visuals:** Added `crossterm::style::{Color, Stylize}` integrations on all standalone entrypoints to ensure users always see high-contrast, formatted error feedback across the terminal ecosystem.

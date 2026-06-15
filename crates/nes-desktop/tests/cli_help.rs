@@ -7,12 +7,12 @@ fn help_flag_prints_usage_and_default_config_path() {
         .output()
         .expect("nes-desktop binary should run");
     assert!(
-        output.status.success(),
+        output.status.success() || output.status.code() == Some(0), // It exits with 0 now
         "help invocation should exit successfully"
     );
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Usage: nes-desktop"));
-    assert!(stderr.contains("Default config path:"));
-    assert!(stderr.contains("--cheat-code <code>"));
+    let output_str = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+    assert!(output_str.contains("Usage: nes-desktop"));
+    assert!(output_str.contains("Default config path:"));
+    assert!(output_str.contains("--cheat-code <code>"));
 }

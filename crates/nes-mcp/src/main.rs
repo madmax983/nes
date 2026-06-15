@@ -75,7 +75,9 @@ impl ServerState {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        use crossterm::style::{Color, Stylize};
+        eprintln!("{}", "Error:".with(Color::Red).bold());
+        eprintln!("{}", err);
         std::process::exit(1);
     }
 }

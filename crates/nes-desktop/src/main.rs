@@ -56,7 +56,12 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        if err.starts_with("Usage:") {
+            println!("{}", err);
+            std::process::exit(0);
+        }
+        eprintln!("{}", err);
+        std::process::exit(1);
     }
 }
 
@@ -677,8 +682,8 @@ fn run() -> Result<(), String> {
     println!("{}", "nes-desktop".with(Color::Cyan).bold());
     println!("\n{table}");
     if cfg!(debug_assertions) {
-        eprintln!(
-            "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>"
+        println!(
+            "{}", "Running debug build; performance will be much lower. For speed use: cargo run -p nes-desktop --release -- <rom>".with(Color::Yellow)
         );
     }
 

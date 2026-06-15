@@ -99,7 +99,8 @@ impl RelayNetSim {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("{}", "Error:".with(Color::Red).bold());
+        eprintln!("{}", err);
         std::process::exit(1);
     }
 }
