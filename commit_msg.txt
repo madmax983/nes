@@ -1,0 +1,5 @@
+🗣️ Echo: Commands fail in bash terminal
+
+Add an Echo report complaining about PowerShell commands and backtick
+line continuations in the README that fail when copy-pasted into standard
+bash/zsh terminals.
