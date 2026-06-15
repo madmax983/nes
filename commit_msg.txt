@@ -1,0 +1,6 @@
+⚒️ Forge: Extract overlay cheat dispatch logic
+
+🚮 Smell: The `dispatch_overlay_command` function had deeply nested and repetitive `match` blocks for handling `ToggleCheat`, `RemoveCheat`, and `SubmitCheatCode`. Error handling and state updates were duplicated across arms.
+✨ Solution: Extracted the logic for each cheat command into clear, descriptive helper functions: `handle_toggle_cheat`, `handle_remove_cheat`, and `handle_submit_cheat_code`. Extracted the repeated error check into `apply_cheats_and_set_status` which safely propagates errors.
+🧼 Benefit: Significantly flattens the match block, reducing visual noise. Enhances DRY compliance.
+🛡️ Verification: Tests passed. No logic changed. The modal specifically stays open on failure.

@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extracting duplicate status handling logic**
+**Learning:** In `crates/nes-desktop/src/main.rs`, the `dispatch_overlay_command` method had deeply nested repetitive logic around `apply_session_cheats` for different operations (Toggle, Remove, Submit). Each match arm replicated error handling formatting and overlay state management, leading to a pyramid of doom. A bug in the initial refactor also showed that returning the state early without respecting failures will close modals erroneously.
+**Action:** Extracted the core error and state message updates into a shared `apply_cheats_and_set_status` function returning `Result<(), String>`, and encapsulated each overlay command mapping into single-responsibility handlers `handle_toggle_cheat`, `handle_remove_cheat`, and `handle_submit_cheat_code`. This flattens the execution flow without changing user-visible runtime behavior.
