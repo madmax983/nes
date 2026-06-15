@@ -1,3 +1,8 @@
+//! The `nes-desktop` binary entry point.
+//!
+//! This executable ties together the `nes-core` emulator, the `winit` event loop for windowing,
+//! `pixels` for hardware-accelerated 2D rendering, and `cpal` for audio output. It serves as
+//! the primary rich client for end-users, offering UI menus, controller support, and netplay.
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

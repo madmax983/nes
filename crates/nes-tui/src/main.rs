@@ -1,3 +1,8 @@
+//! The `nes-tui` terminal UI binary entry point.
+//!
+//! This executable maps the `nes-core` framebuffer to ANSI terminal escape sequences using
+//! `ratatui`. It handles raw terminal input, allowing users to play NES games directly
+//! within a terminal window.
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

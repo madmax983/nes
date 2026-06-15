@@ -26,3 +26,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2026-06-15 - Missing Crate-Level Documentation on Binaries
+**Confusion:** `cargo doc` with `-W rustdoc::missing_crate_level_docs` threw warnings for `nes-desktop`, `nes-mcp`, and `nes-tui` binaries because they lacked `//!` doc comments at the top of their `main.rs` files, leaving developers without a high-level overview of their functionality in generated docs.
+**Clarification:** Added module-level `//!` comments at the beginning of each `main.rs` to summarize the executable's purpose and scope.

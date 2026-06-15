@@ -1,0 +1,5 @@
+🎻 Bard: [documentation update]
+
+📖 Chapter: Crate-level Module Documentation
+🔦 Insight: Added missing `//!` documentation comments to the main binary entries in `nes-desktop`, `nes-mcp`, and `nes-tui` to clearly explain their purpose and scope, resolving `rustdoc::missing_crate_level_docs` warnings.
+🧪 Example: Clean `cargo doc` execution without missing crate-level doc warnings.

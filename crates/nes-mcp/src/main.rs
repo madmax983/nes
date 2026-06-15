@@ -1,3 +1,8 @@
+//! The `nes-mcp` Model Context Protocol (MCP) daemon.
+//!
+//! This binary implements the JSON-RPC over stdio transport required by the MCP specification.
+//! It wraps `nes-core` and exposes emulation controls (like stepping, button pressing, and
+//! reading memory) as structured tools for Large Language Models to consume.
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
