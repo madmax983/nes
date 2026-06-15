@@ -674,3 +674,75 @@ mod tests {
         assert_eq!(fd.frame_id, 7);
     }
 }
+
+#[cfg(test)]
+mod more_additional_tests {
+    use super::*;
+    use nes_core::NesCore;
+
+    fn make_snapshot() -> CoreSnapshot {
+        NesCore::new().save_state()
+    }
+
+    #[test]
+    fn ppu_scroll_change_all_fields() {
+        let before = make_snapshot();
+
+        let mut after = before.clone();
+        after.ppu.vram_addr = !before.ppu.vram_addr;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.temp_addr = !before.ppu.temp_addr;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.fine_x = !before.ppu.fine_x;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.write_toggle = !before.ppu.write_toggle;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.scroll_x = !before.ppu.scroll_x;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.scroll_y = !before.ppu.scroll_y;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.read_buffer = !before.ppu.read_buffer;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.render_scroll_x = !before.ppu.render_scroll_x;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+
+        let mut after = before.clone();
+        after.ppu.render_ctrl = !before.ppu.render_ctrl;
+        assert!(FieldDelta::compute(&before, &after).ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_timing_change_all_fields() {
+        let before = make_snapshot();
+
+        let mut after = before.clone();
+        after.ppu.scanline = !before.ppu.scanline;
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+
+        let mut after = before.clone();
+        after.ppu.dot = !before.ppu.dot;
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+
+        let mut after = before.clone();
+        after.ppu.frame_counter = !before.ppu.frame_counter;
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+
+        let mut after = before.clone();
+        after.ppu.odd_frame = !before.ppu.odd_frame;
+        assert!(FieldDelta::compute(&before, &after).ppu_timing.is_some());
+    }
+}

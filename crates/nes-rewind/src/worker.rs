@@ -254,6 +254,27 @@ impl Drop for TimeMachine {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn test_rewind_step_state_math() {
+        let mut core = make_core();
+        let mut tm = TimeMachine::new(TimeMachineConfig::default());
+        for _ in 0..120 {
+            core.execute(Command::StepFrame).unwrap();
+            tm.record_frame(&core);
+        }
+
+        let res = tm.rewind_step(&mut core);
+        assert!(res.is_some());
+
+        match tm.state() {
+            TimeMachineState::Rewinding { seconds_remaining } => {
+                assert!((seconds_remaining - 1.9833333).abs() < 0.001);
+            }
+            _ => panic!("Expected Rewinding state"),
+        }
+    }
+
     use super::*;
     use nes_core::{Command, NesCore};
 

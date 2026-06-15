@@ -72,13 +72,40 @@ impl KeyframePolicy {
 mod tests {
     use super::*;
 
-    fn policy() -> KeyframePolicy {
-        KeyframePolicy::new(60, 2048)
+    #[test]
+    fn test_strict_greater_than_spike_threshold() {
+        let mut p = KeyframePolicy::new(60, 2048);
+        p.rolling_avg = 0;
+        assert!(
+            !p.should_promote(2048),
+            "must not promote when exactly equal to spike threshold"
+        );
+    }
+
+    #[test]
+    fn test_strict_greater_than_rolling_avg_multiplier() {
+        let mut p = KeyframePolicy::new(60, 2048);
+        p.rolling_avg = 501;
+        assert!(
+            !p.should_promote(2100),
+            "must not promote when exactly equal to 3x rolling avg"
+        );
+    }
+
+    #[test]
+    fn test_ema_step_mutant_addition() {
+        let mut p = KeyframePolicy::new(60, 2048);
+        p.rolling_avg = 1000;
+        let res = p.ema_step(1600);
+        assert_eq!(res, 1075);
+        p.rolling_avg = 0;
+        let res2 = p.ema_step(800);
+        assert_eq!(res2, 100);
     }
 
     #[test]
     fn forces_keyframe_at_base_interval() {
-        let mut p = policy();
+        let mut p = KeyframePolicy::new(60, 2048);
         for _ in 0..59 {
             assert!(!p.should_promote(100));
         }
@@ -87,7 +114,7 @@ mod tests {
 
     #[test]
     fn resets_counter_after_promotion() {
-        let mut p = policy();
+        let mut p = KeyframePolicy::new(60, 2048);
         for _ in 0..60 {
             p.should_promote(100);
         }
@@ -99,7 +126,7 @@ mod tests {
 
     #[test]
     fn spike_triggers_early_promotion() {
-        let mut p = policy();
+        let mut p = KeyframePolicy::new(60, 2048);
         for _ in 0..10 {
             p.should_promote(100);
         } // warm up EMA
@@ -108,7 +135,7 @@ mod tests {
 
     #[test]
     fn moderate_delta_does_not_false_positive() {
-        let mut p = policy();
+        let mut p = KeyframePolicy::new(60, 2048);
         for _ in 0..10 {
             p.should_promote(500);
         }

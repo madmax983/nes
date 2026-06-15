@@ -136,12 +136,8 @@ impl CompressedTimeline {
                     oldest.frame_id = delta.frame_id;
                 }
             } else {
-                // No deltas anchored to oldest keyframe — drop it and any
-                // orphaned deltas that preceded the next keyframe.
+                // No deltas anchored to oldest keyframe — drop it.
                 self.keyframes.pop_front();
-                while self.deltas.front().is_some_and(|d| d.frame_id < next_kf_id) {
-                    self.deltas.pop_front();
-                }
             }
         }
     }
@@ -149,6 +145,132 @@ impl CompressedTimeline {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn reconstruct_ignores_delta_at_kf_frame() {
+        let mut tl = CompressedTimeline::new(10, crate::policy::KeyframePolicy::new(60, 2048));
+        let snap1 = nes_core::NesCore::new().save_state();
+        tl.last_frame_id = Some(11);
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 10,
+            snapshot: snap1.clone(),
+        });
+
+        let mut fd = FrameDelta::compute(&snap1, &snap1);
+        fd.frame_id = 10;
+        fd.fields.cpu_regs = Some(nes_core::cpu::CpuSnapshot {
+            a: 100,
+            ..snap1.cpu
+        });
+        tl.deltas.push_back(fd);
+
+        let recon = tl.reconstruct(11).unwrap();
+        assert_eq!(recon.cpu.a, 0);
+    }
+
+    #[test]
+    fn test_is_empty_mutant() {
+        let mut tl = CompressedTimeline::new(10, crate::policy::KeyframePolicy::new(60, 2048));
+        let snap = nes_core::NesCore::new().save_state();
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 1,
+            snapshot: snap,
+        });
+        assert!(!tl.is_empty());
+        let empty_tl = CompressedTimeline::new(10, crate::policy::KeyframePolicy::new(60, 2048));
+        assert!(empty_tl.is_empty());
+    }
+
+    #[test]
+    fn test_prune_mutants() {
+        let mut tl2 = CompressedTimeline::new(2, crate::policy::KeyframePolicy::new(60, 2048));
+        let snap1 = nes_core::NesCore::new().save_state();
+        tl2.keyframes.push_back(Keyframe {
+            frame_id: 10,
+            snapshot: snap1.clone(),
+        });
+        tl2.keyframes.push_back(Keyframe {
+            frame_id: 20,
+            snapshot: snap1.clone(),
+        });
+
+        let mut fd = FrameDelta::compute(&snap1, &snap1);
+        fd.frame_id = 20;
+        tl2.deltas.push_back(fd);
+
+        tl2.max_frames = 2;
+        tl2.prune();
+
+        assert_eq!(tl2.keyframes.front().unwrap().frame_id, 20);
+        assert_eq!(tl2.deltas.len(), 1);
+
+        let mut tl4 = CompressedTimeline::new(2, crate::policy::KeyframePolicy::new(60, 2048));
+        let snap = nes_core::NesCore::new().save_state();
+        tl4.keyframes.push_back(Keyframe {
+            frame_id: 1,
+            snapshot: snap.clone(),
+        });
+        tl4.keyframes.push_back(Keyframe {
+            frame_id: 2,
+            snapshot: snap.clone(),
+        });
+        tl4.keyframes.push_back(Keyframe {
+            frame_id: 3,
+            snapshot: snap.clone(),
+        });
+        tl4.prune();
+        assert_eq!(tl4.len(), 2);
+
+        let mut tl5 = CompressedTimeline::new(3, crate::policy::KeyframePolicy::new(60, 2048));
+        tl5.keyframes.push_back(Keyframe {
+            frame_id: 1,
+            snapshot: snap.clone(),
+        });
+        tl5.keyframes.push_back(Keyframe {
+            frame_id: 2,
+            snapshot: snap.clone(),
+        });
+        tl5.keyframes.push_back(Keyframe {
+            frame_id: 3,
+            snapshot: snap.clone(),
+        });
+        tl5.prune();
+        assert_eq!(tl5.len(), 3);
+
+        let mut tl3 = CompressedTimeline::new(2, crate::policy::KeyframePolicy::new(60, 2048));
+        tl3.keyframes.push_back(Keyframe {
+            frame_id: 10,
+            snapshot: snap1.clone(),
+        });
+        tl3.keyframes.push_back(Keyframe {
+            frame_id: 20,
+            snapshot: snap1.clone(),
+        });
+        let mut fd_clone = FrameDelta::compute(&snap1, &snap1);
+        fd_clone.frame_id = 15;
+        tl3.deltas.push_back(fd_clone);
+        tl3.max_frames = 2;
+    }
+
+    #[test]
+    fn reconstruct_strict_conditions() {
+        let mut tl = CompressedTimeline::new(10, crate::policy::KeyframePolicy::new(60, 2048));
+        let snap1 = nes_core::NesCore::new().save_state();
+        let mut snap2 = snap1.clone();
+        snap2.cpu.a = 42;
+        snap2.ppu.frame_counter = 1;
+        let mut snap3 = snap2.clone();
+        snap3.cpu.a = 99;
+        snap3.ppu.frame_counter = 2;
+
+        tl.push(0, snap1.clone());
+        tl.push(1, snap2.clone());
+        tl.push(2, snap3.clone());
+
+        let recon = tl.reconstruct(1).expect("should reconstruct");
+        assert_eq!(recon.cpu.a, 42);
+    }
+
     use super::*;
     use nes_core::{Command, NesCore};
 
