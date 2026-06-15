@@ -1,0 +1,6 @@
+⚡ Bolt: [Remove unused continuous allocation in tick frame event loop]
+
+💡 What: Replaced `Vec::<RtaEvent>::with_capacity(2)` with `Vec::new()` in the hotpath of `RtaManager::tick`.
+🎯 Why: `Vec::with_capacity(N)` immediately allocates heap memory regardless of whether elements are pushed. `RtaManager::tick` runs 60 times a second, meaning we were allocating and deallocating memory for a list that is almost always empty (RTA events are rare). `Vec::new()` avoids allocation entirely until the first element is pushed.
+📊 Impact: Removes 60 immediate heap allocations per second during steady-state gameplay.
+🔬 Measurement: Run `cargo test -p nes-desktop`
