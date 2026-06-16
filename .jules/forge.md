@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract Input/Gamepad functions from main.rs**
+**Learning:** Found that `main.rs` in `nes-desktop` was acting as a "God File", containing disparate logic related to keyboard and gamepad input tracking, which was better suited in their respective domain files (`input.rs` and `gamepad.rs`).
+**Action:** Extracted keyboard/gamepad update and tracking functions (`update_button_bits`, `track_keyboard_bits_for_key`, `merge_local_input_bits`, `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, `apply_gamepad_delta_commands`) into `input.rs` and `gamepad.rs` along with their unit tests to enforce better cohesion and readability in `main.rs`.

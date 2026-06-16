@@ -1,5 +1,5 @@
 use gilrs::GamepadId;
-use nes_core::{Button, Command};
+use nes_core::{Button, Command, NesCore};
 
 pub const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
 
@@ -193,4 +193,103 @@ pub fn controller_state_delta_for_player(
             _ => None,
         }
     })
+}
+
+pub(crate) fn release_all_buttons(core: &mut NesCore) {
+    for &button in &CONTROLLER_BUTTONS {
+        let _ = core.execute(Command::ReleaseButton(button));
+        let _ = core.execute(Command::ReleaseButton2(button));
+    }
+}
+
+pub(crate) fn resync_restored_inputs(
+    core: &mut NesCore,
+    keyboard_bits: u8,
+    gamepad_bits: &mut [u8; 2],
+) -> Result<(), String> {
+    release_all_buttons(core);
+    *gamepad_bits = [0; 2];
+    apply_gamepad_delta_commands(core, 0, keyboard_bits, nes_core::Player::One)
+}
+
+pub(crate) fn is_player_two_slot(player_index: usize) -> bool {
+    player_index == 1
+}
+
+pub(crate) fn apply_gamepad_delta_commands(
+    core: &mut NesCore,
+    previous_bits: u8,
+    next_bits: u8,
+    player: nes_core::Player,
+) -> Result<(), String> {
+    for command in controller_state_delta_for_player(previous_bits, next_bits, player) {
+        core.execute(command)
+            .map_err(|err| format!("Gamepad command failed: {err}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::{Button, NesCore};
+
+    #[test]
+    fn resync_restored_inputs_reapplies_keyboard_and_resets_gamepad_cache() {
+        let mut core = NesCore::new();
+        let mut gamepad_bits = [Button::Right.bit_mask(), Button::Start.bit_mask()];
+
+        resync_restored_inputs(&mut core, Button::A.bit_mask(), &mut gamepad_bits)
+            .expect("restored inputs should resync");
+
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask(),
+            "held keyboard input should be re-applied immediately"
+        );
+        assert_eq!(
+            core.controller2_bits(),
+            0,
+            "player-2 gamepad state should be cleared until the next poll replays it"
+        );
+        assert_eq!(
+            gamepad_bits,
+            [0, 0],
+            "gamepad cache must reset so held pads generate deltas on the next poll"
+        );
+    }
+
+    #[test]
+    fn apply_gamepad_delta_commands_updates_controller_bits() {
+        let mut core = NesCore::new();
+        apply_gamepad_delta_commands(
+            &mut core,
+            0,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            nes_core::Player::One,
+        )
+        .expect("applying player-1 gamepad delta should succeed");
+        assert_eq!(
+            core.controller_bits(),
+            Button::A.bit_mask() | Button::Right.bit_mask()
+        );
+
+        apply_gamepad_delta_commands(
+            &mut core,
+            Button::A.bit_mask() | Button::Right.bit_mask(),
+            Button::Right.bit_mask(),
+            nes_core::Player::One,
+        )
+        .expect("releasing one player-1 button should succeed");
+        assert_eq!(core.controller_bits(), Button::Right.bit_mask());
+
+        apply_gamepad_delta_commands(
+            &mut core,
+            0,
+            Button::Start.bit_mask(),
+            nes_core::Player::Two,
+        )
+        .expect("applying player-2 gamepad delta should succeed");
+        assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
+    }
 }
