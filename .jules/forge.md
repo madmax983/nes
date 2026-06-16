@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[NES Core Extract PPU Cycles]**
+**Learning:** Extracting repeated logic for PPU dot stepping improves readability without altering complex inner-loop emulation behavior.
+**Action:** Found identical loop blocks and extracted to a private helper `step_ppu_dot`.
