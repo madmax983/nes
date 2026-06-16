@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract classify_keyboard_input match block into a function**
+**Learning:** The window event loop in `nes-desktop/src/main.rs` contained a massive `match classify_keyboard_input(...)` block that made the `run()` function incredibly long and hard to follow, contributing to the "Pyramid of Doom" smell.
+**Action:** Extracted this entire block into a standalone `apply_keyboard_decision` helper function that takes the `KeyboardDecision`, an `AppContext`, and `keyboard_bits: &mut u8`. This completely flattened the event loop processing for keyboard decisions while securely keeping track of ephemeral vs. long-lived state without altering runtime behavior.

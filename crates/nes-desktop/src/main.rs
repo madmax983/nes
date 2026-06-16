@@ -877,82 +877,9 @@ fn run() -> Result<(), String> {
                     rta_calibrate: rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 };
 
-                match classify_keyboard_input(key, pressed, mode) {
-                    KeyboardDecision::ToggleOverlay => {
-                        let mut ctx = build_ctx!();
-                        let _ = dispatch_app_action(AppAction::ToggleOverlay, &mut ctx, control_flow);
-                    }
-                    KeyboardDecision::ManualSaveState => {
-                        if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = build_ctx!();
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
-                        }
-                    }
-                    KeyboardDecision::ManualLoadState => {
-                        if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = build_ctx!();
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
-                        }
-                    }
-                    KeyboardDecision::SetRewindHeld(held) => {
-                        // R: hold to rewind, release to resume.
-                        rewind_held = held;
-                        if held
-                            && let Some(rta) = rta_manager.as_mut()
-                        {
-                            let _ = rta.mark_forbidden_action(
-                                ForbiddenAction::Rewind,
-                                frame_index,
-                                Instant::now(),
-                            );
-                        }
-                        if should_resume_after_rewind_hold(held) {
-                            time_machine.resume();
-                            // The restored snapshot's controller bits may reflect buttons
-                            // held at that historical frame. Release both pads so the
-                            // core's latch matches the host's live input state going forward.
-                            if let Err(err) =
-                                resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
-                            {
-                                eprintln!("Input resync failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                            }
-                        }
-                    }
-                    KeyboardDecision::RtaManualSplit => {
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.manual_split(frame_index, Instant::now());
-                        }
-                    }
-                    KeyboardDecision::RtaFinish => {
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.force_finish(frame_index, Instant::now());
-                            let _ = rta.write_artifacts_if_finished();
-                            if let Some(rta_config) = runtime.rta.as_ref() {
-                                let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
-                            }
-                        }
-                    }
-                    KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
-                        keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
-                    }
-                    KeyboardDecision::ExecuteCore(command) => {
-                        if let Some(action) = command_marks_rta_invalidation(command)
-                            && let Some(rta) = rta_manager.as_mut()
-                        {
-                            let _ = rta.mark_forbidden_action(action, frame_index, Instant::now());
-                        }
-                        if let Err(err) = core.execute(command) {
-                            eprintln!("Input command failed: {err}");
-                            *control_flow = ControlFlow::Exit;
-                        }
-                    }
-                    KeyboardDecision::Noop => {}
-                }
+                let decision = classify_keyboard_input(key, pressed, mode);
+                let mut ctx = build_ctx!();
+                apply_keyboard_decision(decision, &mut ctx, control_flow, &mut keyboard_bits);
             }
             WindowEventDecision::Resized { width, height } => {
                 if let Err(err) = pixels.resize_surface(width, height) {
@@ -1470,6 +1397,76 @@ fn build_startup_table(
     }
 
     table
+}
+
+fn apply_keyboard_decision(
+    decision: KeyboardDecision,
+    ctx: &mut AppContext<'_>,
+    control_flow: &mut ControlFlow,
+    keyboard_bits: &mut u8,
+) {
+    match decision {
+        KeyboardDecision::ToggleOverlay => {
+            let _ = dispatch_app_action(AppAction::ToggleOverlay, ctx, control_flow);
+        }
+        KeyboardDecision::ManualSaveState => {
+            if let Some(action) = slot_action_for_hotkey(true, ctx.overlay.selected_slot()) {
+                let _ = dispatch_app_action(action, ctx, control_flow);
+            }
+        }
+        KeyboardDecision::ManualLoadState => {
+            if let Some(action) = slot_action_for_hotkey(false, ctx.overlay.selected_slot()) {
+                let _ = dispatch_app_action(action, ctx, control_flow);
+            }
+        }
+        KeyboardDecision::SetRewindHeld(held) => {
+            *ctx.rewind_held = held;
+            if held && let Some(rta) = ctx.rta_manager.as_mut() {
+                let _ = rta.mark_forbidden_action(
+                    ForbiddenAction::Rewind,
+                    ctx.frame_index,
+                    Instant::now(),
+                );
+            }
+            if should_resume_after_rewind_hold(held) {
+                ctx.time_machine.resume();
+                if let Err(err) = resync_restored_inputs(ctx.core, *keyboard_bits, ctx.gamepad_bits)
+                {
+                    eprintln!("Input resync failed: {err}");
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+        }
+        KeyboardDecision::RtaManualSplit => {
+            if let Some(rta) = ctx.rta_manager.as_mut() {
+                let _ = rta.manual_split(ctx.frame_index, Instant::now());
+            }
+        }
+        KeyboardDecision::RtaFinish => {
+            if let Some(rta) = ctx.rta_manager.as_mut() {
+                let _ = rta.force_finish(ctx.frame_index, Instant::now());
+                let _ = rta.write_artifacts_if_finished();
+                if let Some(rta_config) = ctx.runtime.rta.as_ref() {
+                    let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                }
+            }
+        }
+        KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
+            *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+        }
+        KeyboardDecision::ExecuteCore(command) => {
+            if let Some(action) = command_marks_rta_invalidation(command)
+                && let Some(rta) = ctx.rta_manager.as_mut()
+            {
+                let _ = rta.mark_forbidden_action(action, ctx.frame_index, Instant::now());
+            }
+            if let Err(err) = ctx.core.execute(command) {
+                eprintln!("Input command failed: {err}");
+                *control_flow = ControlFlow::Exit;
+            }
+        }
+        KeyboardDecision::Noop => {}
+    }
 }
 
 #[cfg(test)]
