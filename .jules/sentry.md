@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-06-18 - Missing cfg(feature = "mcp-host") and PPM edge cases
+**Learning:** The tests checking mcp-host features in `nes-desktop` (e.g. `mcp_host_slowloris`, `havoc_mcp_oom`) were not gated behind `#[cfg(feature = "mcp-host")]`, which caused `unresolved import` compilation errors when tested locally or without `--all-features`. Furthermore, `encode_ppm` was lacking test coverage for length mismatch due to dimension configurations (e.g. height zero).
+**Action:** Always add the proper feature gate on the top level of feature-dependent test files. Additionally, filled the `encode_ppm` gap with a new test `encode_ppm_returns_error_on_height_zero`.

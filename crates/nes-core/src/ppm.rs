@@ -59,6 +59,13 @@ pub fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> io::Result<Vec<u8
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn encode_ppm_returns_error_on_height_zero() {
+        let err = encode_ppm(2, 0, &[1, 2, 3, 255, 4, 5, 6, 255]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    }
+
     use super::*;
 
     #[test]
