@@ -1,5 +1,10 @@
 # NES Emulator (Proof-Forward + MCP-First)
 
+
+> [!NOTE]
+> **REQUIRES FEATURE NOVA**
+> Experimental R&D visualizers and tools (like the story_demo and NarrativeGenerator) are gated behind the `nova` feature flag.
+
 This repository hosts a Rust NES emulator workspace focused on systems learning, deterministic behavior, and strong correctness checks.
 
 ## Workspace
