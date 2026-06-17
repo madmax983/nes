@@ -1,3 +1,7 @@
+//! The Model Context Protocol (MCP) server executable for the NES emulator.
+//!
+//! This binary runs a JSON-RPC server over stdin/stdout, allowing external tools to interact with the NES core.
+
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};

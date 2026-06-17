@@ -1,3 +1,7 @@
+//! Terminal user interface executable for the NES emulator.
+//!
+//! This binary provides the entry point for running the NES emulator in a terminal window using Ratatui.
+
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

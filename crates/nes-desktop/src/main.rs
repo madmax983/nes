@@ -1,3 +1,7 @@
+//! Desktop executable for the NES emulator.
+//!
+//! This binary provides a desktop window, audio rendering, and input handling for the emulator using WGPU and Rodio.
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
