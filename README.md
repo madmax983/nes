@@ -150,6 +150,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_hybrid_autopla
 
 For in-process automation, `nes_core::tas` is now the stable foundation when `nes-core` is built with `--features tas`: it records run-length encoded per-frame controller movies, replays them deterministically against `NesCore`, and can export the legacy macro script format for existing MCP tooling. That gives search/planning work, including `nes-ai`, a structured input tape instead of a stringly experiment.
 
+## ⚠️ Experimental Features (Nova) ⚠️
+
+> **REQUIRES FEATURE NOVA**
+>
+> Experimental R&D visualizers, tools, and demos (such as `story_demo` and `NarrativeGenerator`) are gated behind the `nova` feature flag to keep the base emulator footprint small.
+>
+> To use these features, you must append `--features nova` to your Cargo commands. For example:
+>
+> ```powershell
+> cargo run -p nes-desktop --features nova --release -- ./roms/homebrew/homebrew.nes
+> ```
+
 ## AI Control Training
 
 `nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
