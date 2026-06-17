@@ -61,50 +61,6 @@ fn hex_encode(bytes: &[u8]) -> String {
     output
 }
 
-fn decode_base64(raw: &str) -> Result<Vec<u8>, String> {
-    fn decode_char(ch: u8) -> Result<u8, String> {
-        match ch {
-            b'A'..=b'Z' => Ok(ch - b'A'),
-            b'a'..=b'z' => Ok(ch - b'a' + 26),
-            b'0'..=b'9' => Ok(ch - b'0' + 52),
-            b'+' => Ok(62),
-            b'/' => Ok(63),
-            _ => Err(format!("invalid base64 character '{}'", ch as char)),
-        }
-    }
-
-    if !raw.len().is_multiple_of(4) {
-        return Err("base64 length must be multiple of 4".to_owned());
-    }
-
-    let bytes = raw.as_bytes();
-    let mut out = Vec::with_capacity((bytes.len() / 4) * 3);
-    let mut i = 0usize;
-    while i < bytes.len() {
-        let c0 = bytes[i];
-        let c1 = bytes[i + 1];
-        let c2 = bytes[i + 2];
-        let c3 = bytes[i + 3];
-        i += 4;
-
-        let v0 = decode_char(c0)?;
-        let v1 = decode_char(c1)?;
-        let pad2 = c2 == b'=';
-        let pad3 = c3 == b'=';
-        let v2 = if pad2 { 0 } else { decode_char(c2)? };
-        let v3 = if pad3 { 0 } else { decode_char(c3)? };
-
-        out.push((v0 << 2) | (v1 >> 4));
-        if !pad2 {
-            out.push(((v1 & 0x0F) << 4) | (v2 >> 2));
-        }
-        if !pad3 {
-            out.push(((v2 & 0x03) << 6) | v3);
-        }
-    }
-    Ok(out)
-}
-
 #[test]
 fn every_catalog_tool_has_dispatch_path() {
     let mut core = NesCore::new();
@@ -551,7 +507,7 @@ fn export_6502_dsl_rom_base64_returns_ines_payload() {
         } => {
             assert_eq!(mapper_id, 0);
             assert_eq!(prg_rom_bytes, 16 * 1024);
-            let rom = decode_base64(&rom_base64).expect("valid base64 rom payload");
+            let rom = nes_core::base64::decode(&rom_base64).expect("valid base64 rom payload");
             assert_eq!(bytes, rom.len());
             assert!(rom.starts_with(b"NES\x1A"));
             assert_eq!(rom[4], 1);

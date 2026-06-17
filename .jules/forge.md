@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Extract base64 to nes-core]**
+**Learning:** Found duplicate implementations of `encode_base64` and `decode_base64` in `nes-mcp`. This logic is a core utility that should be tested and reused across the system, not duplicated.
+**Action:** Extracted `base64` encoding and decoding logic into a standalone, fully-tested `nes_core::base64` module, removing duplication across crates.

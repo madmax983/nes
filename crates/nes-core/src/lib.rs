@@ -2,6 +2,8 @@
 
 mod api;
 mod apu;
+/// Base64 encoding utilities.
+pub mod base64;
 /// BMP image encoding utilities.
 pub mod bmp;
 /// CPU bus region helpers and address classification.

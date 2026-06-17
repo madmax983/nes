@@ -549,7 +549,7 @@ fn handle_export_6502_dsl_rom_base64(params: &ToolParams) -> Result<DispatchOutp
         .map(|banks| usize::from(*banks) * 16 * 1024)
         .unwrap_or(0);
     Ok(DispatchOutput::DslRomExportedBase64 {
-        rom_base64: encode_base64(rom.as_slice()),
+        rom_base64: nes_core::base64::encode(rom.as_slice()),
         bytes: rom.len(),
         mapper_id: 0,
         prg_rom_bytes,
@@ -903,41 +903,6 @@ fn parse_required_string(params: &ToolParams, key: &str) -> Result<String, Dispa
     Ok(value)
 }
 
-fn encode_base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    let mut i = 0usize;
-    while i + 3 <= bytes.len() {
-        let b0 = bytes[i];
-        let b1 = bytes[i + 1];
-        let b2 = bytes[i + 2];
-        i += 3;
-
-        out.push(ALPHABET[usize::from(b0 >> 2)] as char);
-        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) + (b1 >> 4))] as char);
-        out.push(ALPHABET[usize::from(((b1 & 0x0F) << 2) + (b2 >> 6))] as char);
-        out.push(ALPHABET[usize::from(b2 & 0x3F)] as char);
-    }
-
-    let rem = bytes.len() - i;
-    if rem == 1 {
-        let b0 = bytes[i];
-        out.push(ALPHABET[usize::from(b0 >> 2)] as char);
-        out.push(ALPHABET[usize::from((b0 & 0x03) << 4)] as char);
-        out.push('=');
-        out.push('=');
-    } else if rem == 2 {
-        let b0 = bytes[i];
-        let b1 = bytes[i + 1];
-        out.push(ALPHABET[usize::from(b0 >> 2)] as char);
-        out.push(ALPHABET[usize::from(((b0 & 0x03) << 4) + (b1 >> 4))] as char);
-        out.push(ALPHABET[usize::from((b1 & 0x0F) << 2)] as char);
-        out.push('=');
-    }
-
-    out
-}
-
 fn parse_hex_bytes(raw: &str) -> Result<Vec<u8>, DispatchError> {
     let mut bytes = Vec::with_capacity(raw.len() / 2);
     let mut valid_bytes = raw
@@ -976,9 +941,9 @@ mod tests {
     use nes_core::{FRAME_HEIGHT, FRAME_WIDTH, NesCore};
 
     use super::{
-        Button, DispatchError, Mirroring, ToolParams, encode_base64, parse_button,
-        parse_dsl_rom_options, parse_hex_bytes, parse_player2, parse_slot, parse_speed_permille,
-        parse_u64, sync_audio_output, sync_frame_output,
+        Button, DispatchError, Mirroring, ToolParams, parse_button, parse_dsl_rom_options,
+        parse_hex_bytes, parse_player2, parse_slot, parse_speed_permille, parse_u64,
+        sync_audio_output, sync_frame_output,
     };
     use crate::output::{latest_output_metadata, reset_output_state_for_test};
 
@@ -1089,17 +1054,6 @@ mod tests {
         let err = parse_dsl_rom_options(&params(&[("mirroring", "diagonal")]))
             .expect_err("invalid mirroring");
         assert!(matches!(err, DispatchError::InvalidParams(_)));
-    }
-
-    #[test]
-    fn encode_base64_matches_known_vectors() {
-        assert_eq!(encode_base64(b""), "");
-        assert_eq!(encode_base64(b"f"), "Zg==");
-        assert_eq!(encode_base64(b"fo"), "Zm8=");
-        assert_eq!(encode_base64(b"foo"), "Zm9v");
-        assert_eq!(encode_base64(b"foob"), "Zm9vYg==");
-        assert_eq!(encode_base64(b"fooba"), "Zm9vYmE=");
-        assert_eq!(encode_base64(b"foobar"), "Zm9vYmFy");
     }
 
     #[test]
