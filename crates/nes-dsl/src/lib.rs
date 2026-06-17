@@ -220,7 +220,10 @@ enum OperandSyntax {
     AbsoluteOrZeroPage(Expr),
 }
 
-fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, DslError> {
+pub(crate) fn parse_operand_syntax(
+    operand: &str,
+    line_no: usize,
+) -> Result<OperandSyntax, DslError> {
     if operand.is_empty() {
         return Ok(OperandSyntax::Implied);
     }
@@ -228,42 +231,31 @@ fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<OperandSyntax, 
         return Ok(OperandSyntax::Accumulator);
     }
 
-    if let Some(raw) = operand.strip_prefix('#') {
-        return Ok(OperandSyntax::Immediate(parse_expr(raw.trim(), line_no)?));
-    }
+    let parsed = |s: &str| parse_expr(s.trim(), line_no);
 
+    if let Some(prefix) = operand.strip_prefix('#') {
+        return Ok(OperandSyntax::Immediate(parsed(prefix)?));
+    }
     if let Some(inner) = operand.strip_prefix('(') {
-        if let Some(inner) = inner.strip_suffix(",X)") {
-            return Ok(OperandSyntax::IndirectX(parse_expr(inner.trim(), line_no)?));
+        let trimmed = inner.trim_end();
+        if let Some(prefix) = trimmed.strip_suffix(",X)") {
+            return Ok(OperandSyntax::IndirectX(parsed(prefix)?));
         }
-
-        if let Some(inner) = inner.strip_suffix("),Y") {
-            return Ok(OperandSyntax::IndirectY(parse_expr(inner.trim(), line_no)?));
+        if let Some(prefix) = trimmed.strip_suffix("),Y") {
+            return Ok(OperandSyntax::IndirectY(parsed(prefix)?));
         }
-
-        if let Some(inner) = inner.strip_suffix(')') {
-            return Ok(OperandSyntax::Indirect(parse_expr(inner.trim(), line_no)?));
+        if let Some(prefix) = trimmed.strip_suffix(')') {
+            return Ok(OperandSyntax::Indirect(parsed(prefix)?));
         }
     }
-
     if let Some(prefix) = operand.strip_suffix(",X") {
-        return Ok(OperandSyntax::AbsoluteX(parse_expr(
-            prefix.trim(),
-            line_no,
-        )?));
+        return Ok(OperandSyntax::AbsoluteX(parsed(prefix)?));
     }
-
     if let Some(prefix) = operand.strip_suffix(",Y") {
-        return Ok(OperandSyntax::AbsoluteY(parse_expr(
-            prefix.trim(),
-            line_no,
-        )?));
+        return Ok(OperandSyntax::AbsoluteY(parsed(prefix)?));
     }
 
-    Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(
-        operand.trim(),
-        line_no,
-    )?))
+    Ok(OperandSyntax::AbsoluteOrZeroPage(parsed(operand)?))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

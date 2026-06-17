@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactor parse_operand_syntax to flatten structural checks]
+**Learning:** Argument parsing routines with many options often devolve into a "pyramid of doom" consisting of nearly identical `if arg == ...` and `if let Some(value) = arg.strip_prefix(...)` blocks, causing unnecessary scrolling and boilerplate.
+**Action:** Extract a helper function or closure (e.g., `parsed`) that abstracts the common shape of checking for both exact matches and prefix matches, flattening the match arms to apply the specific field mutations cleanly.
