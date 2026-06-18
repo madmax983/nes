@@ -12,6 +12,24 @@ use nes_ai::{
     trainer::{TrainerConfig, evaluate_smb_control},
 };
 
+fn format_profile_read_error(profile_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the AI profile config at '{}'.\n{} Check the path or create a new .toml file.",
+            "Error:".with(Color::Red).bold(),
+            profile_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read profile config at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            profile_path.with(Color::Yellow),
+            err
+        )
+    }
+}
+
 fn main() {
     if let Err(err) = run() {
         eprintln!("\n{err}");
@@ -45,7 +63,7 @@ fn run() -> Result<(), String> {
     let artifact_dir = args.get(4).map(PathBuf::from);
 
     let profile_str = fs::read_to_string(&profile_path)
-        .map_err(|e| format!("Failed to read profile config: {e}"))?;
+        .map_err(|e| format_profile_read_error(&profile_path.to_string_lossy(), &e))?;
     let profile_cfg: AiProfileConfig =
         toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
 

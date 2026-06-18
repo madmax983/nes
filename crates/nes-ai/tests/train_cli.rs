@@ -45,3 +45,30 @@ fn train_smb_control_without_required_arguments_prints_usage_and_fails() {
         "Usage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]"
     ));
 }
+
+#[test]
+fn train_smb_control_missing_profile_prints_styled_error() {
+    let output = Command::new(train_smb_control_bin())
+        .arg("__does_not_exist__.toml")
+        .output()
+        .expect("run train_smb_control");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("Could not find the AI profile config at"));
+    assert!(stderr.contains("__does_not_exist__.toml"));
+    assert!(stderr.contains("Hint:"));
+}
+
+#[test]
+fn train_smb_control_invalid_profile_permissions_prints_styled_error() {
+    let output = Command::new(train_smb_control_bin())
+        .arg(".")
+        .output()
+        .expect("run train_smb_control");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("Failed to read profile config at"));
+    assert!(stderr.contains('.'));
+}
