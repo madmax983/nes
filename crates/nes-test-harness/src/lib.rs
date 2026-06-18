@@ -35,26 +35,41 @@ pub use rom_paths::*;
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Captures a single write to an APU hardware register, used for audio fidelity testing.
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle when the write occurred.
     pub cpu_cycle: u64,
+    /// The memory address of the APU register being written to.
     pub addr: u16,
+    /// The 8-bit value written to the register.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Statistical metrics for an audio waveform, used to detect clipping, DC offset, and general volume levels.
 pub struct AudioStats {
+    /// Total number of samples in the waveform.
     pub sample_count: usize,
+    /// The Root Mean Square of the audio signal, indicating average power.
     pub rms: f64,
+    /// The absolute maximum peak amplitude reached in the sample.
     pub peak: i16,
+    /// The average DC offset of the signal, which should ideally be zero to avoid popping.
     pub dc_offset: f64,
+    /// The percentage of samples that reach maximum or minimum possible values, indicating distortion.
     pub clipping_ratio: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Detailed results of a perceptual audio comparison between a generated waveform and a golden reference.
 pub struct WaveformComparison {
+    /// The number of samples successfully compared.
     pub samples_compared: usize,
+    /// Cross-correlation coefficient representing temporal alignment and similarity. 1.0 is a perfect match.
     pub correlation: f64,
+    /// The ratio of the generated waveform's RMS to the golden waveform's RMS.
     pub rms_ratio: f64,
+    /// The average absolute difference in decibels between the frequency spectrums of both signals.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -98,6 +113,7 @@ pub fn collect_apu_register_writes(
 }
 
 #[must_use]
+/// Computes a stable hash of APU register writes to act as a deterministic golden signature.
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for event in writes {
@@ -178,6 +194,7 @@ pub fn capture_audio_window(
 }
 
 #[must_use]
+/// Computes a stable 64-bit hash over raw PCM audio samples for exact determinism checks.
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for sample in samples {
@@ -188,6 +205,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
 }
 
 #[must_use]
+/// Analyzes a raw PCM audio buffer and extracts statistical metrics like RMS, peak, and DC offset.
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
         return AudioStats {
@@ -226,6 +244,7 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
 }
 
 #[must_use]
+/// Computes the RMS envelope of an audio signal over a sliding window to analyze dynamic volume over time.
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
         return Vec::new();
@@ -328,6 +347,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
 }
 
 #[must_use]
+/// Compares two waveforms and generates a statistical and spectral similarity report to ensure audio fidelity.
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
     if n == 0 {
@@ -373,6 +393,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 }
 
 #[must_use]
+/// Computes the magnitude of the Fast Fourier Transform (FFT) in Decibels (dB) for frequency domain analysis.
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
         return Vec::new();
@@ -415,6 +436,7 @@ fn hann_window(idx: usize, len: usize) -> f64 {
 }
 
 #[must_use]
+/// Inspects the header of a `.nes` ROM byte slice to extract the iNES mapper ID without parsing the whole file.
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
         return None;
@@ -432,6 +454,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 }
 
 #[must_use]
+/// Checks if the core emulator engine explicitly implements the specified mapper ID.
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)
 }

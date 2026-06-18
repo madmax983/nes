@@ -1,12 +1,15 @@
 use nes_core::{Button, Command};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Maps a platform UI input event to an actionable emulator or system command.
 pub struct BridgeCommand {
+    /// The core emulator command to be executed (e.g. `PressButton`).
     pub core: Command,
 }
 
 impl BridgeCommand {
     #[must_use]
+    /// Returns a human readable name for the tool or command intended for debug logging.
     pub fn tool_name(self) -> &'static str {
         match self.core {
             Command::PressButton(_) => "press_button",
@@ -17,6 +20,7 @@ impl BridgeCommand {
 }
 
 #[must_use]
+/// Maps a raw system keycode string and press state to a known UI or Emulator core command.
 pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
     let button = map_key_event_to_button(key_code)?;
 
@@ -30,6 +34,7 @@ pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeC
 }
 
 #[must_use]
+/// Maps a raw system keycode string to an emulator controller `Button` enum if applicable.
 pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
     match key_code {
         "KeyZ" => Some(Button::A),
@@ -45,6 +50,7 @@ pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
 }
 
 #[must_use]
+/// Maps a raw system keycode string to its bitwise representation for controller state tracking.
 pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
     map_key_event_to_button(key_code).map(Button::bit_mask)
 }

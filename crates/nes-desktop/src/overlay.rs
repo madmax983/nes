@@ -24,50 +24,70 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// The primary top-level navigation panel.
     MainMenu,
+    /// The cheat code management panel.
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainMenuSelection {
+    /// Unpauses and closes the overlay.
     Resume,
+    /// Triggers the host file picker.
     OpenRom,
+    /// Transitions to the Cheats panel.
     OpenCheats,
+    /// Saves state to the specified slot.
     SaveSlot(u8),
+    /// Loads state from the specified slot.
     LoadSlot(u8),
+    /// Performs a hard reset of the emulator console.
     Reset,
+    /// Terminates the application.
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatsSelection {
+    /// Triggers the text input modal to add a new Game Genie code.
     AddCode,
+    /// Selects an existing cheat code for toggling or removal.
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlaySelection {
+    /// Indicates a selection was made on the Main Menu.
     Main(MainMenuSelection),
+    /// Indicates a selection was made on the Cheats panel.
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// Propagates an intent that must be handled by the outer application loop.
     AppAction(AppAction),
+    /// Intent to toggle the enabled state of a specific cheat code.
     ToggleCheat(usize),
+    /// Intent to delete a specific cheat code.
     RemoveCheat(usize),
+    /// Intent to add a newly typed Game Genie code.
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// The index of the save slot.
     pub slot: u8,
+    /// The human-readable string indicating the status (e.g. `Empty`, `Corrupt`).
     pub status_label: &'static str,
+    /// The timestamp when the state was saved, if it exists.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -86,7 +106,9 @@ impl OverlaySlotSummary {
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// The original raw text of the Game Genie code.
     pub raw_code: &'a str,
+    /// Whether the cheat is currently actively modifying memory.
     pub enabled: bool,
 }
 

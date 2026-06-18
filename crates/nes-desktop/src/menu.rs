@@ -22,11 +22,13 @@ pub struct DesktopMenu {
 
 impl DesktopMenu {
     #[must_use]
+    /// Retrieves the ordered list of entries belonging to this menu.
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
     }
 
     #[cfg(not(test))]
+    /// Injects the menu natively into the host OS window title bar.
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
         unsafe {
@@ -47,6 +49,7 @@ impl DesktopMenu {
 
     #[cfg(not(test))]
     #[must_use]
+    /// Polls the native OS menu event queue to see if the user triggered any actions.
     pub fn poll_action(&self) -> Option<AppAction> {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -60,6 +63,7 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// Dynamically enables or disables a specific menu action item by mutating the native UI.
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -73,6 +77,7 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// Synchronizes the enable/disable state of menu items based on current runtime conditions, such as blocking Save/Load during Netplay.
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);
     }
@@ -98,10 +103,15 @@ impl DesktopMenu {
 /// Declarative menu node used to keep menu semantics testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesktopMenuEntry {
+    /// A standard clickable action item.
     Item(MenuItemSpec),
+    /// A visual divider between items.
     Separator,
+    /// A nested folder containing more items.
     Submenu {
+        /// The display text for the submenu folder.
         label: &'static str,
+        /// The children elements contained in the folder.
         entries: Vec<DesktopMenuEntry>,
     },
 }
@@ -109,7 +119,9 @@ pub enum DesktopMenuEntry {
 /// Shared metadata for actionable menu items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuItemSpec {
+    /// Unique identifier for the menu.
     pub id: String,
+    /// The label rendered in the UI.
     pub label: String,
 }
 
@@ -167,24 +179,32 @@ pub fn action_from_menu_event_id(id: &str) -> Option<AppAction> {
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
+/// Indicates if the host platform supports native OS menus (e.g., Windows/macOS).
+/// Indicates if the host platform supports native OS menus (e.g., Windows/macOS).
+/// Indicates if the host platform supports native OS menus (e.g., Windows/macOS).
 pub const fn native_menu_supported() -> bool {
     true
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// Indicates if the host platform supports native OS menus (e.g., Windows/macOS).
 pub const fn native_menu_supported() -> bool {
     false
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
+/// Indicates if the host platform supports native file picker dialogs.
+/// Indicates if the host platform supports native file picker dialogs.
+/// Indicates if the host platform supports native file picker dialogs.
 pub const fn rom_picker_supported() -> bool {
     true
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// Indicates if the host platform supports native file picker dialogs.
 pub const fn rom_picker_supported() -> bool {
     false
 }

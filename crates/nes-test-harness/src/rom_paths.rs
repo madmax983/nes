@@ -4,6 +4,7 @@ use std::path::Path;
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
 #[allow(dead_code)]
+/// Retrieves the path to the configured Super Mario Bros. ROM for integration testing.
 pub fn smb_rom_path() -> String {
     let config = load_config();
     let rom_path = config
@@ -19,6 +20,7 @@ pub fn smb_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Retrieves the path to the configured `nestest` ROM for CPU instruction tests.
 pub fn nestest_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.nestest.unwrap_or_else(|| {
@@ -28,6 +30,7 @@ pub fn nestest_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Retrieves the path to the Blargg CPU behavior test suite ROM.
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.blargg_cpu.unwrap_or_else(|| {
@@ -39,6 +42,7 @@ pub fn blargg_cpu_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Retrieves a list of all test ROM paths within the configured Brad Smith audio test suite directory.
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.unwrap_or_else(|| {
@@ -69,6 +73,7 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
 }
 
 #[allow(dead_code)]
+/// Retrieves the path to the directory containing golden audio waveform artifacts.
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.unwrap_or_else(|| {

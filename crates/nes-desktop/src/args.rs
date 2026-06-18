@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// The default network binding address for the local MCP tool server.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// The CLI usage help text printed when requested.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,21 +24,37 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// Path to the ROM file to be loaded.
     pub rom_path: Option<String>,
+    /// A list of Game Genie cheat codes to enable at startup.
     pub cheat_codes: Vec<String>,
+    /// If true, the local JSON-RPC MCP server is enabled.
     pub mcp_enabled: bool,
+    /// The network address the MCP server should bind to.
     pub mcp_bind_addr: String,
+    /// If true, rollback netplay is enabled.
     pub netplay_enabled: bool,
+    /// The websocket address of the netplay relay server.
     pub netplay_relay_addr: Option<String>,
+    /// The identifier for the netplay matchmaking room.
     pub netplay_room: Option<String>,
+    /// The assigned player number for this netplay client (1 or 2).
     pub netplay_player: Option<u8>,
+    /// Forced manual input delay in frames for netplay prediction buffering.
     pub netplay_input_delay_frames: Option<u32>,
+    /// The maximum number of frames the netplay engine is allowed to rollback.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// Frequency in frames at which netplay clients verify state hashes for desyncs.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// If true, the RTA (Real Time Attack) competitive speedrun mode is enabled.
     pub rta_enabled: bool,
+    /// Overrides auto-detection and forces a specific RTA profile ID to load.
     pub rta_profile_id: Option<String>,
+    /// Path to the directory containing RTA profile definitions.
     pub rta_profiles_dir: Option<String>,
+    /// Path to the directory where completed RTA run artifacts are saved.
     pub rta_runs_dir: Option<String>,
+    /// If true, launches RTA calibration mode to generate draft profiles based on manual splits.
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
     pub auto_player_enabled: bool,
