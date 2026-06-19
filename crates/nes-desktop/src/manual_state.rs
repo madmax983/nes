@@ -12,10 +12,10 @@ const HASH_PREFIX_LEN: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SaveStateFile {
+struct SaveStateFile<'a> {
     version: u32,
     rom_hash: String,
-    snapshot: CoreSnapshot,
+    snapshot: std::borrow::Cow<'a, CoreSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,7 +184,9 @@ pub fn save_state_file(path: &Path, rom_hash: &str, snapshot: &CoreSnapshot) -> 
     let payload = SaveStateFile {
         version: SAVE_STATE_VERSION,
         rom_hash: rom_hash.to_owned(),
-        snapshot: snapshot.clone(),
+        // **⚡ Bolt Optimization:** Avoids a 64KB+ deep `.clone()` of the `CoreSnapshot`
+        // when serializing a save state to disk by using `Cow`.
+        snapshot: std::borrow::Cow::Borrowed(snapshot),
     };
     let encoded = serde_json::to_vec(&payload)
         .map_err(|err| format!("failed to serialize save-state payload: {err}"))?;
@@ -233,7 +235,7 @@ pub fn load_state_file(path: &Path, expected_rom_hash: &str) -> Result<CoreSnaps
             payload.rom_hash
         ));
     }
-    Ok(payload.snapshot)
+    Ok(payload.snapshot.into_owned())
 }
 
 /// Reads lightweight metadata (like the timestamp) for a specific save state slot.
