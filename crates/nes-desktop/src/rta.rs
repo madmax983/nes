@@ -476,14 +476,14 @@ pub fn select_profile(
     let Some(first_match) = match_iter.next() else {
         return Err(format!(
             "No RTA profile matched ROM hash {rom_hash}. Known profiles: [{}]",
-            format_profile_names(profiles)
+            format_profile_names(profiles.iter())
         ));
     };
 
     if let Some(second_match) = match_iter.next() {
-        let mut conflict_profiles = vec![first_match.clone(), second_match.clone()];
-        conflict_profiles.extend(match_iter.cloned());
-        let conflict = format_profile_names(&conflict_profiles);
+        let mut conflict_profiles = vec![first_match, second_match];
+        conflict_profiles.extend(match_iter);
+        let conflict = format_profile_names(conflict_profiles.into_iter());
         return Err(format!(
             "Multiple RTA profiles matched ROM hash {rom_hash}: {conflict}"
         ));
@@ -574,13 +574,10 @@ impl TriggerRuntime {
 
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
 /// a String and joining manually.
-fn format_profile_names(profiles: &[LoadedProfile]) -> String {
-    let len = profiles
-        .iter()
-        .map(|p| p.profile.id.len() + 2)
-        .sum::<usize>();
-    let mut names = String::with_capacity(len);
-    for (i, profile) in profiles.iter().enumerate() {
+fn format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String {
+    // We can't pre-allocate the exact length easily with an iterator, but we avoid cloning LoadedProfile structs.
+    let mut names = String::new();
+    for (i, profile) in profiles.enumerate() {
         if i > 0 {
             names.push_str(", ");
         }

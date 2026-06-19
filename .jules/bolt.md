@@ -35,3 +35,11 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Optimized formatting iterator slices]**
+**Learning:** Passing a slice  to a function and mapping over its iterator can allocate intermediate structures or be inefficient compared to taking an  directly.
+**Action:** Use  for methods that consume elements to format them to avoid unnecessary allocations, cloning, or converting if we don't strictly need a slice.
+
+**[Optimized formatting iterator slices]**
+**Learning:** Passing a slice `&[T]` to a function and mapping over its iterator can allocate intermediate structures or be inefficient compared to taking an `impl Iterator<Item = &T>` directly, particularly when formatting list strings.
+**Action:** Use `impl Iterator<Item = &T>` for methods that consume elements to format them to avoid unnecessary allocations, cloning, or converting if we don't strictly need a slice.
