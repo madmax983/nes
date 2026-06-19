@@ -14,7 +14,7 @@ use nes_ai::{
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(Color::Red).bold());
         std::process::exit(1);
     }
 }

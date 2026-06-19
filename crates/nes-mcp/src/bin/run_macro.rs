@@ -14,23 +14,26 @@ use nes_core::NesCore;
 use nes_mcp::macro_engine::execute_macro_script;
 
 fn main() {
+    if let Err(err) = run() {
+        eprintln!("\n{} {err}", "Error:".with(Color::Red).bold());
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
         println!("Usage: nes-mcp-run-macro <rom_path> <script_path>");
         std::process::exit(0);
     }
     if args.len() != 3 {
-        eprintln!("Usage: nes-mcp-run-macro <rom_path> <script_path>");
-        std::process::exit(1);
+        return Err("missing or invalid number of arguments.\nUsage: nes-mcp-run-macro <rom_path> <script_path>".to_string());
     }
 
     let rom_path = &args[1];
     let script_path = &args[2];
 
-    if let Err(err) = run(rom_path, script_path) {
-        eprintln!("\n{err}");
-        std::process::exit(1);
-    }
+    run_inner(rom_path, script_path)
 }
 
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
@@ -69,7 +72,7 @@ fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
     }
 }
 
-fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
+fn run_inner(rom_path: &str, script_path: &str) -> Result<(), String> {
     let rom_bytes = fs::read(rom_path).map_err(|err| format_rom_read_error(rom_path, &err))?;
     let script_content = fs::read_to_string(script_path)
         .map_err(|err| format_script_read_error(script_path, &err))?;
@@ -154,11 +157,11 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::run;
+    use super::run_inner;
 
     #[test]
     fn run_reports_missing_rom_file_errors() {
-        let err = run("__missing_rom__.nes", "__missing_script__.txt")
+        let err = run_inner("__missing_rom__.nes", "__missing_script__.txt")
             .expect_err("missing files should fail");
         assert!(err.contains("Could not find the ROM file at"));
         assert!(err.contains("__missing_rom__.nes"));
@@ -173,7 +176,7 @@ mod tests {
         let rom_path = temp_dir.join("dummy.nes");
         std::fs::write(&rom_path, vec![0; 16 + 16384]).unwrap();
 
-        let err = run(rom_path.to_str().unwrap(), "__missing_script__.txt")
+        let err = run_inner(rom_path.to_str().unwrap(), "__missing_script__.txt")
             .expect_err("missing script should fail");
         assert!(err.contains("Could not find the macro script at"));
         assert!(err.contains("__missing_script__.txt"));

@@ -13,7 +13,7 @@ use nes_test_harness::{default_homebrew_rom_path, write_homebrew_rom};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), err);
         std::process::exit(1);
     }
 }
@@ -33,7 +33,10 @@ fn run() -> Result<(), String> {
             }
             "--out" => {
                 let Some(path) = args.next() else {
-                    return Err("missing value after --out".to_owned());
+                    return Err(
+                        "missing value after --out\nUsage: build_homebrew_rom [--out <path>]"
+                            .to_string(),
+                    );
                 };
                 out_path = PathBuf::from(path);
             }

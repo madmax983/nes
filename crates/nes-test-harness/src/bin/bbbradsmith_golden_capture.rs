@@ -94,7 +94,7 @@ fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Col
 fn main() {
     let mut stdout = std::io::stdout();
     if let Err(err) = run(&mut stdout) {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(Color::Red).bold(), err);
         std::process::exit(1);
     }
 }
@@ -111,7 +111,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     for arg in &pass_through {
         if arg != "--force" {
             return Err(format!(
-                "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
+                "unknown argument '{arg}'\nUsage: bbbradsmith_golden_capture [--config <path>] [--force]"
             ));
         }
     }
