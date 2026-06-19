@@ -576,6 +576,96 @@ mod tests {
     }
 
     #[test]
+    fn ppu_timing_dot_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.dot = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_timing.is_some());
+    }
+
+    #[test]
+    fn ppu_timing_odd_frame_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.odd_frame = !before.ppu.odd_frame;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_timing.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_temp_addr_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.temp_addr = 0x1234;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_write_toggle_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.write_toggle = !before.ppu.write_toggle;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_scroll_y_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.scroll_y = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_render_scroll_x_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.render_scroll_x = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_render_ctrl_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.render_ctrl = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_read_buffer_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.read_buffer = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_scroll_x_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.scroll_x = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
+    fn ppu_scroll_fine_x_change_only() {
+        let before = make_snapshot();
+        let mut after = before.clone();
+        after.ppu.fine_x = 123;
+        let fd = FieldDelta::compute(&before, &after);
+        assert!(fd.ppu_scroll.is_some());
+    }
+
+    #[test]
     fn field_delta_apply_restores_changes() {
         let before = make_snapshot();
         let mut after = before.clone();

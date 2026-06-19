@@ -25,3 +25,10 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-05-15 - Mutants Timeouts vs Coverage Gaps
+**Learning:** Mutating loop increment bounds (e.g. `+=` to `*=` in `delta.rs`) can cause test timeouts. These should be treated as caught or unviable, not as true coverage gaps, as the mutation induces an infinite loop rather than an incorrect result state that can be asserted against.
+**Action:** When inspecting mutants logs, differentiate between timeouts on tight loop constructs and actual MISSED coverage gaps on state changes.
+
+## 2025-05-15 - Exact Boundary Testing on EMA
+**Learning:** Testing logic involving exponential moving averages (`EMA`) and mathematical bounds (`>` vs `>=`) requires generating exact integer inputs that resolve exactly to boundaries without fractional overflow to effectively kill operator mutants.
+**Action:** Calculate expected integer fractions and verify `==` boundaries prior to asserting on the surrounding Boolean threshold mutations.

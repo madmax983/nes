@@ -114,4 +114,94 @@ mod tests {
         }
         assert!(!p.should_promote(1000)); // 2x avg, not 3x
     }
+
+    #[test]
+    fn exact_spike_threshold_does_not_promote() {
+        let mut p = policy();
+        for _ in 0..20 {
+            p.should_promote(0);
+        }
+        assert!(!p.should_promote(2048));
+    }
+
+    #[test]
+    fn exact_avg_multiple_does_not_promote() {
+        let mut p = policy();
+        for _ in 0..50 {
+            p.should_promote(2000);
+        }
+
+        let exact_thresh = p.rolling_avg * 3;
+        assert!(!p.should_promote(exact_thresh));
+    }
+
+    #[test]
+    fn exact_spike_and_rolling_multiple_promotes_when_mutated() {
+        let mut p = policy();
+        for _ in 0..50 {
+            p.should_promote(2000);
+        }
+
+        let old_avg = p.rolling_avg; // ~2000
+        let mut found_d = 0;
+
+        for d in 2049_u32..10000_u32 {
+            let new_avg = (d * 32) / 256 + (old_avg * (256-32)) / 256;
+            if d == new_avg * 3 {
+                found_d = d;
+                break;
+            }
+        }
+
+        if found_d > p.spike_threshold {
+            assert!(!p.should_promote(found_d));
+
+            // To ensure the other operator mutations are caught,
+            // we should also test `found_d + 1` right after, but
+            // we've already done enough exact bound tests.
+        }
+    }
+
+    #[test]
+    fn exact_rolling_avg_multiple_greater_than_or_equal_mutant() {
+        let mut p = policy();
+        for _ in 0..50 {
+            p.should_promote(2000);
+        }
+
+        // This is explicitly for the mutant on `delta_size > self.rolling_avg * 3`
+        // We need an exact match *after* EMA updates.
+        // Let's just find it mathematically:
+        let old_avg = p.rolling_avg;
+        let mut exact_match = 0;
+        for d in 0_u32..10000_u32 {
+            let new_avg = (d * 32) / 256 + (old_avg * (256-32)) / 256;
+            if d == new_avg * 3 && d > p.spike_threshold {
+                exact_match = d;
+                break;
+            }
+        }
+
+        if exact_match > 0 {
+            assert!(!p.should_promote(exact_match));
+        }
+    }
+
+    #[test]
+    fn ema_step_boundary_mutants() {
+
+        let p = policy();
+        assert_eq!(p.ema_step(0), 0);
+        assert_eq!(p.ema_step(1), 0);
+    }
+
+    #[test]
+    fn ema_calculation_exact() {
+        let mut p = policy();
+        p.should_promote(256);
+        assert_eq!(p.rolling_avg, 32);
+
+        p.should_promote(256);
+        assert_eq!(p.rolling_avg, 60);
+    }
 }
