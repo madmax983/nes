@@ -7,6 +7,9 @@ mod mmc1;
 mod mmc3;
 mod nrom;
 mod uxrom;
+mod dispatch;
+pub use dispatch::MapperDelta;
+pub(crate) use dispatch::{LoadedMapper, MapperDeltaKind};
 
 pub use axrom::Axrom;
 pub(crate) use axrom::AxromState;
