@@ -32,3 +32,15 @@ fn golden_capture_with_help_flag_prints_usage_and_succeeds() {
         assert!(stdout.contains("Usage: bbbradsmith_golden_capture [--config <path>] [--force]"));
     }
 }
+
+#[test]
+fn golden_capture_with_unknown_flag_fails() {
+    let output = Command::new(golden_capture_bin())
+        .arg("--unknown-flag")
+        .output()
+        .expect("run bbbradsmith_golden_capture");
+
+    assert!(!output.status.success(), "should fail on unknown flag");
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("unknown argument '--unknown-flag'"));
+}

@@ -19,7 +19,10 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let mut args = env::args().skip(1);
+    run_with_args(env::args().skip(1))
+}
+
+fn run_with_args(mut args: impl Iterator<Item = String>) -> Result<(), String> {
     let mut out_path = default_homebrew_rom_path();
 
     while let Some(arg) = args.next() {
@@ -72,7 +75,7 @@ fn build_success_table(out_path: &std::path::Path) -> Table {
 
 #[cfg(test)]
 mod tests {
-    use super::build_success_table;
+    use super::{build_success_table, run_with_args};
     use std::path::PathBuf;
 
     #[test]
@@ -85,5 +88,29 @@ mod tests {
         assert!(output.contains("Output Path"));
         assert!(output.contains("Status"));
         assert!(output.contains("Success"));
+    }
+
+    #[test]
+    fn run_with_args_help_returns_ok() {
+        assert!(run_with_args(vec!["--help".to_string()].into_iter()).is_ok());
+        assert!(run_with_args(vec!["-h".to_string()].into_iter()).is_ok());
+    }
+
+    #[test]
+    fn run_with_args_builds_homebrew_rom() {
+        let temp_dir = std::env::temp_dir().join("nes_test_harness_build_homebrew_test");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let out_path = temp_dir.join("test_homebrew.nes");
+
+        let args = vec!["--out".to_string(), out_path.to_str().unwrap().to_string()];
+
+        let result = run_with_args(args.into_iter());
+        assert!(result.is_ok(), "Run should succeed");
+
+        assert!(out_path.exists(), "ROM file should have been written");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
