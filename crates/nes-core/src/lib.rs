@@ -1,3 +1,9 @@
+//!
+//! Deterministic emulation core, command/query API, and stable TAS movie/recorder primitives.
+//!
+//! The `nes-core` crate encapsulates the entire cycle-accurate hardware simulation of the NES.
+//!
+
 #![doc = include_str!("../README.md")]
 
 mod api;

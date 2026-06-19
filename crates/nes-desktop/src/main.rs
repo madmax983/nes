@@ -1,3 +1,9 @@
+//!
+//! The NES emulator desktop executable.
+//!
+//! This crate serves as the primary desktop frontend for the NES emulator, bridging `nes-core` with native desktop APIs (Windowing, Audio, Input).
+//!
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

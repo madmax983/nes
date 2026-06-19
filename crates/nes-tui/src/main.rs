@@ -1,3 +1,9 @@
+//!
+//! Terminal UI (TUI) frontend for the NES emulator.
+//!
+//! This crate uses `ratatui` to render NES output as ANSI block characters and handle terminal input.
+//!
+
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

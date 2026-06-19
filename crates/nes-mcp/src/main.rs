@@ -1,3 +1,9 @@
+//!
+//! Desktop executable entry point for the NES Model Context Protocol (MCP) server.
+//!
+//! This crate translates MCP JSON-RPC requests into `nes-core` command execution.
+//!
+
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
