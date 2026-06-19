@@ -1,9 +1,5 @@
-# 🗣️ Echo: Getting Started example is broken
+# 🗣️ Echo: Strict RTA mode example is confusing
 
-**Description:**
-
-* 🤦 **The Confusion:** Tried to run `cargo run -p nes-desktop --release -- --config ./nes.toml` from the "Desktop/TUI launch commands" section. Got an error: `failed to read config './nes.toml': No such file or directory (os error 2)`.
-
-* 🕵️ **The Reality:** The workspace doesn't have a `nes.toml` by default, it has a `nes.example.toml`. The README says "Runtime and ROM paths are configured through `nes.toml` at the workspace root", but never instructs the user to create or copy the file before running the command.
-
-* 💡 **The Fix:** Add a step before the launch commands instructing users to copy the example config: `cp nes.example.toml nes.toml`.
+* 🤦 **The Confusion:** Tried to run the "Strict RTA mode" example `cargo run -p nes-desktop --release -- --rta --rta-profiles-dir ./config/rta/profiles ./roms/homebrew/homebrew.nes`. It crashed with `Failed to enter RTA mode for ROM hash... No RTA profile matched ROM hash`.
+* 🕵️ **The Reality:** The workspace bundles a `homebrew.nes` ROM, but strict RTA mode requires a ROM whose hash exactly matches a known profile (like `smb-any`). The homebrew ROM doesn't match the Super Mario Bros profile hash, causing it to fail instantly.
+* 💡 **The Fix:** Change the README example to use a hypothetical path like `<path-to-super-mario-bros.nes>`, or add a note explaining that users must create a profile matching their ROM's hash first before strict auto-select will work.
