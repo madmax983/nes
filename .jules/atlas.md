@@ -25,3 +25,7 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+
+**Extract duplicate map_virtual_keycode from main.rs**
+**Tangle:** The `map_virtual_keycode` method was still duplicated in `crates/nes-desktop/src/main.rs` along with its test even though it was correctly placed in `crates/nes-desktop/src/input.rs` and properly used from there.
+**Blueprint:** Removed the duplicated test and import from `crates/nes-desktop/src/main.rs`.
