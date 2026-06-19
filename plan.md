@@ -1,12 +1,5 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+1.  **Identify Weak Point**: Mutex poisoning in `nes_mcp::output::publish_frame_with` and `nes_mcp::output::publish_audio_with` leading to a Denial of Service (DoS).
+2.  **Verify Mutex Poisoning Bug**: We have `crates/nes-mcp/tests/havoc_mcp_output_poison.rs` (frame poison panic) and created `crates/nes-mcp/tests/havoc_mcp_audio_poison.rs` (audio poison panic) and `crates/nes-mcp/tests/havoc_mcp_audio_dos.rs` which show the system fails to recover gracefully.
+3.  **Write PR/Issue file**: I'll create `havoc-report.md` simulating the PR, documenting the trigger, stack trace, and reproduction step.
+4.  **Complete pre commit steps to ensure proper testing, verification, review, and reflection are done.**
+5.  **Submit the PR**.
