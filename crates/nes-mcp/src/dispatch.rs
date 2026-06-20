@@ -529,8 +529,7 @@ fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, Dis
 
     let prg_rom_bytes = rom
         .get(4)
-        .map(|banks| usize::from(*banks) * 16 * 1024)
-        .unwrap_or(0);
+        .map_or(0, |banks| usize::from(*banks) * 16 * 1024);
     Ok(DispatchOutput::DslRomExported {
         path: output_path,
         bytes: rom.len(),
@@ -546,8 +545,7 @@ fn handle_export_6502_dsl_rom_base64(params: &ToolParams) -> Result<DispatchOutp
         .map_err(|err| DispatchError::InvalidParams(format!("dsl rom build failed: {err}")))?;
     let prg_rom_bytes = rom
         .get(4)
-        .map(|banks| usize::from(*banks) * 16 * 1024)
-        .unwrap_or(0);
+        .map_or(0, |banks| usize::from(*banks) * 16 * 1024);
     Ok(DispatchOutput::DslRomExportedBase64 {
         rom_base64: encode_base64(rom.as_slice()),
         bytes: rom.len(),
@@ -824,8 +822,7 @@ fn parse_player2(params: &ToolParams) -> Result<bool, DispatchError> {
 fn parse_slot(params: &ToolParams) -> String {
     params
         .get("slot")
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| "default".to_owned())
+        .map_or_else(|| "default".to_owned(), ToOwned::to_owned)
 }
 
 fn parse_integer(raw: &str) -> Result<u64, DispatchError> {

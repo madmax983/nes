@@ -51,3 +51,10 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flattening `parse_btn` with Match]**
+**Learning:** `parse_btn` in `nes-mcp/src/macro_engine.rs` was an extensive `if/else if` chain of 16+ lines evaluating string comparisons using `eq_ignore_ascii_case`. This was visually noisy.
+**Action:** Replaced the "Pyramid of Doom" with a clean `match` expression using match guard clauses (`_ if s.eq_ignore_ascii_case(...)`). This preserves the zero-allocation optimization while improving readability.
+**[Simplifying unwrap_or usage via map_or_else/map_or]**
+**Learning:** Found cases where `unwrap_or` was used in `nes-mcp/src/dispatch.rs` chained after `map`, such as `map(|banks| usize::from(*banks) * 16 * 1024).unwrap_or(0)` or `map(ToOwned::to_owned).unwrap_or_else(|| "default".to_owned())`.
+**Action:** Switched to idiomatic `map_or` and `map_or_else` which reduces chaining and makes the default explicit before the mapping closure.

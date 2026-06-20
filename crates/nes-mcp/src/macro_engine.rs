@@ -125,24 +125,16 @@ pub fn execute_macro_script(
 
 #[inline]
 fn parse_btn(s: &str) -> Option<Button> {
-    if s.eq_ignore_ascii_case("A") {
-        Some(Button::A)
-    } else if s.eq_ignore_ascii_case("B") {
-        Some(Button::B)
-    } else if s.eq_ignore_ascii_case("SELECT") {
-        Some(Button::Select)
-    } else if s.eq_ignore_ascii_case("START") {
-        Some(Button::Start)
-    } else if s.eq_ignore_ascii_case("UP") {
-        Some(Button::Up)
-    } else if s.eq_ignore_ascii_case("DOWN") {
-        Some(Button::Down)
-    } else if s.eq_ignore_ascii_case("LEFT") {
-        Some(Button::Left)
-    } else if s.eq_ignore_ascii_case("RIGHT") {
-        Some(Button::Right)
-    } else {
-        None
+    match s {
+        _ if s.eq_ignore_ascii_case("A") => Some(Button::A),
+        _ if s.eq_ignore_ascii_case("B") => Some(Button::B),
+        _ if s.eq_ignore_ascii_case("SELECT") => Some(Button::Select),
+        _ if s.eq_ignore_ascii_case("START") => Some(Button::Start),
+        _ if s.eq_ignore_ascii_case("UP") => Some(Button::Up),
+        _ if s.eq_ignore_ascii_case("DOWN") => Some(Button::Down),
+        _ if s.eq_ignore_ascii_case("LEFT") => Some(Button::Left),
+        _ if s.eq_ignore_ascii_case("RIGHT") => Some(Button::Right),
+        _ => None,
     }
 }
 
