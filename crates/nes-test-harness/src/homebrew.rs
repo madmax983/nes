@@ -1,6 +1,17 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Resolves the default temporary path for building homebrew ROMs.
+///
+/// Ensures the `roms/homebrew` directory exists and returns a safe temp filename.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -24,6 +35,19 @@ pub fn default_homebrew_rom_path() -> PathBuf {
 /// let rom_bytes = build_homebrew_rom().unwrap();
 /// assert!(rom_bytes.len() > 16);
 /// assert_eq!(&rom_bytes[0..4], b"NES\x1A");
+/// ```
+/// Assembles and builds a minimal homebrew ROM from DSL definitions.
+///
+/// Uses the `nes_dsl` framework to compile a valid NES ROM byte vector in memory
+/// for immediate integration testing without needing external files.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::build_homebrew_rom;
+///
+/// let rom_bytes = build_homebrew_rom().unwrap();
+/// assert_eq!(&rom_bytes[0..4], &[0x4E, 0x45, 0x53, 0x1A]); // iNES magic
 /// ```
 pub fn build_homebrew_rom() -> Result<Vec<u8>, String> {
     let source = assemble_homebrew_program();

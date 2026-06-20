@@ -3,6 +3,17 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Resolves the path to the Super Mario Bros ROM if configured.
+///
+/// Used for integration tests involving scrolling, sprites, and input.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::smb_rom_path;
+///
+/// let path = smb_rom_path();
+/// ```
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +29,22 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Resolves the absolute path to the `nestest.nes` validation ROM.
+///
+/// Returns the path configured in the global config file or panics if not set.
+///
+/// ## Panics
+///
+/// Panics if the `roms.nestest` path is not provided in `nes.example.toml`.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::nestest_rom_path;
+///
+/// let path = nestest_rom_path();
+/// println!("Testing with ROM: {}", path);
+/// ```
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +54,15 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Resolves the path to the base Blargg CPU test ROM directory.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::blargg_cpu_rom_path;
+///
+/// let path = blargg_cpu_rom_path();
+/// ```
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +74,15 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Resolves all paths in the bbbradsmith audio suite ROM directory.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::bbbradsmith_audio_suite_rom_paths;
+///
+/// let paths = bbbradsmith_audio_suite_rom_paths();
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +113,15 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Resolves the path to the bbbradsmith audio golden records directory.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::bbbradsmith_audio_golden_dir_path;
+///
+/// let path = bbbradsmith_audio_golden_dir_path();
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
