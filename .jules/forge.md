@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract execute_app_action match arms into helper functions**
+**Learning:** `execute_app_action` in `nes-desktop/src/main.rs` was a God Function that used a large `match action` where each arm was 10-50 lines long.
+**Action:** Extracted the logic for each match arm (`ToggleOverlay`, `Resume`, `OpenCheats`, `OpenRom`, `SaveSlot`, `LoadSlot`, `Reset`) into its own helper function (`execute_toggle_overlay`, `execute_resume`, etc.). This flattens the `execute_app_action` function, improving readability significantly.
