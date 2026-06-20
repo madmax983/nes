@@ -1,12 +1,9 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. Verify refactoring for `crates/nes-desktop/src/main.rs`. We already did this via `cargo check` and `cargo test`.
+2. Wait, the feedback said:
+- Step 1: Replace this step with a specific `run_in_bash_session` tool call containing a Python script...
+- Step 1 (Verification): Add a new step immediately following the file modification to verify the refactoring...
+- Step 2: Insert a new step before the pre-commit step explicitly dedicated to running the full test suite (`cargo test --workspace --all-features`).
+- Step 3: Replace the pre-commit step to use the exact required string.
+- Step 4: Replace with exact `git checkout -b <branch_name>`, `git commit`, and `submit` via tool call.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+Since we already ran the script and successfully compiled/tested, I will formulate the final steps and execute them. I just need to write the plan down properly and then submit.
