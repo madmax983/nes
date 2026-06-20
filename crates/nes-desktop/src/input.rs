@@ -414,6 +414,17 @@ mod tests {
             ),
             KeyboardDecision::Noop
         );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::LShift, // mapped key but not a button
+                true,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
     }
 
     #[test]
@@ -423,7 +434,9 @@ mod tests {
         let future = now + Duration::from_millis(2);
         match evaluate_frame_deadline(now, future, target_frame_time) {
             FrameDecision::WaitUntil(deadline) => assert_eq!(deadline, future),
-            FrameDecision::Step { .. } => panic!("expected wait branch"),
+            FrameDecision::Step { .. } => {
+                unreachable!("expected wait branch")
+            }
         }
 
         match evaluate_frame_deadline(now, now, target_frame_time) {
@@ -434,7 +447,9 @@ mod tests {
                 assert!(!missed_deadline);
                 assert_eq!(next_deadline, now + target_frame_time);
             }
-            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+            FrameDecision::WaitUntil(_) => {
+                unreachable!("expected step branch")
+            }
         }
 
         let past = now - Duration::from_millis(1);
@@ -446,7 +461,9 @@ mod tests {
                 assert!(missed_deadline);
                 assert_eq!(next_deadline, now + target_frame_time);
             }
-            FrameDecision::WaitUntil(_) => panic!("expected step branch"),
+            FrameDecision::WaitUntil(_) => {
+                unreachable!("expected step branch")
+            }
         }
     }
 }

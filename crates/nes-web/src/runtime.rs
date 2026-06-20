@@ -528,7 +528,6 @@ impl Default for WebRuntime {
         Self::new()
     }
 }
-
 fn parse_button(button: &str) -> Result<Button, String> {
     match button {
         "A" => Ok(Button::A),
@@ -542,5 +541,41 @@ fn parse_button(button: &str) -> Result<Button, String> {
         _ => Err(format!(
             "unknown button '{button}'. expected one of: A, B, Select, Start, Up, Down, Left, Right"
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nes_core::{Button, Command};
+
+    #[test]
+    fn test_execute_propagates_error() {
+        let mut runtime = WebRuntime::new();
+        // StepCpu should not error under normal conditions
+        let res = runtime.execute(Command::StepCpu);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_parse_button() {
+        assert_eq!(parse_button("A"), Ok(Button::A));
+        assert_eq!(parse_button("B"), Ok(Button::B));
+        assert_eq!(parse_button("Select"), Ok(Button::Select));
+        assert_eq!(parse_button("Start"), Ok(Button::Start));
+        assert_eq!(parse_button("Up"), Ok(Button::Up));
+        assert_eq!(parse_button("Down"), Ok(Button::Down));
+        assert_eq!(parse_button("Left"), Ok(Button::Left));
+        assert_eq!(parse_button("Right"), Ok(Button::Right));
+        assert!(parse_button("Invalid").is_err());
+    }
+
+    #[test]
+    fn test_default() {
+        let runtime = WebRuntime::default();
+        assert_eq!(
+            runtime.audio_chunk_samples(),
+            nes_core::AUDIO_CHUNK_SAMPLES as u32
+        );
     }
 }
