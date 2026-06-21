@@ -821,6 +821,15 @@ impl RtaManager {
         }
 
         let split_events = Vec::with_capacity(profile.splits.len());
+
+        let input_log = if profile.logging.save_input_log {
+            // **⚡ Bolt Optimization:** Pre-allocates space for ~10 minutes of input logging
+            // at 60 FPS (36,000 frames) to eliminate continuous heap reallocations on the hot path.
+            Vec::with_capacity(36_000)
+        } else {
+            Vec::new()
+        };
+
         Self {
             profile,
             rom_hash,
@@ -834,7 +843,7 @@ impl RtaManager {
             split_counter: 0,
             split_events,
             triggers,
-            input_log: Vec::new(),
+            input_log,
             runs_dir,
             artifacts_written: None,
             calibration,

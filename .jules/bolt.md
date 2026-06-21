@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+## 2025-06-25 - input_log Allocation Avoidance
+**Learning:** In the `RtaManager` struct (which handles Speedrun tools), `input_log` is a vector updated on every single frame (~60 times per second) if the profile has `save_input_log` enabled. It previously started with `Vec::new()`, meaning it continuously reallocated on the heap as it grew frame by frame.
+**Action:** Identified `input_log` allocation bottleneck. Replaced `Vec::new()` with `Vec::with_capacity(36_000)` (enough for 10 minutes at 60fps) if logging is enabled, mitigating expensive memory allocations on the application's hot path.
