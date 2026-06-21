@@ -1,12 +1,5 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+1. **Optimize `ToolParams` string parsing in `crates/nes-mcp/src/dispatch.rs`**
+   - **What:** The `parse_required_string` function parses required parameters from the MCP JSON-RPC protocol (`ToolParams` which is a `BTreeMap<String, String>`). Currently, it calls `.cloned()` on the value `Option<&String>`, causing unnecessary heap allocations. We can optimize this by changing the signature to `fn parse_required_string<'a>(params: &'a ToolParams, key: &str) -> Result<&'a str, DispatchError>` so it returns a borrowed string slice instead of an owned `String`.
+   - **Why:** In JSON-RPC APIs like this, tools often accept several string parameters (e.g., file paths, memory keys). Getting ownership is mostly unnecessary. For example, `handle_load_rom` just reads the path using `std::fs::read(path)` and `handle_apply_cheat` just passes `code` down to `core.apply_cheat_code(&code)`. By returning `&str`, we defer or completely eliminate multiple heap allocations per tool invocation without altering program semantics.
+   - **Pre commit step:** Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+   - **Submit:** Submit with title "⚡ Bolt: Remove unnecessary heap allocations in MCP param parsing"
