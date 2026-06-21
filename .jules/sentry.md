@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2026-06-21 - PPU Live Updates
+**Learning:** `unwrap()` on `VecDeque::pop_front` is safe if the loop condition uses `front().is_some_and(...)`.
+**Action:** Replaced `unwrap()` with explicit `expect` and added tests for PPU live update handling.

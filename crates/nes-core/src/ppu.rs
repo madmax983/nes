@@ -892,7 +892,10 @@ impl Ppu {
             .front()
             .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
         {
-            let update = self.pending_live_chr_updates.pop_front().unwrap();
+            let update = self
+                .pending_live_chr_updates
+                .pop_front()
+                .expect("loop condition checks is_some_and()");
             self.live_chr.fill(0);
             let copy_len = update.chr.len().min(CHR_BYTES);
             self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
@@ -911,7 +914,10 @@ impl Ppu {
             .front()
             .is_some_and(|update| update.due_cycle_in_frame <= current_cycle)
         {
-            let update = self.pending_live_bg_updates.pop_front().unwrap();
+            let update = self
+                .pending_live_bg_updates
+                .pop_front()
+                .expect("loop condition checks is_some_and()");
             let preserve_split_vertical = self.live_bg_tracks_vram_addr
                 && self.scanline < FRAME_HEIGHT as u16
                 && self.dot > FRAME_WIDTH as u16;
@@ -2483,5 +2489,45 @@ mod tests {
         ppu.render_rgba(&mut frame);
         let idx = (y * FRAME_WIDTH + x) * 4;
         (frame[idx], frame[idx + 1], frame[idx + 2])
+    }
+}
+
+#[cfg(test)]
+mod tests_sentry {
+    use super::*;
+
+    #[test]
+    fn test_apply_due_live_bg_updates_preserve_split_vertical() {
+        let mut ppu = Ppu::new();
+        ppu.live_bg_tracks_vram_addr = true;
+        ppu.scanline = 100;
+        ppu.dot = 300;
+        ppu.live_ctrl = 0b0000_0010;
+        ppu.pending_live_bg_updates
+            .push_back(PendingLiveBgStateUpdate {
+                due_cycle_in_frame: 0,
+                ctrl: 0b1111_1101,
+                scroll_x: 42,
+                scroll_y: 100,
+            });
+        ppu.apply_due_live_bg_updates();
+        assert_eq!(ppu.live_ctrl, 0b1111_1111);
+        assert_eq!(ppu.live_scroll_x, 42);
+        assert_eq!(ppu.live_scroll_y, 0);
+    }
+
+    #[test]
+    fn test_apply_due_live_chr_updates_copies_slice() {
+        let mut ppu = Ppu::new();
+        let update = PendingLiveChrWindowUpdate {
+            due_cycle_in_frame: 0,
+            chr: vec![42; 10],
+        };
+        ppu.pending_live_chr_updates.push_back(update);
+        ppu.scanline = 1;
+        ppu.dot = 0;
+        ppu.apply_due_live_chr_updates();
+        assert_eq!(&ppu.live_chr[0..10], &[42; 10]);
+        assert_eq!(&ppu.live_chr[10..20], &[0; 10]);
     }
 }
