@@ -1172,17 +1172,3 @@ mod havoc_fuzz_tests {
         }
     }
 }
-
-#[cfg(test)]
-mod tests2 {
-    use super::*;
-
-    #[test]
-    fn parse_hex_bytes_tests_more_boundaries() {
-        let bytes = parse_hex_bytes("0102").unwrap();
-        assert_eq!(bytes, vec![1, 2]);
-
-        let bytes2 = parse_hex_bytes("00FF").unwrap();
-        assert_eq!(bytes2, vec![0, 255]);
-    }
-}

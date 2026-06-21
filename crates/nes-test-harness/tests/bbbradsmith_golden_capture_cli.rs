@@ -73,14 +73,15 @@ fn golden_capture_with_empty_suite_dir_fails() {
 
     std::fs::create_dir(&suite_dir).unwrap();
 
+    // Use forward slashes for cross platform
     let config_content = format!(
         r#"
 [roms]
 bbbradsmith_audio_suite_dir = "{}"
 bbbradsmith_audio_golden_dir = "{}"
 "#,
-        suite_dir.display(),
-        golden_dir.display()
+        suite_dir.display().to_string().replace("\\", "/"),
+        golden_dir.display().to_string().replace("\\", "/")
     );
 
     std::fs::write(&config_path, config_content).unwrap();
@@ -115,8 +116,8 @@ fn golden_capture_with_missing_suite_dir_fails() {
 bbbradsmith_audio_suite_dir = "{}"
 bbbradsmith_audio_golden_dir = "{}"
 "#,
-        suite_dir.display(),
-        golden_dir.display()
+        suite_dir.display().to_string().replace("\\", "/"),
+        golden_dir.display().to_string().replace("\\", "/")
     );
 
     std::fs::write(&config_path, config_content).unwrap();

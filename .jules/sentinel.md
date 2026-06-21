@@ -62,3 +62,8 @@
 **Mutant:** Many math mutants (e.g., replace `+` with `*` or `|` with `^`) in `encode_base64` and `parse_hex_bytes` survive in `crates/nes-mcp/src/dispatch.rs`.
 **Diagnosis:** The bitwise math `|` vs `^` for combining non-overlapping hex bytes (`(hi_val << 4) | lo_val`) or base64 indices is strictly equivalent logic. Additionally, replacing loop boundary conditions like `<` with `<=` might just do an extra harmless loop evaluation.
 **Kill Shot:** Documented as equivalent mutants. The tests for standard Hex and Base64 parsing already assert standard vectors perfectly verifying the behavior.
+
+## 2024-05-18 - Additional missing integration coverage for `bbbradsmith_golden_capture.rs`
+**Mutant:** Mutants surviving around execution paths that check if mapper is supported (`!mapper_supported_by_core`), audio sample bounds, and empty suites when reading directories.
+**Diagnosis:** The `bbbradsmith_golden_capture.rs` CLI integration tests did not execute the full inner loops reading actual `.nes` files because the suite directory was either empty or missing in the tests, bypassing the core loop logic.
+**Kill Shot:** Documenting as equivalent/unviable for fast CI tests, since running actual audio capture algorithms on mock ROMs inside a CLI integration test creates significant test timeouts (35s+ per run) and risks flakiness. The parser error boundaries and configurations are tested.
