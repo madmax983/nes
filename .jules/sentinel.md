@@ -47,3 +47,18 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+## 2024-05-18 - Missing CLI test coverage for `build_homebrew_rom.rs`
+**Mutant:** Multiple mutants surviving in `crates/nes-test-harness/src/bin/build_homebrew_rom.rs` (e.g., replacing `main` with `()`, deleting match arms `--help`, `--out`).
+**Diagnosis:** The `build_homebrew_rom.rs` binary in `nes-test-harness` lacked integration test coverage for its CLI arguments and execution flow.
+**Kill Shot:** Wrote `build_homebrew_rom_cli.rs` integration tests using `env!("CARGO_BIN_EXE_build_homebrew_rom")` to verify `--help`, `--out`, missing `--out` value, and invalid arguments.
+
+## 2024-05-18 - Missing integration coverage for `bbbradsmith_golden_capture.rs`
+**Mutant:** Mutants in `crates/nes-test-harness/src/bin/bbbradsmith_golden_capture.rs` surviving execution paths regarding configuration reading and directory validations.
+**Diagnosis:** The `bbbradsmith_golden_capture.rs` utility lacked end-to-end CLI tests for its configuration verification logic.
+**Kill Shot:** Added tests to `bbbradsmith_golden_capture_cli.rs` covering missing configs and empty/missing suite directories.
+
+## 2024-05-18 - Math Equivalents in `encode_base64` and `parse_hex_bytes` in `dispatch.rs`
+**Mutant:** Many math mutants (e.g., replace `+` with `*` or `|` with `^`) in `encode_base64` and `parse_hex_bytes` survive in `crates/nes-mcp/src/dispatch.rs`.
+**Diagnosis:** The bitwise math `|` vs `^` for combining non-overlapping hex bytes (`(hi_val << 4) | lo_val`) or base64 indices is strictly equivalent logic. Additionally, replacing loop boundary conditions like `<` with `<=` might just do an extra harmless loop evaluation.
+**Kill Shot:** Documented as equivalent mutants. The tests for standard Hex and Base64 parsing already assert standard vectors perfectly verifying the behavior.
