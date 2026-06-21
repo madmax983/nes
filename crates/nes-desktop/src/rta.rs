@@ -821,6 +821,13 @@ impl RtaManager {
         }
 
         let split_events = Vec::with_capacity(profile.splits.len());
+        // ⚡ Bolt Optimization: Pre-allocate space for 36,000 frames (approx. 10 minutes at 60 FPS)
+        // to prevent dozens of expensive heap reallocations on the hot path during long recording sessions.
+        let input_log = if profile.logging.save_input_log {
+            Vec::with_capacity(36_000)
+        } else {
+            Vec::new()
+        };
         Self {
             profile,
             rom_hash,
@@ -834,7 +841,7 @@ impl RtaManager {
             split_counter: 0,
             split_events,
             triggers,
-            input_log: Vec::new(),
+            input_log,
             runs_dir,
             artifacts_written: None,
             calibration,
@@ -1231,18 +1238,14 @@ impl RtaManager {
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
         let elapsed_ms = self.elapsed(now).as_millis();
-        self.split_events.push(SplitEvent {
-            name: name.clone(),
-            source,
-            frame,
-            elapsed_ms,
-        });
-        SplitEvent {
+        let event = SplitEvent {
             name,
             source,
             frame,
             elapsed_ms,
-        }
+        };
+        self.split_events.push(event.clone());
+        event
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.

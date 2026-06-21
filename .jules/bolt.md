@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+## 2026-06-21 - [Pre-allocate vectors & leverage derived Clone]
+**Learning:** Initializing vectors without capacity on a path where they grow continuously (e.g. tracking per-frame input data over a long duration) causes excessive heap allocations and reallocations. Also, duplicating struct construction instead of cloning the constructed event leads to unnecessary explicit cloning of the fields.
+**Action:** Always pre-allocate vectors (`Vec::with_capacity`) based on realistic bounds when possible, and rely on `event.clone()` for data structs that implement `Clone` to eliminate redundant construction and explicit field cloning.
