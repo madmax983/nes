@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring repetitive Option::map chained with unwrap_or/unwrap_or_else]**
+**Learning:** Found multiple usages of `.map(...).unwrap_or(...)` and `.map(...).unwrap_or_else(...)`. These are unidiomatic in Rust and should be replaced with `.map_or(...)` and `.map_or_else(...)` to improve readability and reduce chaining.
+**Action:** Replaced `.map(f).unwrap_or(default)` with `.map_or(default, f)` and `.map(f).unwrap_or_else(default_fn)` with `.map_or_else(default_fn, f)` across `nes-mcp`, `nes-tui`, `nes-test-harness`, `nes-relay`, `nes-desktop`, and `nes-rewind`.

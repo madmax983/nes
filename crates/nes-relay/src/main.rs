@@ -156,8 +156,7 @@ fn run() -> Result<(), String> {
         };
         let peer = stream
             .peer_addr()
-            .map(|addr| addr.to_string())
-            .unwrap_or_else(|_| "<unknown-peer>".to_owned());
+            .map_or_else(|_| "<unknown-peer>".to_owned(), |addr| addr.to_string());
         let shared = Arc::clone(&state);
         let net = Arc::clone(&net_sim);
         thread::spawn(move || {

@@ -213,6 +213,5 @@ fn rom_name(path: &str) -> String {
     Path::new(path)
         .file_name()
         .and_then(|name| name.to_str())
-        .map(str::to_owned)
-        .unwrap_or_else(|| path.to_owned())
+        .map_or_else(|| path.to_owned(), str::to_owned)
 }

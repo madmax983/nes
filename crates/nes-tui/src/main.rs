@@ -241,8 +241,7 @@ fn run() -> Result<(), String> {
     let rom_name = Path::new(&rom_path)
         .file_name()
         .and_then(|name| name.to_str())
-        .map(std::borrow::ToOwned::to_owned)
-        .unwrap_or(rom_path.clone());
+        .map_or_else(|| rom_path.clone(), std::borrow::ToOwned::to_owned);
     let mut runtime = TuiRuntime {
         core,
         rom_name,

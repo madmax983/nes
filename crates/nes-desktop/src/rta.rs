@@ -1572,8 +1572,7 @@ impl CalibrationRecorder {
         let mut work_ram = if self.frames.len() >= self.max_frames {
             self.frames
                 .pop_front()
-                .map(|f| f.work_ram)
-                .unwrap_or_else(|| vec![0_u8; 0x0800])
+                .map_or_else(|| vec![0_u8; 0x0800], |f| f.work_ram)
         } else {
             vec![0_u8; 0x0800]
         };

@@ -123,8 +123,7 @@ impl CompressedTimeline {
             let next_kf_id = self
                 .keyframes
                 .get(1)
-                .map(|kf| kf.frame_id)
-                .unwrap_or(u64::MAX);
+                .map_or(u64::MAX, |kf| kf.frame_id);
 
             if self.deltas.front().is_some_and(|d| d.frame_id < next_kf_id) {
                 // Advance the oldest keyframe by absorbing the first delta into
