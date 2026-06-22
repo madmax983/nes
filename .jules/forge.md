@@ -51,3 +51,19 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract parse_arg utility]**
+**Learning:** Found duplicate CLI argument parsing routines handling flag and value separation (like `--flag value` and `--flag=value`) across `nes-desktop`, `nes-relay`, and `nes-config`. The duplication bloated the argument parsing methods with repetitive prefix stripping logic and `if let` blocks.
+**Action:** Extracted the core `parse_arg` implementation into the `nes-config` crate to be reused globally. This ensures argument parsing behavior remains consistent across the workspace and drastically reduces duplication.
+
+**[Clean up redundant `unwrap_or(0)` calls]**
+**Learning:** Found multiple usages of `.unwrap_or(0)` and `.unwrap_or(0.0)` in error handling and mapping contexts throughout `nes-desktop`, `nes-mcp`, and `nes-ai`.
+**Action:** Replaced with `.unwrap_or_default()` to follow idiomatic Rust principles.
+
+**[Replace error-handling logic around `.unwrap(Value::Null)`]**
+**Learning:** Found occurrences of returning explicit default `Value::Null` values via `unwrap_or(Value::Null)` in `nes-desktop/src/mcp_host.rs`.
+**Action:** Used `Value::default()` instead of `Value::Null` to increase codebase consistency and conform to `clippy::unwrap_or_default` best practices.
+
+**[Refactor `split_csv`'s antipattern logic in `nes-dsl/src/parser.rs`]**
+**Learning:** The method checked for trailing elements logic by validating if an error occurred with `if !tail.is_empty()` and returning an `Err` via an `else if !parts.is_empty()`. This required an allocation-less element to fail properly.
+**Action:** Utilized the `parts.last()` element using the guard check `if let Some(_last) = parts.last()` to evaluate emptiness in standard Rust idioms over boolean flags.

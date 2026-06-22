@@ -358,7 +358,7 @@ impl NetplayRuntimeStats {
     /// We use this zero fallback to keep the dynamic delay logic mathematically
     /// safe during the initial connection handshake before the first ping returns.
     pub fn latest_rtt_ms_or_zero(&self) -> f64 {
-        self.latest_rtt_ms.unwrap_or(0.0)
+        self.latest_rtt_ms.unwrap_or_default()
     }
 }
 
@@ -370,7 +370,7 @@ pub fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8
             .iter()
             .copied()
             .find(|bits| *bits != 0)
-            .unwrap_or(0)
+            .unwrap_or_default()
     })
 }
 
@@ -762,7 +762,10 @@ mod tests {
         )
         .expect("pong message should process");
         assert!(pending.is_empty());
-        let rtt_ms = stats.as_ref().and_then(|s| s.latest_rtt_ms).unwrap_or(0.0);
+        let rtt_ms = stats
+            .as_ref()
+            .and_then(|s| s.latest_rtt_ms)
+            .unwrap_or_default();
         assert!(
             (1.0..=500.0).contains(&rtt_ms),
             "expected plausible RTT ms value, got {rtt_ms}"

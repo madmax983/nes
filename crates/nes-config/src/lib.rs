@@ -244,7 +244,12 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
     Ok((config_path, pass_through))
 }
 
-fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
+pub fn parse_arg<F>(
+    args: &[String],
+    idx: &mut usize,
+    flag: &str,
+    mut apply: F,
+) -> Result<bool, String>
 where
     F: FnMut(&str) -> Result<(), String>,
 {

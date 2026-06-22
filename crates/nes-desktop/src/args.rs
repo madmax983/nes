@@ -60,6 +60,8 @@ pub struct RuntimeArgs {
 /// assert!(parsed.mcp_enabled);
 /// assert_eq!(parsed.rom_path.as_deref(), Some("./game.nes"));
 /// ```
+use nes_config::parse_arg;
+
 pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
     let mut parsed = RuntimeArgs {
         rom_path: None,
@@ -90,13 +92,12 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             ));
         }
 
-        if parse_arg(
-            args,
-            &mut idx,
-            "--cheat-code",
-            |v| parsed.cheat_codes.push(v),
-            parse_string_arg,
-        )? {
+        if parse_arg(args, &mut idx, "--cheat-code", |v| {
+            let val = parse_string_arg(v, "--cheat-code")?;
+            let mut apply_fn = |v| parsed.cheat_codes.push(v);
+            apply_fn(val);
+            Ok(())
+        })? {
             continue;
         }
         if arg == "--mcp-host" {
@@ -104,16 +105,15 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
             idx += 1;
             continue;
         }
-        if parse_arg(
-            args,
-            &mut idx,
-            "--mcp-bind",
-            |v| {
+        if parse_arg(args, &mut idx, "--mcp-bind", |v| {
+            let val = parse_string_arg(v, "--mcp-bind")?;
+            let mut apply_fn = |v| {
                 parsed.mcp_enabled = true;
                 parsed.mcp_bind_addr = v;
-            },
-            parse_string_arg,
-        )? {
+            };
+            apply_fn(val);
+            Ok(())
+        })? {
             continue;
         }
         if parse_netplay_arg(args, &mut idx, &mut parsed)? {
@@ -151,76 +151,70 @@ fn parse_netplay_arg(
         *idx += 1;
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--netplay-relay",
-        |v| {
+    if parse_arg(args, idx, "--netplay-relay", |v| {
+        let val = parse_string_arg(v, "--netplay-relay")?;
+        let mut apply_fn = |v| {
             parsed.netplay_enabled = true;
             parsed.netplay_relay_addr = Some(v);
-        },
-        parse_string_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--netplay-room",
-        |v| {
+    if parse_arg(args, idx, "--netplay-room", |v| {
+        let val = parse_string_arg(v, "--netplay-room")?;
+        let mut apply_fn = |v| {
             parsed.netplay_enabled = true;
             parsed.netplay_room = Some(v);
-        },
-        parse_string_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--netplay-player",
-        |v| {
+    if parse_arg(args, idx, "--netplay-player", |v| {
+        let val = parse_u8_arg(v, "--netplay-player")?;
+        let mut apply_fn = |v| {
             parsed.netplay_enabled = true;
             parsed.netplay_player = Some(v);
-        },
-        parse_u8_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--netplay-delay",
-        |v| {
+    if parse_arg(args, idx, "--netplay-delay", |v| {
+        let val = parse_u32_arg(v, "--netplay-delay")?;
+        let mut apply_fn = |v| {
             parsed.netplay_enabled = true;
             parsed.netplay_input_delay_frames = Some(v);
-        },
-        parse_u32_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--netplay-max-rollback",
-        |v| {
+    if parse_arg(args, idx, "--netplay-max-rollback", |v| {
+        let val = parse_u32_arg(v, "--netplay-max-rollback")?;
+        let mut apply_fn = |v| {
             parsed.netplay_enabled = true;
             parsed.netplay_max_rollback_frames = Some(v);
-        },
-        parse_u32_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--netplay-hash-every",
-        |v| {
+    if parse_arg(args, idx, "--netplay-hash-every", |v| {
+        let val = parse_u64_arg(v, "--netplay-hash-every")?;
+        let mut apply_fn = |v| {
             parsed.netplay_enabled = true;
             parsed.netplay_hash_check_every_frames = Some(v);
-        },
-        parse_u64_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
     Ok(false)
@@ -237,40 +231,37 @@ fn parse_rta_arg(
         *idx += 1;
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--rta-profile",
-        |v| {
+    if parse_arg(args, idx, "--rta-profile", |v| {
+        let val = parse_string_arg(v, "--rta-profile")?;
+        let mut apply_fn = |v| {
             parsed.rta_enabled = true;
             parsed.rta_profile_id = Some(v);
-        },
-        parse_string_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--rta-profiles-dir",
-        |v| {
+    if parse_arg(args, idx, "--rta-profiles-dir", |v| {
+        let val = parse_string_arg(v, "--rta-profiles-dir")?;
+        let mut apply_fn = |v| {
             parsed.rta_enabled = true;
             parsed.rta_profiles_dir = Some(v);
-        },
-        parse_string_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
-    if parse_arg(
-        args,
-        idx,
-        "--rta-runs-dir",
-        |v| {
+    if parse_arg(args, idx, "--rta-runs-dir", |v| {
+        let val = parse_string_arg(v, "--rta-runs-dir")?;
+        let mut apply_fn = |v| {
             parsed.rta_enabled = true;
             parsed.rta_runs_dir = Some(v);
-        },
-        parse_string_arg,
-    )? {
+        };
+        apply_fn(val);
+        Ok(())
+    })? {
         return Ok(true);
     }
     if arg == "--rta-calibrate" {
@@ -284,34 +275,6 @@ fn parse_rta_arg(
 
 fn parse_string_arg(value: &str, _flag: &str) -> Result<String, String> {
     Ok(value.to_owned())
-}
-
-fn parse_arg<T, F, P>(
-    args: &[String],
-    idx: &mut usize,
-    flag: &str,
-    mut apply: F,
-    parse: P,
-) -> Result<bool, String>
-where
-    F: FnMut(T),
-    P: Fn(&str, &str) -> Result<T, String>,
-{
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(val) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
-        apply(parse(val, flag)?);
-        *idx += 2;
-        Ok(true)
-    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
-        apply(parse(val, flag)?);
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }
 
 fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {

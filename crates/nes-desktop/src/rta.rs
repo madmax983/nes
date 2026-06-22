@@ -1456,7 +1456,7 @@ impl RtaManager {
 fn unix_epoch_millis() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
+        .unwrap_or_default()
         .as_millis()
 }
 

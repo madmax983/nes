@@ -781,7 +781,7 @@ fn build_train_batch<B: Backend>(
         let sample = &samples[index];
         frames.extend_from_slice(&sample.observation.frames);
         features.extend_from_slice(&sample.observation.features);
-        action_indices.push(i64::try_from(sample.action_index).unwrap_or(0));
+        action_indices.push(i64::try_from(sample.action_index).unwrap_or_default());
         old_log_probs.push(sample.old_log_prob);
         advantages.push(sample.advantage);
         returns.push(sample.return_estimate);
@@ -924,7 +924,7 @@ fn forward_policy(
         .as_slice::<f32>()
         .ok()
         .and_then(|values| values.first().copied())
-        .unwrap_or(0.0);
+        .unwrap_or_default();
 
     (logits, value)
 }

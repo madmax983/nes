@@ -161,7 +161,7 @@ pub(crate) fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {
     let tail = input[current_start..].trim();
     if !tail.is_empty() {
         parts.push(tail);
-    } else if !parts.is_empty() {
+    } else if let Some(_last) = parts.last() {
         return Err(DslError::Parse {
             line: 0,
             message: "trailing comma in list".to_owned(),
