@@ -4,16 +4,17 @@
 //! This allows the workspace to have a deterministic test target without needing
 //! an external 6502 assembler.
 
+use crossterm::style::Stylize;
 use std::env;
 use std::path::PathBuf;
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use nes_test_harness::{default_homebrew_rom_path, write_homebrew_rom};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
         std::process::exit(1);
     }
 }

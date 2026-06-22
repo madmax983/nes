@@ -4,6 +4,7 @@
 //! test suite. These reference files are later used by the harness to ensure
 //! emulator audio output does not regress.
 
+use crossterm::style::Stylize;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -12,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::borrow::Cow;
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use nes_config::{NesConfig, parse_config_path_arg};
 use nes_test_harness::{
     AudioStats, audio_stats, capture_audio_window, detect_mapper_id, mapper_supported_by_core,
@@ -94,7 +95,7 @@ fn print_processing_progress(stdout: &mut impl Write, rom_name: &str, color: Col
 fn main() {
     let mut stdout = std::io::stdout();
     if let Err(err) = run(&mut stdout) {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
         std::process::exit(1);
     }
 }

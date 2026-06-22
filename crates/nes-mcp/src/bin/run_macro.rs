@@ -4,12 +4,13 @@
 //! against a ROM using the `nes_mcp` macro engine. Useful for debugging
 //! automated tool interactions outside of an active MCP session.
 
+use crossterm::style::Stylize;
 use std::env;
 use std::fs;
 use std::path::Path;
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use nes_core::NesCore;
 use nes_mcp::macro_engine::execute_macro_script;
 
@@ -28,7 +29,7 @@ fn main() {
     let script_path = &args[2];
 
     if let Err(err) = run(rom_path, script_path) {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(crossterm::style::Color::Red).bold());
         std::process::exit(1);
     }
 }

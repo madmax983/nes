@@ -1,7 +1,8 @@
+use crossterm::style::Stylize;
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use nes_core::NesCore;
 use nes_mcp::{
     dispatch_tool,
@@ -75,7 +76,7 @@ impl ServerState {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
         std::process::exit(1);
     }
 }

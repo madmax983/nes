@@ -3,16 +3,17 @@
 //! A utility to bootstrap the reinforcement learning environment by saving
 //! a snapshot state (e.g., SMB 1-1) required to train the control policy.
 
+use crossterm::style::Stylize;
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use nes_ai::snapshot::{sha256_hex, write_snapshot_bundle};
 use nes_core::{NesCore, tas::TasMovie};
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(crossterm::style::Color::Red).bold());
         std::process::exit(1);
     }
 }

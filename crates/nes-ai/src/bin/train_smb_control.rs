@@ -3,10 +3,11 @@
 //! A utility to train a PPO reinforcement learning agent on the Super Mario Bros
 //! control task. Outputs model checkpoints and periodic evaluation replays.
 
+use crossterm::style::Stylize;
 use std::{env, fs, path::PathBuf};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use nes_ai::{
     config::AiProfileConfig,
     trainer::{TrainerConfig, train_smb_control},
@@ -14,7 +15,7 @@ use nes_ai::{
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{err}");
+        eprintln!("\n{} {err}", "Error:".with(crossterm::style::Color::Red).bold());
         std::process::exit(1);
     }
 }

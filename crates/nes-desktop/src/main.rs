@@ -1,3 +1,4 @@
+use crossterm::style::Stylize;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -18,7 +19,7 @@ use crate::session::*;
 use crate::gamepad::*;
 use crate::input::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
-use crossterm::style::{Color, Stylize};
+use crossterm::style::{Color};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
@@ -56,7 +57,7 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
     }
 }
 
