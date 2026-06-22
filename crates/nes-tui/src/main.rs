@@ -1815,3 +1815,70 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod pause_overlay_tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use ratatui::layout::Rect;
+
+    #[test]
+    fn render_pause_overlay_ignores_small_areas() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(0, 0, 13, 10));
+            render_pause_overlay(f, Rect::new(0, 0, 20, 2));
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        for row in 0..24 {
+            for col in 0..80 {
+                assert_ne!(buffer.cell((col, row)).unwrap().symbol(), "[");
+            }
+        }
+    }
+
+    #[test]
+    fn render_pause_overlay_draws_on_large_enough_areas() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(0, 0, 14, 3));
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let mut found = false;
+        for row in 0..24 {
+            for col in 0..80 {
+                if buffer.cell((col, row)).unwrap().symbol() == "[" {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        assert!(found, "Pause overlay should be rendered");
+    }
+
+    #[test]
+    fn render_pause_overlay_centers_popup() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|f| {
+            render_pause_overlay(f, Rect::new(10, 5, 40, 15));
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let popup_x = 23;
+        let popup_y = 11;
+
+        assert_eq!(buffer.cell((popup_x + 1, popup_y + 1)).unwrap().symbol(), " ");
+        assert_eq!(buffer.cell((popup_x + 2, popup_y + 1)).unwrap().symbol(), "[");
+        assert_eq!(buffer.cell((popup_x + 3, popup_y + 1)).unwrap().symbol(), " ");
+        assert_eq!(buffer.cell((popup_x + 4, popup_y + 1)).unwrap().symbol(), "P");
+    }
+}
