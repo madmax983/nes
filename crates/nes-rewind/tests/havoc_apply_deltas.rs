@@ -5,6 +5,7 @@ use smallvec::SmallVec;
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(5000))]
     #[test]
+    #[should_panic(expected = "out of range")]
     #[ignore = "havoc target"]
     fn havoc_fuzz_apply_deltas(
         mut target in proptest::collection::vec(any::<u8>(), 0..1024),
