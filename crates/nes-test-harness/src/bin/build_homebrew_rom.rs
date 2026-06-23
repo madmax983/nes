@@ -37,7 +37,22 @@ fn run() -> Result<(), String> {
                 };
                 out_path = PathBuf::from(path);
             }
-            _ => return Err(format!("unknown argument '{arg}'")),
+            _ => return Err(format!(
+                "\n{}\n",
+                {
+                    let mut table = Table::new();
+                    table.load_preset(UTF8_FULL);
+                    table.add_row(vec![
+                        Cell::new("Error:").fg(TableColor::Red),
+                        Cell::new(format!("unknown argument '{arg}'")),
+                    ]);
+                    table.add_row(vec![
+                        Cell::new("Usage:").fg(TableColor::Cyan),
+                        Cell::new("build_homebrew_rom [--out <path>]"),
+                    ]);
+                    table
+                }
+            )),
         }
     }
 

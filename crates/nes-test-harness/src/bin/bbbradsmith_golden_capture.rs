@@ -111,7 +111,20 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     for arg in &pass_through {
         if arg != "--force" {
             return Err(format!(
-                "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
+                "\n{}\n",
+                {
+                    let mut table = Table::new();
+                    table.load_preset(UTF8_FULL);
+                    table.add_row(vec![
+                        Cell::new("Error:").fg(TableColor::Red),
+                        Cell::new(format!("unknown argument '{arg}'.")),
+                    ]);
+                    table.add_row(vec![
+                        Cell::new("Supported:").fg(TableColor::Cyan),
+                        Cell::new("--config <path>, --config=<path>, --force"),
+                    ]);
+                    table
+                }
             ));
         }
     }
