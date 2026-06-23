@@ -37,9 +37,8 @@ fn run() -> Result<(), String> {
                 };
                 out_path = PathBuf::from(path);
             }
-            _ => return Err(format!(
-                "\n{}\n",
-                {
+            _ => {
+                return Err(format!("\n{}\n", {
                     let mut table = Table::new();
                     table.load_preset(UTF8_FULL);
                     table.add_row(vec![
@@ -51,8 +50,8 @@ fn run() -> Result<(), String> {
                         Cell::new("build_homebrew_rom [--out <path>]"),
                     ]);
                     table
-                }
-            )),
+                }));
+            }
         }
     }
 
