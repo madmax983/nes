@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+## 2023-10-27 - Mapper Bank Switch Optimization
+**Learning:** `ppu.chr_window_snapshot()` returns a copied 8KB array `[u8; 8192]`. In `apply_cpu_write_side_effect`, this was being called unconditionally for all PRG-space writes before sending it to the mapper, even if the mapper doesn't support writable CHR RAM. Since MMC3 bank switches very frequently during a frame, skipping this 8KB copy reduces overhead.
+**Action:** Guarded `ppu.chr_window_snapshot()` behind `mapper.chr_writable()`. Using a direct reference instead of copying the array requires lifetime adjustments to the mapper trait, so guarding the snapshot copy is the safest approach without a large refactor.

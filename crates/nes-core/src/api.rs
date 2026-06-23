@@ -1474,8 +1474,10 @@ impl NesCore {
         let remap_needed = if addr >= 0x8000 {
             if let Some(mapper) = self.mapper.as_mut() {
                 // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                if mapper.chr_writable() {
+                    let chr_window = self.ppu.chr_window_snapshot();
+                    mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                }
                 mapper.write_prg(addr, value);
                 true
             } else {
