@@ -25,3 +25,14 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2026-05-09 - `decode_string_literal` Equivalent Mutants
+
+**Learning:** The mutant `replace | with ^ in decode_string_literal` at `crates/nes-dsl/src/lib.rs:1323:41` (which does `(hi_val << 4 | lo_val) as u8`) is completely unviable and an equivalent mutant. Because `hi_val` is shifted left by 4, its lower 4 bits are zeroes, and `lo_val` is parsed from a single hex digit (so its upper bits are zeroes). Therefore, the bits of `hi_val << 4` and `lo_val` never overlap. In this case, `|` and `^` do exactly the same thing. No test can differentiate them.
+
+**Action:** Treat this mutant as an equivalent mutant and do not write test coverage for it.
+
+## 2026-05-09 - `encode_base64` Equivalent Mutants
+
+**Learning:** The `encode_base64` has multiple unkillable mutants that replace bitwise OR `|` with XOR `^`. These mutants are equivalent because they only combine bits that have been strictly shifted to separate ranges (e.g. `(b0 & 3) << 4` combined with `b1 >> 4`), so the bits never overlap, and `|` and `^` do exactly the same thing.
+
+**Action:** Treat these mutants as equivalent mutants and skip them.
