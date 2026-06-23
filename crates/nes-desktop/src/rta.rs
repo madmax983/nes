@@ -1141,8 +1141,7 @@ impl RtaManager {
     {
         for idx in 0..self.profile.splits.len() {
             if self.trigger_fired(TriggerSlot::Split(idx), &mut read_u8) {
-                let split_name = self.profile.splits[idx].name.clone();
-                let event = self.push_split(split_name, SplitSource::Automatic, frame, now);
+                let event = self.push_split(self.profile.splits[idx].name.clone(), SplitSource::Automatic, frame, now);
                 events.push(RtaEvent::Split(event));
             }
         }
@@ -1231,18 +1230,14 @@ impl RtaManager {
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
         let elapsed_ms = self.elapsed(now).as_millis();
-        self.split_events.push(SplitEvent {
-            name: name.clone(),
-            source,
-            frame,
-            elapsed_ms,
-        });
-        SplitEvent {
+        let event = SplitEvent {
             name,
             source,
             frame,
             elapsed_ms,
-        }
+        };
+        self.split_events.push(event.clone());
+        event
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
