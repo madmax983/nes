@@ -1123,7 +1123,10 @@ impl RtaManager {
                     .saturating_add(now.saturating_duration_since(paused_at));
                 events.push(RtaEvent::Resumed);
             }
-        } else if self.trigger_fired(TriggerSlot::Pause, &mut read_u8) {
+            return is_paused;
+        }
+
+        if self.trigger_fired(TriggerSlot::Pause, &mut read_u8) {
             self.pause_started_at = Some(now);
             events.push(RtaEvent::Paused);
         }
@@ -1758,14 +1761,15 @@ impl CalibrationRecorder {
                     break;
                 }
             }
-            if let Some((address, value, confidence)) = selected {
-                out.push(DraftCandidate {
-                    split_name: &split.name,
-                    address: address as u16,
-                    value,
-                    confidence,
-                });
-            }
+            let Some((address, value, confidence)) = selected else {
+                continue;
+            };
+            out.push(DraftCandidate {
+                split_name: &split.name,
+                address: address as u16,
+                value,
+                confidence,
+            });
         }
         out
     }

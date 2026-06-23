@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flattening deeply nested option unwrapping via Guard Clauses in nes-desktop/src/input.rs and nes-desktop/src/rta.rs]**
+**Learning:** Found deeply nested matches and "Pyramid of Doom" structures (`if let Some(...) { ... }`) in `classify_keyboard_input`, `evaluate_frame_deadline`, and `tick_pause_resume`.
+**Action:** Extracted and flattened the logic using Guard Clauses (`let Some(...) = ... else { return ... };` and `if condition { return ...; }`) to reduce nesting and make the execution path linear.
