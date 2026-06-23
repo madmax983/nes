@@ -35,6 +35,10 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Visual overlay for controller input state.
+#[cfg(feature = "nova")]
+pub mod input_overlay;
+
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
