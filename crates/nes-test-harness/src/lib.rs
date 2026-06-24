@@ -441,14 +441,21 @@ mod tests {
     use super::{
         apu_write_hash, audio_stats, collect_apu_register_writes, compare_waveforms,
         detect_mapper_id, mapper_supported_by_core, pearson_correlation, read_pcm_i16le,
-        rms_envelope, waveform_hash, write_pcm_i16le,
+        rms_envelope, waveform_hash, write_pcm_i16le, fft_log_mag_db,
     };
     use nes_core::NesCore;
 
     #[test]
     fn waveform_hash_is_stable_for_known_input() {
         let samples = [1_i16, -2, 3, -4, 5, -6];
-        assert_eq!(waveform_hash(&samples), waveform_hash(&samples));
+        let hash1 = waveform_hash(&samples);
+        assert_eq!(hash1, waveform_hash(&samples));
+
+        let mut samples_mut = samples;
+        samples_mut[0] = 2;
+        assert_ne!(hash1, waveform_hash(&samples_mut));
+
+        assert_eq!(waveform_hash(&[]), 0xcbf2_9ce4_8422_2325_u64);
     }
 
     #[test]
@@ -460,12 +467,31 @@ mod tests {
         assert_eq!(stats.dc_offset, 0.0);
         assert!(stats.rms > 0.0);
         assert_eq!(stats.clipping_ratio, 0.0);
+
+        let empty: [i16; 0] = [];
+        let stats_empty = audio_stats(&empty);
+        assert_eq!(stats_empty.sample_count, 0);
+
+        let clipping = [32767_i16, -32768, 0];
+        let stats_clipping = audio_stats(&clipping);
+        assert!(stats_clipping.clipping_ratio > 0.0);
     }
 
     #[test]
     fn pearson_correlation_is_one_for_identical_sequences() {
         let lhs = [1_i16, 2, 3, 4, 5];
         assert_eq!(pearson_correlation(&lhs, &lhs), 1.0);
+
+        let inv = [5_i16, 4, 3, 2, 1];
+        assert_eq!(pearson_correlation(&lhs, &inv), -1.0);
+
+        let zero = [0_i16; 5];
+        assert_eq!(pearson_correlation(&zero, &zero), 0.0);
+
+        let small = [1_i16];
+        assert_eq!(pearson_correlation(&small, &small), 0.0);
+
+        assert_eq!(pearson_correlation(&lhs, &[]), 0.0);
     }
 
     #[test]
@@ -474,6 +500,15 @@ mod tests {
         let envelope = rms_envelope(&samples, 2);
         assert_eq!(envelope.len(), 2);
         assert!(envelope[0] > envelope[1]);
+
+        let samples_even = [2_i16, -2, 2, -2];
+        let envelope_even = rms_envelope(&samples_even, 2);
+        assert_eq!(envelope_even.len(), 2);
+        assert_eq!(envelope_even[0], envelope_even[1]);
+
+        let empty: [i16; 0] = [];
+        let envelope_empty = rms_envelope(&empty, 2);
+        assert_eq!(envelope_empty.len(), 0);
     }
 
     #[test]
@@ -501,47 +536,20 @@ mod tests {
         assert_ne!(hash, 0);
         assert_ne!(hash, 1);
 
-        let mut writes = writes;
+        let mut writes_mut = writes.clone();
 
-        writes[0].cpu_cycle ^= 0xFFFF;
-        assert_ne!(hash, apu_write_hash(&writes));
-        writes[0].cpu_cycle ^= 0xFFFF;
+        writes_mut[0].cpu_cycle = 0;
+        assert_ne!(hash, apu_write_hash(&writes_mut));
 
-        writes[0].addr ^= 0xFFFF;
-        assert_ne!(hash, apu_write_hash(&writes));
-        writes[0].addr ^= 0xFFFF;
+        writes_mut = writes.clone();
+        writes_mut[0].addr = 0;
+        assert_ne!(hash, apu_write_hash(&writes_mut));
 
-        writes[0].value ^= 0xFF;
-        assert_ne!(hash, apu_write_hash(&writes));
-        writes[0].value ^= 0xFF;
+        writes_mut = writes.clone();
+        writes_mut[0].value = 0;
+        assert_ne!(hash, apu_write_hash(&writes_mut));
 
-        let orig_cycle = writes[0].cpu_cycle;
-        writes[0].cpu_cycle |= 0xFFFF;
-        if writes[0].cpu_cycle != orig_cycle {
-            assert_ne!(hash, apu_write_hash(&writes));
-        }
-        writes[0].cpu_cycle = orig_cycle;
-
-        let orig_addr = writes[0].addr;
-        writes[0].addr &= 0x0000;
-        if writes[0].addr != orig_addr {
-            assert_ne!(hash, apu_write_hash(&writes));
-        }
-        writes[0].addr = orig_addr;
-
-        let orig_value_or = writes[0].value;
-        writes[0].value |= 0xFF;
-        if writes[0].value != orig_value_or {
-            assert_ne!(hash, apu_write_hash(&writes));
-        }
-        writes[0].value = orig_value_or;
-
-        let orig_value_and = writes[0].value;
-        writes[0].value &= 0x00;
-        if writes[0].value != orig_value_and {
-            assert_ne!(hash, apu_write_hash(&writes));
-        }
-        writes[0].value = orig_value_and;
+        assert_eq!(apu_write_hash(&[]), 0xcbf2_9ce4_8422_2325_u64);
     }
 
     #[test]
@@ -588,7 +596,22 @@ mod tests {
         write_pcm_i16le(&path, &samples).expect("pcm write should succeed");
         let loaded = read_pcm_i16le(&path).expect("pcm read should succeed");
         assert_eq!(samples, loaded);
-        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(&path);
+
+        // Test empty write/read
+        write_pcm_i16le(&path, &[]).expect("empty pcm write should succeed");
+        let empty_loaded = read_pcm_i16le(&path).expect("empty pcm read should succeed");
+        assert!(empty_loaded.is_empty());
+        let _ = std::fs::remove_file(&path);
+
+        // test incomplete sample
+        std::fs::write(&path, vec![1_u8]).unwrap();
+        let incomplete_loaded = read_pcm_i16le(&path);
+        assert!(incomplete_loaded.is_err());
+        let _ = std::fs::remove_file(&path);
+
+        let no_file_loaded = read_pcm_i16le(&path);
+        assert!(no_file_loaded.is_err());
     }
 
     #[test]
@@ -598,6 +621,15 @@ mod tests {
         let comparison = compare_waveforms(&lhs, &rhs, 8);
         assert!(comparison.correlation > 0.99);
         assert!(comparison.fft_mean_abs_db_diff < 1.0);
+
+        let empty: [i16; 0] = [];
+        let comp_empty = compare_waveforms(&empty, &empty, 8);
+        assert_eq!(comp_empty.samples_compared, 0);
+
+        let zeros = [0_i16, 0, 0, 0];
+        let rhs_ones = [1_i16, 1, 1, 1];
+        let comp_zeros = compare_waveforms(&rhs_ones, &zeros, 8);
+        assert_eq!(comp_zeros.rms_ratio, 0.0);
     }
 
     #[test]
@@ -607,6 +639,31 @@ mod tests {
         rom[6] = 0x10;
         rom[7] = 0x20;
         assert_eq!(detect_mapper_id(&rom), Some(0x21));
+
+        // Test invalid magic
+        rom[0] = b'X';
+        assert_eq!(detect_mapper_id(&rom), None);
+        rom[0] = b'N';
+
+        // Test too short
+        assert_eq!(detect_mapper_id(&[0_u8; 15]), None);
+
+        // Test high bits
+        rom[6] = 0xF0;
+        rom[7] = 0xF8; // nes 2.0 extension
+        rom[8] = 0x0F;
+        assert_eq!(detect_mapper_id(&rom), Some(0xFFF));
+
+        // Test high bits with NES 2.0 extension 0 flag
+        rom[7] = 0x00;
+        assert_eq!(detect_mapper_id(&rom), Some(0x0F));
+
+        rom[6] = 0x00;
+        rom[7] = 0x08;
+        assert_eq!(detect_mapper_id(&rom), Some(0xF00));
+
+        rom[8] = 0x00;
+        assert_eq!(detect_mapper_id(&rom), Some(0x000));
     }
 
     #[test]
@@ -616,5 +673,27 @@ mod tests {
         assert!(mapper_supported_by_core(2));
         assert!(mapper_supported_by_core(4));
         assert!(!mapper_supported_by_core(69));
+        assert!(!mapper_supported_by_core(3));
+    }
+
+    #[test]
+    fn fft_log_mag_db_reports_expected_geometry() {
+        let empty = fft_log_mag_db(&[], 8);
+        assert!(empty.is_empty());
+
+        let samples = [1_i16, 2, 3, 4];
+        let too_small_fft = fft_log_mag_db(&samples, 1);
+        assert!(too_small_fft.is_empty());
+
+        let dc_signal = [1000_i16; 16];
+        let bins = fft_log_mag_db(&dc_signal, 16);
+        assert_eq!(bins.len(), 8); // nyquist
+        assert!(bins[0] > bins[1]); // DC component highest
+
+        let sine_wave: Vec<i16> = (0..32).map(|i| {
+            ((i as f64 * std::f64::consts::PI * 2.0 / 8.0).sin() * 1000.0) as i16
+        }).collect();
+        let bins = fft_log_mag_db(&sine_wave, 32);
+        assert!(bins[4] > bins[0]); // Bin 4 (nyquist/4) should be higher than DC
     }
 }

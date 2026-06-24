@@ -384,4 +384,61 @@ mod tests {
         assert!(output.contains("Skip (Mapper)"));
         assert!(output.contains("255"));
     }
+
+    #[test]
+    fn format_skipped_mapper_row_populates_fields() {
+        let row = format_skipped_mapper_row("test_rom.nes".to_owned(), 42);
+        assert_eq!(row.rom_name, "test_rom.nes");
+        assert_eq!(row.status, "Skip (Mapper)");
+        assert_eq!(row.status_color, TableColor::Magenta);
+        assert_eq!(row.mapper, "42");
+        assert_eq!(row.samples, "-");
+        assert_eq!(row.rms, "-");
+        assert_eq!(row.peak, "-");
+        assert_eq!(row.hash, "-");
+    }
+
+    #[test]
+    fn format_skipped_existing_row_populates_fields() {
+        let row = format_skipped_existing_row("test_rom.nes".to_owned(), 42);
+        assert_eq!(row.rom_name, "test_rom.nes");
+        assert_eq!(row.status, "Skip (Exists)");
+        assert_eq!(row.status_color, TableColor::Yellow);
+        assert_eq!(row.mapper, "42");
+        assert_eq!(row.samples, "-");
+        assert_eq!(row.rms, "-");
+        assert_eq!(row.peak, "-");
+        assert_eq!(row.hash, "-");
+    }
+
+    #[test]
+    fn format_written_row_populates_fields() {
+        let stats = AudioStats {
+            sample_count: 100,
+            rms: 0.5,
+            peak: 1000,
+            dc_offset: 0.0,
+            clipping_ratio: 0.0,
+        };
+        let row = format_written_row("test_rom.nes".to_owned(), 42, 100, stats, 12345);
+        assert_eq!(row.rom_name, "test_rom.nes");
+        assert_eq!(row.status, "Written");
+        assert_eq!(row.status_color, TableColor::Green);
+        assert_eq!(row.mapper, "42");
+        assert_eq!(row.samples, "100");
+        assert!(row.rms.contains("0.50"));
+        assert_eq!(row.peak, "1000");
+        assert!(row.hash.contains("3039"));
+    }
+
+    #[test]
+    fn build_summary_table_populates_correctly() {
+        let rows = vec![format_written_row("test1.nes".to_owned(), 0, 0, AudioStats { sample_count: 0, rms: 0.0, peak: 0, dc_offset: 0.0, clipping_ratio: 0.0 }, 0)];
+        let table = build_summary_table(rows);
+        let table_str = table.to_string();
+        assert!(table_str.contains("ROM"));
+        assert!(table_str.contains("Status"));
+        assert!(table_str.contains("test1.nes"));
+        assert!(table_str.contains("Written"));
+    }
 }
