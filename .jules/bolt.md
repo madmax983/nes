@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Optimized String Allocations in RTA Manager]**
+**Learning:** Found unnecessary string allocations and `TriggerRule` clones when evaluating manual splits, instantiating `TriggerRuntime`, and pushing to `split_events` loops. Additionally, learned that `Vec::new()` does not allocate heap memory, so refactoring `Vec<T>` to `Option<Vec<T>>` just to avoid `Vec::new()` on empty paths is an anti-pattern.
+**Action:** Re-ordered memory accesses in `manual_split` and changed signatures on `TriggerRuntime::new` to take references instead of consuming values directly to eliminate 5 unnecessary `.clone()`s of `String` and nested struct values from the hot and initialization paths of the RtaManager.

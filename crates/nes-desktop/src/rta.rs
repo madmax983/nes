@@ -525,9 +525,9 @@ struct TriggerRuntime {
 }
 
 impl TriggerRuntime {
-    fn new(rule: TriggerRule) -> Self {
+    fn new(rule: &TriggerRule) -> Self {
         Self {
-            rule,
+            rule: rule.clone(),
             cooldown: 0,
             consecutive_hits: 0,
             last_observed_value: None,
@@ -804,19 +804,19 @@ impl RtaManager {
             Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(4 + profile.splits.len());
         triggers.push((
             TriggerSlot::Start,
-            TriggerRuntime::new(profile.start.clone()),
+            TriggerRuntime::new(&profile.start),
         ));
-        triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end.clone())));
-        if let Some(rule) = profile.pause.clone() {
+        triggers.push((TriggerSlot::End, TriggerRuntime::new(&profile.end)));
+        if let Some(rule) = &profile.pause {
             triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule)));
         }
-        if let Some(rule) = profile.resume.clone() {
+        if let Some(rule) = &profile.resume {
             triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule)));
         }
         for (idx, split) in profile.splits.iter().enumerate() {
             triggers.push((
                 TriggerSlot::Split(idx),
-                TriggerRuntime::new(split.trigger.clone()),
+                TriggerRuntime::new(&split.trigger),
             ));
         }
 
@@ -1231,18 +1231,14 @@ impl RtaManager {
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
         let elapsed_ms = self.elapsed(now).as_millis();
-        self.split_events.push(SplitEvent {
-            name: name.clone(),
-            source,
-            frame,
-            elapsed_ms,
-        });
-        SplitEvent {
+        let event = SplitEvent {
             name,
             source,
             frame,
             elapsed_ms,
-        }
+        };
+        self.split_events.push(event.clone());
+        event
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
@@ -1267,10 +1263,10 @@ impl RtaManager {
             return None;
         }
         let split_name = format!("manual-{}", self.split_counter.saturating_add(1));
-        let event = self.push_split(split_name.clone(), SplitSource::Manual, frame, now);
         if let Some(calibration) = self.calibration.as_mut() {
-            calibration.mark_split(split_name, frame);
+            calibration.mark_split(split_name.clone(), frame);
         }
+        let event = self.push_split(split_name, SplitSource::Manual, frame, now);
         Some(RtaEvent::Split(event))
     }
 
