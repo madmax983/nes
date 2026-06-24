@@ -47,3 +47,14 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+## 2024-06-24 - Mutants caught in protocol.rs
+
+**Target:** `crates/nes-mcp/src/protocol.rs`
+**Issue:** `cargo mutants` found multiple un-caught mutants in `RpcError` constructors, `json_arg_to_string`, `jsonrpc_result`, `jsonrpc_error`, `dispatch_output_value`, and `tool_input_schema`.
+**Diagnosis:** `MISSING_COVERAGE`. There were no tests for these utility/formatting functions.
+**Kill Shot:** Added `test_protocol_mutants.rs` which exhaustively checks the outputs of all these functions, correctly verifying schemas, error codes, string mapping, etc.
+## 2024-06-24 - Equivalent Mutants in encode_base64
+
+**Mutant:** Multiple loop increment mutations (e.g., `replace += with *= in encode_base64`) at `crates/nes-mcp/src/dispatch.rs:914:11`
+**Diagnosis:** EQUIVALENT_MUTANT. As per `.jules/sentinel.md` (and general Rust testing), mutating loop increments like `+=` to `*=` in `encode_base64` causes test execution timeouts (infinite loops) rather than explicit assertion failures. These should be treated as unviable/equivalent mutants rather than missing test coverage.
+**Kill Shot:** N/A (Equivalent/Timeout)
