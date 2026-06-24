@@ -229,13 +229,19 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
     let mut idx = 0_usize;
     while idx < args.len() {
         let arg = &args[idx];
-        if parse_arg(args, &mut idx, "--config", |value| {
-            if value.starts_with("--") {
-                return Err("missing value after --config".to_owned());
-            }
-            config_path = Some(PathBuf::from(value));
-            Ok(())
-        })? {
+        if parse_arg(
+            args,
+            &mut idx,
+            "--config",
+            |value: String| {
+                if value.starts_with("--") {
+                    return Err("missing value after --config".to_owned());
+                }
+                config_path = Some(PathBuf::from(value));
+                Ok(())
+            },
+            parse_string_arg,
+        )? {
             continue;
         }
         pass_through.push(arg.clone());
@@ -244,23 +250,34 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
     Ok((config_path, pass_through))
 }
 
-fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
+pub fn parse_string_arg(value: &str, _flag: &str) -> Result<String, String> {
+    Ok(value.to_owned())
+}
+
+pub fn parse_arg<T, F, P>(
+    args: &[String],
+    idx: &mut usize,
+    flag: &str,
+    mut apply: F,
+    parse: P,
+) -> Result<bool, String>
 where
-    F: FnMut(&str) -> Result<(), String>,
+    F: FnMut(T) -> Result<(), String>,
+    P: Fn(&str, &str) -> Result<T, String>,
 {
     let arg = &args[*idx];
     if arg == flag {
-        let Some(value) = args.get(*idx + 1) else {
+        let Some(val) = args.get(*idx + 1) else {
             return Err(format!("missing value after {flag}"));
         };
-        apply(value)?;
+        apply(parse(val, flag)?)?;
         *idx += 2;
         Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
-        if value.is_empty() {
+    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
+        if val.is_empty() {
             return Err(format!("missing value after {flag}="));
         }
-        apply(value)?;
+        apply(parse(val, flag)?)?;
         *idx += 1;
         Ok(true)
     } else {
@@ -440,19 +457,37 @@ window_scale = 9
 
         let start_idx = 0;
         let mut idx = start_idx;
-        let res = super::parse_arg(&args, &mut idx, "--config", |_| Ok(()));
+        let res = super::parse_arg(
+            &args,
+            &mut idx,
+            "--config",
+            |_: String| Ok(()),
+            super::parse_string_arg,
+        );
         assert_eq!(res, Ok(true));
         assert_eq!(idx, start_idx + 2); // Ensure it increments by 2
 
         let mut idx = 0;
         let args2 = vec!["--config=dummy.toml".to_owned(), "extra".to_owned()];
-        let res2 = super::parse_arg(&args2, &mut idx, "--config", |_| Ok(()));
+        let res2 = super::parse_arg(
+            &args2,
+            &mut idx,
+            "--config",
+            |_: String| Ok(()),
+            super::parse_string_arg,
+        );
         assert_eq!(res2, Ok(true));
         assert_eq!(idx, 1); // Ensure it increments by 1
 
         let mut idx = 0;
         let args3 = vec!["extra".to_owned()];
-        let res3 = super::parse_arg(&args3, &mut idx, "--config", |_| Ok(()));
+        let res3 = super::parse_arg(
+            &args3,
+            &mut idx,
+            "--config",
+            |_: String| Ok(()),
+            super::parse_string_arg,
+        );
         assert_eq!(res3, Ok(false));
         assert_eq!(idx, 0); // Unchanged when not matched
     }

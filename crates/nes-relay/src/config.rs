@@ -82,38 +82,68 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
             return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
         }
 
-        if parse_arg(&args, &mut idx, "--bind", |value| {
-            parsed.bind_addr = value.to_string();
-            Ok(())
-        })? {
+        if nes_config::parse_arg(
+            &args,
+            &mut idx,
+            "--bind",
+            |value: String| {
+                parsed.bind_addr = value.to_string();
+                Ok(())
+            },
+            nes_config::parse_string_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--latency-ms", |value| {
-            parsed.link.latency_ms = parse_u64_arg(value, "--latency-ms")?;
-            Ok(())
-        })? {
+        if nes_config::parse_arg(
+            &args,
+            &mut idx,
+            "--latency-ms",
+            |value: String| {
+                parsed.link.latency_ms = parse_u64_arg(&value, "--latency-ms")?;
+                Ok(())
+            },
+            nes_config::parse_string_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--jitter-ms", |value| {
-            parsed.link.jitter_ms = parse_u64_arg(value, "--jitter-ms")?;
-            Ok(())
-        })? {
+        if nes_config::parse_arg(
+            &args,
+            &mut idx,
+            "--jitter-ms",
+            |value: String| {
+                parsed.link.jitter_ms = parse_u64_arg(&value, "--jitter-ms")?;
+                Ok(())
+            },
+            nes_config::parse_string_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--loss-pct", |value| {
-            parsed.link.loss_pct = parse_percent_arg(value, "--loss-pct")?;
-            Ok(())
-        })? {
+        if nes_config::parse_arg(
+            &args,
+            &mut idx,
+            "--loss-pct",
+            |value: String| {
+                parsed.link.loss_pct = parse_percent_arg(&value, "--loss-pct")?;
+                Ok(())
+            },
+            nes_config::parse_string_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--reorder-pct", |value| {
-            parsed.link.reorder_pct = parse_percent_arg(value, "--reorder-pct")?;
-            Ok(())
-        })? {
+        if nes_config::parse_arg(
+            &args,
+            &mut idx,
+            "--reorder-pct",
+            |value: String| {
+                parsed.link.reorder_pct = parse_percent_arg(&value, "--reorder-pct")?;
+                Ok(())
+            },
+            nes_config::parse_string_arg,
+        )? {
             continue;
         }
 
@@ -122,30 +152,6 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
         ));
     }
     Ok(parsed)
-}
-
-fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
-where
-    F: FnMut(&str) -> Result<(), String>,
-{
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(value) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
-        apply(value)?;
-        *idx += 2;
-        Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
-        if value.is_empty() {
-            return Err(format!("missing value after {flag}="));
-        }
-        apply(value)?;
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }
 
 /// Parses a string representation of a non-negative integer into a `u64`.
