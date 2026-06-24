@@ -1581,6 +1581,18 @@ mod tests {
         assert_eq!(delay, 3);
     }
 
+    use proptest::prelude::*;
+    proptest! {
+        #[test]
+        #[should_panic]
+        fn havoc_test_recommended_input_delay_frames_panics_on_extreme_latency(
+            rtt in any::<f64>(),
+            jitter in any::<f64>(),
+        ) {
+            let _ = recommended_input_delay_frames(Some(rtt), jitter, 0, 10, 5);
+        }
+    }
+
     #[test]
     fn adaptive_delay_exact_targets_and_hysteresis_behave_as_expected() {
         let raised = recommended_input_delay_frames(Some(96.0), 12.0, 1, 12, 2);
