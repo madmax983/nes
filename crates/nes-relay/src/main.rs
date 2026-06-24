@@ -4,7 +4,10 @@
 //! for the NES emulator. It handles joining rooms, forwarding deterministic inputs, and optionally
 //! simulating poor network conditions.
 
-use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+use comfy_table::{
+    Cell, Color as TableColor, Table, modifiers::UTF8_ROUND_CORNERS,
+    modifiers::UTF8_SOLID_INNER_BORDERS, presets::UTF8_FULL,
+};
 use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -106,7 +109,10 @@ fn main() {
 
 fn build_startup_table(args: &RelayArgs) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .apply_modifier(UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),

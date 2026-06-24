@@ -5,7 +5,10 @@
 
 use std::{env, fs, path::PathBuf};
 
-use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+use comfy_table::{
+    Cell, Color as TableColor, Table, modifiers::UTF8_ROUND_CORNERS,
+    modifiers::UTF8_SOLID_INNER_BORDERS, presets::UTF8_FULL,
+};
 use crossterm::style::{Color, Stylize};
 use nes_ai::{
     config::AiProfileConfig,
@@ -70,7 +73,10 @@ fn run() -> Result<(), String> {
 
 fn build_summary_table(average_return: f32, artifact_paths_len: usize) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .apply_modifier(UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
