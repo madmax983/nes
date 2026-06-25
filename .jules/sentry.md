@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-06-24 - `nes-test-harness` coverage
+**Learning:** We've successfully covered test gaps in `nes-test-harness`'s `compare_waveforms` and `rms_envelope`. The remaining mutants are largely equivalent mutants from hash functions. We will submit these test improvements to increase confidence.
+**Action:** Proceed to submit PR for `nes-test-harness` test coverage improvements.
