@@ -37,7 +37,11 @@ impl AudioVisualizer {
     /// let bmp_bytes = AudioVisualizer::render_waveform_bmp(&samples, 400, 200).unwrap();
     /// assert_eq!(&bmp_bytes[0..2], b"BM");
     /// ```
-    pub fn render_waveform_bmp(samples: &[i16], width: usize, height: usize) -> Result<Vec<u8>, String> {
+    pub fn render_waveform_bmp(
+        samples: &[i16],
+        width: usize,
+        height: usize,
+    ) -> Result<Vec<u8>, String> {
         if width == 0 || height == 0 || samples.is_empty() {
             return encode_bmp(width, height, &[]); // Will error appropriately
         }
@@ -65,8 +69,13 @@ impl AudioVisualizer {
             let y = (center_y - (sample * scale_y)).clamp(0.0, (height - 1) as f32) as usize;
 
             let next_sample_idx = ((x + 1) * samples.len()) / width;
-            let next_sample = if next_sample_idx < samples.len() { samples[next_sample_idx] as f32 } else { sample };
-            let next_y = (center_y - (next_sample * scale_y)).clamp(0.0, (height - 1) as f32) as usize;
+            let next_sample = if next_sample_idx < samples.len() {
+                samples[next_sample_idx] as f32
+            } else {
+                sample
+            };
+            let next_y =
+                (center_y - (next_sample * scale_y)).clamp(0.0, (height - 1) as f32) as usize;
 
             let min_y = y.min(next_y);
             let max_y = y.max(next_y);
@@ -100,6 +109,9 @@ mod tests {
         // Let's check if there's any non-zero byte in the pixel data.
         let pixel_data = &bmp_data[54..];
         let has_lit_pixel = pixel_data.iter().any(|&b| b > 0);
-        assert!(has_lit_pixel, "The waveform trace should be visible (not solid black)");
+        assert!(
+            has_lit_pixel,
+            "The waveform trace should be visible (not solid black)"
+        );
     }
 }
