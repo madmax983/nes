@@ -19,18 +19,28 @@ struct SaveStateFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// A sum type that defines the various distinct states of `SaveSlotStatus`.
 pub enum SaveSlotStatus {
+    /// A state variation representing the `Empty` condition.
     Empty,
+    /// A state variation representing the `Saved` condition.
     Saved,
+    /// A state variation representing the `Corrupt` condition.
     Corrupt,
+    /// A state variation representing the `IncompatibleRom` condition.
     IncompatibleRom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// A data structure encapsulating the configuration and state for `SaveSlotMetadata`.
 pub struct SaveSlotMetadata {
+    /// The zero-indexed slot number.
     pub slot: u8,
+    /// The filesystem path where the profile was discovered.
     pub path: PathBuf,
+    /// Whether this is a draft or an active competitive profile.
     pub status: SaveSlotStatus,
+    /// The Unix timestamp of when the state was saved, if available.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -124,6 +134,7 @@ fn slot_number_from_path(path: &Path) -> Result<u8, String> {
 }
 
 #[must_use]
+/// A utility function enabling the `slot_path_for_rom` capability.
 pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);
@@ -133,6 +144,7 @@ pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
 }
 
 #[must_use]
+/// A utility function enabling the `slot_paths_for_rom` capability.
 pub fn slot_paths_for_rom(
     rom_path: &Path,
     rom_hash: &str,
@@ -144,6 +156,7 @@ pub fn slot_paths_for_rom(
 }
 
 #[must_use]
+/// A utility function enabling the `quicksave_path_for_rom` capability.
 pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);

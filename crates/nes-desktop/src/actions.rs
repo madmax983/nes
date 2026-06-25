@@ -1,13 +1,21 @@
 /// Shared high-level intents emitted by the native menu, overlay, and hotkeys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppAction {
+    /// A state variation representing the `ToggleOverlay` condition.
     ToggleOverlay,
+    /// Return to gameplay.
     Resume,
+    /// Open the OS file browser to load a new `.nes` file.
     OpenRom,
+    /// Navigate to the Cheats panel.
     OpenCheats,
+    /// Write emulator state to the designated slot (0-9).
     SaveSlot(u8),
+    /// Restore emulator state from the designated slot (0-9).
     LoadSlot(u8),
+    /// Hard reset the virtual console.
     Reset,
+    /// Exit the application.
     Quit,
 }
 

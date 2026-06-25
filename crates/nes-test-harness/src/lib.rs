@@ -35,26 +35,41 @@ pub use rom_paths::*;
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A data structure encapsulating the configuration and state for `ApuWriteEvent`.
 pub struct ApuWriteEvent {
+    /// A configured variable holding the `cpu_cycle` property.
     pub cpu_cycle: u64,
+    /// A configured variable holding the `addr` property.
     pub addr: u16,
+    /// The target value to compare against.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// A data structure encapsulating the configuration and state for `AudioStats`.
 pub struct AudioStats {
+    /// A configured variable holding the `sample_count` property.
     pub sample_count: usize,
+    /// A configured variable holding the `rms` property.
     pub rms: f64,
+    /// A configured variable holding the `peak` property.
     pub peak: i16,
+    /// A configured variable holding the `dc_offset` property.
     pub dc_offset: f64,
+    /// A configured variable holding the `clipping_ratio` property.
     pub clipping_ratio: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// A data structure encapsulating the configuration and state for `WaveformComparison`.
 pub struct WaveformComparison {
+    /// A configured variable holding the `samples_compared` property.
     pub samples_compared: usize,
+    /// A configured variable holding the `correlation` property.
     pub correlation: f64,
+    /// A configured variable holding the `rms_ratio` property.
     pub rms_ratio: f64,
+    /// A configured variable holding the `fft_mean_abs_db_diff` property.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -98,6 +113,7 @@ pub fn collect_apu_register_writes(
 }
 
 #[must_use]
+/// A utility function enabling the `apu_write_hash` capability.
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for event in writes {
@@ -178,6 +194,7 @@ pub fn capture_audio_window(
 }
 
 #[must_use]
+/// A utility function enabling the `waveform_hash` capability.
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for sample in samples {
@@ -188,6 +205,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
 }
 
 #[must_use]
+/// A utility function enabling the `audio_stats` capability.
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
         return AudioStats {
@@ -226,6 +244,7 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
 }
 
 #[must_use]
+/// A utility function enabling the `rms_envelope` capability.
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
         return Vec::new();
@@ -328,6 +347,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
 }
 
 #[must_use]
+/// A utility function enabling the `compare_waveforms` capability.
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
     if n == 0 {
@@ -373,6 +393,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 }
 
 #[must_use]
+/// A utility function enabling the `fft_log_mag_db` capability.
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
         return Vec::new();
@@ -415,6 +436,7 @@ fn hann_window(idx: usize, len: usize) -> f64 {
 }
 
 #[must_use]
+/// A utility function enabling the `detect_mapper_id` capability.
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
         return None;
@@ -432,6 +454,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 }
 
 #[must_use]
+/// A utility function enabling the `mapper_supported_by_core` capability.
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)
 }

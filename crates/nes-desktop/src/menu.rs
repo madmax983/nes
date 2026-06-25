@@ -22,11 +22,13 @@ pub struct DesktopMenu {
 
 impl DesktopMenu {
     #[must_use]
+    /// A utility function enabling the `entries` capability.
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
     }
 
     #[cfg(not(test))]
+    /// A utility function enabling the `install_for_window` capability.
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
         unsafe {
@@ -47,6 +49,7 @@ impl DesktopMenu {
 
     #[cfg(not(test))]
     #[must_use]
+    /// A utility function enabling the `poll_action` capability.
     pub fn poll_action(&self) -> Option<AppAction> {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -60,6 +63,7 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// A utility function enabling the `set_action_enabled` capability.
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -73,6 +77,7 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// A utility function enabling the `sync_runtime_state` capability.
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);
     }
@@ -98,10 +103,15 @@ impl DesktopMenu {
 /// Declarative menu node used to keep menu semantics testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesktopMenuEntry {
+    /// A state variation representing the `Item` condition.
     Item(MenuItemSpec),
+    /// A state variation representing the `Separator` condition.
     Separator,
+    /// A state variation representing the `Submenu` condition.
     Submenu {
+        /// A state variation representing the `label` condition.
         label: &'static str,
+        /// A state variation representing the `entries` condition.
         entries: Vec<DesktopMenuEntry>,
     },
 }
@@ -109,7 +119,9 @@ pub enum DesktopMenuEntry {
 /// Shared metadata for actionable menu items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuItemSpec {
+    /// The unique identifier for this profile.
     pub id: String,
+    /// A configured variable holding the `label` property.
     pub label: String,
 }
 
@@ -173,6 +185,7 @@ pub const fn native_menu_supported() -> bool {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// A utility function enabling the `native_menu_supported` capability.
 pub const fn native_menu_supported() -> bool {
     false
 }
@@ -185,6 +198,7 @@ pub const fn rom_picker_supported() -> bool {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// A utility function enabling the `rom_picker_supported` capability.
 pub const fn rom_picker_supported() -> bool {
     false
 }

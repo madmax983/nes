@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// A constant configuration value defining the default for `DEFAULT_MCP_BIND_ADDR`.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// A constant configuration value defining the default for `RUNTIME_USAGE`.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,21 +24,37 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// A configured variable holding the `rom_path` property.
     pub rom_path: Option<String>,
+    /// A configured variable holding the `cheat_codes` property.
     pub cheat_codes: Vec<String>,
+    /// A configured variable holding the `mcp_enabled` property.
     pub mcp_enabled: bool,
+    /// A configured variable holding the `mcp_bind_addr` property.
     pub mcp_bind_addr: String,
+    /// A configured variable holding the `netplay_enabled` property.
     pub netplay_enabled: bool,
+    /// A configured variable holding the `netplay_relay_addr` property.
     pub netplay_relay_addr: Option<String>,
+    /// A configured variable holding the `netplay_room` property.
     pub netplay_room: Option<String>,
+    /// A configured variable holding the `netplay_player` property.
     pub netplay_player: Option<u8>,
+    /// A configured variable holding the `netplay_input_delay_frames` property.
     pub netplay_input_delay_frames: Option<u32>,
+    /// A configured variable holding the `netplay_max_rollback_frames` property.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// A configured variable holding the `netplay_hash_check_every_frames` property.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// A configured variable holding the `rta_enabled` property.
     pub rta_enabled: bool,
+    /// A configured variable holding the `rta_profile_id` property.
     pub rta_profile_id: Option<String>,
+    /// A configured variable holding the `rta_profiles_dir` property.
     pub rta_profiles_dir: Option<String>,
+    /// A configured variable holding the `rta_runs_dir` property.
     pub rta_runs_dir: Option<String>,
+    /// A configured variable holding the `rta_calibrate` property.
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
     pub auto_player_enabled: bool,

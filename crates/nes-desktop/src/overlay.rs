@@ -24,50 +24,70 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlayPanel {
+    /// The `MainMenu` variant.
     MainMenu,
+    /// The `Cheats` variant.
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainMenuSelection {
+    /// The `Resume` variant.
     Resume,
+    /// The `OpenRom` variant.
     OpenRom,
+    /// The `OpenCheats` variant.
     OpenCheats,
+    /// The `SaveSlot` variant.
     SaveSlot(u8),
+    /// The `LoadSlot` variant.
     LoadSlot(u8),
+    /// The `Reset` variant.
     Reset,
+    /// The `Quit` variant.
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatsSelection {
+    /// The `AddCode` variant.
     AddCode,
+    /// The `Cheat` variant.
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OverlaySelection {
+    /// The `Main` variant.
     Main(MainMenuSelection),
+    /// The `Cheats` variant.
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OverlayCommand {
+    /// The `AppAction` variant.
     AppAction(AppAction),
+    /// The `ToggleCheat` variant.
     ToggleCheat(usize),
+    /// The `RemoveCheat` variant.
     RemoveCheat(usize),
+    /// The `SubmitCheatCode` variant.
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlaySlotSummary {
+    /// The `slot` field.
     pub slot: u8,
+    /// The `status_label` field.
     pub status_label: &'static str,
+    /// The `modified_unix_secs` field.
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -86,7 +106,9 @@ impl OverlaySlotSummary {
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OverlayCheatSummary<'a> {
+    /// The `raw_code` field.
     pub raw_code: &'a str,
+    /// The `enabled` field.
     pub enabled: bool,
 }
 

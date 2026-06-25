@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[must_use]
+/// A utility function enabling the `default_homebrew_rom_path` capability.
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")

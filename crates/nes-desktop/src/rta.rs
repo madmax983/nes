@@ -35,47 +35,73 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// A constant representing `DEFAULT_RTA_PROFILES_DIR`.
+/// The default directory to store competitive speedrunning profiles.
+///
+/// This is conventionally `config/rta/profiles` at the workspace root.
 pub const DEFAULT_RTA_PROFILES_DIR: &str = "config/rta/profiles";
+/// A constant representing `DEFAULT_RTA_RUNS_DIR`.
+/// The default directory where cryptographic run artifacts are saved.
+///
+/// This is conventionally `runs/rta` at the workspace root.
 pub const DEFAULT_RTA_RUNS_DIR: &str = "runs/rta";
 
 #[derive(Debug, Clone)]
+/// A struct representing `RtaRuntimeConfig`.
 pub struct RtaRuntimeConfig {
+    /// The `profile_id_override` field.
     pub profile_id_override: Option<String>,
+    /// The `profiles_dir` field.
     pub profiles_dir: PathBuf,
+    /// The `runs_dir` field.
     pub runs_dir: PathBuf,
+    /// The `calibrate` field.
     pub calibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// An enum representing `ProfileStatus`.
 pub enum ProfileStatus {
+    /// The `Draft` variant.
     Draft,
     #[default]
+    /// The `Published` variant.
     Published,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// An enum representing `TimerClock`.
 pub enum TimerClock {
     #[default]
+    /// The `Wall` variant.
     Wall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// An enum representing `FocusLossPolicy`.
 pub enum FocusLossPolicy {
+    /// The `AutoPause` variant.
     AutoPause,
+    /// The `Invalidate` variant.
     Invalidate,
     #[default]
+    /// The `Continue` variant.
     Continue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default, Hash)]
 #[serde(rename_all = "snake_case")]
+/// An enum representing `ForbiddenAction`.
 pub enum ForbiddenAction {
     #[default]
+    /// The `Rewind` variant.
     Rewind,
+    /// The `SaveLoad` variant.
     SaveLoad,
+    /// The `FrameStep` variant.
     FrameStep,
 }
 
@@ -91,33 +117,51 @@ impl ForbiddenAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// An enum representing `TriggerWidth`.
 pub enum TriggerWidth {
     #[default]
+    /// The `U8` variant.
     U8,
+    /// The `U16` variant.
     U16,
+    /// The `U32` variant.
     U32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// An enum representing `TriggerOp`.
 pub enum TriggerOp {
     #[default]
+    /// The `Eq` variant.
     Eq,
+    /// The `Ne` variant.
     Ne,
+    /// The `Gt` variant.
     Gt,
+    /// The `Gte` variant.
     Gte,
+    /// The `Lt` variant.
     Lt,
+    /// The `Lte` variant.
     Lte,
+    /// The `BitSet` variant.
     BitSet,
+    /// The `BitClear` variant.
     BitClear,
+    /// The `Changed` variant.
     Changed,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
+/// A struct representing `TimerPolicy`.
 pub struct TimerPolicy {
+    /// The `clock` field.
     pub clock: TimerClock,
+    /// The `focus_loss` field.
     pub focus_loss: FocusLossPolicy,
+    /// The `manual_fallback` field.
     pub manual_fallback: bool,
 }
 
@@ -133,7 +177,9 @@ impl Default for TimerPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
+/// A struct representing `InvalidationPolicy`.
 pub struct InvalidationPolicy {
+    /// The `invalidate_on` field.
     pub invalidate_on: Vec<ForbiddenAction>,
 }
 
@@ -151,8 +197,11 @@ impl Default for InvalidationPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
+/// A struct representing `SplitPolicy`.
 pub struct SplitPolicy {
+    /// The `append_only` field.
     pub append_only: bool,
+    /// The `manual_hotkey` field.
     pub manual_hotkey: String,
 }
 
@@ -167,18 +216,27 @@ impl Default for SplitPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(default, deny_unknown_fields)]
+/// A struct representing `LoggingPolicy`.
 pub struct LoggingPolicy {
+    /// The `save_input_log` field.
     pub save_input_log: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
+/// A struct representing `TriggerRule`.
 pub struct TriggerRule {
+    /// The `address` field.
     pub address: u16,
+    /// The `width` field.
     pub width: TriggerWidth,
+    /// The `op` field.
     pub op: TriggerOp,
+    /// The `value` field.
     pub value: u32,
+    /// The `debounce_frames` field.
     pub debounce_frames: u32,
+    /// The `require_consecutive` field.
     pub require_consecutive: u32,
 }
 
@@ -310,20 +368,29 @@ impl Default for RtaProfile {
 }
 
 #[derive(Debug, Clone)]
+/// A struct representing `LoadedProfile`.
 pub struct LoadedProfile {
+    /// The `path` field.
     pub path: PathBuf,
+    /// The `profile` field.
     pub profile: RtaProfile,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An enum representing `ProfileSelectionSource`.
 pub enum ProfileSelectionSource {
+    /// The `AutoByRomHash` variant.
     AutoByRomHash,
+    /// The `ManualOverride` variant.
     ManualOverride,
 }
 
 #[derive(Debug, Clone)]
+/// A struct representing `ProfileSelection`.
 pub struct ProfileSelection {
+    /// The `selected` field.
     pub selected: LoadedProfile,
+    /// The `source` field.
     pub source: ProfileSelectionSource,
 }
 
@@ -499,11 +566,17 @@ pub fn select_profile(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An enum representing `RtaSessionState`.
 pub enum RtaSessionState {
+    /// The `Idle` variant.
     Idle,
+    /// The `Armed` variant.
     Armed,
+    /// The `Running` variant.
     Running,
+    /// The `Finished` variant.
     Finished,
+    /// The `InvalidPractice` variant.
     InvalidPractice,
 }
 
@@ -625,40 +698,63 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// An enum representing `SplitSource`.
 pub enum SplitSource {
+    /// The `Automatic` variant.
     Automatic,
+    /// The `Manual` variant.
     Manual,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// A struct representing `SplitEvent`.
 pub struct SplitEvent {
+    /// The `name` field.
     pub name: String,
+    /// The `source` field.
     pub source: SplitSource,
+    /// The `frame` field.
     pub frame: u64,
+    /// The `elapsed_ms` field.
     pub elapsed_ms: u128,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// A struct representing `InputLogFrame`.
 pub struct InputLogFrame {
+    /// The `frame` field.
     pub frame: u64,
+    /// The `controller1_bits` field.
     pub controller1_bits: u8,
+    /// The `controller2_bits` field.
     pub controller2_bits: u8,
+    /// The `elapsed_ms` field.
     pub elapsed_ms: u128,
 }
 
 #[derive(Debug, Clone)]
+/// An enum representing `RtaEvent`.
 pub enum RtaEvent {
+    /// The `Started` variant.
     Started,
+    /// The `Paused` variant.
     Paused,
+    /// The `Resumed` variant.
     Resumed,
+    /// The `Split` variant.
     Split(SplitEvent),
+    /// The `Invalidated` variant.
     Invalidated(String),
+    /// The `Finished` variant.
     Finished(Duration),
 }
 
 #[derive(Debug, Clone)]
+/// A struct representing `RunArtifactPaths`.
 pub struct RunArtifactPaths {
+    /// The `run_json_path` field.
     pub run_json_path: PathBuf,
+    /// The `input_log_path` field.
     pub input_log_path: Option<PathBuf>,
 }
 
@@ -674,6 +770,8 @@ struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     splits: &'a [SplitEvent],
 }
 
+/// Helper module for serializing iterators with Serde.
+/// Helper module for serializing iterators with Serde.
 pub mod serde_iter {
     use serde::{Serialize, Serializer};
 
@@ -1493,8 +1591,11 @@ struct DraftReport<'a> {
 }
 
 #[derive(Debug, Clone)]
+/// A struct representing `DraftOutput`.
 pub struct DraftOutput {
+    /// The `profile_path` field.
     pub profile_path: PathBuf,
+    /// The `report_path` field.
     pub report_path: PathBuf,
 }
 
@@ -1511,10 +1612,20 @@ struct CalibrationSplitMark {
 }
 
 #[derive(Debug, Clone)]
+/// A struct representing `CalibrationRecorder`.
+/// An experimental tool that hallucinates new profiles by observing a human player.
+///
+/// Instead of manually typing hex addresses into a TOML file, the user simply
+/// presses a hotkey when a split occurs. The recorder analyzes the memory deltas
+/// around that exact frame to mathematically deduce the likely trigger condition.
 pub struct CalibrationRecorder {
+    /// The target profile ID being drafted.
     profile_id: String,
+    /// A rolling buffer of memory deltas.
     frames: VecDeque<CalibrationFrame>,
+    /// List of user requested marks.
     splits: Vec<CalibrationSplitMark>,
+    /// Max history size.
     max_frames: usize,
 }
 
