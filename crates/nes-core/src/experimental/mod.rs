@@ -8,6 +8,8 @@
 
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
+/// Visualizes APU audio output as a waveform.
+pub mod audio_visualizer;
 /// Utility for discovering cheat codes by monitoring RAM changes.
 pub mod cheat_finder;
 /// Tracks emulator events for external logging and analysis.
