@@ -821,6 +821,14 @@ impl RtaManager {
         }
 
         let split_events = Vec::with_capacity(profile.splits.len());
+        // **⚡ Bolt Optimization:** Pre-allocate `input_log` vector to avoid reallocation during the run if logging is enabled.
+        // 36,000 frames is roughly 10 minutes of gameplay at 60 FPS.
+        let input_log = if profile.logging.save_input_log {
+            Vec::with_capacity(36_000)
+        } else {
+            Vec::new()
+        };
+
         Self {
             profile,
             rom_hash,
@@ -834,7 +842,7 @@ impl RtaManager {
             split_counter: 0,
             split_events,
             triggers,
-            input_log: Vec::new(),
+            input_log,
             runs_dir,
             artifacts_written: None,
             calibration,
@@ -2112,5 +2120,30 @@ unexpected = "boom"
         assert!(multi_err.contains("Multiple RTA profiles matched ROM hash samehash"));
         assert!(multi_err.contains("pub1"));
         assert!(multi_err.contains("pub2"));
+    }
+
+    #[test]
+    fn rta_manager_preallocates_input_log_capacity_when_enabled() {
+        let mut profile = RtaProfile::default();
+        profile.logging.save_input_log = true;
+        let manager = RtaManager::new(profile, "hash".to_owned(), PathBuf::from("out"), None);
+        assert!(
+            manager.input_log.capacity() >= 36_000,
+            "Should pre-allocate input_log capacity for performance"
+        );
+
+        let mut profile_disabled = RtaProfile::default();
+        profile_disabled.logging.save_input_log = false;
+        let manager_disabled = RtaManager::new(
+            profile_disabled,
+            "hash".to_owned(),
+            PathBuf::from("out"),
+            None,
+        );
+        assert_eq!(
+            manager_disabled.input_log.capacity(),
+            0,
+            "Should not pre-allocate if logging is disabled"
+        );
     }
 }

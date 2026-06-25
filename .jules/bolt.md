@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+## 2025-06-25 - Pre-allocate Vector Based on Configuration
+**Learning:** Found an unoptimized `Vec::new()` without capacity initialization on a hot path setup (`RtaManager::new`'s `input_log`). I learned that when pre-allocating capacity conditionally based on fields inside a variable that is consumed (moved) into the struct being initialized (like `profile`), I need to either put the conditional check *before* the variable is moved or declare it as a separate local variable first to satisfy the borrow checker.
+**Action:** Always extract configuration data that determines collection capacity into local variables *before* moving the parent struct into ownership to prevent `E0382`.
