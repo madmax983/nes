@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use std::borrow::Cow;
 
+use comfy_table::modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS};
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
@@ -225,7 +226,10 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
 fn build_summary_table(rows: Vec<RowData>) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .apply_modifier(UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("ROM").fg(TableColor::Cyan),
         Cell::new("Status").fg(TableColor::Cyan),
