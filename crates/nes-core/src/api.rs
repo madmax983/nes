@@ -1675,6 +1675,68 @@ impl Default for NesCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn should_normalize_ppu_register_addr() {
+        assert_eq!(super::normalize_ppu_register_addr(0x2000), 0x2000);
+        assert_eq!(super::normalize_ppu_register_addr(0x2001), 0x2001);
+        assert_eq!(super::normalize_ppu_register_addr(0x2007), 0x2007);
+        assert_eq!(super::normalize_ppu_register_addr(0x2008), 0x2000);
+        assert_eq!(super::normalize_ppu_register_addr(0x200F), 0x2007);
+        assert_eq!(super::normalize_ppu_register_addr(0x2010), 0x2000);
+        assert_eq!(super::normalize_ppu_register_addr(0x3FFF), 0x2007);
+    }
+
+    #[test]
+    fn test_apply_cpu_write_side_effect() {
+        let mut core = NesCore::new();
+        // Load dummy ROM to ensure mapper is initialized and doesn't panic
+        // This time using a valid ROM to avoid Truncated error.
+        // 16 bytes header + 16384 bytes PRG + 8192 bytes CHR = 24592 bytes minimum.
+        let mut rom_bytes = vec![0; 24592];
+        // INES header
+        rom_bytes[0..4].copy_from_slice(b"NES\x1A");
+        rom_bytes[4] = 1; // 1 PRG bank
+        rom_bytes[5] = 1; // 1 CHR bank
+
+        core.load_ines_rom(&rom_bytes).unwrap();
+
+        // Check >= 0x8000
+        core.apply_cpu_write_side_effect(0x8000, 0x01);
+
+        // PPU write (0x2000..=0x3FFF)
+        core.apply_cpu_write_side_effect(0x2000, 0x02);
+
+        // OAM DMA trigger (0x4014)
+        core.apply_cpu_write_side_effect(0x4014, 0x03);
+        assert_eq!(core.pending_oam_dma_page, Some(0x03));
+
+        // Controller port latch (0x4016)
+        core.apply_cpu_write_side_effect(0x4016, 0x01);
+
+        // APU write
+        core.apply_cpu_write_side_effect(0x4015, 0x00);
+
+        // Unmapped address
+        core.apply_cpu_write_side_effect(0x5000, 0x00);
+    }
+
+    #[test]
+    fn test_apply_cpu_read_side_effect() {
+        let mut core = NesCore::new();
+
+        // Controller port side effects shift buttons out
+        core.execute(Command::PressButton(Button::A)).unwrap();
+        core.execute(Command::PressButton2(Button::A)).unwrap();
+
+        core.apply_cpu_read_side_effect(0x2002);
+        core.apply_cpu_read_side_effect(0x2007);
+        core.apply_cpu_read_side_effect(0x4015);
+        core.apply_cpu_read_side_effect(0x4016);
+        core.apply_cpu_read_side_effect(0x4017);
+
+        // Unmapped address
+        core.apply_cpu_read_side_effect(0x0000);
+    }
 
     #[test]
     fn should_return_chr_window_for_mmc3() {

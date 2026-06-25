@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-06-25 - api.rs test gaps
+**Learning:** Adding test coverage to `apply_cpu_read_side_effect` and `apply_cpu_write_side_effect` in `api.rs` revealed how to properly initialize the emulator memory without causing a panic when invoking side effects, by mocking iNES headers correctly `let mut rom_bytes = vec![0; 24592];`.
+**Action:** Always load dummy state first when testing internal emulator state directly.
