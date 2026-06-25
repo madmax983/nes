@@ -530,7 +530,7 @@ fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, Dis
     let prg_rom_bytes = rom
         .get(4)
         .map(|banks| usize::from(*banks) * 16 * 1024)
-        .unwrap_or(0);
+        .unwrap_or_default();
     Ok(DispatchOutput::DslRomExported {
         path: output_path,
         bytes: rom.len(),
@@ -547,7 +547,7 @@ fn handle_export_6502_dsl_rom_base64(params: &ToolParams) -> Result<DispatchOutp
     let prg_rom_bytes = rom
         .get(4)
         .map(|banks| usize::from(*banks) * 16 * 1024)
-        .unwrap_or(0);
+        .unwrap_or_default();
     Ok(DispatchOutput::DslRomExportedBase64 {
         rom_base64: encode_base64(rom.as_slice()),
         bytes: rom.len(),

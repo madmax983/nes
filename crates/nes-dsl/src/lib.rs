@@ -1210,22 +1210,23 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
         rest.parse::<i64>().ok()
     };
 
-    let Some(value) = parsed else {
-        if sign != 1 {
-            return Err(DslError::Parse {
-                line: line_no,
-                message: format!("invalid numeric expression '{token}'"),
-            });
-        }
-        let symbol = normalize_symbol(rest);
-        validate_symbol(&symbol).map_err(|message| DslError::Parse {
-            line: line_no,
-            message,
-        })?;
-        return Ok(Expr::Symbol(symbol));
-    };
+    if let Some(value) = parsed {
+        return Ok(Expr::Number(sign * value));
+    }
 
-    Ok(Expr::Number(sign * value))
+    if sign != 1 {
+        return Err(DslError::Parse {
+            line: line_no,
+            message: format!("invalid numeric expression '{token}'"),
+        });
+    }
+
+    let symbol = normalize_symbol(rest);
+    validate_symbol(&symbol).map_err(|message| DslError::Parse {
+        line: line_no,
+        message,
+    })?;
+    Ok(Expr::Symbol(symbol))
 }
 
 fn split_csv(input: &str) -> Result<Vec<&str>, DslError> {

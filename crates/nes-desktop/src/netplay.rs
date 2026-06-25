@@ -358,7 +358,7 @@ impl NetplayRuntimeStats {
     /// We use this zero fallback to keep the dynamic delay logic mathematically
     /// safe during the initial connection handshake before the first ping returns.
     pub fn latest_rtt_ms_or_zero(&self) -> f64 {
-        self.latest_rtt_ms.unwrap_or(0.0)
+        self.latest_rtt_ms.unwrap_or_default()
     }
 }
 
@@ -370,7 +370,7 @@ pub fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8
             .iter()
             .copied()
             .find(|bits| *bits != 0)
-            .unwrap_or(0)
+            .unwrap_or_default()
     })
 }
 

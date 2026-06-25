@@ -51,3 +51,11 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flatten let-else patterns with heavy else blocks]
+**Learning:** Found an instance in `crates/nes-dsl/src/lib.rs`'s `parse_expr` where `let Some(value) = parsed else { ... heavy logic ... }` was used. The `else` block contained significant validation and error handling logic, while the success path (the `let` binding usage) was a simple one-liner.
+**Action:** When a let-else `else` block is very large, flip it into a standard `if let Some(value) = ... { return Ok(...); }` early return. This keeps the error handling or complex validation logic flattened at the bottom of the function, rather than conceptually nested inside an `else` divergence block.
+
+**[Refactoring redundant default allocations]
+**Learning:** Found multiple instances where `.unwrap_or(0)` or `.unwrap_or(0.0)` were used instead of `.unwrap_or_default()`.
+**Action:** Always prefer `.unwrap_or_default()` over explicit zero/null initializers to adhere to idiomatic Rust standards and resolve standard Clippy linting recommendations (`clippy::unwrap_or_default`).
