@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring repetitive build_startup_table logic]**
+**Learning:** Found a lot of repeated code with `table.add_row(vec![Cell::new("key"), Cell::new(val)])`.
+**Action:** Created an inline helper closure `add_row` to remove the `.add_row(vec![...])` boilerplate, increasing DRY-ness.
