@@ -47,3 +47,18 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+## 2024-05-18 - Missing Bounds Checks in `parse_arg`
+**Mutant:** Timeouts when mutating `*idx += 2;` or `*idx += 1;` in `parse_arg` of `crates/nes-config/src/lib.rs`.
+**Diagnosis:** The timeouts indicate that an infinite loop occurs when `parse_arg`'s `idx` updates are mutated because `parse_config_path_arg` iterates through args via `while i < args.len()`. If `idx` is not properly incremented, the loop never terminates. To catch this, we should add a test that explicitly bounds the number of iterations or passes a mock sequence and breaks if it loops infinitely.
+**Kill Shot:** An explicit timeout catching infinite loops in `parse_config_path_arg`.
+
+## 2024-05-18 - EOF Read Loop Timeout in `mcp_host.rs`
+**Mutant:** Timeout when mutating `read == 0` to `read != 0` in `read_framed_message`.
+**Diagnosis:** This is an equivalent mutant causing a timeout in test runs because altering the EOF read condition causes the parsing loop to execute infinitely. When the test runner encounters this, it cannot catch it with an assertion, but correctly interrupts it as a timeout.
+**Kill Shot:** None needed. This is a known equivalence that causes infinite loop timeouts and requires a custom mock reader to track iterations and panic, but the tests added for MCP bounds already catch the other functional gaps. It is tracked as an accepted limitation.
+
+## 2024-05-18 - Equivalent/Unviable Mutants in `rom_paths.rs`
+**Mutant:** Uncaught mutants replacing `smb_rom_path -> String` with `String::new()` and similar mutations for other `rom_path` getters in `crates/nes-test-harness/src/rom_paths.rs`.
+**Diagnosis:** The tests that cover `smb_rom_path()` and the others are integration tests (like `tests/rom_smb.rs`) which are ignored by default and skipped during the `cargo mutants` run, or they are covered by `cover_rom_path_helpers` which catches any panics and throws away the result. Because `cover_rom_path_helpers` throws away the returned `String`, mutating the returned value to `String::new()` does not fail the test!
+**Kill Shot:** Update `cover_rom_path_helpers` to assert on the returned string, but since we cannot guarantee the exact path string on different machines without `nes.toml`, we should add a mocked test, or accept this as a test-harness helper that is evaluated manually during real runs. Wait, the function `ensure_path_exists` will panic if the path does NOT exist! If we mutate the return value of `ensure_path_exists(...)` which is what `smb_rom_path()` returns, the path was successfully loaded but the function returns `""`. Since `cover_rom_path_helpers` ignores the return value, the test doesn't fail. We can assert that the return value is not empty, but we can't because `smb_rom_path()` relies on `nes.toml`. So we can use `catch_unwind` and if it succeeds, assert the string is not empty.

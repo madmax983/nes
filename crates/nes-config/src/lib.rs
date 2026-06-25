@@ -489,3 +489,6 @@ window_scal = 7
         assert!(err.contains("window_scal"));
     }
 }
+
+#[cfg(test)]
+mod tests_parse_arg;

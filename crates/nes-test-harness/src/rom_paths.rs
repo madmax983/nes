@@ -163,10 +163,21 @@ mod tests {
     #[test]
     #[ignore = "purely to verify panics locally for coverage without crashing pure CI"]
     fn cover_rom_path_helpers() {
-        let _ = std::panic::catch_unwind(smb_rom_path);
-        let _ = std::panic::catch_unwind(nestest_rom_path);
-        let _ = std::panic::catch_unwind(blargg_cpu_rom_path);
-        let _ = std::panic::catch_unwind(bbbradsmith_audio_suite_rom_paths);
-        let _ = std::panic::catch_unwind(bbbradsmith_audio_golden_dir_path);
+        if let Ok(path) = std::panic::catch_unwind(smb_rom_path) {
+            assert!(!path.is_empty());
+        }
+        if let Ok(path) = std::panic::catch_unwind(nestest_rom_path) {
+            assert!(!path.is_empty());
+        }
+        if let Ok(path) = std::panic::catch_unwind(blargg_cpu_rom_path) {
+            assert!(!path.is_empty());
+        }
+        if let Ok(paths) = std::panic::catch_unwind(bbbradsmith_audio_suite_rom_paths) {
+            assert!(!paths.is_empty());
+            assert!(!paths[0].is_empty());
+        }
+        if let Ok(path) = std::panic::catch_unwind(bbbradsmith_audio_golden_dir_path) {
+            assert!(!path.is_empty());
+        }
     }
 }
