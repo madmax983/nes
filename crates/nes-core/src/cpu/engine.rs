@@ -182,10 +182,11 @@ impl Cpu {
             sp: 0xFD,
             status: Status::with_bits(0x24),
             memory: [0; 0x1_0000],
-            writes: Vec::new(),
-            prg_writes: Vec::new(),
-            mmio_reads: RefCell::new(Vec::new()),
-            bus_trace: RefCell::new(Vec::new()),
+            // Pre-allocate vectors to avoid reallocations on the hot path
+            writes: Vec::with_capacity(4),
+            prg_writes: Vec::with_capacity(2),
+            mmio_reads: RefCell::new(Vec::with_capacity(2)),
+            bus_trace: RefCell::new(Vec::with_capacity(8)),
             bus_cycle: Cell::new(0),
             trace_enabled: cfg!(debug_assertions),
         }

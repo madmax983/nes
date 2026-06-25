@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+## Vector Pre-Allocation in Hot Paths
+**Learning:** Instantiating new vectors without a capacity (`Vec::new()`) inside structs that are accessed frequently, cleared, and repopulated (like CPU writes/traces) causes runtime allocations as elements are pushed.
+**Action:** Always pre-allocate capacity (`Vec::with_capacity(N)`) for structures used in hot paths like `NesCore` and `Cpu` to avoid reallocations.
