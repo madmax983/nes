@@ -178,7 +178,22 @@ impl NesConfig {
     /// let config = NesConfig::load(Path::new("my_nes.toml")).unwrap();
     /// ```
     pub fn load(path: &Path) -> Result<Self, String> {
-        let bytes = fs::read_to_string(path).map_err(|err| {
+        let mut path_to_read = path.to_path_buf();
+        if !path_to_read.exists()
+            && path_to_read.file_name().and_then(|s| s.to_str()) == Some("nes.toml")
+        {
+            let fallback = path_to_read.with_file_name("nes.example.toml");
+            if fallback.exists() {
+                eprintln!(
+                    "Config '{}' not found, falling back to '{}'",
+                    path.display(),
+                    fallback.display()
+                );
+                path_to_read = fallback;
+            }
+        }
+
+        let bytes = fs::read_to_string(&path_to_read).map_err(|err| {
             if err.kind() == std::io::ErrorKind::NotFound {
                 format!(
                     "failed to read config '{}': file not found. Hint: copy the example profile (e.g. cp nes.example.toml nes.toml)",
@@ -189,7 +204,7 @@ impl NesConfig {
             }
         })?;
         toml::from_str::<Self>(&bytes)
-            .map_err(|err| format!("failed to parse config '{}': {err}", path.display()))
+            .map_err(|err| format!("failed to parse config '{}': {err}", path_to_read.display()))
     }
     /// Loads a configuration from the given path if present, otherwise attempts to load from the default path or returns a default configuration.
     ///
@@ -203,8 +218,16 @@ impl NesConfig {
             Self::load(config_path)
         } else {
             let default_path = Path::new(DEFAULT_CONFIG_PATH);
+            let fallback_path = default_path.with_file_name("nes.example.toml");
             if default_path.exists() {
                 Self::load(default_path)
+            } else if fallback_path.exists() {
+                eprintln!(
+                    "Config '{}' not found, falling back to '{}'",
+                    default_path.display(),
+                    fallback_path.display()
+                );
+                Self::load(&fallback_path)
             } else {
                 Ok(Self::default())
             }
