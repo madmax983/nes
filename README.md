@@ -150,6 +150,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/mcp_hybrid_autopla
 
 For in-process automation, `nes_core::tas` is now the stable foundation when `nes-core` is built with `--features tas`: it records run-length encoded per-frame controller movies, replays them deterministically against `NesCore`, and can export the legacy macro script format for existing MCP tooling. That gives search/planning work, including `nes-ai`, a structured input tape instead of a stringly experiment.
 
+## Nova Story Feature
+
+⚠️ **REQUIRES FEATURE NOVA:** To use the `story_demo` and the `NarrativeGenerator`, you MUST build or run with the `nova` feature enabled.
+For example: `cargo run -p nes-core --features nova`
+
 ## AI Control Training
 
 `nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
