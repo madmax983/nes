@@ -1,37 +1,15 @@
-## 2023-10-24 - [Avoid unwrap_or clone on Option borrowed from HashMap]
-**Learning:** [When dealing with an `Option<&Vec<T>>` returned from `HashMap::get`, using `.unwrap_or(&Vec::new()).clone()` forces an unnecessary heap allocation. Furthermore, `Vec` does not implement `map_or` directly, but `Option` does. Using `Option::is_none_or()` is the most idiomatic and performant way to evaluate a condition against the optional borrowed value without allocating.]
-**Action:** [Always use `is_none_or` or `map_or` for conditional checks on borrowed `Option` values instead of cloning them or providing fallback heap allocations.]
-**[Local variable doc comments]
-**Learning:** [In Rust, applying a documentation comment (`///`) to a local statement (such as a `let` binding inside a function body) causes a compilation error (`error: expected outer doc comment`). Use standard comments (`//`) to document local variables and internal function logic.]
-**Action:** [Always use `//` for comments inside functions, and reserve `///` for outer item declarations like functions, structs, and fields.]
-**[Eliminating Header Buffer Allocations]
-**Learning:** [When parsing line-based protocols (like MCP/JSON-RPC over stdio or TCP streams) in a loop, declaring `let mut line = String::new();` inside the loop causes a heap allocation for every single header line read.]
-**Action:** [Hoist the `String` allocation outside the reading loop and call `line.clear()` before each `.read_line()` call. This allows `read_line` to safely reuse the existing buffer capacity, eliminating per-header-line allocations entirely.]
-**[Optimized RtaManager Allocations]**
-**Learning:** `TriggerRule` and `RtaProfile` struct members were unnecessarily cloned during `RtaManager` initialization on the hot path, causing heap allocations.
-**Action:** Used `std::mem::take` to pass ownership of properties out of the `mut profile` instead of cloning them. Iterated over `profile.splits.iter_mut()` instead of `.iter()`.
-**[Optimized RtaManager Allocations]**
-**Learning:** `TriggerRule` and `RtaProfile` struct members are owned by `RtaManager` and cannot be `take`n without leaving empty rules in the stored profile.
-**Action:** Reverted the attempt to use `std::mem::take` and kept the `.clone()` calls because the values are retained.
-**[Optimized String Allocations in IO Loops]**
-**Learning:** Found loops doing `let mut line = String::new();` inside before a `read_line`, allocating continuously instead of reusing capacity.
-**Action:** Hoisted the string allocation outside the loops and called `.clear()` to reuse the memory, ensuring zero allocations in the hot read loops.
+**[Optimizing map_region in nes-core bus.rs]
+**Learning:** `match` on ranges (`0x0000..=0x1FFF => ...`) compiles to exactly the same assembly as `if/else if` chains (`if addr < 0x2000 ...`) due to LLVM optimizations. Additionally, transforming the branch structure into a binary search shape does not improve performance.
+**Action:** Do not micro-optimize `match` statements with ranges in Rust when LLVM can optimize them perfectly.
 
-## 2024-04-27 - [Avoid String clones in RTA DraftCandidate]
-**Learning:** Avoid unnecessary `.clone()`s of `String` during serialization workflows.
-**Action:** Used `&'a str` in structs purely meant for serialization like `DraftCandidate` and `DraftReport` instead of cloning `String` on every candidate instantiation in hot-ish parsing paths. Also optimized `push_split` by constructing the `SplitEvent` structure and then pushing it to the vector without cloning the original string name argument.
+**[Pre-allocating scratch vectors in CPU trace routines]
+**Learning:** Initializing `Vec::new()` instead of `Vec::with_capacity(...)` for short-lived traces (e.g. `writes`, `prg_writes`, `mmio_reads`, `bus_trace`) inside `Cpu::new()` and `NesCore::new()` showed statistically insignificant performance differences (actually regressed by a fraction of a percent) during frame throughput tests, since these vectors are cleared and re-used for thousands of frames. The initial allocation happens once per emulator lifespan and is amortized.
+**Action:** Avoid micro-optimizing constructor vector capacities unless profiling shows structural reallocation overhead during the hot loop (e.g., inside `step_cpu`).
 
-**Replacing push_str format allocations**
-**Learning:** Using `string.push_str(&format!(...))` inside loops causes a new String allocation on the heap for every iteration.
-**Action:** Use `writeln!(string, ...)` via `std::fmt::Write` to append formatted text directly to the existing buffer without intermediate heap allocations.
+**[Case-insensitive string comparisons]
+**Learning:** `head.to_ascii_uppercase()` allocates a new string just to perform a lookup in a match statement like `matches!(mnemonic, "BCC" | "BCS" ... )` and `opcode_for(&mnemonic, ...)`. This is an unnecessary heap allocation, especially inside parsers or assemblers that run per line. Using `eq_ignore_ascii_case` avoids the allocation but the match statement syntax is simpler.
+**Action:** To refactor extensive `if/else if` chains evaluating string case-insensitivity without allocating new strings (e.g., avoiding `.to_ascii_uppercase()`), use a `match` expression with guard clauses (e.g., `_ if s.eq_ignore_ascii_case(...) => ...`).
 
-**[Pre-allocated CalibrationRecorder Frames]**
-**Learning:** `CalibrationRecorder::new` was initializing `frames` with `VecDeque::new()` without reserving capacity, causing repeated heap reallocations as the buffer filled up to 30,000 frames.
-**Action:** Used `VecDeque::with_capacity(30_000)` to eliminate reallocations during RTA draft recording.
-**[Lazy Iterator Operations]
-**Learning:** `Iterator::count()` iterates over all elements to calculate the length. If the result is only needed in an optional branch (like a callback function), it introduces unnecessary O(N) overhead.
-**Action:** Wrap eager iterator operations like `count()` inside `if option.is_some() { Some(...) } else { None }` so it's only lazily computed when strictly necessary.
-
-**[Unnecessary Vec Allocations in Tests]
-**Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
-**Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[JSON-RPC Parser Allocations]
+**Learning:** In `nes-mcp/src/dispatch.rs`, the `ToolParams` type is heavily used to extract strings from a BTreeMap. Creating unnecessary owned `String` variables by cloning values from the BTreeMap just to pass them around inside parsers creates a ton of short-lived heap allocations.
+**Action:** In JSON-RPC or similar parsers (e.g., `nes-mcp/src/dispatch.rs` handling `BTreeMap<String, String>`), prefer returning borrowed `&str` references tied to the input map's lifetime rather than using `.cloned()` or allocating new `String`s, deferring `.to_owned()` allocations only to the final structs that explicitly require them.
