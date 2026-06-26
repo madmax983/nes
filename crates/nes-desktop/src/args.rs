@@ -297,21 +297,10 @@ where
     F: FnMut(T),
     P: Fn(&str, &str) -> Result<T, String>,
 {
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(val) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
+    nes_config::parse_arg(args, idx, flag, |val| {
         apply(parse(val, flag)?);
-        *idx += 2;
-        Ok(true)
-    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
-        apply(parse(val, flag)?);
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+        Ok(())
+    })
 }
 
 fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {

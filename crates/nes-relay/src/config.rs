@@ -1,3 +1,4 @@
+use nes_config::parse_arg;
 /// Configures simulated network degradation for testing netcode resilience.
 ///
 /// This struct allows you to inject artificial latency, jitter, packet loss, and reordering
@@ -19,6 +20,7 @@
 /// };
 /// ```
 #[derive(Debug, Clone, Copy, Default)]
+
 pub struct LinkCondition {
     /// The baseline artificial latency to inject (in milliseconds).
     pub latency_ms: u64,
@@ -122,30 +124,6 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
         ));
     }
     Ok(parsed)
-}
-
-fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
-where
-    F: FnMut(&str) -> Result<(), String>,
-{
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(value) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
-        apply(value)?;
-        *idx += 2;
-        Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
-        if value.is_empty() {
-            return Err(format!("missing value after {flag}="));
-        }
-        apply(value)?;
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }
 
 /// Parses a string representation of a non-negative integer into a `u64`.

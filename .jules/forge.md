@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract common CLI parse_arg logic into nes-config]**
+**Learning:** Found duplicate implementations of the `parse_arg` CLI argument parsing utility in `nes-relay`, `nes-desktop`, and `nes-config`. `nes-config` is designed as a shared configuration crate for the workspace.
+**Action:** Made `parse_arg` public in `nes-config`, then removed the duplicate local implementations in `nes-relay` and `nes-desktop` to reuse the single source of truth, increasing DRY-ness and test coverage reuse.

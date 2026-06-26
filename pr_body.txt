@@ -1,0 +1,4 @@
+🚮 Smell: Duplicate implementations of the `parse_arg` CLI argument parsing utility existed across `nes-relay`, `nes-desktop`, and `nes-config`, causing unnecessary boilerplate and maintenance overhead.
+✨ Solution: Made `parse_arg` public in `nes-config` (the workspace configuration crate) and updated `nes-relay` and `nes-desktop` to reuse this centralized implementation.
+🧼 Benefit: Reduces technical debt, increases DRY-ness, and standardizes CLI parsing logic across the workspace.
+🛡️ Verification: Tests passed across all crates. No logic changed.
