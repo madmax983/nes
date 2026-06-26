@@ -370,7 +370,7 @@ pub fn compute_local_netplay_bits(gamepad_bits: [u8; 2], local_player: u8) -> u8
             .iter()
             .copied()
             .find(|bits| *bits != 0)
-            .unwrap_or(0)
+            .unwrap_or_default()
     })
 }
 

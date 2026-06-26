@@ -56,7 +56,8 @@ fn sample_uxrom3_ines() -> Vec<u8> {
 fn hex_encode(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        output.push_str(&format!("{byte:02X}"));
+        use std::fmt::Write;
+        write!(output, "{byte:02X}").unwrap();
     }
     output
 }

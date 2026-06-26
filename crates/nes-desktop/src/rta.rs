@@ -1231,18 +1231,14 @@ impl RtaManager {
     ) -> SplitEvent {
         self.split_counter = self.split_counter.saturating_add(1);
         let elapsed_ms = self.elapsed(now).as_millis();
-        self.split_events.push(SplitEvent {
-            name: name.clone(),
-            source,
-            frame,
-            elapsed_ms,
-        });
-        SplitEvent {
+        let event = SplitEvent {
             name,
             source,
             frame,
             elapsed_ms,
-        }
+        };
+        self.split_events.push(event.clone());
+        event
     }
 
     /// Forcefully logs a segment completion, bypassing all automated memory conditions.
@@ -1267,10 +1263,10 @@ impl RtaManager {
             return None;
         }
         let split_name = format!("manual-{}", self.split_counter.saturating_add(1));
-        let event = self.push_split(split_name.clone(), SplitSource::Manual, frame, now);
         if let Some(calibration) = self.calibration.as_mut() {
-            calibration.mark_split(split_name, frame);
+            calibration.mark_split(split_name.clone(), frame);
         }
+        let event = self.push_split(split_name, SplitSource::Manual, frame, now);
         Some(RtaEvent::Split(event))
     }
 

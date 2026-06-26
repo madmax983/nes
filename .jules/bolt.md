@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Optimizing default fallbacks and format strings]**
+**Learning:** Found cases of `.unwrap_or(0)` which is slightly less idiomatic than `.unwrap_or_default()`, though performance impact is zero, but standardizing it is good. Also found `string.push_str(&format!(...))` in a hot loop in tests which creates an intermediate string per iteration.
+**Action:** Replaced `.unwrap_or(0)` with `.unwrap_or_default()` and used `write!(string, ...)` for appending to eliminate allocations.
