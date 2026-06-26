@@ -161,13 +161,32 @@ impl PpuVisualizer {
                     let logical_nt_addr = 0x2000 + (nt_idx * 0x400);
                     let tile_index_in_nt = tile_y * 32 + tile_x;
 
-                    let nt_offset = (logical_nt_addr + tile_index_in_nt) % 2048;
+                    let resolve_nt_offset = |addr: usize| -> usize {
+                        let within = (addr - 0x2000) % 0x1000;
+                        let table = within / 0x0400;
+                        let offset = within % 0x0400;
+                        let physical_table = match ppu.mirroring {
+                            crate::rom::NametableMirroring::Vertical => match table {
+                                0 | 2 => 0,
+                                _ => 1,
+                            },
+                            crate::rom::NametableMirroring::Horizontal => match table {
+                                0 | 1 => 0,
+                                _ => 1,
+                            },
+                            crate::rom::NametableMirroring::OneScreenLower => 0,
+                            crate::rom::NametableMirroring::OneScreenUpper => 1,
+                        };
+                        physical_table * 0x0400 + offset
+                    };
+
+                    let nt_offset = resolve_nt_offset(logical_nt_addr + tile_index_in_nt);
                     let tile_id = ppu.nametable_ram[nt_offset];
 
                     let tile_addr = bg_pattern_table_base + (tile_id as usize) * 16;
 
                     let attr_offset = 0x3C0 + (tile_y / 4) * 8 + (tile_x / 4);
-                    let attr_val = ppu.nametable_ram[(logical_nt_addr + attr_offset) % 2048];
+                    let attr_val = ppu.nametable_ram[resolve_nt_offset(logical_nt_addr + attr_offset)];
                     let shift = ((tile_y & 2) << 1) | (tile_x & 2);
                     let palette_idx = (attr_val >> shift) & 0x03;
 
@@ -246,6 +265,51 @@ mod tests {
     #[test]
     fn extract_nametables_with_scroll_returns_bmp() {
         let core = NesCore::new();
+        let bmp = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
+        assert_eq!(&bmp[0..2], b"BM");
+    }
+
+    #[test]
+    fn test_horizontal_mirroring() {
+        let mut core = NesCore::new();
+        let mut rom_data = vec![
+            0x4E, 0x45, 0x53, 0x1A, 0x01, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        rom_data.extend(vec![0; 16384]);
+        rom_data.extend(vec![0; 8192]);
+        core.load_ines_rom(&rom_data).unwrap();
+
+        let bmp = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
+        assert_eq!(&bmp[0..2], b"BM");
+    }
+
+    #[test]
+    fn test_vertical_mirroring() {
+        let mut core = NesCore::new();
+        let mut rom_data = vec![
+            0x4E, 0x45, 0x53, 0x1A, 0x01, 0x01, 0x01, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        rom_data.extend(vec![0; 16384]);
+        rom_data.extend(vec![0; 8192]);
+        core.load_ines_rom(&rom_data).unwrap();
+
+        let bmp = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
+        assert_eq!(&bmp[0..2], b"BM");
+    }
+
+    #[test]
+    fn test_one_screen_mirroring() {
+        let mut core = NesCore::new();
+        let mut rom_data = vec![
+            0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x10, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        rom_data.extend(vec![0; 32768]);
+        rom_data.extend(vec![0; 8192]);
+
+        core.load_ines_rom(&rom_data).unwrap();
         let bmp = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
         assert_eq!(&bmp[0..2], b"BM");
     }
