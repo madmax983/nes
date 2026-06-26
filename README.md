@@ -41,6 +41,9 @@ cargo llvm-cov --workspace --all-features --all-targets --lcov --output-path lco
 ## Runtime And ROM Config
 
 Runtime and ROM paths are configured through `nes.toml` at the workspace root.
+
+> **⚠️ REQUIRES CONFIGURATION FILE**: The workspace does not have a `nes.toml` by default, it has a `nes.example.toml`. You must copy the example configuration file `nes.example.toml` to `nes.toml` before launching the emulator.
+
 Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
 Desktop/TUI launch commands:
