@@ -422,56 +422,44 @@ impl LoadedMapper {
     }
 
     fn apply_delta(&mut self, delta: &MapperDelta, chr_window: &[u8; CHR_8K_BYTES]) {
-        match &delta.kind {
-            MapperDeltaKind::Uxrom(state) => {
-                let Self::Uxrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
+        let matched = match (&mut *self, &delta.kind) {
+            (Self::Uxrom(mapper), MapperDeltaKind::Uxrom(state)) => {
                 mapper.restore_state(*state);
+                true
             }
-            MapperDeltaKind::Mmc1(state) => {
-                let Self::Mmc1(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
+            (Self::Mmc1(mapper), MapperDeltaKind::Mmc1(state)) => {
                 mapper.restore_state(*state);
+                true
             }
-            MapperDeltaKind::Cnrom(state) => {
-                let Self::Cnrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
+            (Self::Cnrom(mapper), MapperDeltaKind::Cnrom(state)) => {
                 mapper.restore_state(*state);
+                true
             }
-            MapperDeltaKind::Axrom(state) => {
-                let Self::Axrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
+            (Self::Axrom(mapper), MapperDeltaKind::Axrom(state)) => {
                 mapper.restore_state(*state);
+                true
             }
-            MapperDeltaKind::Gxrom(state) => {
-                let Self::Gxrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
+            (Self::Gxrom(mapper), MapperDeltaKind::Gxrom(state)) => {
                 mapper.restore_state(*state);
+                true
             }
-            MapperDeltaKind::Mmc3(state) => {
-                let Self::Mmc3(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
+            (Self::Mmc3(mapper), MapperDeltaKind::Mmc3(state)) => {
                 mapper.restore_state(*state);
+                true
             }
-            MapperDeltaKind::Replace(_) => {
+            (_, MapperDeltaKind::Replace(_)) => {
                 debug_assert!(
                     false,
                     "replacement mapper deltas are handled by CoreSnapshot"
                 );
                 return;
             }
+            _ => false,
+        };
+
+        debug_assert!(matched, "mapper delta kind must match mapper variant");
+        if !matched {
+            return;
         }
 
         self.sync_chr_ram_from_ppu_window(chr_window);
@@ -1471,45 +1459,34 @@ impl NesCore {
     }
 
     fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
+        match addr {
+            0x8000..=0xFFFF => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+                    let chr_window = self.ppu.chr_window_snapshot();
+                    mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                    mapper.write_prg(addr, value);
+
+                    self.sync_mapper_prg_window();
+                    self.sync_mapper_mirroring();
+                    self.sync_mapper_chr_window();
+                }
             }
-        } else {
-            false
-        };
-
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
-            self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
-            true
-        } else {
-            false
-        };
-
-        if (0x4000..=0x4017).contains(&addr) {
-            if addr == 0x4014 {
+            0x2000..=0x3FFF => {
+                self.ppu
+                    .write_register(normalize_ppu_register_addr(addr), value);
+                self.sync_ppu_register_image();
+            }
+            0x4014 => {
                 self.pending_oam_dma_page = Some(value);
-            } else if addr == 0x4016 {
+            }
+            0x4016 => {
                 self.ports.write_controller_strobe(value);
-            } else {
+            }
+            0x4000..=0x4017 => {
                 self.apu.write_register(addr, value);
             }
-        }
-
-        if remap_needed {
-            self.sync_mapper_prg_window();
-            self.sync_mapper_mirroring();
-            self.sync_mapper_chr_window();
-        }
-        if ppu_changed {
-            self.sync_ppu_register_image();
+            _ => {}
         }
     }
 

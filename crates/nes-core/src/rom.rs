@@ -107,6 +107,44 @@ impl std::error::Error for RomError {}
 ///
 /// Returns [`RomError`] when header bytes are invalid, sizes are unsupported,
 /// or the input is truncated.
+fn parse_banks_and_mapper(
+    bytes: &[u8],
+    flags6: u8,
+    flags7: u8,
+    is_nes2: bool,
+) -> Result<(u8, usize, usize), RomError> {
+    if is_nes2 {
+        let mapper_low = (flags6 >> 4) | (flags7 & 0xF0);
+        let mapper_high = bytes[8] & 0x0F;
+        let mapper_extended = ((mapper_high as u16) << 8) | mapper_low as u16;
+        let submapper = bytes[8] >> 4;
+        if submapper != 0 {
+            return Err(RomError::UnsupportedNes2Submapper(submapper));
+        }
+        if mapper_high != 0 {
+            return Err(RomError::UnsupportedNes2ExtendedMapper(mapper_extended));
+        }
+
+        let prg_msb = bytes[9] & 0x0F;
+        let chr_msb = (bytes[9] >> 4) & 0x0F;
+        if prg_msb == 0x0F || chr_msb == 0x0F {
+            return Err(RomError::UnsupportedNes2SizeEncoding);
+        }
+
+        Ok((
+            mapper_low,
+            bytes[4] as usize | ((prg_msb as usize) << 8),
+            bytes[5] as usize | ((chr_msb as usize) << 8),
+        ))
+    } else {
+        Ok((
+            flags6 >> 4 | (flags7 & 0xF0),
+            bytes[4] as usize,
+            bytes[5] as usize,
+        ))
+    }
+}
+
 pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
     if bytes.len() < INES_HEADER_LEN {
         return Err(RomError::Truncated {
@@ -135,36 +173,7 @@ pub fn parse_ines(bytes: &[u8]) -> Result<InesRom<'_>, RomError> {
         NametableMirroring::Horizontal
     };
 
-    let (mapper_id, prg_banks, chr_banks) = if is_nes2 {
-        let mapper_low = (flags6 >> 4) | (flags7 & 0xF0);
-        let mapper_high = bytes[8] & 0x0F;
-        let mapper_extended = ((mapper_high as u16) << 8) | mapper_low as u16;
-        let submapper = bytes[8] >> 4;
-        if submapper != 0 {
-            return Err(RomError::UnsupportedNes2Submapper(submapper));
-        }
-        if mapper_high != 0 {
-            return Err(RomError::UnsupportedNes2ExtendedMapper(mapper_extended));
-        }
-
-        let prg_msb = bytes[9] & 0x0F;
-        let chr_msb = (bytes[9] >> 4) & 0x0F;
-        if prg_msb == 0x0F || chr_msb == 0x0F {
-            return Err(RomError::UnsupportedNes2SizeEncoding);
-        }
-
-        (
-            mapper_low,
-            bytes[4] as usize | ((prg_msb as usize) << 8),
-            bytes[5] as usize | ((chr_msb as usize) << 8),
-        )
-    } else {
-        (
-            flags6 >> 4 | (flags7 & 0xF0),
-            bytes[4] as usize,
-            bytes[5] as usize,
-        )
-    };
+    let (mapper_id, prg_banks, chr_banks) = parse_banks_and_mapper(bytes, flags6, flags7, is_nes2)?;
 
     if prg_banks == 0 {
         return Err(RomError::MissingPrgRom);

@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Apply Guard Clauses & Extract Functions]**
+**Learning:** Refactoring deeply nested conditionals (like flattening apply_cpu_write_side_effect) into `match` blocks greatly reduces cognitive load. Similarly, pulling parsing logic out of large blocks (like `parse_banks_and_mapper` out of `parse_ines`) keeps methods succinct.
+**Action:** Always look for `if/else if/else` chains in API borders (like memory map boundaries) and turn them into `match` with exact ranges where feasible. Look for complex boolean logic blocks (like parsing specific versions of ROM formats) and push them out into helper functions.
