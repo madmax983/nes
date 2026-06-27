@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Eliminating Header Buffer Allocations]
+**Learning:** When parsing line-based protocols (like MCP/JSON-RPC over stdio or TCP streams) in a loop, declaring `let mut line = String::new();` inside the loop causes a heap allocation for every single header line read.
+**Action:** Hoisted the `String` allocation outside the reading loop and pass it as a `&mut String` to `read_line`, calling `.clear()` before each read. This allows `read_line` to safely reuse the existing buffer capacity, eliminating per-header-line allocations entirely. Applied to `nes-mcp` and `nes-desktop` mcp_host.

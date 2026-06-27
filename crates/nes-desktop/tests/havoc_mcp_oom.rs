@@ -7,7 +7,7 @@ fn havoc_mcp_content_length_oom() {
     let payload = b"Content-Length: 18446744073709551615\r\n\r\n{}";
     let mut cursor = Cursor::new(payload);
 
-    let result = read_framed_message(&mut cursor);
+    let result = read_framed_message(&mut cursor, &mut String::new());
     assert!(
         result.is_err(),
         "Expected reading an oversized content-length to result in an error"
