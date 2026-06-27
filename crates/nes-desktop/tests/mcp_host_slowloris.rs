@@ -2,8 +2,10 @@ use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "mcp-host")]
 use nes_desktop::mcp_host::{McpHost, read_framed_message};
 
+#[cfg(feature = "mcp-host")]
 #[test]
 fn havoc_mcp_slowloris_dos() {
     let host = McpHost::start("127.0.0.1:0").expect("host should start");

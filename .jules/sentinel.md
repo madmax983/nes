@@ -47,3 +47,12 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+## 2025-06-27 - General Sentinel Scan Fixes
+**Mutant:** Uncaught timeout in audio test due to empty mutant payload in `rodio_sink_adapter_clear_empties_queue`
+**Diagnosis:** The original test `rodio_sink_adapter_clear_empties_queue` wasn't catching the `replace <impl AudioSinkControl for RodioSinkAdapter>::clear with ()` mutant. When the method was stripped to `()`, `queue_len()` still showed `0` later in the test because the buffer finished playing so quickly.
+**Kill Shot:** Fixed by filling the test with two rounds of items, polling them with an explicit background thread running `rx.next()` that reads everything except the last item, then asserting that `queue_len` was still positive, then finally running `clear()` and asserting `queue_len` was `0`.
+
+**session_cheats.rs - toggle**
+**Mutant:** various in toggle/remove
+**Diagnosis:** Will investigate remaining unviable or surviving mutants if any. But since mutants in session_cheats were 15 caught, 3 unviable, there are NO survivors.
