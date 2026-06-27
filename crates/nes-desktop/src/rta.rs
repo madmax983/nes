@@ -821,6 +821,13 @@ impl RtaManager {
         }
 
         let split_events = Vec::with_capacity(profile.splits.len());
+        // **⚡ Bolt Optimization:** Pre-allocate input_log based on whether we save the input log, avoiding reallocations
+        // for up to 30,000 frames (a common limit like in `CalibrationRecorder`).
+        let input_log = if profile.logging.save_input_log {
+            Vec::with_capacity(30_000)
+        } else {
+            Vec::new()
+        };
         Self {
             profile,
             rom_hash,
@@ -834,7 +841,7 @@ impl RtaManager {
             split_counter: 0,
             split_events,
             triggers,
-            input_log: Vec::new(),
+            input_log,
             runs_dir,
             artifacts_written: None,
             calibration,
