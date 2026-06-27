@@ -1802,6 +1802,18 @@ mod tests {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
         assert!(!mapper.chr_writable());
+
+        let mmc1 = Mmc1::from_prg_rom(vec![0; 32 * 1024], 1);
+        let mapper = LoadedMapper::Mmc1(mmc1);
+        assert!(!mapper.chr_writable());
+
+        let uxrom = Uxrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Uxrom(uxrom);
+        assert!(!mapper.chr_writable());
+
+        let axrom = Axrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Axrom(axrom);
+        assert!(!mapper.chr_writable());
     }
 
     #[test]
@@ -1822,6 +1834,18 @@ mod tests {
         let mut mapper = LoadedMapper::Nrom(nrom);
         let window = [4; 8192];
         // This should not panic or change anything
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        let mmc1 = Mmc1::from_prg_rom(vec![0; 32 * 1024], 1);
+        let mut mapper = LoadedMapper::Mmc1(mmc1);
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        let uxrom = Uxrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mut mapper = LoadedMapper::Uxrom(uxrom);
+        mapper.sync_chr_ram_from_ppu_window(&window);
+
+        let axrom = Axrom::from_prg_rom(vec![0; 32 * 1024]);
+        let mut mapper = LoadedMapper::Axrom(axrom);
         mapper.sync_chr_ram_from_ppu_window(&window);
     }
 

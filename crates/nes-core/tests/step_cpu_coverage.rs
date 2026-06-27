@@ -335,6 +335,490 @@ fn cpu_opcode_coverage() {
             expected_trace_contains: "ROL $1234,X",
             ..Default::default()
         },
+        TestCase {
+            name: "EOR ($zp,X)",
+            setup_code: &[0x41, 0x10],
+            expected_a: 0x66,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x34), (0x16, 0x12), (0x1234, 0x33)],
+            expected_trace_contains: "EOR ($10,X)",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR $zp",
+            setup_code: &[0x45, 0x10],
+            expected_a: 0x66,
+            setup_a: 0x55,
+            setup_memory: vec![(0x10, 0x33)],
+            expected_trace_contains: "EOR $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "LSR $zp",
+            setup_code: &[0x46, 0x10],
+            expected_memory: vec![(0x10, 0x40)],
+            setup_memory: vec![(0x10, 0x81)],
+            expected_trace_contains: "LSR $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR #$imm",
+            setup_code: &[0x49, 0x33],
+            expected_a: 0x66,
+            setup_a: 0x55,
+            expected_trace_contains: "EOR #$33",
+            ..Default::default()
+        },
+        TestCase {
+            name: "LSR A",
+            setup_code: &[0x4A],
+            expected_a: 0x40,
+            setup_a: 0x81,
+            expected_trace_contains: "LSR A",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR $addr",
+            setup_code: &[0x4D, 0x34, 0x12],
+            expected_a: 0x66,
+            setup_a: 0x55,
+            setup_memory: vec![(0x1234, 0x33)],
+            expected_trace_contains: "EOR $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "LSR $addr",
+            setup_code: &[0x4E, 0x34, 0x12],
+            expected_memory: vec![(0x1234, 0x40)],
+            setup_memory: vec![(0x1234, 0x81)],
+            expected_trace_contains: "LSR $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR ($zp),Y",
+            setup_code: &[0x51, 0x10],
+            expected_a: 0x66,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x10, 0x34), (0x11, 0x12), (0x123A, 0x33)],
+            expected_trace_contains: "EOR ($10),Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR $zp,X",
+            setup_code: &[0x55, 0x10],
+            expected_a: 0x66,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x33)],
+            expected_trace_contains: "EOR $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "LSR $zp,X",
+            setup_code: &[0x56, 0x10],
+            expected_memory: vec![(0x15, 0x40)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x81)],
+            expected_trace_contains: "LSR $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR $addr,Y",
+            setup_code: &[0x59, 0x34, 0x12],
+            expected_a: 0x66,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x123A, 0x33)],
+            expected_trace_contains: "EOR $1234,Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "EOR $addr,X",
+            setup_code: &[0x5D, 0x34, 0x12],
+            expected_a: 0x66,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x33)],
+            expected_trace_contains: "EOR $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "LSR $addr,X",
+            setup_code: &[0x5E, 0x34, 0x12],
+            expected_memory: vec![(0x1239, 0x40)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x81)],
+            expected_trace_contains: "LSR $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC ($zp,X)",
+            setup_code: &[0x61, 0x10],
+            expected_a: 0x88,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x34), (0x16, 0x12), (0x1234, 0x33)],
+            expected_trace_contains: "ADC ($10,X)",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC $zp",
+            setup_code: &[0x65, 0x10],
+            expected_a: 0x88,
+            setup_a: 0x55,
+            setup_memory: vec![(0x10, 0x33)],
+            expected_trace_contains: "ADC $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ROR $zp",
+            setup_code: &[0x66, 0x10],
+            expected_memory: vec![(0x10, 0x40)],
+            setup_memory: vec![(0x10, 0x81)],
+            expected_trace_contains: "ROR $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC #$imm",
+            setup_code: &[0x69, 0x33],
+            expected_a: 0x88,
+            setup_a: 0x55,
+            expected_trace_contains: "ADC #$33",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ROR A",
+            setup_code: &[0x6A],
+            expected_a: 0x40,
+            setup_a: 0x81,
+            expected_trace_contains: "ROR A",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC $addr",
+            setup_code: &[0x6D, 0x34, 0x12],
+            expected_a: 0x88,
+            setup_a: 0x55,
+            setup_memory: vec![(0x1234, 0x33)],
+            expected_trace_contains: "ADC $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ROR $addr",
+            setup_code: &[0x6E, 0x34, 0x12],
+            expected_memory: vec![(0x1234, 0x40)],
+            setup_memory: vec![(0x1234, 0x81)],
+            expected_trace_contains: "ROR $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC ($zp),Y",
+            setup_code: &[0x71, 0x10],
+            expected_a: 0x88,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x10, 0x34), (0x11, 0x12), (0x123A, 0x33)],
+            expected_trace_contains: "ADC ($10),Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC $zp,X",
+            setup_code: &[0x75, 0x10],
+            expected_a: 0x88,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x33)],
+            expected_trace_contains: "ADC $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ROR $zp,X",
+            setup_code: &[0x76, 0x10],
+            expected_memory: vec![(0x15, 0x40)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x81)],
+            expected_trace_contains: "ROR $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC $addr,Y",
+            setup_code: &[0x79, 0x34, 0x12],
+            expected_a: 0x88,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x123A, 0x33)],
+            expected_trace_contains: "ADC $1234,Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ADC $addr,X",
+            setup_code: &[0x7D, 0x34, 0x12],
+            expected_a: 0x88,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x33)],
+            expected_trace_contains: "ADC $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "ROR $addr,X",
+            setup_code: &[0x7E, 0x34, 0x12],
+            expected_memory: vec![(0x1239, 0x40)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x81)],
+            expected_trace_contains: "ROR $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP ($zp,X)",
+            setup_code: &[0xC1, 0x10],
+            expected_a: 0x55,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x34), (0x16, 0x12), (0x1234, 0x33)],
+            expected_trace_contains: "CMP ($10,X)",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP $zp",
+            setup_code: &[0xC5, 0x10],
+            expected_a: 0x55,
+            setup_a: 0x55,
+            setup_memory: vec![(0x10, 0x33)],
+            expected_trace_contains: "CMP $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "DEC $zp",
+            setup_code: &[0xC6, 0x10],
+            expected_memory: vec![(0x10, 0x80)],
+            setup_memory: vec![(0x10, 0x81)],
+            expected_trace_contains: "DEC $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP #$imm",
+            setup_code: &[0xC9, 0x33],
+            expected_a: 0x55,
+            setup_a: 0x55,
+            expected_trace_contains: "CMP #$33",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP $addr",
+            setup_code: &[0xCD, 0x34, 0x12],
+            expected_a: 0x55,
+            setup_a: 0x55,
+            setup_memory: vec![(0x1234, 0x33)],
+            expected_trace_contains: "CMP $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "DEC $addr",
+            setup_code: &[0xCE, 0x34, 0x12],
+            expected_memory: vec![(0x1234, 0x80)],
+            setup_memory: vec![(0x1234, 0x81)],
+            expected_trace_contains: "DEC $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP ($zp),Y",
+            setup_code: &[0xD1, 0x10],
+            expected_a: 0x55,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x10, 0x34), (0x11, 0x12), (0x123A, 0x33)],
+            expected_trace_contains: "CMP ($10),Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP $zp,X",
+            setup_code: &[0xD5, 0x10],
+            expected_a: 0x55,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x33)],
+            expected_trace_contains: "CMP $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "DEC $zp,X",
+            setup_code: &[0xD6, 0x10],
+            expected_memory: vec![(0x15, 0x80)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x81)],
+            expected_trace_contains: "DEC $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP $addr,Y",
+            setup_code: &[0xD9, 0x34, 0x12],
+            expected_a: 0x55,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x123A, 0x33)],
+            expected_trace_contains: "CMP $1234,Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "CMP $addr,X",
+            setup_code: &[0xDD, 0x34, 0x12],
+            expected_a: 0x55,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x33)],
+            expected_trace_contains: "CMP $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "DEC $addr,X",
+            setup_code: &[0xDE, 0x34, 0x12],
+            expected_memory: vec![(0x1239, 0x80)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x81)],
+            expected_trace_contains: "DEC $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC ($zp,X)",
+            setup_code: &[0xE1, 0x10],
+            expected_a: 0x21,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x34), (0x16, 0x12), (0x1234, 0x33)],
+            expected_trace_contains: "SBC ($10,X)",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC $zp",
+            setup_code: &[0xE5, 0x10],
+            expected_a: 0x21,
+            setup_a: 0x55,
+            setup_memory: vec![(0x10, 0x33)],
+            expected_trace_contains: "SBC $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "INC $zp",
+            setup_code: &[0xE6, 0x10],
+            expected_memory: vec![(0x10, 0x82)],
+            setup_memory: vec![(0x10, 0x81)],
+            expected_trace_contains: "INC $10",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC #$imm",
+            setup_code: &[0xE9, 0x33],
+            expected_a: 0x21,
+            setup_a: 0x55,
+            expected_trace_contains: "SBC #$33",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC $addr",
+            setup_code: &[0xED, 0x34, 0x12],
+            expected_a: 0x21,
+            setup_a: 0x55,
+            setup_memory: vec![(0x1234, 0x33)],
+            expected_trace_contains: "SBC $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "INC $addr",
+            setup_code: &[0xEE, 0x34, 0x12],
+            expected_memory: vec![(0x1234, 0x82)],
+            setup_memory: vec![(0x1234, 0x81)],
+            expected_trace_contains: "INC $1234",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC ($zp),Y",
+            setup_code: &[0xF1, 0x10],
+            expected_a: 0x21,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x10, 0x34), (0x11, 0x12), (0x123A, 0x33)],
+            expected_trace_contains: "SBC ($10),Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC $zp,X",
+            setup_code: &[0xF5, 0x10],
+            expected_a: 0x21,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x33)],
+            expected_trace_contains: "SBC $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "INC $zp,X",
+            setup_code: &[0xF6, 0x10],
+            expected_memory: vec![(0x15, 0x82)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x15, 0x81)],
+            expected_trace_contains: "INC $10,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC $addr,Y",
+            setup_code: &[0xF9, 0x34, 0x12],
+            expected_a: 0x21,
+            expected_y: 0x06,
+            setup_a: 0x55,
+            setup_y: 0x06,
+            setup_memory: vec![(0x123A, 0x33)],
+            expected_trace_contains: "SBC $1234,Y",
+            ..Default::default()
+        },
+        TestCase {
+            name: "SBC $addr,X",
+            setup_code: &[0xFD, 0x34, 0x12],
+            expected_a: 0x21,
+            expected_x: 0x05,
+            setup_a: 0x55,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x33)],
+            expected_trace_contains: "SBC $1234,X",
+            ..Default::default()
+        },
+        TestCase {
+            name: "INC $addr,X",
+            setup_code: &[0xFE, 0x34, 0x12],
+            expected_memory: vec![(0x1239, 0x82)],
+            expected_x: 0x05,
+            setup_x: 0x05,
+            setup_memory: vec![(0x1239, 0x81)],
+            expected_trace_contains: "INC $1234,X",
+            ..Default::default()
+        },
     ];
 
     for tc in cases {

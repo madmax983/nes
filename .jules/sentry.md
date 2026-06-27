@@ -25,3 +25,10 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2024-06-27 - Added test for chr_writable false unsupported mappers
+**Learning:** Found coverage gap in `api.rs` where `chr_writable()` and `sync_chr_ram_from_ppu_window` returns `false` or ignores for mappers like MMC1, UxROM, AxROM, but it wasn't asserted in tests.
+**Action:** Added explicitly assertions for these mappers in `should_return_false_for_chr_writable_unsupported_mappers` and `should_ignore_sync_chr_ram_for_unsupported_mappers` tests.
+
+## 2024-06-27 - Added table-driven coverage tests for cpu/engine.rs
+**Learning:** Found coverage gap in CPU opcodes like EOR, LSR, ADC, ROR, CMP, DEC, SBC, and INC across various addressing modes.
+**Action:** Extended the `step_cpu_coverage.rs` table-driven test cases to include these operations with various addressing modes.
