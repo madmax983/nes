@@ -5,7 +5,7 @@
 
 use std::{env, fs, path::PathBuf};
 
-use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL, modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS}};
 use crossterm::style::{Color, Stylize};
 use nes_ai::snapshot::{sha256_hex, write_snapshot_bundle};
 use nes_core::{NesCore, tas::TasMovie};
@@ -80,7 +80,7 @@ fn run() -> Result<(), String> {
 
 fn build_success_table(rom_hash: &str, out_path: &std::path::Path) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).apply_modifier(UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),

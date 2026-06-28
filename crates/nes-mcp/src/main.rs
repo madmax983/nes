@@ -1,6 +1,6 @@
 use std::io::{self, BufRead, BufReader, Write};
 
-use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL, modifiers::{UTF8_ROUND_CORNERS, UTF8_SOLID_INNER_BORDERS}};
 use crossterm::style::{Color, Stylize};
 use nes_core::NesCore;
 use nes_mcp::{
@@ -88,7 +88,7 @@ fn run() -> Result<(), McpError> {
     let mut state = ServerState::new();
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS).apply_modifier(UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
