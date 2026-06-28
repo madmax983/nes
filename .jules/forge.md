@@ -1,3 +1,8 @@
+
+**Extract execute_app_action match arms into helpers**
+**Learning:** Found a massive `execute_app_action` function with a large `match` block in `crates/nes-desktop/src/main.rs`. This function handled complex `AppAction`s like `OpenRom`, `SaveSlot`, and `LoadSlot` all inline, creating a God Function that was difficult to read and maintain.
+**Action:** Extracted the logic for each complex `AppAction` into individual helper functions (`handle_open_rom`, `handle_save_slot`, `handle_load_slot`, `handle_reset`). This drastically flattened the `execute_app_action` function and improved readability.
+
 **[Refactoring redundant controller input updates in nes-core api.rs]
 **Learning:** Found massive boilerplate in the `execute` method of `api.rs` where every controller state modification command manually called `self.ports.set_controller_bits` and `self.sync_ppu_register_image()`. This increased risk of forgetting the sync call for future input commands.
 **Action:** Flattened the execution block using early returns inside the `match` expression for non-input commands, letting input commands evaluate to a `(player, bits)` tuple. The actual state modification and synchronization is now performed exactly once at the bottom of the function.**Context Struct Extraction for Action Dispatchers**
