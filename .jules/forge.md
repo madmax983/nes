@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract flush_rta_artifacts in nes-desktop/src/main.rs**
+**Learning:** Found multiple instances of repeated boilerplate to force finish RTA runs, write artifacts, and optionally draft calibration rules scattered across WindowEvent closures and loop ends. This bloat made the main application loop hard to read and violated DRY principles.
+**Action:** Extracted `flush_rta_artifacts` to consolidate RTA artifact and calibration drafting logic.

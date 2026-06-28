@@ -227,6 +227,30 @@ struct AppContext<'a> {
     frame_index: u64,
 }
 
+fn flush_rta_artifacts(
+    rta_manager: &mut Option<RtaManager>,
+    runtime_rta_config: Option<&nes_desktop::rta::RtaRuntimeConfig>,
+    frame_index: u64,
+    now: Instant,
+    force_finish: bool,
+) {
+    let Some(rta) = rta_manager.as_mut() else {
+        return;
+    };
+    if force_finish && rta.is_active() {
+        let _ = rta.force_finish(frame_index, now);
+    }
+    if let Err(err) = rta.write_artifacts_if_finished() {
+        eprintln!("RTA artifact write failed: {err}");
+    }
+    if let Some(rta_config) = runtime_rta_config
+        && rta.is_calibrating()
+        && let Err(err) = rta.write_calibration_draft(&rta_config.profiles_dir)
+    {
+        eprintln!("RTA calibration draft write failed: {err}");
+    }
+}
+
 fn dispatch_app_action(
     action: AppAction,
     ctx: &mut AppContext<'_>,
@@ -838,15 +862,14 @@ fn run() -> Result<(), String> {
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
             WindowEventDecision::CloseRequested => {
-                if let Some(rta) = rta_manager.as_mut() {
-                    if rta.is_calibrating() && rta.is_active() {
-                        let _ = rta.force_finish(frame_index, Instant::now());
-                    }
-                    let _ = rta.write_artifacts_if_finished();
-                    if let Some(rta_config) = runtime.rta.as_ref() {
-                        let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
-                    }
-                }
+                let should_force = rta_manager.as_ref().is_some_and(|rta| rta.is_calibrating() && rta.is_active());
+                flush_rta_artifacts(
+                    &mut rta_manager,
+                    runtime.rta.as_ref(),
+                    frame_index,
+                    Instant::now(),
+                    should_force,
+                );
                 *control_flow = ControlFlow::Exit;
             }
             WindowEventDecision::KeyboardInput { key, pressed } => {
@@ -929,13 +952,13 @@ fn run() -> Result<(), String> {
                         }
                     }
                     KeyboardDecision::RtaFinish => {
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.force_finish(frame_index, Instant::now());
-                            let _ = rta.write_artifacts_if_finished();
-                            if let Some(rta_config) = runtime.rta.as_ref() {
-                                let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
-                            }
-                        }
+                        flush_rta_artifacts(
+                            &mut rta_manager,
+                            runtime.rta.as_ref(),
+                            frame_index,
+                            Instant::now(),
+                            true,
+                        );
                     }
                     KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
                         keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
@@ -1208,6 +1231,7 @@ fn run() -> Result<(), String> {
 
             let step_elapsed = step_start.elapsed();
             frame_index = frame_index.saturating_add(1);
+            let mut rta_finished = false;
             if let Some(rta) = rta_manager.as_mut() {
                 let events = rta.tick(frame_index, now, |addr| core.read_memory(addr));
                 rta.record_input_frame(
@@ -1216,20 +1240,16 @@ fn run() -> Result<(), String> {
                     core.controller2_bits(),
                     now,
                 );
-                if events
-                    .iter()
-                    .any(|event| matches!(event, RtaEvent::Finished(_)))
-                {
-                    if let Err(err) = rta.write_artifacts_if_finished() {
-                        eprintln!("RTA artifact write failed: {err}");
-                    }
-                    if let Some(rta_config) = runtime.rta.as_ref()
-                        && rta.is_calibrating()
-                        && let Err(err) = rta.write_calibration_draft(&rta_config.profiles_dir)
-                    {
-                        eprintln!("RTA calibration draft write failed: {err}");
-                    }
-                }
+                rta_finished = events.iter().any(|event| matches!(event, RtaEvent::Finished(_)));
+            }
+            if rta_finished {
+                flush_rta_artifacts(
+                    &mut rta_manager,
+                    runtime.rta.as_ref(),
+                    frame_index,
+                    now,
+                    false,
+                );
             }
             metrics.on_step(&core, step_elapsed, missed_deadline);
             if let Some(stats) = netplay_stats.as_ref() {
