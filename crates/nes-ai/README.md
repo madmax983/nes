@@ -14,6 +14,7 @@ cargo run -p nes-ai --bin prepare_smb_control -- `
 ```
 
 Then copy `config/ai/profiles/smb-control.example.toml` to `config/ai/profiles/smb-control.toml` and point `rom_path` / `snapshot_path` at your local files.
+If you just want to run the demo, edit the config to set `rom_path = "./roms/homebrew/homebrew.nes"`.
 
 ## Training
 
