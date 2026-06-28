@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Avoid guaranteed allocations on hot paths**
+**Learning:** While `Vec::with_capacity(n)` is often good practice to avoid reallocations, using it on a hot path where the collection is empty 99.9% of the time (like an event buffer evaluated every frame) causes a guaranteed heap allocation on every single pass.
+**Action:** Use `Vec::new()` instead for rare event buffers evaluated continuously, as it defers heap allocation until the first element is pushed.
