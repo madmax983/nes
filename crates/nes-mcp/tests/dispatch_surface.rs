@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use nes_core::{AUDIO_CHUNK_SAMPLES, Button, Command, CoreSnapshot, NesCore};
 use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
 
@@ -53,10 +55,11 @@ fn sample_uxrom3_ines() -> Vec<u8> {
     rom
 }
 
+/// **Performance optimization:** Replaces `push_str(&format!(...))` with `write!(...)` to avoid intermediate `String` allocations.
 fn hex_encode(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        output.push_str(&format!("{byte:02X}"));
+        write!(output, "{byte:02X}").unwrap();
     }
     output
 }
