@@ -1084,18 +1084,7 @@ impl NesCore {
         };
         self.reset_pc = reset_pc;
 
-        self.paused = false;
-        self.ports.controllers = [ControllerState::default(); 2];
-        self.ports.controller_strobe = false;
-        self.scheduler.reset();
-        self.ppu.reset();
-        self.apu.reset();
-        self.cpu.reset(reset_pc);
-        self.pending_oam_dma_page = None;
-        self.sync_ppu_register_image();
-        self.last_cpu_trace = None;
-        self.last_cpu_bus_trace.clear();
-        self.scratch_writes.clear();
+        self.reset_runtime();
 
         Ok(RomLoadInfo {
             mapper_id: rom.mapper_id,
