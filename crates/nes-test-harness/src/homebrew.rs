@@ -2,6 +2,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[must_use]
+/// Returns the default fallback path for generated homebrew ROMs.
+///
+/// If a user doesn't specify an explicit path to save their generated test ROM to,
+/// the harness will use this path (`$TMPDIR/nes_test_rom_<pid>.nes`).
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// // path contains "nes_test_rom"
+/// ```
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
