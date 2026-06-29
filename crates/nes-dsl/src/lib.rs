@@ -1320,7 +1320,7 @@ fn decode_string_literal(literal: &str) -> Result<Vec<u8>, String> {
                 let lo_val = lo
                     .to_digit(16)
                     .ok_or_else(|| "invalid hex escape sequence".to_owned())?;
-                bytes.push((hi_val << 4 | lo_val) as u8);
+                bytes.push((hi_val * 16 + lo_val) as u8);
             }
             _ => return Err(format!("unsupported escape '\\{esc}'")),
         }
@@ -1908,6 +1908,18 @@ mod tests {
             Expr::Symbol("LABEL_NAME".to_owned())
         );
         assert!(parse_expr("-label_name", 1).is_err());
+    }
+
+    #[test]
+    fn string_literal_decodes_all_valid_escapes() {
+        let decoded = decode_string_literal(r#""\xfa""#).expect("lowercase hex escape");
+        assert_eq!(decoded, vec![0xFA]);
+
+        let err = decode_string_literal(r#""\q""#).expect_err("unsupported escape");
+        assert!(err.contains("unsupported escape"));
+
+        let err2 = decode_string_literal(r#""\x1""#).expect_err("incomplete hex");
+        assert!(err2.contains("expected two hex digits after"));
     }
 
     #[test]
