@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract Reset Session Cheats]
+**Learning:** Found duplicate logic in `crates/nes-desktop/src/main.rs` for `AppAction::Reset` and `AppAction::LoadSlot` (and others) regarding the re-application of session cheats after a core reset or load. This logic was missed in the initial `AppAction::Reset` implementation, leading to active cheats not being reapplied after a soft reset.
+**Action:** Ensure that operations modifying or resetting core state (like `AppAction::Reset`, `AppAction::LoadSlot`) correctly re-apply active session overlays (like `session_cheats`) immediately after altering the core, to maintain consistent user expectations.

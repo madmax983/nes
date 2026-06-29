@@ -456,6 +456,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             ctx.core
                 .execute(Command::Reset)
                 .map_err(|err| format!("Reset failed: {err}"))?;
+            apply_session_cheats(ctx.core, ctx.session_cheats)?;
             reset_ephemeral_state(ctx);
             ctx.overlay.set_status_message("System reset");
             set_overlay_open(
