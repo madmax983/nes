@@ -229,7 +229,13 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
     let mut idx = 0_usize;
     while idx < args.len() {
         let arg = &args[idx];
-        if parse_arg(args, &mut idx, "--config", |value| config_path = Some(value), parse_path_arg)? {
+        if parse_arg(
+            args,
+            &mut idx,
+            "--config",
+            |value| config_path = Some(value),
+            parse_path_arg,
+        )? {
             continue;
         }
         pass_through.push(arg.clone());
@@ -237,7 +243,6 @@ pub fn parse_config_path_arg(args: &[String]) -> Result<(Option<PathBuf>, Vec<St
     }
     Ok((config_path, pass_through))
 }
-
 
 /// Helper function to abstract repetitive parsing logic for command-line arguments.
 pub fn parse_arg<T, F, P>(
@@ -277,7 +282,6 @@ fn parse_path_arg(value: &str, _flag: &str) -> Result<std::path::PathBuf, String
     }
     Ok(std::path::PathBuf::from(value))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -457,13 +461,25 @@ window_scale = 9
 
         let mut idx = 0;
         let args2 = vec!["--config=dummy.toml".to_owned(), "extra".to_owned()];
-        let res2 = super::parse_arg(&args2, &mut idx, "--config", |_| {}, |v, _| Ok(v.to_owned()));
+        let res2 = super::parse_arg(
+            &args2,
+            &mut idx,
+            "--config",
+            |_| {},
+            |v, _| Ok(v.to_owned()),
+        );
         assert_eq!(res2, Ok(true));
         assert_eq!(idx, 1); // Ensure it increments by 1
 
         let mut idx = 0;
         let args3 = vec!["extra".to_owned()];
-        let res3 = super::parse_arg(&args3, &mut idx, "--config", |_| {}, |v, _| Ok(v.to_owned()));
+        let res3 = super::parse_arg(
+            &args3,
+            &mut idx,
+            "--config",
+            |_| {},
+            |v, _| Ok(v.to_owned()),
+        );
         assert_eq!(res3, Ok(false));
         assert_eq!(idx, 0); // Unchanged when not matched
     }

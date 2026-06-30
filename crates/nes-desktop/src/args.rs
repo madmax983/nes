@@ -286,8 +286,6 @@ fn parse_string_arg(value: &str, _flag: &str) -> Result<String, String> {
     Ok(value.to_owned())
 }
 
-
-
 fn parse_u8_arg(value: &str, flag: &str) -> Result<u8, String> {
     value
         .parse::<u8>()

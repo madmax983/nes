@@ -84,23 +84,53 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
             return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
         }
 
-        if parse_arg(&args, &mut idx, "--bind", |value| parsed.bind_addr = value, parse_string_arg)? {
+        if parse_arg(
+            &args,
+            &mut idx,
+            "--bind",
+            |value| parsed.bind_addr = value,
+            parse_string_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--latency-ms", |value| parsed.link.latency_ms = value, parse_u64_arg)? {
+        if parse_arg(
+            &args,
+            &mut idx,
+            "--latency-ms",
+            |value| parsed.link.latency_ms = value,
+            parse_u64_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--jitter-ms", |value| parsed.link.jitter_ms = value, parse_u64_arg)? {
+        if parse_arg(
+            &args,
+            &mut idx,
+            "--jitter-ms",
+            |value| parsed.link.jitter_ms = value,
+            parse_u64_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--loss-pct", |value| parsed.link.loss_pct = value, parse_percent_arg)? {
+        if parse_arg(
+            &args,
+            &mut idx,
+            "--loss-pct",
+            |value| parsed.link.loss_pct = value,
+            parse_percent_arg,
+        )? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--reorder-pct", |value| parsed.link.reorder_pct = value, parse_percent_arg)? {
+        if parse_arg(
+            &args,
+            &mut idx,
+            "--reorder-pct",
+            |value| parsed.link.reorder_pct = value,
+            parse_percent_arg,
+        )? {
             continue;
         }
 
@@ -110,8 +140,6 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     }
     Ok(parsed)
 }
-
-
 
 /// Parses a string representation of a non-negative integer into a `u64`.
 ///
