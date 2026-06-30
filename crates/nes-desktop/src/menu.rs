@@ -15,6 +15,7 @@ use crate::actions::{AppAction, action_from_menu_id, menu_id_for_action};
 /// Pure description of the desktop menu tree.
 #[cfg_attr(test, derive(Debug, Clone, PartialEq, Eq))]
 pub struct DesktopMenu {
+    /// The items inside the submenu.
     entries: Vec<DesktopMenuEntry>,
     #[cfg(all(not(test), any(target_os = "windows", target_os = "macos")))]
     native: NativeDesktopMenu,
@@ -22,11 +23,13 @@ pub struct DesktopMenu {
 
 impl DesktopMenu {
     #[must_use]
+    /// Returns a slice of the logical menu tree.
     pub fn entries(&self) -> &[DesktopMenuEntry] {
         &self.entries
     }
 
     #[cfg(not(test))]
+    /// Attaches the native menu to the main window.
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         #[cfg(target_os = "windows")]
         unsafe {
@@ -47,6 +50,7 @@ impl DesktopMenu {
 
     #[cfg(not(test))]
     #[must_use]
+    /// Checks for any pending menu events fired by the native platform.
     pub fn poll_action(&self) -> Option<AppAction> {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -60,6 +64,7 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// Toggles the interactive state of a specific menu item.
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
@@ -73,11 +78,13 @@ impl DesktopMenu {
     }
 
     #[cfg(not(test))]
+    /// Synchronizes the disabled/enabled states of the menu items based on runtime conditions.
     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
         sync_runtime_entries(self, &self.entries, rollback_enabled);
     }
 
     #[cfg(test)]
+    /// Attaches the native menu to the main window.
     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
         let _ = window;
         Ok(())
@@ -85,11 +92,13 @@ impl DesktopMenu {
 
     #[cfg(test)]
     #[must_use]
+    /// Checks for any pending menu events fired by the native platform.
     pub fn poll_action(&self) -> Option<AppAction> {
         None
     }
 
     #[cfg(test)]
+    /// Toggles the interactive state of a specific menu item.
     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
         let _ = (action, enabled);
     }
@@ -98,10 +107,15 @@ impl DesktopMenu {
 /// Declarative menu node used to keep menu semantics testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DesktopMenuEntry {
+    /// A standard actionable item.
     Item(MenuItemSpec),
+    /// A visual divider line.
     Separator,
+    /// A nested group of menu entries.
     Submenu {
+        /// The display text for the submenu.
         label: &'static str,
+        /// The items inside the submenu.
         entries: Vec<DesktopMenuEntry>,
     },
 }
@@ -109,7 +123,9 @@ pub enum DesktopMenuEntry {
 /// Shared metadata for actionable menu items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuItemSpec {
+    /// The unique routing ID for this action.
     pub id: String,
+    /// The display text for the item.
     pub label: String,
 }
 
@@ -167,24 +183,28 @@ pub fn action_from_menu_event_id(id: &str) -> Option<AppAction> {
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
+/// Indicates whether native menus are supported on the current platform.
 pub const fn native_menu_supported() -> bool {
     true
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// Indicates whether native menus are supported on the current platform.
 pub const fn native_menu_supported() -> bool {
     false
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 #[must_use]
+/// Indicates whether the native ROM picker dialog is supported on the current platform.
 pub const fn rom_picker_supported() -> bool {
     true
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 #[must_use]
+/// Indicates whether the native ROM picker dialog is supported on the current platform.
 pub const fn rom_picker_supported() -> bool {
     false
 }

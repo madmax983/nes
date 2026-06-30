@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// The default network address for the MCP host to bind to.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// Usage instructions printed when `--help` is requested or on parsing error.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,23 +24,40 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// Path to the NES ROM to execute.
     pub rom_path: Option<String>,
+    /// A list of Game Genie or raw cheat codes to apply.
     pub cheat_codes: Vec<String>,
+    /// Whether to run an MCP server alongside the emulator.
     pub mcp_enabled: bool,
+    /// Address for the MCP host to bind to.
     pub mcp_bind_addr: String,
+    /// Enable multiplayer Netplay over network.
     pub netplay_enabled: bool,
+    /// Host address for the Netplay relay server.
     pub netplay_relay_addr: Option<String>,
+    /// Name of the Netplay room to join.
     pub netplay_room: Option<String>,
+    /// Local player slot (1 or 2).
     pub netplay_player: Option<u8>,
+    /// Netplay rollback input delay override.
     pub netplay_input_delay_frames: Option<u32>,
+    /// Maximum allowable rollback frames before disconnecting.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// Interval for netplay state verification.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// Enable strict RTA (Real-Time Attack) speedrun validation rules.
     pub rta_enabled: bool,
+    /// Manual override for the RTA profile ID.
     pub rta_profile_id: Option<String>,
+    /// Custom path to the RTA profiles directory.
     pub rta_profiles_dir: Option<String>,
+    /// Custom path to the RTA runs artifact directory.
     pub rta_runs_dir: Option<String>,
+    /// Enable RTA calibration draft generation mode.
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
+    /// Enable autonomous gameplay.
     pub auto_player_enabled: bool,
 }
 

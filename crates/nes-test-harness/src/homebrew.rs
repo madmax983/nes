@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[must_use]
+/// Path to the auto-built homebrew ROM.
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")

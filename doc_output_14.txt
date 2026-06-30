@@ -1,0 +1,8 @@
+ Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
+error: unknown start of token: \
+   --> crates/nes-desktop/src/menu.rs:117:17
+    |
+117 |         label: &\'static str,
+    |                 ^
+
+error: could not document `nes-desktop`

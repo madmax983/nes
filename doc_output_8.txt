@@ -1,0 +1,14 @@
+ Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
+error: unknown start of token: \
+  --> crates/nes-desktop/src/overlay.rs:89:24
+   |
+89 |     pub status_label: &\'static str,
+   |                        ^
+
+error: unknown start of token: \
+   --> crates/nes-desktop/src/overlay.rs:110:20
+    |
+110 |     pub raw_code: &\'a str,
+    |                    ^
+
+error: could not document `nes-desktop`

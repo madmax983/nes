@@ -1,0 +1,197 @@
+warning: missing documentation for a struct
+  --> crates/nes-test-harness/src/lib.rs:38:1
+   |
+38 | pub struct ApuWriteEvent {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:39:5
+   |
+39 |     pub cpu_cycle: u64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:40:5
+   |
+40 |     pub addr: u16,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:41:5
+   |
+41 |     pub value: u8,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-test-harness/src/lib.rs:45:1
+   |
+45 | pub struct AudioStats {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:46:5
+   |
+46 |     pub sample_count: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:47:5
+   |
+47 |     pub rms: f64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:48:5
+   |
+48 |     pub peak: i16,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:49:5
+   |
+49 |     pub dc_offset: f64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:50:5
+   |
+50 |     pub clipping_ratio: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-test-harness/src/lib.rs:54:1
+   |
+54 | pub struct WaveformComparison {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:55:5
+   |
+55 |     pub samples_compared: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:56:5
+   |
+56 |     pub correlation: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:57:5
+   |
+57 |     pub rms_ratio: f64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:58:5
+   |
+58 |     pub fft_mean_abs_db_diff: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:101:1
+    |
+101 | pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:181:1
+    |
+181 | pub fn waveform_hash(samples: &[i16]) -> u64 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:191:1
+    |
+191 | pub fn audio_stats(samples: &[i16]) -> AudioStats {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:229:1
+    |
+229 | pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:331:1
+    |
+331 | pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:376:1
+    |
+376 | pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:418:1
+    |
+418 | pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:435:1
+    |
+435 | pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+ --> crates/nes-test-harness/src/homebrew.rs:5:1
+  |
+5 | pub fn default_homebrew_rom_path() -> PathBuf {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+ --> crates/nes-test-harness/src/rom_paths.rs:7:1
+  |
+7 | pub fn smb_rom_path() -> String {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:22:1
+   |
+22 | pub fn nestest_rom_path() -> String {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:31:1
+   |
+31 | pub fn blargg_cpu_rom_path() -> String {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:42:1
+   |
+42 | pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:72:1
+   |
+72 | pub fn bbbradsmith_audio_golden_dir_path() -> String {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `nes-test-harness` (lib doc) generated 29 warnings
+ Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
+error: expected identifier, found doc comment `/// Manually overridden by the user.`
+   --> crates/nes-desktop/src/rta.rs:492:45
+    |
+490 | ...Ok(ProfileSelection {
+    |       ---------------- while parsing this struct
+491 | ...ected: found,
+492 | ...rce: ProfileSelectionSource::/// Manually overridden by the user.
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected identifier, found doc comment
+
+error: expected identifier, found doc comment `/// Automatically selected by matching ROM hash.`
+   --> crates/nes-desktop/src/rta.rs:526:41
+    |
+524 | ...Ok(ProfileSelection {
+    |       ---------------- while parsing this struct
+525 | ...    selected,
+526 | ...    source: ProfileSelectionSource::/// Automatically selected by matching ROM hash.
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected identifier, found doc comment
+
+error: could not document `nes-desktop`

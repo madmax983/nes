@@ -1,0 +1,18 @@
+ Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/menu.rs:192:1
+    |
+192 | pub const fn native_menu_supported() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/menu.rs:204:1
+    |
+204 | pub const fn rom_picker_supported() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `nes-desktop` (lib doc) generated 2 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.09s
+   Generated /app/target/doc/nes_ai/index.html and 18 other files

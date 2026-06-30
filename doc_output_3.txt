@@ -1,0 +1,877 @@
+warning: missing documentation for a struct
+  --> crates/nes-test-harness/src/lib.rs:38:1
+   |
+38 | pub struct ApuWriteEvent {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:39:5
+   |
+39 |     pub cpu_cycle: u64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:40:5
+   |
+40 |     pub addr: u16,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:41:5
+   |
+41 |     pub value: u8,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-test-harness/src/lib.rs:45:1
+   |
+45 | pub struct AudioStats {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:46:5
+   |
+46 |     pub sample_count: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:47:5
+   |
+47 |     pub rms: f64,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:48:5
+   |
+48 |     pub peak: i16,
+   |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:49:5
+   |
+49 |     pub dc_offset: f64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:50:5
+   |
+50 |     pub clipping_ratio: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-test-harness/src/lib.rs:54:1
+   |
+54 | pub struct WaveformComparison {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:55:5
+   |
+55 |     pub samples_compared: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:56:5
+   |
+56 |     pub correlation: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:57:5
+   |
+57 |     pub rms_ratio: f64,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-test-harness/src/lib.rs:58:5
+   |
+58 |     pub fft_mean_abs_db_diff: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:101:1
+    |
+101 | pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:181:1
+    |
+181 | pub fn waveform_hash(samples: &[i16]) -> u64 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:191:1
+    |
+191 | pub fn audio_stats(samples: &[i16]) -> AudioStats {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:229:1
+    |
+229 | pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:331:1
+    |
+331 | pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:376:1
+    |
+376 | pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:418:1
+    |
+418 | pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-test-harness/src/lib.rs:435:1
+    |
+435 | pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+ --> crates/nes-test-harness/src/homebrew.rs:5:1
+  |
+5 | pub fn default_homebrew_rom_path() -> PathBuf {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+ --> crates/nes-test-harness/src/rom_paths.rs:7:1
+  |
+7 | pub fn smb_rom_path() -> String {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:22:1
+   |
+22 | pub fn nestest_rom_path() -> String {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:31:1
+   |
+31 | pub fn blargg_cpu_rom_path() -> String {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:42:1
+   |
+42 | pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-test-harness/src/rom_paths.rs:72:1
+   |
+72 | pub fn bbbradsmith_audio_golden_dir_path() -> String {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `nes-test-harness` (lib doc) generated 29 warnings
+ Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:4:5
+  |
+4 |     ToggleOverlay,
+  |     ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:5:5
+  |
+5 |     Resume,
+  |     ^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:6:5
+  |
+6 |     OpenRom,
+  |     ^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:7:5
+  |
+7 |     OpenCheats,
+  |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:8:5
+  |
+8 |     SaveSlot(u8),
+  |     ^^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:9:5
+  |
+9 |     LoadSlot(u8),
+  |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/actions.rs:10:5
+   |
+10 |     Reset,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/actions.rs:11:5
+   |
+11 |     Quit,
+   |     ^^^^
+
+warning: missing documentation for a struct
+ --> crates/nes-desktop/src/app.rs:4:1
+  |
+4 | pub struct BridgeCommand {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+ --> crates/nes-desktop/src/app.rs:5:5
+  |
+5 |     pub core: Command,
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/app.rs:10:5
+   |
+10 |     pub fn tool_name(self) -> &'static str {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-desktop/src/app.rs:20:1
+   |
+20 | pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-desktop/src/app.rs:33:1
+   |
+33 | pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-desktop/src/app.rs:48:1
+   |
+48 | pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+ --> crates/nes-desktop/src/args.rs:3:1
+  |
+3 | pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+ --> crates/nes-desktop/src/args.rs:4:1
+  |
+4 | pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--...
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:25:5
+   |
+25 |     pub rom_path: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:26:5
+   |
+26 |     pub cheat_codes: Vec<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:27:5
+   |
+27 |     pub mcp_enabled: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:28:5
+   |
+28 |     pub mcp_bind_addr: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:29:5
+   |
+29 |     pub netplay_enabled: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:30:5
+   |
+30 |     pub netplay_relay_addr: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:31:5
+   |
+31 |     pub netplay_room: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:32:5
+   |
+32 |     pub netplay_player: Option<u8>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:33:5
+   |
+33 |     pub netplay_input_delay_frames: Option<u32>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:34:5
+   |
+34 |     pub netplay_max_rollback_frames: Option<u32>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:35:5
+   |
+35 |     pub netplay_hash_check_every_frames: Option<u64>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:36:5
+   |
+36 |     pub rta_enabled: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:37:5
+   |
+37 |     pub rta_profile_id: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:38:5
+   |
+38 |     pub rta_profiles_dir: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:39:5
+   |
+39 |     pub rta_runs_dir: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/args.rs:40:5
+   |
+40 |     pub rta_calibrate: bool,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/manual_state.rs:22:1
+   |
+22 | pub enum SaveSlotStatus {
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:23:5
+   |
+23 |     Empty,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:24:5
+   |
+24 |     Saved,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:25:5
+   |
+25 |     Corrupt,
+   |     ^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:26:5
+   |
+26 |     IncompatibleRom,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-desktop/src/manual_state.rs:30:1
+   |
+30 | pub struct SaveSlotMetadata {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:31:5
+   |
+31 |     pub slot: u8,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:32:5
+   |
+32 |     pub path: PathBuf,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:33:5
+   |
+33 |     pub status: SaveSlotStatus,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:34:5
+   |
+34 |     pub modified_unix_secs: Option<u64>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/manual_state.rs:127:1
+    |
+127 | pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/manual_state.rs:136:1
+    |
+136 | / pub fn slot_paths_for_rom(
+137 | |     rom_path: &Path,
+138 | |     rom_hash: &str,
+139 | |     slots: RangeInclusive<u8>,
+140 | | ) -> Vec<PathBuf> {
+    | |_________________^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/manual_state.rs:147:1
+    |
+147 | pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:25:5
+   |
+25 |     pub fn entries(&self) -> &[DesktopMenuEntry] {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:30:5
+   |
+30 |     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:50:5
+   |
+50 |     pub fn poll_action(&self) -> Option<AppAction> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:63:5
+   |
+63 |     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:76:5
+   |
+76 |     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/menu.rs:101:5
+    |
+101 |     Item(MenuItemSpec),
+    |     ^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/menu.rs:102:5
+    |
+102 |     Separator,
+    |     ^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/menu.rs:103:5
+    |
+103 |     Submenu {
+    |     ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:104:9
+    |
+104 |         label: &'static str,
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:105:9
+    |
+105 |         entries: Vec<DesktopMenuEntry>,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:112:5
+    |
+112 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:113:5
+    |
+113 |     pub label: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/menu.rs:176:1
+    |
+176 | pub const fn native_menu_supported() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/menu.rs:188:1
+    |
+188 | pub const fn rom_picker_supported() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:27:5
+   |
+27 |     MainMenu,
+   |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:28:5
+   |
+28 |     Cheats,
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:34:5
+   |
+34 |     Resume,
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:35:5
+   |
+35 |     OpenRom,
+   |     ^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:36:5
+   |
+36 |     OpenCheats,
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:37:5
+   |
+37 |     SaveSlot(u8),
+   |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:38:5
+   |
+38 |     LoadSlot(u8),
+   |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:39:5
+   |
+39 |     Reset,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:40:5
+   |
+40 |     Quit,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:46:5
+   |
+46 |     AddCode,
+   |     ^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:47:5
+   |
+47 |     Cheat(usize),
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:53:5
+   |
+53 |     Main(MainMenuSelection),
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:54:5
+   |
+54 |     Cheats(CheatsSelection),
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:60:5
+   |
+60 |     AppAction(AppAction),
+   |     ^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:61:5
+   |
+61 |     ToggleCheat(usize),
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:62:5
+   |
+62 |     RemoveCheat(usize),
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/overlay.rs:63:5
+   |
+63 |     SubmitCheatCode(String),
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/overlay.rs:69:5
+   |
+69 |     pub slot: u8,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/overlay.rs:70:5
+   |
+70 |     pub status_label: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/overlay.rs:71:5
+   |
+71 |     pub modified_unix_secs: Option<u64>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/overlay.rs:89:5
+   |
+89 |     pub raw_code: &'a str,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/overlay.rs:90:5
+   |
+90 |     pub enabled: bool,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/nes-desktop/src/rta.rs:38:1
+   |
+38 | pub const DEFAULT_RTA_PROFILES_DIR: &str = "config/rta/profiles";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates/nes-desktop/src/rta.rs:39:1
+   |
+39 | pub const DEFAULT_RTA_RUNS_DIR: &str = "runs/rta";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-desktop/src/rta.rs:42:1
+   |
+42 | pub struct RtaRuntimeConfig {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/rta.rs:43:5
+   |
+43 |     pub profile_id_override: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/rta.rs:44:5
+   |
+44 |     pub profiles_dir: PathBuf,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/rta.rs:45:5
+   |
+45 |     pub runs_dir: PathBuf,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/rta.rs:46:5
+   |
+46 |     pub calibrate: bool,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/rta.rs:51:1
+   |
+51 | pub enum ProfileStatus {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:52:5
+   |
+52 |     Draft,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:54:5
+   |
+54 |     Published,
+   |     ^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/rta.rs:59:1
+   |
+59 | pub enum TimerClock {
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:61:5
+   |
+61 |     Wall,
+   |     ^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/rta.rs:66:1
+   |
+66 | pub enum FocusLossPolicy {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:67:5
+   |
+67 |     AutoPause,
+   |     ^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:68:5
+   |
+68 |     Invalidate,
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:70:5
+   |
+70 |     Continue,
+   |     ^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/rta.rs:75:1
+   |
+75 | pub enum ForbiddenAction {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:77:5
+   |
+77 |     Rewind,
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:78:5
+   |
+78 |     SaveLoad,
+   |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:79:5
+   |
+79 |     FrameStep,
+   |     ^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/rta.rs:94:1
+   |
+94 | pub enum TriggerWidth {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:96:5
+   |
+96 |     U8,
+   |     ^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:97:5
+   |
+97 |     U16,
+   |     ^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/rta.rs:98:5
+   |
+98 |     U32,
+   |     ^^^
+
+warning: missing documentation for an enum
+   --> crates/nes-desktop/src/rta.rs:103:1
+    |
+103 | pub enum TriggerOp {
+    | ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:105:5
+    |
+105 |     Eq,
+    |     ^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:106:5
+    |
+106 |     Ne,
+    |     ^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:107:5
+    |
+107 |     Gt,
+    |     ^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:108:5
+    |
+108 |     Gte,
+    |     ^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:109:5
+    |
+109 |     Lt,
+    |     ^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:110:5
+    |
+110 |     Lte,
+    |     ^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:111:5
+    |
+111 |     BitSet,
+    |     ^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:112:5
+    |
+112 |     BitClear,
+    |     ^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/rta.rs:113:5
+    |
+113 |     Changed,
+    |     ^^^^^^^
+
+warning: `nes-desktop` (lib doc) generated 115 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.92s
+   Generated /app/target/doc/nes_ai/index.html and 18 other files

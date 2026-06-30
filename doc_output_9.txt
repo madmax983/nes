@@ -1,0 +1,256 @@
+ Documenting nes-desktop v0.1.0 (/app/crates/nes-desktop)
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:4:5
+  |
+4 |     ToggleOverlay,
+  |     ^^^^^^^^^^^^^
+  |
+  = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:5:5
+  |
+5 |     Resume,
+  |     ^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:6:5
+  |
+6 |     OpenRom,
+  |     ^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:7:5
+  |
+7 |     OpenCheats,
+  |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:8:5
+  |
+8 |     SaveSlot(u8),
+  |     ^^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates/nes-desktop/src/actions.rs:9:5
+  |
+9 |     LoadSlot(u8),
+  |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/actions.rs:10:5
+   |
+10 |     Reset,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/actions.rs:11:5
+   |
+11 |     Quit,
+   |     ^^^^
+
+warning: missing documentation for a struct
+ --> crates/nes-desktop/src/app.rs:4:1
+  |
+4 | pub struct BridgeCommand {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+ --> crates/nes-desktop/src/app.rs:5:5
+  |
+5 |     pub core: Command,
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/app.rs:10:5
+   |
+10 |     pub fn tool_name(self) -> &'static str {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-desktop/src/app.rs:20:1
+   |
+20 | pub fn map_key_event_to_command(key_code: &str, pressed: bool) -> Option<BridgeCommand> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-desktop/src/app.rs:33:1
+   |
+33 | pub fn map_key_event_to_button(key_code: &str) -> Option<Button> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+  --> crates/nes-desktop/src/app.rs:48:1
+   |
+48 | pub fn map_key_event_to_button_bit(key_code: &str) -> Option<u8> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates/nes-desktop/src/manual_state.rs:22:1
+   |
+22 | pub enum SaveSlotStatus {
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:23:5
+   |
+23 |     Empty,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:24:5
+   |
+24 |     Saved,
+   |     ^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:25:5
+   |
+25 |     Corrupt,
+   |     ^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates/nes-desktop/src/manual_state.rs:26:5
+   |
+26 |     IncompatibleRom,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates/nes-desktop/src/manual_state.rs:30:1
+   |
+30 | pub struct SaveSlotMetadata {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:31:5
+   |
+31 |     pub slot: u8,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:32:5
+   |
+32 |     pub path: PathBuf,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:33:5
+   |
+33 |     pub status: SaveSlotStatus,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/nes-desktop/src/manual_state.rs:34:5
+   |
+34 |     pub modified_unix_secs: Option<u64>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/manual_state.rs:127:1
+    |
+127 | pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/manual_state.rs:136:1
+    |
+136 | / pub fn slot_paths_for_rom(
+137 | |     rom_path: &Path,
+138 | |     rom_hash: &str,
+139 | |     slots: RangeInclusive<u8>,
+140 | | ) -> Vec<PathBuf> {
+    | |_________________^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/manual_state.rs:147:1
+    |
+147 | pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:25:5
+   |
+25 |     pub fn entries(&self) -> &[DesktopMenuEntry] {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:30:5
+   |
+30 |     pub fn install_for_window(&self, window: &Window) -> Result<(), String> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:50:5
+   |
+50 |     pub fn poll_action(&self) -> Option<AppAction> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:63:5
+   |
+63 |     pub fn set_action_enabled(&self, action: AppAction, enabled: bool) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates/nes-desktop/src/menu.rs:76:5
+   |
+76 |     pub fn sync_runtime_state(&self, rollback_enabled: bool) {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/menu.rs:101:5
+    |
+101 |     Item(MenuItemSpec),
+    |     ^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/menu.rs:102:5
+    |
+102 |     Separator,
+    |     ^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates/nes-desktop/src/menu.rs:103:5
+    |
+103 |     Submenu {
+    |     ^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:104:9
+    |
+104 |         label: &'static str,
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:105:9
+    |
+105 |         entries: Vec<DesktopMenuEntry>,
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:112:5
+    |
+112 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/nes-desktop/src/menu.rs:113:5
+    |
+113 |     pub label: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/menu.rs:176:1
+    |
+176 | pub const fn native_menu_supported() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/nes-desktop/src/menu.rs:188:1
+    |
+188 | pub const fn rom_picker_supported() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `nes-desktop` (lib doc) generated 41 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.12s
+   Generated /app/target/doc/nes_ai/index.html and 18 other files
