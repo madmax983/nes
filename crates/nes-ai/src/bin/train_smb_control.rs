@@ -28,9 +28,40 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() < 2 || args.len() > 5 {
+        let mut table = Table::new();
+        table.load_preset(UTF8_FULL)
+            .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
+            .apply_modifier(comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS);
+        table.set_header(vec![
+            Cell::new("Argument").fg(TableColor::Cyan),
+            Cell::new("Description").fg(TableColor::White),
+            Cell::new("Required").fg(TableColor::Yellow),
+        ]);
+        table.add_row(vec![
+            Cell::new("<profile_toml>"),
+            Cell::new("Path to the AI profile config"),
+            Cell::new("Yes"),
+        ]);
+        table.add_row(vec![
+            Cell::new("[episodes]"),
+            Cell::new("Number of episodes to train"),
+            Cell::new("No"),
+        ]);
+        table.add_row(vec![
+            Cell::new("[checkpoint_dir]"),
+            Cell::new("Directory to save checkpoints"),
+            Cell::new("No"),
+        ]);
+        table.add_row(vec![
+            Cell::new("[artifact_dir]"),
+            Cell::new("Directory to save artifacts"),
+            Cell::new("No"),
+        ]);
+
         return Err(format!(
-            "{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
-            "Error:".with(Color::Red).bold()
+            "{} missing or invalid number of arguments.\n\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]\n\n{}",
+            "Error:".with(Color::Red).bold(),
+            table
         ));
     }
 
@@ -78,7 +109,9 @@ fn build_summary_table(
     artifact_paths_len: usize,
 ) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_preset(UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
+        .apply_modifier(comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),

@@ -914,21 +914,41 @@ fn render_pause_overlay(frame: &mut Frame<'_>, area: Rect) {
 }
 
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
+    let mut table = comfy_table::Table::new();
+    table.load_preset(comfy_table::presets::UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
+        .apply_modifier(comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS);
+    table.set_header(vec![
+        comfy_table::Cell::new("Property").fg(comfy_table::Color::Cyan),
+        comfy_table::Cell::new("Details").fg(comfy_table::Color::White),
+    ]);
+
+    table.add_row(vec![
+        comfy_table::Cell::new("Path"),
+        comfy_table::Cell::new(rom_path).fg(comfy_table::Color::Yellow),
+    ]);
+
     if err.kind() == std::io::ErrorKind::NotFound {
-        format!(
-            "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            "Hint:".with(crossterm::style::Color::Cyan).bold()
-        )
+        table.add_row(vec![
+            comfy_table::Cell::new("Error"),
+            comfy_table::Cell::new("File not found").fg(comfy_table::Color::Red),
+        ]);
+        table.add_row(vec![
+            comfy_table::Cell::new("Hint"),
+            comfy_table::Cell::new("Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes").fg(comfy_table::Color::Green),
+        ]);
     } else {
-        format!(
-            "{} Failed to read ROM at '{}': {}",
-            "Error:".with(crossterm::style::Color::Red).bold(),
-            rom_path.with(crossterm::style::Color::Yellow),
-            err
-        )
+        table.add_row(vec![
+            comfy_table::Cell::new("Error"),
+            comfy_table::Cell::new(err.to_string()).fg(comfy_table::Color::Red),
+        ]);
     }
+
+    format!(
+        "{} Failed to load ROM\n\n{}",
+        "Error:".with(crossterm::style::Color::Red).bold(),
+        table
+    )
 }
 
 #[cfg(test)]
@@ -1147,13 +1167,13 @@ mod tests {
     fn format_rom_read_error_handles_not_found_and_other_errors() {
         let not_found = std::io::Error::from(std::io::ErrorKind::NotFound);
         let msg = format_rom_read_error("bad.nes", &not_found);
-        assert!(msg.contains("Could not find the ROM file at"));
+        assert!(msg.contains("File not found"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("homebrew.nes"));
 
         let other = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let msg = format_rom_read_error("bad.nes", &other);
-        assert!(msg.contains("Failed to read ROM at"));
+        assert!(msg.contains("Failed to load ROM"));
         assert!(msg.contains("bad.nes"));
         assert!(msg.contains("permission denied"));
     }
