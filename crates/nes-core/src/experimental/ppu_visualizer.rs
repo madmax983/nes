@@ -249,4 +249,32 @@ mod tests {
         let bmp = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
         assert_eq!(&bmp[0..2], b"BM");
     }
+
+    #[test]
+    fn extract_nametables_with_scroll_draws_red_viewport_border() {
+        let core = NesCore::new();
+        let bmp = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
+
+        let width = 512;
+        let _height = 480;
+        let row_bytes = width * 3;
+
+        let idx_0_0 = 54 + 479 * row_bytes;
+        assert_eq!(bmp[idx_0_0], 0); // B
+        assert_eq!(bmp[idx_0_0 + 1], 0); // G
+        assert_eq!(bmp[idx_0_0 + 2], 255); // R
+
+        let idx_1_1 = 54 + 478 * row_bytes + 3;
+        assert_eq!(bmp[idx_1_1], 84); // Nes palette 0x00 is (84, 84, 84)
+        assert_eq!(bmp[idx_1_1 + 1], 84);
+        assert_eq!(bmp[idx_1_1 + 2], 84);
+
+        let idx_255_239 = 54 + (479 - 239) * row_bytes + 255 * 3;
+        assert_eq!(bmp[idx_255_239], 0);
+        assert_eq!(bmp[idx_255_239 + 1], 0);
+        assert_eq!(bmp[idx_255_239 + 2], 255);
+
+        let idx_256_239 = 54 + (479 - 239) * row_bytes + 256 * 3;
+        assert_eq!(bmp[idx_256_239], 84);
+    }
 }
