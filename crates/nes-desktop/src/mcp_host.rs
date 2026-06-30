@@ -677,6 +677,34 @@ mod coverage_tests {
     use std::io::Cursor;
 
     #[test]
+    fn read_framed_message_handles_eof_loops_and_limits() {
+        use std::io::Read;
+        struct MockEofReader { count: usize }
+        impl Read for MockEofReader {
+            fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+                self.count += 1;
+                if self.count > 10 {
+                    panic!("infinite loop detected");
+                }
+                Ok(0)
+            }
+        }
+        impl std::io::BufRead for MockEofReader {
+            fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+                self.count += 1;
+                if self.count > 10 {
+                    panic!("infinite loop detected");
+                }
+                Ok(&[])
+            }
+            fn consume(&mut self, _amt: usize) {}
+        }
+
+        let mut eof_reader = MockEofReader { count: 0 };
+        assert_eq!(read_framed_message(&mut eof_reader).unwrap(), None);
+    }
+
+    #[test]
     fn test_mcp_host_start() {
         let host = McpHost::start("127.0.0.1:0").unwrap();
         assert!(host.bind_addr().starts_with("127.0.0.1:"));

@@ -47,3 +47,8 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+
+## 2024-05-18 - Equivalent Mutant in `read_framed_message`
+**Mutant:** `replace == with != in read_framed_message`
+**Diagnosis:** The stdio parser handles `EOF` via checking `read == 0`. Mutating this check breaks the break-out condition and causes an infinite loop in the `cargo-mutants` test harness, leading to a timeout rather than a specific test failure. This is effectively caught by standard timeout mechanisms, but requires targeted `MockReader` panics for cleaner resolution.
+**Kill Shot:** A custom mock reader (`MockEofReader`) was implemented that explicitly asserts that `None` is returned, though the test harness still requires manual oversight for loop timeouts on this boundary.
