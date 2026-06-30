@@ -244,6 +244,22 @@ fn append_wait(script: &mut String, frames: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::NesCore;
+
+    fn looping_core() -> NesCore {
+        let mut core = NesCore::new();
+        core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
+        core
+    }
+
+    #[test]
+    fn test_tas_error_display() {
+        let err = TasError::Player2MacroScriptUnsupported;
+        assert_eq!(
+            err.to_string(),
+            "legacy macro scripts do not support player 2 input"
+        );
+    }
 
     #[test]
     fn test_tas_movie_to_macro_script_fails_with_player_2_input() {
@@ -303,18 +319,6 @@ mod tests {
             ]
         );
     }
-}
-
-#[cfg(test)]
-mod tests_mutants {
-    use super::*;
-    use crate::NesCore;
-
-    fn looping_core() -> NesCore {
-        let mut core = NesCore::new();
-        core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]);
-        core
-    }
 
     #[test]
     fn test_tas_frame_run_new() {
@@ -325,23 +329,61 @@ mod tests_mutants {
     }
 
     #[test]
-    fn test_tas_movie_methods() {
+    fn test_tas_movie_replay_frames_elapsed() {
+        let mut core = looping_core();
         let mut movie = TasMovie::default();
-        assert_eq!(movie.total_frames(), 0);
+        movie.push_run(TasFrameRun::new(1, 2, 0)); // 0 frame run
+        movie.push_run(TasFrameRun::new(1, 2, 5)); // 5 frame run
 
-        movie = TasMovie::from_runs(vec![TasFrameRun::new(1, 2, 5)]);
-        assert_eq!(movie.total_frames(), 5);
+        let frames = movie.replay(&mut core).unwrap();
+        assert_eq!(frames, 5); // ensures we don't return Ok(0) or Ok(1) when it should be 5
+    }
+
+    #[test]
+    fn test_tas_movie_replay_frames_correctness() {
+        let mut core = looping_core();
+        let mut movie = TasMovie::default();
+        movie.push_run(TasFrameRun::new(1, 2, 3));
+        let frames = movie.replay(&mut core).unwrap();
+        assert_eq!(frames, 3);
+    }
+
+    #[test]
+    fn test_tas_movie_total_frames() {
+        let mut movie = TasMovie::default();
+        movie.push_run(TasFrameRun::new(1, 2, 5));
+        movie.push_run(TasFrameRun::new(1, 2, 3));
+        assert_eq!(movie.total_frames(), 8); // ensures we don't return 0 or 1
+
+        let empty_movie = TasMovie::default();
+        assert_eq!(empty_movie.total_frames(), 0);
+    }
+
+    #[test]
+    fn test_tas_movie_from_runs() {
+        let runs = vec![TasFrameRun::new(1, 2, 5), TasFrameRun::new(1, 2, 5)];
+        let movie = TasMovie::from_runs(runs);
+        // If Default::default() was used instead of actual initialization, it would have 0 runs
+        assert_eq!(movie.runs().len(), 1); // should coalesce into 1 run
+        assert_eq!(movie.total_frames(), 10);
+
+        let empty_movie = TasMovie::from_runs(vec![]);
+        assert_eq!(empty_movie.runs().len(), 0);
+    }
+
+    #[test]
+    fn test_tas_movie_runs_returns_actual_reference() {
+        let mut movie = TasMovie::default();
+        movie.push_run(TasFrameRun::new(1, 2, 5));
 
         let runs = movie.runs();
         assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0], TasFrameRun::new(1, 2, 5));
+        assert_eq!(runs[0].frames, 5);
 
-        let mut core = looping_core();
-        let frames = movie.replay(&mut core).unwrap();
-        assert_eq!(frames, 5);
-
-        movie.push_frame(3, 4);
-        assert_eq!(movie.runs().len(), 2);
+        movie.push_run(TasFrameRun::new(3, 4, 10));
+        let runs_after = movie.runs();
+        assert_eq!(runs_after.len(), 2);
+        assert_eq!(runs_after[1].frames, 10);
     }
 
     #[test]
@@ -368,5 +410,33 @@ mod tests_mutants {
 
         let movie = recorder.finish();
         let _ = movie.runs();
+    }
+
+    #[test]
+    fn test_append_button_transitions_macro_script() {
+        let mut movie = TasMovie::default();
+        // A -> 0x01, B -> 0x02
+
+        movie.push_run(TasFrameRun::new(0x01, 0, 1)); // Press A
+        movie.push_run(TasFrameRun::new(0x01 | 0x02, 0, 1)); // Hold A, Press B
+        movie.push_run(TasFrameRun::new(0x02, 0, 1)); // Release A, Hold B
+        movie.push_run(TasFrameRun::new(0, 0, 1)); // Release B
+
+        let script = movie.to_macro_script().unwrap();
+        let expected = "\
+PRESS A\n\
+WAIT 1\n\
+PRESS B\n\
+WAIT 1\n\
+RELEASE A\n\
+WAIT 1\n\
+RELEASE B\n\
+WAIT 1\n\
+";
+        assert_eq!(script, expected);
+
+        // Also test empty movie returns empty script
+        let empty_movie = TasMovie::default();
+        assert_eq!(empty_movie.to_macro_script().unwrap(), "");
     }
 }

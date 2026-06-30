@@ -400,4 +400,22 @@ mod tests {
         // compare = 0x70 | 0x80 | 0x07 | 0x08 = 0xFF
         assert_eq!(code_n7_n6_n5.compare(), Some(0xFF));
     }
+
+    #[test]
+    fn cheat_code_decodes_compare_bits_correctly() {
+        let base_8 = CheatCode::from_str("AAAAAAAA").unwrap();
+        assert_eq!(base_8.compare(), Some(0x00));
+
+        let code_e6 = CheatCode::from_str("AAAAAAEA").unwrap();
+        // digits[6] = 0x8 => (0x8 & 0x8) << 4 = 0x80
+        assert_eq!(code_e6.compare(), Some(0x80));
+
+        let code_n6 = CheatCode::from_str("AAAAAANA").unwrap();
+        // digits[6] = 0xF => (0xF & 0x8) << 4 = 0x80 | (0xF & 0x7) = 0x07 => 0x87
+        assert_eq!(code_n6.compare(), Some(0x87));
+
+        let code_y7 = CheatCode::from_str("AAAAAAAY").unwrap();
+        // digits[7] = 0x7 => (0x7 & 0x7) << 4 = 0x70
+        assert_eq!(code_y7.compare(), Some(0x70));
+    }
 }

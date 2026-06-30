@@ -19,3 +19,17 @@ pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
 
 /// The number of audio samples generated per frame (assuming 60 FPS).
 pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constants_are_correct() {
+        assert_eq!(FRAME_WIDTH, 256);
+        assert_eq!(FRAME_HEIGHT, 240);
+        assert_eq!(FRAME_RGBA_BYTES, 256 * 240 * 4);
+        assert_eq!(AUDIO_SAMPLE_RATE, 44_100);
+        assert_eq!(AUDIO_CHUNK_SAMPLES, 44_100 / 60);
+    }
+}
