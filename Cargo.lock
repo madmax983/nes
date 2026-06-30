@@ -3306,6 +3306,7 @@ dependencies = [
  "comfy-table",
  "crossterm 0.28.1",
  "loom",
+ "nes-config",
  "nes-netplay",
  "proptest",
  "serde_json",

@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**Extracting Generic Parsing Logic**
+**Learning:** Repetitive string prefix checks and parsing (like CLI argument `--flag=value` parsing) can quickly turn into a "Pyramid of Doom" (deeply nested match/if branches) across multiple binary crates.
+**Action:** Extract the prefix stripping and value parsing into a generic, higher-order function (e.g., `parse_arg(arg, flag, parser)`) in a shared crate to DRY up the parsing boilerplate, flattening the logic into clean guard clauses or let-else statements. When checking prefixes, avoid string allocations (`format!("{flag}=")`) and prefer zero-allocation methods (`strip_prefix(flag).and_then(|s| s.strip_prefix('='))`).

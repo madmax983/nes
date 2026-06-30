@@ -70,6 +70,8 @@ pub struct RelayArgs {
 ///
 /// assert_eq!(parsed.link.latency_ms, 50);
 /// ```
+use nes_config::parse_arg;
+
 pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     let mut parsed = RelayArgs {
         bind_addr: "127.0.0.1:4545".to_owned(),
@@ -82,38 +84,23 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
             return Err("Usage: nes-relay [--bind <addr>] [--latency-ms <n>] [--jitter-ms <n>] [--loss-pct <0..100>] [--reorder-pct <0..100>]\nDefault bind: 127.0.0.1:4545".to_string());
         }
 
-        if parse_arg(&args, &mut idx, "--bind", |value| {
-            parsed.bind_addr = value.to_string();
-            Ok(())
-        })? {
+        if parse_arg(&args, &mut idx, "--bind", |value| parsed.bind_addr = value, parse_string_arg)? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--latency-ms", |value| {
-            parsed.link.latency_ms = parse_u64_arg(value, "--latency-ms")?;
-            Ok(())
-        })? {
+        if parse_arg(&args, &mut idx, "--latency-ms", |value| parsed.link.latency_ms = value, parse_u64_arg)? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--jitter-ms", |value| {
-            parsed.link.jitter_ms = parse_u64_arg(value, "--jitter-ms")?;
-            Ok(())
-        })? {
+        if parse_arg(&args, &mut idx, "--jitter-ms", |value| parsed.link.jitter_ms = value, parse_u64_arg)? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--loss-pct", |value| {
-            parsed.link.loss_pct = parse_percent_arg(value, "--loss-pct")?;
-            Ok(())
-        })? {
+        if parse_arg(&args, &mut idx, "--loss-pct", |value| parsed.link.loss_pct = value, parse_percent_arg)? {
             continue;
         }
 
-        if parse_arg(&args, &mut idx, "--reorder-pct", |value| {
-            parsed.link.reorder_pct = parse_percent_arg(value, "--reorder-pct")?;
-            Ok(())
-        })? {
+        if parse_arg(&args, &mut idx, "--reorder-pct", |value| parsed.link.reorder_pct = value, parse_percent_arg)? {
             continue;
         }
 
@@ -124,29 +111,7 @@ pub fn parse_args(args: Vec<String>) -> Result<RelayArgs, String> {
     Ok(parsed)
 }
 
-fn parse_arg<F>(args: &[String], idx: &mut usize, flag: &str, mut apply: F) -> Result<bool, String>
-where
-    F: FnMut(&str) -> Result<(), String>,
-{
-    let arg = &args[*idx];
-    if arg == flag {
-        let Some(value) = args.get(*idx + 1) else {
-            return Err(format!("missing value after {flag}"));
-        };
-        apply(value)?;
-        *idx += 2;
-        Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
-        if value.is_empty() {
-            return Err(format!("missing value after {flag}="));
-        }
-        apply(value)?;
-        *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
-}
+
 
 /// Parses a string representation of a non-negative integer into a `u64`.
 ///
@@ -190,6 +155,10 @@ pub fn parse_percent_arg(value: &str, flag: &str) -> Result<u8, String> {
         return Err(format!("{flag} must be in [0, 100]"));
     }
     Ok(parsed)
+}
+
+fn parse_string_arg(value: &str, _flag: &str) -> Result<String, String> {
+    Ok(value.to_owned())
 }
 
 #[cfg(test)]
