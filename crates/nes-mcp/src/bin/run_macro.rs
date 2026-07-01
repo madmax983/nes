@@ -37,14 +37,23 @@ fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
             "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)),
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            )),
             crossterm::style::Stylize::with(rom_path, crossterm::style::Color::Yellow),
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Hint:", crossterm::style::Color::Cyan))
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Hint:",
+                crossterm::style::Color::Cyan
+            ))
         )
     } else {
         format!(
             "{} Failed to read ROM at '{}': {}",
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)),
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            )),
             crossterm::style::Stylize::with(rom_path, crossterm::style::Color::Yellow),
             err
         )
@@ -55,14 +64,23 @@ fn format_script_read_error(script_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
             "{} Could not find the macro script at '{}'.\n{} Check the path or create a new .txt file.",
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)),
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            )),
             crossterm::style::Stylize::with(script_path, crossterm::style::Color::Yellow),
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Hint:", crossterm::style::Color::Cyan))
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Hint:",
+                crossterm::style::Color::Cyan
+            ))
         )
     } else {
         format!(
             "{} Failed to read script at '{}': {}",
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)),
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            )),
             script_path,
             err
         )

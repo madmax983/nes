@@ -118,10 +118,22 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        format!("{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite", crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)))
+        format!(
+            "{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite",
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            ))
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        format!("{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output", crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)))
+        format!(
+            "{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output",
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            ))
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);

@@ -30,7 +30,10 @@ fn run() -> Result<(), String> {
     if args.len() < 2 || args.len() > 5 {
         return Err(format!(
             "{} missing or invalid number of arguments.\nUsage: train_smb_control <profile_toml> [episodes] [checkpoint_dir] [artifact_dir]",
-            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red))
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with(
+                "Error:",
+                crossterm::style::Color::Red
+            ))
         ));
     }
 
