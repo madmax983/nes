@@ -25,3 +25,14 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2026-06-25 - Equivalent Bitwise Mutants
+**Learning:** Certain bitwise mutants (e.g. replacing `|` with `^` or `&`) can be mathematically equivalent and never fail tests if the operand bits never overlap or if the conditions are mutually exclusive.
+**Action:** Do not refactor valid bitwise operations to arithmetic just to game the mutation score. Treat equivalent mutants as caught or ignore them, and focus on discovering actual missed logic gaps.
+
+## 2026-06-25 - Redundant Logic Mutants (budget_done)
+**Learning:** Variables or flags that merely mirror another checked condition (like a loop upper bound flag mirroring a direct bound check at the end of the loop) will generate unkillable mutants because both logic paths produce the same observable outcome.
+**Action:** Remove redundant state variables in favor of checking the source of truth directly. This simplifies the code and eliminates unkillable equivalent mutants.
+
+## 2026-06-25 - Iterator Loop TIMEOUT Mutants
+**Learning:** `TIMEOUT` results in `cargo mutants` often mean the mutant successfully broke a loop condition or increment causing an infinite loop. This counts as "caught" because the mutant did not silently survive.
+**Action:** When seeing TIMEOUTs in index manipulation functions (like `parse_arg`), ensure tests check the exact modified indices using different starting values to distinguish `+=` from `*=` or `-=` variants, ensuring robust bounds checking coverage.

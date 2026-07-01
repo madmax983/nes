@@ -273,7 +273,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use super::{NesConfig, normalize_nonzero_u32, normalize_nonzero_u64, parse_config_path_arg};
+    use super::{NesConfig, normalize_nonzero_u32, normalize_nonzero_u64, parse_config_path_arg, parse_arg};
 
     fn temp_config_path(stem: &str) -> PathBuf {
         let nonce = std::time::SystemTime::now()
@@ -487,5 +487,43 @@ window_scal = 7
 
         assert!(err.contains("unknown field"));
         assert!(err.contains("window_scal"));
+    }
+
+    #[test]
+    fn test_parse_arg_timeout_mutants_fix() {
+        let mut idx = 1;
+        let args = vec!["dummy".to_owned(), "--flag".to_owned(), "value".to_owned()];
+
+        // We mock apply to simply increment a counter or verify value
+        let mut applied = false;
+        let res = parse_arg(&args, &mut idx, "--flag", |val| {
+            assert_eq!(val, "value");
+            applied = true;
+            Ok(())
+        });
+
+        assert!(res.unwrap());
+        assert!(applied);
+        assert_eq!(idx, 3);
+
+        let mut idx2 = 1;
+        let args2 = vec!["dummy".to_owned(), "--flag=value2".to_owned()];
+        let mut applied2 = false;
+        let res2 = parse_arg(&args2, &mut idx2, "--flag", |val| {
+            assert_eq!(val, "value2");
+            applied2 = true;
+            Ok(())
+        });
+        assert!(res2.unwrap());
+        assert!(applied2);
+        assert_eq!(idx2, 2);
+    }
+
+    #[test]
+    fn test_parse_config_path_arg_loop_increment() {
+        let args = vec!["dummy1".to_owned(), "dummy2".to_owned()];
+        let (config, rest) = parse_config_path_arg(&args).expect("parse should succeed");
+        assert!(config.is_none());
+        assert_eq!(rest, args);
     }
 }

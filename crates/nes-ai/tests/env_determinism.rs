@@ -249,3 +249,58 @@ fn profile_env_step_sets_done_when_budget_done() {
     }
     panic!("Should have been done");
 }
+
+#[test]
+#[allow(irrefutable_let_patterns)]
+fn test_budget_done_mutant() {
+    // Tests that replacing `||` with `&&` in ProfileEnv::step fails.
+    let dir = tempfile::tempdir().unwrap();
+    let rom_path = dir.path().join("mock.nes");
+    std::fs::write(&rom_path, b"live-rom").unwrap();
+
+    let snapshot_path = dir.path().join("mock-v1.nes.zst");
+    let core = nes_core::NesCore::new();
+    let snapshot = core.save_state();
+    let expected_hash = nes_ai::snapshot::sha256_hex(b"live-rom");
+    nes_ai::snapshot::write_snapshot_bundle(&snapshot_path, &expected_hash, "mock-v1", &snapshot)
+        .unwrap();
+
+    let cfg = nes_ai::config::AiProfileConfig {
+        game: nes_ai::config::GameProfileId::Smb,
+        id: "test".to_string(),
+        rom_path,
+        snapshot_path,
+        bootstrap_tas_path: std::path::PathBuf::new(),
+        frame_stack: 4,
+        frame_skip: 1,
+        max_episode_frames: 2, // <--- budget!
+        observation: nes_ai::config::ObservationConfig {
+            width: 84,
+            height: 84,
+        },
+        reward: nes_ai::config::RewardConfig {
+            forward_progress: 1.0,
+            alive_bonus: 0.0,
+            stall_penalty: 0.0,
+            death_penalty: 0.0,
+            stall_frames: 10,
+        },
+    };
+
+    let mut env = nes_ai::env::AnyControlEnv::from_config(cfg).unwrap();
+    env.reset().unwrap();
+
+    // step 1
+    let step1 = env.step(nes_ai::actions::ControlAction::Right).unwrap();
+    assert!(!step1.reward.done);
+
+    // step 2, hits max_episode_frames (2)
+    let step2 = env.step(nes_ai::actions::ControlAction::Right).unwrap();
+    assert!(step2.reward.done);
+
+    // test core leak mutant:
+    #[allow(irrefutable_let_patterns)]
+    if let nes_ai::env::AnyControlEnv::Smb(ref mut p) = env {
+        assert_eq!(p.core().state_hash(), p.core_mut().state_hash());
+    } else { unreachable!() }
+}

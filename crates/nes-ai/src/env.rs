@@ -223,10 +223,8 @@ where
             .execute(Command::SetControllerState(controller1_bits))
             .map_err(|_| AiError::Unsupported("step controller"))?;
 
-        let mut budget_done = false;
         for _ in 0..self.profile.config().frame_skip {
             if self.episode_frames >= self.profile.config().max_episode_frames {
-                budget_done = true;
                 break;
             }
             self.recorder.record_frame(controller1_bits);
@@ -251,9 +249,8 @@ where
                 .saturating_add(self.profile.config().frame_skip)
         };
         let mut reward = self.reward.score(&prev, &next, self.stalled_frames);
-        reward.done = reward.done
-            || budget_done
-            || self.episode_frames >= self.profile.config().max_episode_frames;
+        reward.done =
+            reward.done || self.episode_frames >= self.profile.config().max_episode_frames;
         self.last_features = Some(next.clone());
         self.episode_done = reward.done;
 
