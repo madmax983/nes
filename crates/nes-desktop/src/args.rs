@@ -1,6 +1,22 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// Default TCP binding address for the MCP (Model Context Protocol) server
+/// Default TCP binding address for the MCP server.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::args::DEFAULT_MCP_BIND_ADDR;
+/// assert_eq!(DEFAULT_MCP_BIND_ADDR, "127.0.0.1:6502");
+/// ```
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// Help text displayed when invalid CLI arguments are provided
+/// Help text displayed when invalid CLI arguments are provided.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::args::RUNTIME_USAGE;
+/// assert!(RUNTIME_USAGE.starts_with("Usage:"));
+/// ```
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,23 +38,40 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// Optional path to the `.nes` ROM file to load on startup
     pub rom_path: Option<String>,
+    /// List of Game Genie cheat codes to apply immediately
     pub cheat_codes: Vec<String>,
+    /// Whether to start the embedded MCP server
     pub mcp_enabled: bool,
+    /// The IP and port to bind the MCP server to
     pub mcp_bind_addr: String,
+    /// Whether to launch directly into a rollback netplay session
     pub netplay_enabled: bool,
+    /// The `ip:port` of the relay server coordinating the netplay session
     pub netplay_relay_addr: Option<String>,
+    /// The shared room name used to rendezvous with the opponent
     pub netplay_room: Option<String>,
+    /// Which player this instance represents (1 or 2)
     pub netplay_player: Option<u8>,
+    /// Fixed input delay frames to mask network latency
     pub netplay_input_delay_frames: Option<u32>,
+    /// Maximum number of frames the engine is allowed to roll back
     pub netplay_max_rollback_frames: Option<u32>,
+    /// How often to send state hashes to the peer for desync detection
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// Whether to launch in Speedrun (RTA) mode
     pub rta_enabled: bool,
+    /// Manually specified RTA profile ID to load (bypasses auto-detection)
     pub rta_profile_id: Option<String>,
+    /// Path to the directory containing RTA `.toml` profiles
     pub rta_profiles_dir: Option<String>,
+    /// Path to the directory where completed RTA run JSON artifacts are saved
     pub rta_runs_dir: Option<String>,
+    /// Whether to launch RTA mode in "calibration" mode to learn new manual splits
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
+    /// Whether the experimental Nova auto-player is enabled
     pub auto_player_enabled: bool,
 }
 

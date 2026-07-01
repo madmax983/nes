@@ -19,18 +19,52 @@ struct SaveStateFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Indicates the current status of a manual save state slot on disk
+/// Indicates the current status of a manual save state slot on disk.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::manual_state::SaveSlotStatus;
+///
+/// let status = SaveSlotStatus::Saved;
+/// assert_eq!(status, SaveSlotStatus::Saved);
+/// ```
 pub enum SaveSlotStatus {
+    /// No save state file exists in this slot
     Empty,
+    /// A valid save state file exists and can be loaded
     Saved,
+    /// The save state file is malformed or unreadable
     Corrupt,
+    /// The save state belongs to a different ROM or an incompatible emulator version
     IncompatibleRom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Details about a specific save state slot for the UI
+/// Details about a specific save state slot for the UI.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::manual_state::{SaveSlotMetadata, SaveSlotStatus};
+/// use std::path::PathBuf;
+///
+/// let metadata = SaveSlotMetadata {
+///     slot: 1,
+///     path: PathBuf::from("slot1.json"),
+///     status: SaveSlotStatus::Empty,
+///     modified_unix_secs: None,
+/// };
+/// assert_eq!(metadata.slot, 1);
+/// ```
 pub struct SaveSlotMetadata {
+    /// The slot index (e.g., 0 for Quick Save, 1-9 for standard slots)
     pub slot: u8,
+    /// The absolute file path to the `.state.json` file
     pub path: PathBuf,
+    /// The validation status of the file
     pub status: SaveSlotStatus,
+    /// The last modified time of the file, if it exists
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -124,6 +158,17 @@ fn slot_number_from_path(path: &Path) -> Result<u8, String> {
 }
 
 #[must_use]
+/// Constructs the expected file path for a specific save slot given a ROM's path and hash
+/// Constructs the expected file path for a specific save slot given a ROM's path and hash.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::manual_state::slot_path_for_rom;
+/// use std::path::Path;
+///
+/// let path = slot_path_for_rom(Path::new("game.nes"), "abcdef12", 1);
+/// assert!(path.to_string_lossy().contains("slot1"));
+/// ```
 pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);
@@ -133,6 +178,17 @@ pub fn slot_path_for_rom(rom_path: &Path, rom_hash: &str, slot: u8) -> PathBuf {
 }
 
 #[must_use]
+/// Generates a list of expected file paths for a range of save slots
+/// Generates a list of expected file paths for a range of save slots.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::manual_state::slot_paths_for_rom;
+/// use std::path::Path;
+///
+/// let paths = slot_paths_for_rom(Path::new("game.nes"), "abcdef12", 1..=2);
+/// assert_eq!(paths.len(), 2);
+/// ```
 pub fn slot_paths_for_rom(
     rom_path: &Path,
     rom_hash: &str,
@@ -144,6 +200,16 @@ pub fn slot_paths_for_rom(
 }
 
 #[must_use]
+/// Constructs the specific file path for the "Quick Save" slot (usually slot 0)
+/// Constructs the specific file path for the "Quick Save" slot (usually slot 0).
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::manual_state::quicksave_path_for_rom;
+/// use std::path::Path;
+///
+/// let path = quicksave_path_for_rom(Path::new("game.nes"), "abcdef12");
+/// ```
 pub fn quicksave_path_for_rom(rom_path: &Path, rom_hash: &str) -> PathBuf {
     let sanitized_stem = sanitized_stem_for_rom_path(rom_path);
     let hash_prefix = hash_prefix(rom_hash);

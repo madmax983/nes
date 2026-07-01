@@ -23,51 +23,134 @@ const COLOR_STATUS: [u8; 4] = [207, 173, 91, 255];
 
 /// Which overlay screen is currently visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Which overlay screen is currently visible.
+/// Which overlay screen is currently visible.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::OverlayPanel;
+///
+/// let panel = OverlayPanel::MainMenu;
+/// assert_eq!(panel, OverlayPanel::MainMenu);
+/// ```
 pub enum OverlayPanel {
+    /// The root pause menu
     MainMenu,
+    /// The Game Genie cheat management screen
     Cheats,
 }
 
 /// Selectable entries in the main pause menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Options available in the primary pause menu overlay
+/// Options available in the primary pause menu overlay.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::MainMenuSelection;
+///
+/// let selection = MainMenuSelection::Resume;
+/// assert_eq!(selection, MainMenuSelection::Resume);
+/// ```
 pub enum MainMenuSelection {
+    /// Unpause and return to gameplay
     Resume,
+    /// Open a file dialog to load a new ROM
     OpenRom,
+    /// Navigate to the Game Genie cheats menu
     OpenCheats,
+    /// Save the current emulator state to the specified slot (0 is quicksave)
     SaveSlot(u8),
+    /// Load the emulator state from the specified slot
     LoadSlot(u8),
+    /// Hard reset the emulated NES console
     Reset,
+    /// Exit the application entirely
     Quit,
 }
 
 /// Selectable entries in the cheats panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Options available in the cheats sub-menu
+/// Options available in the cheats sub-menu.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::CheatsSelection;
+///
+/// let selection = CheatsSelection::AddCode;
+/// assert_eq!(selection, CheatsSelection::AddCode);
+/// ```
 pub enum CheatsSelection {
+    /// Open a text input prompt to add a new Game Genie code
     AddCode,
+    /// Select an existing cheat (by its index in the active list) to toggle or remove it
     Cheat(usize),
 }
 
 /// Unified selection state for the active overlay panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Represents a user's chosen interaction from an overlay menu
+/// Represents a user's chosen interaction from an overlay menu.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::{OverlaySelection, MainMenuSelection};
+///
+/// let selection = OverlaySelection::Main(MainMenuSelection::Resume);
+/// ```
 pub enum OverlaySelection {
+    /// A selection was made in the main menu
     Main(MainMenuSelection),
+    /// A selection was made in the cheats menu
     Cheats(CheatsSelection),
 }
 
 /// Commands emitted from the overlay state machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Commands emitted from the overlay state machine.
+/// Commands emitted from the overlay state machine.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::OverlayCommand;
+/// use nes_desktop::actions::AppAction;
+///
+/// let command = OverlayCommand::AppAction(AppAction::Reset);
+/// ```
 pub enum OverlayCommand {
+    /// A global application action was triggered (e.g., Load ROM, Reset)
     AppAction(AppAction),
+    /// The user toggled the active state of a specific cheat code
     ToggleCheat(usize),
+    /// The user deleted a specific cheat code
     RemoveCheat(usize),
+    /// The user submitted a new raw Game Genie string
     SubmitCheatCode(String),
 }
 
 /// Lightweight slot summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Lightweight slot summary used by the overlay renderer.
+/// Lightweight slot summary used by the overlay renderer.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::OverlaySlotSummary;
+///
+/// let summary = OverlaySlotSummary {
+///     slot: 1,
+///     status_label: "Empty",
+///     modified_unix_secs: None,
+/// };
+/// assert_eq!(summary.slot, 1);
+/// ```
 pub struct OverlaySlotSummary {
+    /// The slot index
     pub slot: u8,
+    /// A human-readable description of the slot's current status (e.g., "Empty", "Saved")
     pub status_label: &'static str,
+    /// The timestamp of when the save was created, used for displaying relative time
     pub modified_unix_secs: Option<u64>,
 }
 
@@ -85,8 +168,23 @@ impl OverlaySlotSummary {
 
 /// Lightweight cheat summary used by the overlay renderer.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Lightweight cheat summary used by the overlay renderer.
+/// Lightweight cheat summary used by the overlay renderer.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::overlay::OverlayCheatSummary;
+///
+/// let summary = OverlayCheatSummary {
+///     raw_code: "GOSSIP",
+///     enabled: true,
+/// };
+/// assert!(summary.enabled);
+/// ```
 pub struct OverlayCheatSummary<'a> {
+    /// The raw 6 or 8 character Game Genie string
     pub raw_code: &'a str,
+    /// Whether the cheat is currently active in the core
     pub enabled: bool,
 }
 

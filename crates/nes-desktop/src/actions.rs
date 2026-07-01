@@ -1,13 +1,32 @@
 /// Shared high-level intents emitted by the native menu, overlay, and hotkeys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Global commands that can be triggered via keyboard shortcuts or the OS menu
+/// Global commands that can be triggered via keyboard shortcuts or the OS menu
+/// Global commands that can be triggered via keyboard shortcuts or the OS menu.
+///
+/// ## Examples
+/// ```
+/// use nes_desktop::actions::AppAction;
+///
+/// let action = AppAction::Reset;
+/// assert_eq!(action, AppAction::Reset);
+/// ```
 pub enum AppAction {
+    /// Toggle the in-game overlay menu
     ToggleOverlay,
+    /// Unpause and return to gameplay
     Resume,
+    /// Open a file dialog to load a new ROM
     OpenRom,
+    /// Navigate to the Game Genie cheats menu
     OpenCheats,
+    /// Save the current state to a specific slot index (0 is quicksave)
     SaveSlot(u8),
+    /// Load the state from a specific slot index (0 is quicksave)
     LoadSlot(u8),
+    /// Hard reset the emulated NES console
     Reset,
+    /// Exit the application entirely
     Quit,
 }
 

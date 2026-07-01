@@ -26,3 +26,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2026-07-01 - Added missing documentation
+**Confusion:** Many structs, functions, enums, variants, and constant lacked proper rust documentation comments causing rust doc generation warnings.
+**Clarification:** I added the missing documentation across multiple files including `rta.rs`, `manual_state.rs`, `menu.rs`, `app.rs`, `args.rs`, `overlay.rs` and `crates/nes-test-harness/src/lib.rs` using doc comments (`///`) with high level explanations.
