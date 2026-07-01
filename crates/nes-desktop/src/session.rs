@@ -1,4 +1,3 @@
-use crossterm::style::{Color, Stylize};
 use nes_core::{NesCore, RomLoadInfo};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,15 +113,15 @@ pub(crate) fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> Str
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
             "{} Could not find the ROM file at '{}'.\n{} Check the path or try the bundled homebrew ROM: ./roms/homebrew/homebrew.nes or <path-to-your-rom>.nes",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
-            "Hint:".with(Color::Cyan).bold()
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)),
+            crossterm::style::Stylize::with(rom_path, crossterm::style::Color::Yellow),
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Hint:", crossterm::style::Color::Cyan))
         )
     } else {
         format!(
             "{} Failed to read ROM at '{}': {}",
-            "Error:".with(Color::Red).bold(),
-            rom_path.with(Color::Yellow),
+            crossterm::style::Stylize::bold(crossterm::style::Stylize::with("Error:", crossterm::style::Color::Red)),
+            crossterm::style::Stylize::with(rom_path, crossterm::style::Color::Yellow),
             err
         )
     }
