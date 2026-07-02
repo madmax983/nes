@@ -31,6 +31,13 @@ impl MemoryHeatmap {
     ///
     /// * `decay_rate` - How quickly heat dissipates each frame (e.g. 0.95 = 5% decay).
     /// * `intensity` - How much heat is added per memory access.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::memory_heatmap::MemoryHeatmap;
+    /// let heatmap = MemoryHeatmap::new(0.95, 0.1);
+    /// ```
     #[must_use]
     pub fn new(decay_rate: f32, intensity: f32) -> Self {
         Self {
@@ -41,6 +48,17 @@ impl MemoryHeatmap {
     }
 
     /// Records all memory accesses from the core's latest CPU trace.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::NesCore;
+    /// # use nes_core::experimental::memory_heatmap::MemoryHeatmap;
+    /// let core = NesCore::new();
+    /// let mut heatmap = MemoryHeatmap::default();
+    /// // ... after stepping the CPU
+    /// heatmap.record_trace(&core);
+    /// ```
     pub fn record_trace(&mut self, core: &NesCore) {
         for access in core.last_cpu_bus_trace() {
             let addr = access.addr as usize;
@@ -54,6 +72,15 @@ impl MemoryHeatmap {
     }
 
     /// Decays the overall heat map. Should be called once per frame.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::memory_heatmap::MemoryHeatmap;
+    /// let mut heatmap = MemoryHeatmap::default();
+    /// // Call this once per frame
+    /// heatmap.decay_frame();
+    /// ```
     pub fn decay_frame(&mut self) {
         for h in &mut self.heat {
             *h *= self.decay_rate;
@@ -65,6 +92,15 @@ impl MemoryHeatmap {
 
     /// Renders the current heatmap as a 256x256 BMP image.
     /// Hot addresses are red, warm are yellow, cool are blue.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::memory_heatmap::MemoryHeatmap;
+    /// let heatmap = MemoryHeatmap::default();
+    /// let bmp_data = heatmap.render_bmp().unwrap();
+    /// assert_eq!(&bmp_data[0..2], b"BM");
+    /// ```
     pub fn render_bmp(&self) -> Result<std::vec::Vec<u8>, String> {
         let width = 256;
         let height = 256;

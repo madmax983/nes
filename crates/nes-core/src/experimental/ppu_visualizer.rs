@@ -71,11 +71,23 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// Utility for extracting PPU state as images for debugging or visualization.
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
     /// Extracts a given pattern table (0 or 1) combined with a chosen palette, returning a BMP.
     /// The resulting image is 128x128 pixels (16x16 tiles of 8x8 pixels each).
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::NesCore;
+    /// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+    /// let core = NesCore::new();
+    /// // Extract pattern table 0 using palette 0
+    /// let bmp_data = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
+    /// assert_eq!(&bmp_data[0..2], b"BM");
+    /// ```
     pub fn extract_pattern_table_bmp(
         core: &NesCore,
         table_idx: u8,
@@ -138,6 +150,16 @@ impl PpuVisualizer {
 
     /// Extracts the full 4-nametable layout (512x480) with actual palettes applied,
     /// and draws a red bounding box (viewport) indicating the current scroll position.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::NesCore;
+    /// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+    /// let core = NesCore::new();
+    /// let bmp_data = PpuVisualizer::extract_nametables_with_scroll_bmp(&core).unwrap();
+    /// assert_eq!(&bmp_data[0..2], b"BM");
+    /// ```
     pub fn extract_nametables_with_scroll_bmp(core: &NesCore) -> Result<Vec<u8>, String> {
         let snapshot = core.save_state();
         let ppu = snapshot.ppu;

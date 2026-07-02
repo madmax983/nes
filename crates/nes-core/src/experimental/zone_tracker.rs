@@ -49,6 +49,14 @@ pub struct ZoneTracker {
 #[cfg(feature = "nova")]
 impl ZoneTracker {
     /// Creates a new, empty `ZoneTracker`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::zone_tracker::ZoneTracker;
+    /// let tracker = ZoneTracker::new();
+    /// assert_eq!(tracker.events().len(), 0);
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -59,6 +67,14 @@ impl ZoneTracker {
     }
 
     /// Adds a new rectangular zone to monitor.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::zone_tracker::ZoneTracker;
+    /// let mut tracker = ZoneTracker::new();
+    /// tracker.add_zone(1, 10, 10, 20, 20); // Add a 20x20 zone at (10, 10) with ID 1
+    /// ```
     pub fn add_zone(&mut self, id: usize, x: u8, y: u8, w: u8, h: u8) {
         self.zones.push(Zone { id, x, y, w, h });
         self.active_sprites.insert(id, Vec::new());
@@ -67,6 +83,19 @@ impl ZoneTracker {
     /// Evaluates the current frame's OAM against registered zones.
     ///
     /// Generates `ZoneEvent`s for any sprites that have newly entered a zone.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::NesCore;
+    /// # use nes_core::experimental::zone_tracker::ZoneTracker;
+    /// let core = NesCore::new();
+    /// let mut tracker = ZoneTracker::new();
+    /// tracker.add_zone(1, 100, 100, 50, 50);
+    ///
+    /// tracker.track(&core);
+    /// // Access events with `tracker.events()`
+    /// ```
     pub fn track(&mut self, core: &NesCore) {
         let oam_query = OamSpatialQuery::new(core);
 
@@ -94,6 +123,15 @@ impl ZoneTracker {
     }
 
     /// Returns a slice of all recorded `ZoneEvent`s.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::zone_tracker::ZoneTracker;
+    /// let tracker = ZoneTracker::new();
+    /// let events = tracker.events();
+    /// assert_eq!(events.len(), 0);
+    /// ```
     #[must_use]
     pub fn events(&self) -> &[ZoneEvent] {
         &self.events

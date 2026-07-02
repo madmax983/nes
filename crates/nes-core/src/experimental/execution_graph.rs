@@ -45,6 +45,14 @@ pub struct ExecutionGraph {
 #[cfg(feature = "nova")]
 impl ExecutionGraph {
     /// Creates a new, empty execution graph.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::execution_graph::ExecutionGraph;
+    /// let graph = ExecutionGraph::new();
+    /// assert_eq!(graph.to_dot(), "digraph ExecutionFlow {\n}\n");
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -52,6 +60,18 @@ impl ExecutionGraph {
 
     /// Records the current PC from the core, creating a transition from the last recorded PC.
     /// This should be called after each CPU step.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::NesCore;
+    /// # use nes_core::experimental::execution_graph::ExecutionGraph;
+    /// let mut core = NesCore::new();
+    /// let mut graph = ExecutionGraph::new();
+    /// graph.record_step(&core);
+    /// let _ = core.execute(nes_core::Command::StepCpu);
+    /// graph.record_step(&core);
+    /// ```
     pub fn record_step(&mut self, core: &NesCore) {
         let current_pc = core.cpu_pc();
         if let Some(last) = self.last_pc {
@@ -62,6 +82,15 @@ impl ExecutionGraph {
     }
 
     /// Exports the recorded transitions to a Graphviz DOT string.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::execution_graph::ExecutionGraph;
+    /// let graph = ExecutionGraph::new();
+    /// let dot = graph.to_dot();
+    /// assert!(dot.starts_with("digraph ExecutionFlow {"));
+    /// ```
     #[must_use]
     pub fn to_dot(&self) -> String {
         let mut dot = String::from("digraph ExecutionFlow {\n");
