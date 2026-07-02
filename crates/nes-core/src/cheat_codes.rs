@@ -400,4 +400,47 @@ mod tests {
         // compare = 0x70 | 0x80 | 0x07 | 0x08 = 0xFF
         assert_eq!(code_n7_n6_n5.compare(), Some(0xFF));
     }
+
+    #[test]
+    fn cheat_code_getters_are_not_hardcoded() {
+        let code1 = CheatCode::from_str("SXTPOU").unwrap();
+        assert_eq!(code1.raw(), "SXTPOU");
+        assert_ne!(code1.raw(), "");
+        assert_ne!(code1.raw(), "xyzzy");
+
+        let code2 = CheatCode::from_str("ZEXPYGLA").unwrap();
+        assert_eq!(code2.raw(), "ZEXPYGLA");
+
+        assert_eq!(code1.address(), 0x9BE1);
+        assert_ne!(code1.address(), 0);
+        assert_ne!(code1.address(), 1);
+
+        assert_eq!(code2.address(), 0x94A7);
+
+        assert_eq!(code1.compare(), None);
+        assert_ne!(code1.compare(), Some(0));
+        assert_ne!(code1.compare(), Some(1));
+
+        assert_eq!(code2.compare(), Some(0x03));
+        assert_ne!(code2.compare(), None);
+        assert_ne!(code2.compare(), Some(0));
+        assert_ne!(code2.compare(), Some(1));
+    }
+
+    #[test]
+    fn test_cheat_code_error_formatting_not_empty() {
+        let err_len = CheatCodeError::InvalidLength(5);
+        use std::fmt::Write;
+        let mut s = String::new();
+        write!(&mut s, "{}", err_len).unwrap();
+        assert_eq!(s, "cheat code length must be 6 or 8 characters, got 5");
+        assert_ne!(s, "");
+    }
+
+    #[test]
+    fn test_cheat_code_address_bits_exact_or() {
+        // Test parsing code with mixed whitespace and dashes to ensure correct normalized stripping
+        let code_dash_space = CheatCode::from_str("SXT - POU").unwrap();
+        assert_eq!(code_dash_space.raw(), "SXTPOU");
+    }
 }

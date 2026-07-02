@@ -47,3 +47,7 @@
 **Mutant:** replace == with != in `read_framed_message` (`read == 0`) in crates/nes-desktop/src/mcp_host.rs
 **Diagnosis:** Equivalent Mutant. Altering the EOF read check (`read == 0`) into continuous loops results in TIMEOUT. This is an expected weakness based on how test runners enforce time limits.
 **Kill Shot:** None. This is documented as an expected limitation.
+## 2024-05-18 - Cheat Codes Equivalent Mutants
+**Mutant:** Replaced `|` with `^` in address and value decoding in `cheat_codes.rs` (lines 99-115)
+**Diagnosis:** EQUIVALENT_MUTANT - The bitwise operations combine mutually exclusive bits (i.e., they do not overlap). When operands don't share bits, `A | B` is mathematically identical to `A ^ B`. Because they are identical, no test can ever distinguish between them.
+**Kill Shot:** None. These should be considered equivalent and skipped.
