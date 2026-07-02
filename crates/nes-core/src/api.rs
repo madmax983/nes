@@ -1122,65 +1122,73 @@ impl NesCore {
     /// core.execute(Command::PressButton(Button::A)).unwrap();
     /// ```
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
-        let (player, bits) = match command {
-            Command::SetControllerState(bits) => (Player::One, bits),
-            Command::SetController2State(bits) => (Player::Two, bits),
-            Command::PressButton(button) => (
-                Player::One,
-                self.ports.controllers[0].bits | button.bit_mask(),
-            ),
-            Command::PressButton2(button) => (
-                Player::Two,
-                self.ports.controllers[1].bits | button.bit_mask(),
-            ),
-            Command::ReleaseButton(button) => (
-                Player::One,
-                self.ports.controllers[0].bits & !button.bit_mask(),
-            ),
-            Command::ReleaseButton2(button) => (
-                Player::Two,
-                self.ports.controllers[1].bits & !button.bit_mask(),
-            ),
+        match command {
+            Command::SetControllerState(bits) => {
+                self.ports.set_controller_bits(bits, Player::One);
+                self.sync_ppu_register_image();
+            }
+            Command::SetController2State(bits) => {
+                self.ports.set_controller_bits(bits, Player::Two);
+                self.sync_ppu_register_image();
+            }
+            Command::PressButton(button) => {
+                self.ports.set_controller_bits(
+                    self.ports.controllers[0].bits | button.bit_mask(),
+                    Player::One,
+                );
+                self.sync_ppu_register_image();
+            }
+            Command::PressButton2(button) => {
+                self.ports.set_controller_bits(
+                    self.ports.controllers[1].bits | button.bit_mask(),
+                    Player::Two,
+                );
+                self.sync_ppu_register_image();
+            }
+            Command::ReleaseButton(button) => {
+                self.ports.set_controller_bits(
+                    self.ports.controllers[0].bits & !button.bit_mask(),
+                    Player::One,
+                );
+                self.sync_ppu_register_image();
+            }
+            Command::ReleaseButton2(button) => {
+                self.ports.set_controller_bits(
+                    self.ports.controllers[1].bits & !button.bit_mask(),
+                    Player::Two,
+                );
+                self.sync_ppu_register_image();
+            }
             Command::Pause => {
                 self.paused = true;
-                return Ok(());
             }
             Command::Resume => {
                 self.paused = false;
-                return Ok(());
             }
             Command::Reset => {
                 self.reset_runtime();
-                return Ok(());
             }
             Command::PowerCycle => {
                 self.reset_runtime();
                 self.speed_permille = DEFAULT_SPEED_PERMILLE;
-                return Ok(());
             }
             Command::StepCpu => {
                 self.step_single_instruction()?;
-                return Ok(());
             }
             Command::StepScanline => {
                 self.step_until_next_scanline()?;
-                return Ok(());
             }
             Command::StepFrame => {
                 self.step_until_next_frame()?;
-                return Ok(());
             }
             Command::SetSpeed(speed) => {
                 if speed == 0 {
                     return Err(CoreError::InvalidSpeed(speed));
                 }
                 self.speed_permille = speed;
-                return Ok(());
             }
         };
 
-        self.ports.set_controller_bits(bits, player);
-        self.sync_ppu_register_image();
         Ok(())
     }
 

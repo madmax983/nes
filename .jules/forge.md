@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring redundant controller input updates in nes-core api.rs]
+**Learning:** Found boilerplate in the `execute` method of `api.rs` where every controller state modification command manually evaluated out, then called `self.ports.set_controller_bits` and `self.sync_ppu_register_image()` out of the match loop. This wasn't idiomatic.
+**Action:** Refactored the code to explicitly do everything within each match case, preventing future additions to potentially miss out on state sync.
