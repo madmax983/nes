@@ -894,8 +894,7 @@ impl Ppu {
         {
             let update = self.pending_live_chr_updates.pop_front().unwrap();
             self.live_chr.fill(0);
-            let copy_len = update.chr.len().min(CHR_BYTES);
-            self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
+            self.live_chr[..CHR_BYTES].copy_from_slice(&update.chr[..CHR_BYTES]);
             applied = true;
         }
         if applied {
@@ -1655,9 +1654,7 @@ impl Ppu {
                     self.chr[index] = value;
                     self.live_chr[index] = value;
                     for update in &mut self.pending_live_chr_updates {
-                        if index < update.chr.len() {
-                            update.chr[index] = value;
-                        }
+                        update.chr[index] = value;
                     }
                     changed = true;
                 }
