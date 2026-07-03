@@ -1654,7 +1654,9 @@ impl Ppu {
                     self.chr[index] = value;
                     self.live_chr[index] = value;
                     for update in &mut self.pending_live_chr_updates {
-                        update.chr[index] = value;
+                        if index < update.chr.len() {
+                            update.chr[index] = value;
+                        }
                     }
                     changed = true;
                 }
