@@ -283,7 +283,7 @@ struct SpriteScanlineCache {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PendingLiveChrWindowUpdate {
     due_cycle_in_frame: u32,
-    chr: Vec<u8>,
+    chr: Box<[u8]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -388,7 +388,7 @@ impl Ppu {
             self.pending_live_chr_updates
                 .push_back(PendingLiveChrWindowUpdate {
                     due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
-                    chr: self.chr.to_vec(),
+                    chr: Box::from(self.chr.as_slice()),
                 });
         } else {
             *self.live_chr = self.chr;
