@@ -4,6 +4,18 @@ use std::path::Path;
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
 #[allow(dead_code)]
+/// Returns the path to the Super Mario Bros testing ROM, falling back if not found.
+///
+/// First checks `./roms/Super Mario Bros (JU) (PRG0) [!].nes`, then falls back to
+/// `~/Downloads/Super Mario Bros (JU) (PRG0) [!].nes`.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::rom_paths::smb_rom_path;
+/// let path = smb_rom_path();
+/// assert!(path.contains("Super Mario"));
+/// ```
 pub fn smb_rom_path() -> String {
     let config = load_config();
     let rom_path = config
@@ -19,6 +31,17 @@ pub fn smb_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Returns the path to the `nestest.nes` CPU testing ROM.
+///
+/// Checks `./roms/nestest.nes` then falls back to the `Downloads` directory.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::rom_paths::nestest_rom_path;
+/// let path = nestest_rom_path();
+/// assert!(path.contains("nestest.nes"));
+/// ```
 pub fn nestest_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.nestest.unwrap_or_else(|| {
@@ -28,6 +51,17 @@ pub fn nestest_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Returns the path to the Blargg CPU behavior test ROM.
+///
+/// Checks for `./roms/instr_test-v5/rom_singles/01-basics.nes`.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::rom_paths::blargg_cpu_rom_path;
+/// let path = blargg_cpu_rom_path();
+/// assert!(path.contains("01-basics.nes"));
+/// ```
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.blargg_cpu.unwrap_or_else(|| {
@@ -39,6 +73,16 @@ pub fn blargg_cpu_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Returns the paths to all ROMs in the Brad Smith audio testing suite.
+///
+/// These are used to verify APU functionality (Square, Triangle, Noise, DMC).
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::rom_paths::bbbradsmith_audio_suite_rom_paths;
+/// let paths = bbbradsmith_audio_suite_rom_paths();
+/// ```
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.unwrap_or_else(|| {
@@ -69,6 +113,17 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
 }
 
 #[allow(dead_code)]
+/// Returns the path to the directory containing "golden" audio recordings.
+///
+/// These `.pcm` files represent the exact expected output of the audio test suite.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::rom_paths::bbbradsmith_audio_golden_dir_path;
+/// let dir = bbbradsmith_audio_golden_dir_path();
+/// assert!(dir.contains("golden_audio"));
+/// ```
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.unwrap_or_else(|| {

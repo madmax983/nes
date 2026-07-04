@@ -35,47 +35,67 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// The default directory where RTA profiles are stored.
 pub const DEFAULT_RTA_PROFILES_DIR: &str = "config/rta/profiles";
+/// The default directory where recorded RTA runs are saved.
 pub const DEFAULT_RTA_RUNS_DIR: &str = "runs/rta";
 
 #[derive(Debug, Clone)]
+/// Configuration for how the RTA system should run.
 pub struct RtaRuntimeConfig {
+    /// The ID of the profile to force load, ignoring ROM hash matching.
     pub profile_id_override: Option<String>,
+    /// Directory to scan for RTA profiles.
     pub profiles_dir: PathBuf,
+    /// Directory to output finished runs.
     pub runs_dir: PathBuf,
+    /// Whether to start in calibration mode to create a new profile.
     pub calibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// Represents the lifecycle status of an RTA Profile.
 pub enum ProfileStatus {
+    /// A profile that is still being tested and calibrated.
     Draft,
     #[default]
+    /// A finalized profile ready for competitive use.
     Published,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// Defines the source of truth for the speedrun timer.
 pub enum TimerClock {
     #[default]
+    /// Uses real-world wall clock time.
     Wall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// Defines behavior when the emulator loses operating system focus.
 pub enum FocusLossPolicy {
+    /// Automatically pause the game and the timer.
     AutoPause,
+    /// Instantly invalidate the run (prevents cheating via background manipulation).
     Invalidate,
     #[default]
+    /// Keep running normally.
     Continue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default, Hash)]
 #[serde(rename_all = "snake_case")]
+/// Actions that a runner is strictly prohibited from doing during a run.
 pub enum ForbiddenAction {
     #[default]
+    /// Using the rewind feature.
     Rewind,
+    /// Using save states or loading states.
     SaveLoad,
+    /// Pausing and advancing frame-by-frame.
     FrameStep,
 }
 
@@ -91,33 +111,51 @@ impl ForbiddenAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// The bit-width of the memory value being inspected.
 pub enum TriggerWidth {
     #[default]
+    /// 8-bit unsigned integer.
     U8,
+    /// 16-bit unsigned integer.
     U16,
+    /// 32-bit unsigned integer.
     U32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
+/// The comparison operator used for a trigger.
 pub enum TriggerOp {
     #[default]
+    /// Equal to.
     Eq,
+    /// Not equal to.
     Ne,
+    /// Greater than.
     Gt,
+    /// Greater than or equal to.
     Gte,
+    /// Less than.
     Lt,
+    /// Less than or equal to.
     Lte,
+    /// A specific bit is set (1).
     BitSet,
+    /// A specific bit is clear (0).
     BitClear,
+    /// The value has changed since the last frame.
     Changed,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
+/// Rules governing how the run timer behaves.
 pub struct TimerPolicy {
+    /// The source of time for the run (e.g. Real-Time vs NES frames).
     pub clock: TimerClock,
+    /// What to do when the emulator loses focus.
     pub focus_loss: FocusLossPolicy,
+    /// Whether to allow the user to manually control the timer if triggers fail.
     pub manual_fallback: bool,
 }
 
@@ -133,7 +171,9 @@ impl Default for TimerPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
+/// Rules defining actions that instantly disqualify an RTA run.
 pub struct InvalidationPolicy {
+    /// A list of forbidden actions (like rewinding or loading states) that invalidate the run.
     pub invalidate_on: Vec<ForbiddenAction>,
 }
 
@@ -151,8 +191,11 @@ impl Default for InvalidationPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields)]
+/// Rules governing how and when splits are recorded.
 pub struct SplitPolicy {
+    /// If true, prevents modifying or deleting splits after they are recorded.
     pub append_only: bool,
+    /// The hotkey bound to manual splitting.
     pub manual_hotkey: String,
 }
 
@@ -167,18 +210,27 @@ impl Default for SplitPolicy {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(default, deny_unknown_fields)]
+/// Determines what data is saved alongside the run artifact.
 pub struct LoggingPolicy {
+    /// Whether to record the controller inputs for every frame of the run.
     pub save_input_log: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
+/// A memory inspection rule that dictates when an event (like a split or start) occurs.
 pub struct TriggerRule {
+    /// The memory address to inspect.
     pub address: u16,
+    /// The size of the memory value to inspect (e.g., 8-bit, 16-bit).
     pub width: TriggerWidth,
+    /// The comparison operation to evaluate (e.g., Equal, GreaterThan).
     pub op: TriggerOp,
+    /// The target value to compare against.
     pub value: u32,
+    /// Number of frames to wait after a trigger fires before it can fire again.
     pub debounce_frames: u32,
+    /// Number of consecutive frames the condition must be true to trigger.
     pub require_consecutive: u32,
 }
 
@@ -214,6 +266,7 @@ impl Default for TriggerRule {
 #[serde(default, deny_unknown_fields)]
 pub struct SplitRule {
     /// The human-readable name of the split (e.g., `"World 1-1"`).
+    /// The name of the split.
     pub name: String,
     /// The conditions required to trigger the split.
     pub trigger: TriggerRule,
@@ -310,20 +363,29 @@ impl Default for RtaProfile {
 }
 
 #[derive(Debug, Clone)]
+/// An RTA profile that has been loaded into memory from a file.
 pub struct LoadedProfile {
+    /// The file path the profile was loaded from.
     pub path: PathBuf,
+    /// The parsed profile data.
     pub profile: RtaProfile,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Indicates how a profile was chosen for the current session.
 pub enum ProfileSelectionSource {
+    /// Automatically selected because the ROM hash matched a known profile.
     AutoByRomHash,
+    /// Manually selected by the user.
     ManualOverride,
 }
 
 #[derive(Debug, Clone)]
+/// The currently active profile and how it was selected.
 pub struct ProfileSelection {
+    /// The profile that is currently active.
     pub selected: LoadedProfile,
+    /// How this profile was selected.
     pub source: ProfileSelectionSource,
 }
 
@@ -499,11 +561,17 @@ pub fn select_profile(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The current execution state of an RTA run.
 pub enum RtaSessionState {
+    /// Waiting for the start condition to be met.
     Idle,
+    /// Ready to begin, pending user input or final conditions.
     Armed,
+    /// The run is currently active and the timer is ticking.
     Running,
+    /// The run has successfully completed.
     Finished,
+    /// The run was invalidated (e.g. by rewinding) and is now just practice.
     InvalidPractice,
 }
 
@@ -625,40 +693,63 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Indicates what triggered a split event.
 pub enum SplitSource {
+    /// Triggered by a memory condition defined in the profile.
     Automatic,
+    /// Triggered manually by the user pressing a hotkey.
     Manual,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// A recorded milestone during an RTA run.
 pub struct SplitEvent {
+    /// The name of the split.
     pub name: String,
+    /// How the split was triggered.
     pub source: SplitSource,
+    /// The frame number when the split occurred.
     pub frame: u64,
+    /// The total elapsed milliseconds since the run started.
     pub elapsed_ms: u128,
 }
 
 #[derive(Debug, Clone, Serialize)]
+/// A single frame of recorded controller input.
 pub struct InputLogFrame {
+    /// The frame number when the split occurred.
     pub frame: u64,
+    /// The button states for player 1.
     pub controller1_bits: u8,
+    /// The button states for player 2.
     pub controller2_bits: u8,
+    /// The total elapsed milliseconds since the run started.
     pub elapsed_ms: u128,
 }
 
 #[derive(Debug, Clone)]
+/// Significant events emitted by the RTA manager during a session.
 pub enum RtaEvent {
+    /// The run has officially begun.
     Started,
+    /// The run timer is paused.
     Paused,
+    /// The run timer has resumed.
     Resumed,
+    /// A split milestone was reached.
     Split(SplitEvent),
+    /// The run was disqualified (reason provided).
     Invalidated(String),
+    /// The run completed successfully (final time provided).
     Finished(Duration),
 }
 
 #[derive(Debug, Clone)]
+/// File paths to the saved artifacts from a completed run.
 pub struct RunArtifactPaths {
+    /// Path to the JSON metadata file for the run.
     pub run_json_path: PathBuf,
+    /// Path to the recorded input log file, if any.
     pub input_log_path: Option<PathBuf>,
 }
 
@@ -674,6 +765,7 @@ struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     splits: &'a [SplitEvent],
 }
 
+/// Utilities for streaming large JSON arrays to avoid loading everything into memory.
 pub mod serde_iter {
     use serde::{Serialize, Serializer};
 
@@ -1493,8 +1585,11 @@ struct DraftReport<'a> {
 }
 
 #[derive(Debug, Clone)]
+/// Paths to the newly generated profile and report from calibration.
 pub struct DraftOutput {
+    /// Path to the generated RTA profile.
     pub profile_path: PathBuf,
+    /// Path to the calibration analysis report.
     pub report_path: PathBuf,
 }
 
@@ -1511,6 +1606,7 @@ struct CalibrationSplitMark {
 }
 
 #[derive(Debug, Clone)]
+/// Observes manual splits and memory states to automatically generate an `RtaProfile`.
 pub struct CalibrationRecorder {
     profile_id: String,
     frames: VecDeque<CalibrationFrame>,

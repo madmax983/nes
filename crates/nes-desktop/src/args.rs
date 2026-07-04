@@ -1,6 +1,8 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
+/// The default network address for MCP to bind to.
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
+/// The command line usage string.
 pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
 
 /// Defines the configuration used by the desktop runtime.
@@ -22,21 +24,37 @@ pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-c
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeArgs {
+    /// The path to the ROM to load.
     pub rom_path: Option<String>,
+    /// A list of Game Genie cheat codes to enable.
     pub cheat_codes: Vec<String>,
+    /// Whether the MCP (Machine Control Protocol) is enabled.
     pub mcp_enabled: bool,
+    /// The address for the MCP server to bind to.
     pub mcp_bind_addr: String,
+    /// Whether Netplay is enabled.
     pub netplay_enabled: bool,
+    /// The address of the Netplay relay server.
     pub netplay_relay_addr: Option<String>,
+    /// The name of the Netplay room to join.
     pub netplay_room: Option<String>,
+    /// The player number to claim (1 or 2).
     pub netplay_player: Option<u8>,
+    /// Artificial input delay frames to add for Netplay.
     pub netplay_input_delay_frames: Option<u32>,
+    /// The maximum number of frames Netplay is allowed to rollback.
     pub netplay_max_rollback_frames: Option<u32>,
+    /// How often to check the state hash during Netplay.
     pub netplay_hash_check_every_frames: Option<u64>,
+    /// Whether Real-Time Attack (RTA) enforcement is enabled.
     pub rta_enabled: bool,
+    /// The ID of a specific RTA profile to load.
     pub rta_profile_id: Option<String>,
+    /// The directory containing RTA profiles.
     pub rta_profiles_dir: Option<String>,
+    /// The directory where RTA runs will be saved.
     pub rta_runs_dir: Option<String>,
+    /// Start RTA in calibration mode.
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
     pub auto_player_enabled: bool,
