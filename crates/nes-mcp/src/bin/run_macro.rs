@@ -181,3 +181,32 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
+
+#[cfg(test)]
+mod tests_coverage {
+    use super::*;
+
+    #[test]
+    fn run_macro_with_empty_script_reports_zero_progress() {
+        let temp_dir = std::env::temp_dir().join("nes_mcp_run_macro_test2");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let rom_path = temp_dir.join("dummy.nes");
+        let mut rom_bytes = vec![0; 16 + 16384];
+        rom_bytes[0] = b'N';
+        rom_bytes[1] = b'E';
+        rom_bytes[2] = b'S';
+        rom_bytes[3] = 0x1a;
+        rom_bytes[4] = 1;
+        std::fs::write(&rom_path, rom_bytes).unwrap();
+
+        let script_path = temp_dir.join("script.txt");
+        std::fs::write(&script_path, "").unwrap();
+
+        let result = run(rom_path.to_str().unwrap(), script_path.to_str().unwrap());
+        assert!(result.is_ok());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}

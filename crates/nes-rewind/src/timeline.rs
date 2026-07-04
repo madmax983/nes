@@ -163,10 +163,88 @@ mod tests {
     }
 
     #[test]
+    fn test_reconstruct_target_less_than_oldest_keyframe_returns_none() {
+        let core = make_core();
+        let mut tl = CompressedTimeline::new(3, KeyframePolicy::new(1, 0)); // Promote all to KF
+
+        tl.push(1, core.save_state());
+        tl.push(2, core.save_state());
+        tl.push(3, core.save_state());
+
+        // Pushing frame 4 will pop frame 1
+        tl.push(4, core.save_state());
+
+        // tl.last_frame_id is 4. Reconstructing 1 should return None because the oldest KF is now 2.
+        assert!(tl.reconstruct(1).is_none());
+        assert!(tl.reconstruct(2).is_some());
+    }
+
+    #[test]
+    fn test_reconstruct_ignores_delta_with_same_frame_id_as_keyframe() {
+        let core = make_core();
+        let mut tl = CompressedTimeline::new(3, policy());
+
+        let mut snap = core.save_state();
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 10,
+            snapshot: snap.clone(),
+        });
+
+        // Mutate snap so the delta has a measurable effect if applied
+        snap.ppu.frame_counter = 999;
+        let mut delta = FrameDelta::compute(&core.save_state(), &snap);
+        delta.frame_id = 10;
+        tl.deltas.push_back(delta);
+
+        tl.last_frame_id = Some(10);
+
+        // When reconstructing frame 10, the delta for frame 10 should be IGNORED
+        // because its frame_id (10) is not > kf.frame_id (10).
+        let restored = tl.reconstruct(10).unwrap();
+        assert_eq!(
+            restored.ppu.frame_counter,
+            core.save_state().ppu.frame_counter
+        ); // NOT 999
+
+        // However, if we reconstruct frame 11, we should also test that the delta for frame 10 is applied
+        // Wait, if target is 11, kf is 10, delta.frame_id is 10. `delta.frame_id > kf.frame_id` (10 > 10) is false!
+        // So the mutant `replace > with >=` would apply the delta here too and incorrectly apply it.
+        tl.last_frame_id = Some(11);
+        let restored11 = tl.reconstruct(11).unwrap();
+        // Since delta.frame_id (10) is NOT > kf.frame_id (10), it should be skipped.
+        // If the mutant changes > to >=, it WOULD apply the delta, turning frame_counter to 999!
+        assert_eq!(
+            restored11.ppu.frame_counter,
+            core.save_state().ppu.frame_counter
+        );
+    }
+
+    #[test]
+    fn test_reconstruct_rejects_greater_than_last_frame() {
+        let core = make_core();
+        let mut tl = CompressedTimeline::new(3, policy());
+        tl.push(5, core.save_state());
+
+        // Reconstruct exact latest frame (5 <= 5)
+        assert!(tl.reconstruct(5).is_some());
+
+        // Reconstruct > latest frame
+        assert!(tl.reconstruct(6).is_none());
+    }
+
+    #[test]
     fn empty_timeline_returns_none() {
         let tl = CompressedTimeline::new(300, policy());
         assert!(tl.is_empty());
         assert!(tl.reconstruct(0).is_none());
+    }
+
+    #[test]
+    fn timeline_is_not_empty_after_push() {
+        let core = make_core();
+        let mut tl = CompressedTimeline::new(300, policy());
+        tl.push(0, core.save_state());
+        assert!(!tl.is_empty());
     }
 
     #[test]
@@ -225,5 +303,150 @@ mod tests {
         // Reconstruct frame 0 — should have frame_counter 0.
         let restored = tl.reconstruct(0).unwrap();
         assert_eq!(restored.ppu.frame_counter, 0);
+    }
+
+    #[test]
+    fn test_reconstruct_target_is_last_keyframe() {
+        let mut core = make_core();
+        let mut tl = CompressedTimeline::new(300, policy());
+
+        let snap0 = core.save_state();
+        tl.push(0, snap0);
+
+        // Push another frame to make sure it exists, but then we will reconstruct frame 0
+        core.execute(Command::StepFrame).unwrap();
+        let snap1 = core.save_state();
+        tl.push(1, snap1);
+
+        // Reconstruct exact keyframe (frame 0 is a keyframe)
+        let restored = tl.reconstruct(0).unwrap();
+        assert_eq!(restored.ppu.frame_counter, 0);
+    }
+
+    #[test]
+    fn test_reconstruct_target_needs_delta_replay() {
+        let mut core = make_core();
+        let mut tl = CompressedTimeline::new(300, policy());
+
+        let snap0 = core.save_state();
+        tl.push(0, snap0); // kf
+
+        core.execute(Command::StepFrame).unwrap();
+        let snap1 = core.save_state();
+        tl.push(1, snap1); // delta
+
+        core.execute(Command::StepFrame).unwrap();
+        let snap2 = core.save_state();
+        tl.push(2, snap2); // delta
+
+        // Target frame 1: needs to apply first delta but not second
+        let restored = tl.reconstruct(1).unwrap();
+        assert_eq!(restored.ppu.frame_counter, 1);
+
+        // Target frame 2: needs to apply both deltas
+        let restored2 = tl.reconstruct(2).unwrap();
+        assert_eq!(restored2.ppu.frame_counter, 2);
+    }
+
+    #[test]
+    fn test_prune_logic_pop_orphaned_deltas() {
+        let mut core = make_core();
+        // Policy: Every 1 frame is a keyframe for easy testing of pruning logic
+        let mut tl = CompressedTimeline::new(3, KeyframePolicy::new(1, 0));
+
+        // Push 4 frames into a capacity 3 timeline
+        tl.push(0, core.save_state()); // KF
+
+        core.execute(Command::StepFrame).unwrap();
+        tl.push(1, core.save_state()); // KF
+
+        core.execute(Command::StepFrame).unwrap();
+        tl.push(2, core.save_state()); // KF
+
+        core.execute(Command::StepFrame).unwrap();
+        tl.push(3, core.save_state()); // KF (Trigger prune, length becomes 4, max is 3)
+
+        // The first keyframe (frame 0) should be dropped because max_frames=3 and we pushed 4
+        // Length should be exactly 3
+        assert_eq!(tl.len(), 3);
+
+        // Frame 0 should no longer be reconstructible
+        assert!(tl.reconstruct(0).is_none());
+        // Frame 1 should be the oldest valid frame
+        assert!(tl.reconstruct(1).is_some());
+    }
+
+    #[test]
+    fn test_prune_drops_oldest_keyframe_retains_newer_deltas() {
+        let core = make_core();
+        // Policy: Every 1 frame is a keyframe? No, we want a keyframe, then another keyframe, then a delta.
+        // We'll use a custom sequence, but `push` uses `policy`.
+        // We can just construct a sequence where size > policy triggers a keyframe, or we use a tiny max_frames.
+        let mut tl = CompressedTimeline::new(3, KeyframePolicy::new(10, 0)); // Promote everything to keyframe if size > 0.
+        // Wait, if size is 0, it doesn't promote unless interval is reached.
+        // Let's manually manipulate the policy to force KF, KF, Delta, Delta...
+
+        // Actually, we can use a trick:
+        // push 0: KF0
+        // push 1: KF1 (if we force it, but how?)
+        // Let's just create a Timeline and manually insert items to test `prune` exactly.
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: core.save_state(),
+        });
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 2,
+            snapshot: core.save_state(),
+        });
+
+        let snap_delta = core.save_state();
+        let mut delta = FrameDelta::compute(&snap_delta, &snap_delta);
+        delta.frame_id = 3;
+        tl.deltas.push_back(delta);
+
+        assert_eq!(tl.len(), 3);
+
+        // Push one more frame to trigger prune.
+        // We want to trigger the `else` branch of prune: `self.deltas.front()` is either None or its frame_id >= next_kf_id.
+        // deltas.front is 3. next_kf_id is 2. So 3 >= 2. Thus it falls to `else`.
+        // It should pop KF0, and keep Delta3.
+        let snap4 = core.save_state();
+        tl.push(4, snap4); // This will add another entry, len becomes 4, max is 3, so prune runs.
+
+        assert_eq!(tl.len(), 3);
+
+        // KF0 should be gone
+        assert_eq!(tl.keyframes.front().unwrap().frame_id, 2);
+
+        // Delta3 should still be there
+        assert_eq!(tl.deltas.front().unwrap().frame_id, 3);
+    }
+
+    #[test]
+    fn test_prune_delta_boundary_conditions() {
+        let core = make_core();
+        let snap = core.save_state();
+        let mut tl = CompressedTimeline::new(3, policy());
+
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 0,
+            snapshot: snap.clone(),
+        });
+        tl.keyframes.push_back(Keyframe {
+            frame_id: 2,
+            snapshot: snap.clone(),
+        });
+
+        let mut delta = FrameDelta::compute(&snap, &snap);
+        delta.frame_id = 2; // Matches next_kf_id exactly.
+        tl.deltas.push_back(delta);
+
+        let snap3 = core.save_state();
+        tl.push(3, snap3); // Trigger prune. Length goes from 3 to 4, max is 3.
+
+        // delta.frame_id (2) is NOT < next_kf_id (2). So it goes to the else branch
+        // and drops KF 0. Then the inner loop while delta.frame_id < next_kf_id checks 2 < 2 (false).
+        // So Delta 2 is KEPT.
+        assert_eq!(tl.deltas.front().unwrap().frame_id, 2);
     }
 }

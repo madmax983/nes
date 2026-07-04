@@ -25,3 +25,11 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+
+## 2025-05-18 - Infinite loops during stream header parsing
+**Learning:** Network parser loops reading headers (like `while line != "\r\n"`) can generate equivalent or unkillable mutants if the condition is flipped (e.g. `line == "\r\n"`) because it creates an infinite loop if the EOF logic relies on other mechanisms, leading to a timeout rather than a test failure.
+**Action:** Isolate network loops in tests with timeouts to catch hangs, but realize that `==` to `!=` loop conditions might naturally be unkillable without explicit timeout assertions.
+
+## 2025-05-18 - Math operator mutations in nested numeric functions
+**Learning:** Functions doing signal processing or math (like correlation, RMS, FFT, windowing) often leave behind many unkillable mutants because slight shifts in math `(e.g., * to /)` don't trigger the explicit assertions if the assertions are relaxed or if the output space is too broad.
+**Action:** When testing complex mathematical properties, it's often more effective to generate explicitly precise expected values and strictly assert equality against those bounds, or to consider these mutants equivalent if the overall system logic is not compromised by the mathematical imprecision.

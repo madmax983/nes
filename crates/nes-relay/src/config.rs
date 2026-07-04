@@ -309,3 +309,31 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_parse_args {
+    use super::*;
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn parse_args_loops_multiple_args() {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let args = vec![
+                "--latency-ms".to_owned(),
+                "10".to_owned(),
+                "--jitter-ms".to_owned(),
+                "5".to_owned(),
+            ];
+            let parsed = parse_args(args).unwrap();
+            tx.send(parsed).unwrap();
+        });
+        let parsed = rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("timeout parsing arguments");
+        assert_eq!(parsed.link.latency_ms, 10);
+        assert_eq!(parsed.link.jitter_ms, 5);
+    }
+}
