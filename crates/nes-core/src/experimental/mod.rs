@@ -24,6 +24,8 @@ pub mod memory_heatmap;
 pub mod memory_visualizer;
 /// Renders nametable memory into visual representations.
 pub mod nametable_viewer;
+/// Visualizes the physical presence and density of sprites on the screen.
+pub mod oam_heatmap;
 /// Performs spatial queries against Object Attribute Memory (OAM).
 pub mod oam_spatial_query;
 /// Maps zone events to controller commands to create an auto-playing bot.
