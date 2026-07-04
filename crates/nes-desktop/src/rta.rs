@@ -1068,9 +1068,11 @@ impl RtaManager {
             calibration.record_frame(frame, &mut read_u8);
         }
 
-        // Avoids `Vec::new()` without capacity on the hot path (called every frame).
-        // RTA events per frame rarely exceed 2.
-        let mut events = Vec::<RtaEvent>::with_capacity(2);
+        // **⚡ Bolt Optimization:** Use `Vec::new()` instead of `Vec::with_capacity(2)` on this hot path.
+        // Even though capacity is small, `with_capacity` forces an immediate heap allocation every single frame.
+        // `Vec::new()` is completely free (zero allocations) and since events are exceedingly rare,
+        // this eliminates guaranteed heap allocations per frame.
+        let mut events = Vec::<RtaEvent>::new();
 
         self.tick_start(now, &mut read_u8, &mut events);
 
