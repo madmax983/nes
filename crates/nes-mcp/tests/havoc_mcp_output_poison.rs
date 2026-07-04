@@ -4,11 +4,6 @@ use std::thread;
 #[test]
 #[should_panic(expected = "output state lock")]
 fn havoc_test_poisoned_mutex_on_audio_panic() {
-    // If the closure passed to `publish_audio_with` panics, the Mutex holding
-    // the global output state becomes poisoned.
-    // Any subsequent access (like `audio_chunk`) will `expect` on the poisoned lock
-    // and crash the process.
-
     let t = thread::spawn(|| {
         publish_audio_with(256, |_| {
             panic!("Havoc closure panic");
