@@ -340,27 +340,25 @@ fn dispatch_overlay_command(
 fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<bool, String> {
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
+    let set_overlay = |open: bool, ctx: &mut AppContext<'_>| {
+        set_overlay_open(
+            ctx.overlay,
+            open,
+            ctx.core,
+            ctx.audio_output,
+            ctx.window,
+            ctx.session,
+        )
+    };
+
     match action {
         AppAction::ToggleOverlay => {
-            set_overlay_open(
-                ctx.overlay,
-                !ctx.overlay.is_open(),
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
+            let next = !ctx.overlay.is_open();
+            set_overlay(next, ctx)?;
             Ok(false)
         }
         AppAction::Resume => {
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
+            set_overlay(false, ctx)?;
             Ok(false)
         }
         AppAction::OpenCheats => {
@@ -370,14 +368,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
                 return Ok(false);
             }
             if !ctx.overlay.is_open() {
-                set_overlay_open(
-                    ctx.overlay,
-                    true,
-                    ctx.core,
-                    ctx.audio_output,
-                    ctx.window,
-                    ctx.session,
-                )?;
+                set_overlay(true, ctx)?;
             }
             ctx.overlay.open_cheats_panel();
             ctx.window.set_title(&window_title(ctx.session, true));
@@ -404,14 +395,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
             reset_ephemeral_state(ctx);
             resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
             ctx.overlay.clear_status_message();
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
+            set_overlay(false, ctx)?;
             Ok(false)
         }
         AppAction::SaveSlot(slot) => {
@@ -458,14 +442,7 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
                 .map_err(|err| format!("Reset failed: {err}"))?;
             reset_ephemeral_state(ctx);
             ctx.overlay.set_status_message("System reset");
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
+            set_overlay(false, ctx)?;
             Ok(false)
         }
         AppAction::Quit => Ok(true),

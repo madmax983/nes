@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring duplicate set_overlay_open logic]**
+**Learning:** Found massive boilerplate in `execute_app_action` in `crates/nes-desktop/src/main.rs` where several `AppAction` variants passed the exact same 5 arguments to `set_overlay_open(...)`.
+**Action:** Extracted a local closure `let set_overlay = |open: bool, ctx: &mut AppContext<'_>| { ... };` inside the function, eliminating the repetitive argument passing across `ToggleOverlay`, `Resume`, `OpenRom`, `OpenCheats`, and `Reset`.
