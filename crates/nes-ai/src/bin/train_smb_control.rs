@@ -84,18 +84,25 @@ fn build_summary_table(
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("Average Return"),
-        Cell::new(format!("{average_return:.2}")).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Checkpoints Written"),
-        Cell::new(checkpoint_paths_len.to_string()).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Artifacts Written"),
-        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Yellow),
-    ]);
+    let mut add_row = |name: &str, value: String, color: TableColor| {
+        table.add_row(vec![Cell::new(name), Cell::new(value).fg(color)]);
+    };
+
+    add_row(
+        "Average Return",
+        format!("{average_return:.2}"),
+        TableColor::Yellow,
+    );
+    add_row(
+        "Checkpoints Written",
+        checkpoint_paths_len.to_string(),
+        TableColor::Yellow,
+    );
+    add_row(
+        "Artifacts Written",
+        artifact_paths_len.to_string(),
+        TableColor::Yellow,
+    );
 
     table
 }

@@ -86,18 +86,17 @@ fn build_success_table(rom_hash: &str, out_path: &std::path::Path) -> Table {
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("ROM Hash"),
-        Cell::new(rom_hash).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Output Path"),
-        Cell::new(out_path.display().to_string()).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Status"),
-        Cell::new("Success").fg(TableColor::Green),
-    ]);
+    let mut add_row = |name: &str, value: String, color: TableColor| {
+        table.add_row(vec![Cell::new(name), Cell::new(value).fg(color)]);
+    };
+
+    add_row("ROM Hash", rom_hash.to_string(), TableColor::Green);
+    add_row(
+        "Output Path",
+        out_path.display().to_string(),
+        TableColor::Green,
+    );
+    add_row("Status", "Success".to_string(), TableColor::Green);
 
     table
 }

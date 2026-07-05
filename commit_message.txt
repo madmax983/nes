@@ -1,0 +1,6 @@
+⚒️ Forge: Refactor repetitive table row logic
+
+🗑️ Smell: Repeated constructions of `table.add_row(vec![Cell::new("Key"), Cell::new(value).fg(Color)])` across many files caused high vertical code length and violated DRY principles.
+✨ Solution: Extracted local closures `let mut add_row = |name, value, color| { ... }` in all table-building functions and replaced the repetitive inline vectors with clean, single-line calls.
+🧼 Benefit: Reduced boilerplate and cognitive overhead while keeping formatting highly localized. Strict structural changes only.
+🛡️ Verification: `cargo test --workspace` passed; no logic changed.

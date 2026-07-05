@@ -76,14 +76,20 @@ fn build_summary_table(average_return: f32, artifact_paths_len: usize) -> Table 
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("Average Return"),
-        Cell::new(format!("{average_return:.2}")).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Artifacts Written"),
-        Cell::new(artifact_paths_len.to_string()).fg(TableColor::Yellow),
-    ]);
+    let mut add_row = |name: &str, value: String, color: TableColor| {
+        table.add_row(vec![Cell::new(name), Cell::new(value).fg(color)]);
+    };
+
+    add_row(
+        "Average Return",
+        format!("{average_return:.2}"),
+        TableColor::Yellow,
+    );
+    add_row(
+        "Artifacts Written",
+        artifact_paths_len.to_string(),
+        TableColor::Yellow,
+    );
 
     table
 }

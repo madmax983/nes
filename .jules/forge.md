@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring repetitive table rows]**
+**Learning:** Found multiple places constructing CLI tables using repetitive blocks of `table.add_row(vec![Cell::new("Key"), Cell::new(value).fg(Color)])`. This creates a lot of vertical noise.
+**Action:** Extract a local helper closure `let mut add_row = |name: &str, value: String, color: TableColor| { table.add_row(vec![Cell::new(name), Cell::new(value).fg(color)]); };` and rewrite the blocks.

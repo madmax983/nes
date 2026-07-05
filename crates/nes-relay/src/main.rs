@@ -112,26 +112,31 @@ fn build_startup_table(args: &RelayArgs) -> Table {
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("Bind Address"),
-        Cell::new(&args.bind_addr).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Latency"),
-        Cell::new(format!("{}ms", args.link.latency_ms)).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Jitter"),
-        Cell::new(format!("{}ms", args.link.jitter_ms)).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Packet Loss"),
-        Cell::new(format!("{}%", args.link.loss_pct)).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Reorder"),
-        Cell::new(format!("{}%", args.link.reorder_pct)).fg(TableColor::Yellow),
-    ]);
+    let mut add_row = |name: &str, value: String, color: TableColor| {
+        table.add_row(vec![Cell::new(name), Cell::new(value).fg(color)]);
+    };
+
+    add_row("Bind Address", args.bind_addr.clone(), TableColor::Green);
+    add_row(
+        "Latency",
+        format!("{}ms", args.link.latency_ms),
+        TableColor::Yellow,
+    );
+    add_row(
+        "Jitter",
+        format!("{}ms", args.link.jitter_ms),
+        TableColor::Yellow,
+    );
+    add_row(
+        "Packet Loss",
+        format!("{}%", args.link.loss_pct),
+        TableColor::Yellow,
+    );
+    add_row(
+        "Reorder",
+        format!("{}%", args.link.reorder_pct),
+        TableColor::Yellow,
+    );
 
     table
 }

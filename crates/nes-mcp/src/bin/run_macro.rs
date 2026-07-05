@@ -118,34 +118,37 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("ROM"),
-        Cell::new(rom_name).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Mapper ID"),
-        Cell::new(rom_info.mapper_id.to_string()),
-    ]);
-    table.add_row(vec![
-        Cell::new("Status"),
-        Cell::new("Success").fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Frames Elapsed"),
-        Cell::new(frames_elapsed.to_string()).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Total CPU Cycles"),
-        Cell::new(core.total_cycles().to_string()).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Final PC"),
-        Cell::new(format!("${:04X}", core.cpu_pc())).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Final Controller State"),
-        Cell::new(format!("{:08b}", core.controller_bits())).fg(TableColor::Yellow),
-    ]);
+    let mut add_row = |name: &str, value: String, color: Option<TableColor>| {
+        let mut cell = Cell::new(value);
+        if let Some(c) = color {
+            cell = cell.fg(c);
+        }
+        table.add_row(vec![Cell::new(name), cell]);
+    };
+
+    add_row("ROM", rom_name.to_string(), Some(TableColor::Green));
+    add_row("Mapper ID", rom_info.mapper_id.to_string(), None);
+    add_row("Status", "Success".to_string(), Some(TableColor::Green));
+    add_row(
+        "Frames Elapsed",
+        frames_elapsed.to_string(),
+        Some(TableColor::Yellow),
+    );
+    add_row(
+        "Total CPU Cycles",
+        core.total_cycles().to_string(),
+        Some(TableColor::Yellow),
+    );
+    add_row(
+        "Final PC",
+        format!("${:04X}", core.cpu_pc()),
+        Some(TableColor::Yellow),
+    );
+    add_row(
+        "Final Controller State",
+        format!("{:08b}", core.controller_bits()),
+        Some(TableColor::Yellow),
+    );
 
     println!("\n{table}");
 

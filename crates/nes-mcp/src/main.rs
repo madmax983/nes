@@ -94,18 +94,21 @@ fn run() -> Result<(), McpError> {
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("Protocol Version"),
-        Cell::new(DEFAULT_PROTOCOL_VERSION).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Tools Loaded"),
-        Cell::new(tool_catalog().len().to_string()).fg(TableColor::Yellow),
-    ]);
-    table.add_row(vec![
-        Cell::new("Status"),
-        Cell::new("Listening on stdio").fg(TableColor::Green),
-    ]);
+    let mut add_row = |name: &str, value: &str, color: TableColor| {
+        table.add_row(vec![Cell::new(name), Cell::new(value).fg(color)]);
+    };
+
+    add_row(
+        "Protocol Version",
+        DEFAULT_PROTOCOL_VERSION,
+        TableColor::Yellow,
+    );
+    add_row(
+        "Tools Loaded",
+        &tool_catalog().len().to_string(),
+        TableColor::Yellow,
+    );
+    add_row("Status", "Listening on stdio", TableColor::Green);
 
     eprintln!("{}", "nes-mcpd".with(Color::Cyan).bold());
     eprintln!("\n{table}");
