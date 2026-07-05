@@ -13,7 +13,13 @@ cargo run -p nes-ai --bin prepare_smb_control -- `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
 ```
 
-Then copy `config/ai/profiles/smb-control.example.toml` to `config/ai/profiles/smb-control.toml` and point `rom_path` / `snapshot_path` at your local files.
+Then copy the example configuration profile:
+
+```powershell
+cp config/ai/profiles/smb-control.example.toml config/ai/profiles/smb-control.toml
+```
+
+*(Note: the example defaults to using the bundled `./roms/homebrew/homebrew.nes` ROM.)*
 
 ## Training
 

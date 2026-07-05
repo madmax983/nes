@@ -161,14 +161,17 @@ cargo run -p nes-ai --bin prepare_smb_control -- `
   ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
   ./artifacts/ai/snapshots/smb-1-1-control.state.json
 
-# 2. Train from the local profile
+# 2. Copy the example profile
+cp config/ai/profiles/smb-control.example.toml config/ai/profiles/smb-control.toml
+
+# 3. Train from the local profile
 cargo run -p nes-ai --bin train_smb_control -- `
   ./config/ai/profiles/smb-control.toml `
   4 `
   ./artifacts/ai/checkpoints `
   ./artifacts/ai/eval
 
-# 3. Evaluate a saved checkpoint base path (the recorder appends .mpk)
+# 4. Evaluate a saved checkpoint base path (the recorder appends .mpk)
 cargo run -p nes-ai --bin eval_smb_control -- `
   ./config/ai/profiles/smb-control.toml `
   ./artifacts/ai/checkpoints/policy-update-0002 `
