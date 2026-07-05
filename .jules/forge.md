@@ -1,3 +1,7 @@
+**[Extracting RtaManager initialization into init_rta_manager]**
+**Learning:** Found a "God Object" initialization sequence inside `nes-desktop/src/main.rs`. The `run` function contained over 60 lines solely dedicated to parsing RTA configurations, creating directories, handling calibration rules, loading profiles, mapping errors, and initializing `RtaManager`. This made `run` incredibly long and difficult to scan.
+**Action:** Extracted the entire block into a private helper function `init_rta_manager` that takes the `RtaConfig` and `rom_hash` and returns a `Result<Option<RtaManager>, String>`. This flattens the `run` method significantly and cleanly encapsulates the startup logic.
+
 **[Refactoring redundant controller input updates in nes-core api.rs]
 **Learning:** Found massive boilerplate in the `execute` method of `api.rs` where every controller state modification command manually called `self.ports.set_controller_bits` and `self.sync_ppu_register_image()`. This increased risk of forgetting the sync call for future input commands.
 **Action:** Flattened the execution block using early returns inside the `match` expression for non-input commands, letting input commands evaluate to a `(player, bits)` tuple. The actual state modification and synchronization is now performed exactly once at the bottom of the function.**Context Struct Extraction for Action Dispatchers**
