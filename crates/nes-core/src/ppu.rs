@@ -114,11 +114,7 @@ pub struct PpuSnapshot {
     /// OAM address pointer.
     pub oam_addr: u8,
     /// OAM data.
-    #[serde(
-        serialize_with = "crate::serde_array::serialize_u8_array",
-        deserialize_with = "crate::serde_array::deserialize_u8_array"
-    )]
-    pub oam: [u8; 256],
+    pub oam: Box<[u8]>,
     /// Dot index within current frame.
     pub cycle_in_frame: u32,
     /// Current scanline.
@@ -134,11 +130,7 @@ pub struct PpuSnapshot {
     /// Cartridge mirroring mode.
     pub mirroring: NametableMirroring,
     /// CHR backing store.
-    #[serde(
-        serialize_with = "crate::serde_array::serialize_u8_array",
-        deserialize_with = "crate::serde_array::deserialize_u8_array"
-    )]
-    pub chr: [u8; CHR_BYTES],
+    pub chr: Box<[u8]>,
     /// Whether CHR writes are allowed (CHR RAM mode).
     pub chr_writable: bool,
     /// CHR view used by the live background renderer.
@@ -156,11 +148,7 @@ pub struct PpuSnapshot {
     /// Whether live background state is currently following a mid-frame $2006 split.
     live_bg_tracks_vram_addr: bool,
     /// Internal nametable RAM.
-    #[serde(
-        serialize_with = "crate::serde_array::serialize_u8_array",
-        deserialize_with = "crate::serde_array::deserialize_u8_array"
-    )]
-    pub nametable_ram: [u8; NAMETABLE_RAM_BYTES],
+    pub nametable_ram: Box<[u8]>,
     /// Palette RAM.
     pub palette_ram: [u8; PALETTE_RAM_BYTES],
     /// PPUSCROLL/PPUADDR write toggle.
@@ -283,7 +271,7 @@ struct SpriteScanlineCache {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PendingLiveChrWindowUpdate {
     due_cycle_in_frame: u32,
-    chr: Vec<u8>,
+    chr: Box<[u8]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -388,7 +376,7 @@ impl Ppu {
             self.pending_live_chr_updates
                 .push_back(PendingLiveChrWindowUpdate {
                     due_cycle_in_frame: self.cycle_in_frame().saturating_add(16),
-                    chr: self.chr.to_vec(),
+                    chr: Box::from(&self.chr[..]),
                 });
         } else {
             *self.live_chr = self.chr;
@@ -451,7 +439,8 @@ impl Ppu {
         self.mask = snapshot.mask;
         self.status = snapshot.status;
         self.oam_addr = snapshot.oam_addr;
-        self.oam = snapshot.oam;
+        let oam_len = snapshot.oam.len().min(256);
+        self.oam[..oam_len].copy_from_slice(&snapshot.oam[..oam_len]);
         let (scanline, dot) = Self::scanline_dot_from_cycle(snapshot.cycle_in_frame);
         self.scanline = scanline;
         self.dot = dot;
@@ -459,7 +448,8 @@ impl Ppu {
         self.frame_counter = snapshot.frame_counter;
         self.nmi_pending = snapshot.nmi_pending;
         self.mirroring = snapshot.mirroring;
-        self.chr = snapshot.chr;
+        let chr_len = snapshot.chr.len().min(CHR_BYTES);
+        self.chr[..chr_len].copy_from_slice(&snapshot.chr[..chr_len]);
         self.chr_writable = snapshot.chr_writable;
         let mut live_chr = Box::new([0; CHR_BYTES]);
         let live_chr_len = snapshot.live_chr.len().min(CHR_BYTES);
@@ -471,7 +461,8 @@ impl Ppu {
         self.live_scroll_y = snapshot.live_scroll_y;
         self.pending_live_bg_updates = snapshot.pending_live_bg_updates;
         self.live_bg_tracks_vram_addr = snapshot.live_bg_tracks_vram_addr;
-        self.nametable_ram = snapshot.nametable_ram;
+        let nt_len = snapshot.nametable_ram.len().min(NAMETABLE_RAM_BYTES);
+        self.nametable_ram[..nt_len].copy_from_slice(&snapshot.nametable_ram[..nt_len]);
         self.palette_ram = snapshot.palette_ram;
         self.write_toggle = snapshot.write_toggle;
         self.vram_addr = snapshot.vram_addr;
@@ -503,7 +494,7 @@ impl Ppu {
             mask: self.mask,
             status: self.status,
             oam_addr: self.oam_addr,
-            oam: self.oam,
+            oam: Box::from(&self.oam[..]),
             cycle_in_frame: self.cycle_in_frame(),
             scanline: self.scanline,
             dot: self.dot,
@@ -511,7 +502,7 @@ impl Ppu {
             frame_counter: self.frame_counter,
             nmi_pending: self.nmi_pending,
             mirroring: self.mirroring,
-            chr: self.chr,
+            chr: Box::from(&self.chr[..]),
             chr_writable: self.chr_writable,
             live_chr: self.live_chr.to_vec(),
             pending_live_chr_updates: self.pending_live_chr_updates.clone(),
@@ -520,7 +511,7 @@ impl Ppu {
             live_scroll_y: self.live_scroll_y,
             pending_live_bg_updates: self.pending_live_bg_updates.clone(),
             live_bg_tracks_vram_addr: self.live_bg_tracks_vram_addr,
-            nametable_ram: self.nametable_ram,
+            nametable_ram: Box::from(&self.nametable_ram[..]),
             palette_ram: self.palette_ram,
             write_toggle: self.write_toggle,
             vram_addr: self.vram_addr,

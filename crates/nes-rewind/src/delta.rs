@@ -127,7 +127,7 @@ impl FieldDelta {
     /// Compute the field-level delta between two snapshots.
     #[must_use]
     pub fn compute(before: &CoreSnapshot, after: &CoreSnapshot) -> Self {
-        let cpu_regs = (before.cpu != after.cpu).then_some(after.cpu);
+        let cpu_regs = (before.cpu != after.cpu).then_some(after.cpu.clone());
 
         let ppu_ctrl = {
             let b = [
@@ -203,7 +203,7 @@ impl FieldDelta {
     /// Apply this field delta to a mutable snapshot in-place.
     pub fn apply(&self, target: &mut CoreSnapshot) {
         if let Some(cpu) = &self.cpu_regs {
-            target.cpu = *cpu;
+            target.cpu = cpu.clone();
         }
         if let Some([ctrl, mask, status, oam_addr]) = self.ppu_ctrl {
             target.ppu.ctrl = ctrl;

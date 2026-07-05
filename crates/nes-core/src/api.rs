@@ -503,7 +503,10 @@ impl CoreSnapshot {
             }
             _ => {
                 if let Some(mapper) = self.mapper.as_mut() {
-                    mapper.apply_delta(delta, &self.ppu.chr);
+                    let mut chr_array = [0; CHR_8K_BYTES];
+                    let len = self.ppu.chr.len().min(CHR_8K_BYTES);
+                    chr_array[..len].copy_from_slice(&self.ppu.chr[..len]);
+                    mapper.apply_delta(delta, &chr_array);
                 } else {
                     debug_assert!(
                         false,
@@ -993,7 +996,7 @@ impl NesCore {
         self.scheduler.restore(snapshot.scheduler);
         self.ppu.restore(snapshot.ppu.clone());
         self.apu.restore(snapshot.apu.clone());
-        self.cpu.restore(snapshot.cpu);
+        self.cpu.restore(snapshot.cpu.clone());
         self.ports.controller_strobe = snapshot.controller_strobe;
         self.ports.controllers[0].shift = snapshot.controller_shift;
         self.ports.controllers[1].shift = snapshot.controller2_shift;

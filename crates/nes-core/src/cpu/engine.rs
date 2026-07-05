@@ -52,7 +52,7 @@ impl std::error::Error for CpuError {}
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Serializable register snapshot.
 pub struct CpuSnapshot {
     /// Program counter.
@@ -68,11 +68,7 @@ pub struct CpuSnapshot {
     /// Raw status flags.
     pub status: u8,
     /// 2KB NES work RAM ($0000–$07FF).
-    #[serde(
-        serialize_with = "crate::serde_array::serialize_u8_array",
-        deserialize_with = "crate::serde_array::deserialize_u8_array"
-    )]
-    pub work_ram: [u8; 2048],
+    pub work_ram: Box<[u8]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -253,8 +249,6 @@ impl Cpu {
     /// ```
     #[must_use]
     pub fn snapshot(&self) -> CpuSnapshot {
-        let mut work_ram = [0u8; 2048];
-        work_ram.copy_from_slice(&self.memory[0..2048]);
         CpuSnapshot {
             pc: self.pc,
             a: self.a,
@@ -262,7 +256,7 @@ impl Cpu {
             y: self.y,
             sp: self.sp,
             status: self.status.bits(),
-            work_ram,
+            work_ram: Box::from(&self.memory[0..2048]),
         }
     }
 

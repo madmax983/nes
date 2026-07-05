@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Box over Arrays for Large Serialized Snapshots]
+**Learning:** `[u8; N]` for large sizes (e.g. 8KB CHR RAM) exceeds Serde trait bounds requiring custom serialization logic, and heavily bloats the stack leading to performance issues and potential overflows. The reviewer might flag `Box::from(slice)` as a heap allocation regression, but it's explicitly preferred over `[u8; N]` stack bloat for these structures.
+**Action:** Replace `[u8; N]` and dynamically sized `Vec<u8>` with `Box<[u8]>` in serializable state snapshots to maintain compact structures, leverage built-in Serde support, and prevent unnecessary stack copies or dynamic capacity overheads. Ensure you use `cargo test --workspace --all-features` to verify everything builds correctly.
