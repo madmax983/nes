@@ -1166,14 +1166,12 @@ impl RtaManager {
     where
         F: FnMut(u16) -> u8,
     {
-        let Some(runtime) = self
-            .triggers
-            .iter_mut()
-            .find_map(|(s, r)| if *s == slot { Some(r) } else { None })
-        else {
-            return false;
-        };
-        runtime.evaluate(&mut read_u8)
+        for (s, runtime) in &mut self.triggers {
+            if *s == slot {
+                return runtime.evaluate(&mut read_u8);
+            }
+        }
+        false
     }
 
     /// Acts as the strict referee, penalizing actions that compromise the run's legitimacy.
