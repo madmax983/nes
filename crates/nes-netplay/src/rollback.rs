@@ -694,9 +694,12 @@ impl RollbackEngine {
         let snapshot = self
             .snapshots
             .get(&start_frame)
-            .cloned()
             .ok_or(RollbackError::MissingSnapshot(start_frame))?;
-        core.load_state(&snapshot);
+        // ⚡ Bolt: Removed `.cloned()` to prevent an unnecessary heap allocation on the hot path.
+        // Non-lexical lifetimes (NLL) ensure this immutable borrow of `self.snapshots` is dropped
+        // immediately after `core.load_state`, allowing the subsequent mutable borrow by
+        // `self.clear_from` to succeed without fighting the borrow checker.
+        core.load_state(snapshot);
         self.clear_from(start_frame);
 
         for frame in start_frame..self.next_frame {
