@@ -225,7 +225,10 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
 fn build_summary_table(rows: Vec<RowData>) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
+        .apply_modifier(comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("ROM").fg(TableColor::Cyan),
         Cell::new("Status").fg(TableColor::Cyan),
