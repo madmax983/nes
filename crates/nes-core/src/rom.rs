@@ -343,10 +343,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_ines_nes2_size_encoding() {
+    fn test_parse_ines_nes2_size_encoding_is_rejected() {
         let mut bytes = [0; 32];
         bytes[0..4].copy_from_slice(&INES_MAGIC);
+        bytes[4] = 1; // 1 PRG bank to avoid MissingPrgRom
         bytes[7] = 0b0000_1000; // NES 2.0 marker
+
         bytes[9] = 0x0F; // PRG MSB == 0x0F
         let err = parse_ines(&bytes).unwrap_err();
         assert_eq!(err, RomError::UnsupportedNes2SizeEncoding);
@@ -354,6 +356,10 @@ mod tests {
         bytes[9] = 0xF0; // CHR MSB == 0x0F
         let err2 = parse_ines(&bytes).unwrap_err();
         assert_eq!(err2, RomError::UnsupportedNes2SizeEncoding);
+
+        bytes[9] = 0xFF; // PRG and CHR MSB == 0x0F
+        let err3 = parse_ines(&bytes).unwrap_err();
+        assert_eq!(err3, RomError::UnsupportedNes2SizeEncoding);
     }
 
     #[test]

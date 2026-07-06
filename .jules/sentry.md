@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2026-05-18 - [Coverage] Testing Explicit Branch Overlaps in ROM Parsers
+**Learning:** Checking for single failure conditions (like `prg_msb == 0x0F`) in multi-condition branches (like `if prg_msb == 0x0F || chr_msb == 0x0F`) leaves the alternative branch (e.g., `chr_msb == 0x0F`) uncovered, which can mask bugs if the logic changes to `&&`.
+**Action:** When writing tests for multi-condition logic, explicitly construct and assert test cases that trigger every distinct sub-condition to ensure full coverage of the logical OR/AND boundary.

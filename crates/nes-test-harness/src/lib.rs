@@ -34,27 +34,42 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// Represents a single write operation to an APU register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle on which the write occurred.
     pub cpu_cycle: u64,
+    /// The 16-bit address of the APU register.
     pub addr: u16,
+    /// The 8-bit value written to the register.
     pub value: u8,
 }
 
+/// Statistics calculated from a 16-bit PCM audio waveform.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
+    /// The number of samples processed.
     pub sample_count: usize,
+    /// The Root Mean Square (RMS) volume of the audio.
     pub rms: f64,
+    /// The maximum absolute amplitude found in the samples.
     pub peak: i16,
+    /// The average amplitude of the samples.
     pub dc_offset: f64,
+    /// The proportion of samples that reach or exceed the maximum possible amplitude.
     pub clipping_ratio: f64,
 }
 
+/// Results of comparing two audio waveforms.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
+    /// The number of samples compared.
     pub samples_compared: usize,
+    /// The Pearson correlation coefficient between the two waveforms.
     pub correlation: f64,
+    /// The ratio of the Root Mean Square (RMS) volume of the first waveform to the second.
     pub rms_ratio: f64,
+    /// The mean absolute difference in logarithmic magnitude (dB) across the frequency spectrum.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -97,6 +112,7 @@ pub fn collect_apu_register_writes(
     Ok(writes)
 }
 
+/// Computes a lightweight rolling hash mapping the precise sequence of APU register writes.
 #[must_use]
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -177,6 +193,7 @@ pub fn capture_audio_window(
         .map_err(|err| format!("audio capture failed after warmup: {err}"))
 }
 
+/// Computes a lightweight rolling hash of a 16-bit PCM audio waveform.
 #[must_use]
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -187,6 +204,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
     hash
 }
 
+/// Calculates comprehensive statistics for a 16-bit PCM audio waveform.
 #[must_use]
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
@@ -225,6 +243,7 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
     }
 }
 
+/// Calculates the Root Mean Square (RMS) envelope of a 16-bit PCM audio waveform over a sliding window.
 #[must_use]
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
@@ -327,6 +346,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     Ok(samples)
 }
 
+/// Compares two 16-bit PCM audio waveforms and returns a structured analysis of their similarity.
 #[must_use]
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
@@ -372,6 +392,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
     }
 }
 
+/// Calculates the logarithmic magnitude (in decibels) of the frequency spectrum for a 16-bit PCM audio waveform.
 #[must_use]
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
@@ -414,6 +435,7 @@ fn hann_window(idx: usize, len: usize) -> f64 {
     0.5 - 0.5 * phase.cos()
 }
 
+/// Extracts the mapper ID from the header of an iNES/NES 2.0 ROM image.
 #[must_use]
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
@@ -431,6 +453,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     }
 }
 
+/// Checks if the provided mapper ID is currently supported by the emulator core.
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(mapper_id, 0 | 1 | 2 | 4)
