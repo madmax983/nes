@@ -1376,7 +1376,10 @@ fn build_startup_table(
     rta_manager: Option<&RtaManager>,
 ) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
+        .apply_modifier(comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
