@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**Flattening God Functions in CPU Engine**
+**Learning:** The `step_with_trace_and_cycles` function in `crates/nes-core/src/cpu/engine.rs` became a massive "God Function" by inlining address decoding logic for dozens of unofficial instructions (like LAX and SAX), duplicating identical 60-line match statements for each instruction type.
+**Action:** Extract repetitive structural match statements (like indexing modes for reads vs. writes) into isolated helper functions (`decode_unofficial_read_addressing`, `decode_unofficial_write_addressing`) that return the computed address and instruction length, replacing 60-line blocks with single function calls.
