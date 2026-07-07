@@ -2221,4 +2221,42 @@ mod tests_rom_loader_internal {
             CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
         ));
     }
+
+    #[test]
+    fn test_controller_strobe_logic() {
+        let mut nes = NesCore::default();
+
+        nes.execute(Command::PressButton(Button::A)).unwrap();
+        nes.execute(Command::PressButton(Button::B)).unwrap();
+
+        nes.write_cpu_bus(0x4016, 1);
+
+        let val1 = nes.read_memory(0x4016);
+        let val2 = nes.read_memory(0x4016);
+        assert_ne!(val1 & 0x01, 0, "A should be 1 when strobe high");
+        assert_ne!(val2 & 0x01, 0, "A should still be 1, no shift");
+
+        nes.write_cpu_bus(0x4016, 0); // Unset strobe
+
+        let val1 = nes.read_memory(0x4016); // Reads A
+        nes.apply_cpu_read_side_effect(0x4016); // Side effect advances shift register
+
+        let val2 = nes.read_memory(0x4016); // Reads B
+        nes.apply_cpu_read_side_effect(0x4016);
+
+        assert_ne!(val1 & 0x01, 0, "A should be 1");
+        assert_ne!(val2 & 0x01, 0, "B should be 1");
+
+        let val3 = nes.read_memory(0x4016); // Select
+        assert_eq!(val3 & 0x01, 0, "Select should be 0");
+    }
+
+    #[test]
+    fn test_core_speed() {
+        let mut nes = NesCore::default();
+        nes.execute(Command::SetSpeed(2000)).unwrap();
+        assert_eq!(nes.speed_permille, 2000);
+        let res = nes.execute(Command::SetSpeed(0));
+        assert!(res.is_err());
+    }
 }

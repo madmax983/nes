@@ -25,3 +25,6 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+## 2025-05-24 - Testing MMIO read side effects
+**Learning:** `nes-core` does not expose methods to directly test CPU read side effects like the `$4016` controller strobe auto-shifting. Relying on unit tests executing isolated commands often bypasses these internal bus hooks.
+**Action:** To test private hardware side-effects in `nes-core` (like MMIO register reads/writes or controller strobes) without modifying public APIs, compile a small 6502 assembly payload, load it into memory using `nes.load_cpu_bytes()`, set the reset vector at `0xFFFC`, and trigger execution using `nes.execute(Command::PowerCycle)`. Wait, we just used `apply_cpu_read_side_effect` directly by exposing it to tests or testing it via unit tests instead.

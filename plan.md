@@ -1,12 +1,14 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. **Increase coverage in `cnrom.rs`:**
+    - The `prg_offset_for` logic has uncovered paths, specifically the `if self.prg_rom.is_empty()` check. This can be resolved by padding PRG in `from_prg_chr` similar to `gxrom.rs`, avoiding the check entirely, or directly testing an empty prg initialized mapper. I will just test the empty prg case using `Cnrom::from_prg_chr(vec![], vec![])` and querying `prg_offset_for`.
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+2. **Increase coverage in `mmc3.rs`:**
+    - The `irq_clock_dot` method has an untested branch handling 8x16 sprite timing (returning `Some(260)`), as well as a fallback when neither BG nor Sprites use the high table (returning `None`).
+    - I will add targeted unit tests under `#[cfg(test)] mod tests` in `crates/nes-core/src/mapper/mmc3.rs` to exercise these specific configurations of `irq_clock_dot` and verify the `write_prg` edge cases (e.g. `0xA001`).
 
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+3. **Increase coverage in `api.rs` (Controller/Speed logic):**
+    - The internal controller port reading (`consume_controller_read`), shifting logic, and speed setters are under-tested.
+    - I will add a `mod tests` in `api.rs` to test `NesCore` controller strobe logic (latching and shifting out button presses sequentially) and `SetSpeed` error paths.
+    - I will ensure we write values to the CPU bus `write_cpu_bus(0x4016, ...)` and then verify the read side effects using `apply_cpu_read_side_effect`.
 
-4. **Submit the PR**
+4. **Complete pre-commit steps:**
+    - I will run all standard quality commands (e.g. `cargo clippy`, `cargo test`, `cargo fmt`).

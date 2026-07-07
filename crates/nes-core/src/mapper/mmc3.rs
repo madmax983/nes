@@ -718,3 +718,36 @@ mod more_tests {
         assert!(!state.irq_pending);
     }
 }
+
+#[cfg(test)]
+mod extra_tests {
+    use super::*;
+
+    #[test]
+    fn test_irq_clock_dot_8x16_sprites() {
+        assert_eq!(Mmc3::irq_clock_dot(PPUCTRL_SPRITE_SIZE_8X16), Some(260));
+    }
+
+    #[test]
+    fn test_irq_clock_dot_bg_and_sprite_high() {
+        assert_eq!(
+            Mmc3::irq_clock_dot(PPUCTRL_BG_TABLE_ADDR | PPUCTRL_SPRITE_TABLE_ADDR),
+            None
+        );
+    }
+
+    #[test]
+    fn test_irq_clock_dot_neither_high() {
+        assert_eq!(Mmc3::irq_clock_dot(0), None);
+    }
+
+    #[test]
+    fn test_write_prg_ram_protect() {
+        let mut mapper = Mmc3::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![0; 8 * 1024],
+            NametableMirroring::Vertical,
+        );
+        mapper.write_prg(0xA001, 0xFF); // Currently ignored but should not panic
+    }
+}
