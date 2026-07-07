@@ -1,6 +1,19 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Returns the absolute path where the default `homebrew.nes` ROM should reside within the workspace.
+///
+/// This provides a standardized file location so tests and tools know exactly where to write
+/// or read the generated test ROM.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
