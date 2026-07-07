@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring deeply nested command blocks and loops]**
+**Learning:** Found repetitive match arms inside `dispatch_overlay_command` that implemented complex state logic for cheaps, inflating the dispatch function's line count. Also found a verbose `loop` paired with `try_recv()` that manually extracted messages and used an `else { break }` guard clause.
+**Action:** Extract the complex internal logic of `match` arms into named, pure helper functions (e.g. `handle_toggle_cheat`). For polling non-blocking channels iteratively, prefer replacing a `loop` block with a `while let Some(...) = match ...` to naturally break the loop when no further items are queued, flattening error handling in the process.

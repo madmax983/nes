@@ -257,84 +257,88 @@ fn dispatch_app_action(
     }
 }
 
+fn handle_toggle_cheat(index: usize, ctx: &mut AppContext<'_>) {
+    let Some(raw_code) = ctx
+        .session_cheats
+        .entries()
+        .get(index)
+        .map(|entry| entry.raw_code.clone())
+    else {
+        ctx.overlay
+            .set_status_message(format!("No cheat entry exists at index {index}"));
+        ctx.window.request_redraw();
+        return;
+    };
+    match ctx.session_cheats.toggle(index) {
+        Ok(()) => {
+            if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
+                ctx.overlay.set_status_message(err);
+            } else {
+                let enabled = ctx
+                    .session_cheats
+                    .entries()
+                    .get(index)
+                    .is_some_and(|entry| entry.enabled);
+                ctx.overlay.set_status_message(format!(
+                    "[cheat] {} {raw_code}",
+                    if enabled { "enabled" } else { "disabled" }
+                ));
+            }
+        }
+        Err(err) => ctx.overlay.set_status_message(err.to_string()),
+    }
+    ctx.window.request_redraw();
+}
+
+fn handle_remove_cheat(index: usize, ctx: &mut AppContext<'_>) {
+    match ctx.session_cheats.remove(index) {
+        Ok(removed) => {
+            if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
+                ctx.overlay.set_status_message(err);
+            } else {
+                ctx.overlay
+                    .set_status_message(format!("[cheat] removed {}", removed.raw_code));
+            }
+        }
+        Err(err) => ctx.overlay.set_status_message(err.to_string()),
+    }
+    ctx.window.request_redraw();
+}
+
+fn handle_submit_cheat_code(raw_code: String, ctx: &mut AppContext<'_>) {
+    match ctx.session_cheats.add(&raw_code) {
+        Ok(()) => {
+            if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
+                ctx.overlay.set_status_message(err);
+            } else {
+                let new_index = ctx.session_cheats.len().saturating_sub(1);
+                ctx.overlay.close_add_cheat_modal();
+                ctx.overlay.focus_cheat(new_index);
+                ctx.overlay.set_status_message(format!(
+                    "[cheat] added {}",
+                    ctx.session_cheats.entries()[new_index].raw_code
+                ));
+            }
+        }
+        Err(err) => ctx
+            .overlay
+            .set_status_message(format!("Invalid cheat code '{}': {err}", raw_code.trim())),
+    }
+    ctx.window.request_redraw();
+}
+
 fn dispatch_overlay_command(
     command: OverlayCommand,
     ctx: &mut AppContext<'_>,
     control_flow: &mut ControlFlow,
 ) -> bool {
     match command {
-        OverlayCommand::AppAction(action) => dispatch_app_action(action, ctx, control_flow),
-        OverlayCommand::ToggleCheat(index) => {
-            let Some(raw_code) = ctx
-                .session_cheats
-                .entries()
-                .get(index)
-                .map(|entry| entry.raw_code.clone())
-            else {
-                ctx.overlay
-                    .set_status_message(format!("No cheat entry exists at index {index}"));
-                ctx.window.request_redraw();
-                return false;
-            };
-            match ctx.session_cheats.toggle(index) {
-                Ok(()) => {
-                    if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
-                        ctx.overlay.set_status_message(err);
-                    } else {
-                        let enabled = ctx
-                            .session_cheats
-                            .entries()
-                            .get(index)
-                            .is_some_and(|entry| entry.enabled);
-                        ctx.overlay.set_status_message(format!(
-                            "[cheat] {} {raw_code}",
-                            if enabled { "enabled" } else { "disabled" }
-                        ));
-                    }
-                }
-                Err(err) => ctx.overlay.set_status_message(err.to_string()),
-            }
-            ctx.window.request_redraw();
-            false
-        }
-        OverlayCommand::RemoveCheat(index) => {
-            match ctx.session_cheats.remove(index) {
-                Ok(removed) => {
-                    if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
-                        ctx.overlay.set_status_message(err);
-                    } else {
-                        ctx.overlay
-                            .set_status_message(format!("[cheat] removed {}", removed.raw_code));
-                    }
-                }
-                Err(err) => ctx.overlay.set_status_message(err.to_string()),
-            }
-            ctx.window.request_redraw();
-            false
-        }
-        OverlayCommand::SubmitCheatCode(raw_code) => {
-            match ctx.session_cheats.add(&raw_code) {
-                Ok(()) => {
-                    if let Err(err) = apply_session_cheats(ctx.core, ctx.session_cheats) {
-                        ctx.overlay.set_status_message(err);
-                    } else {
-                        let new_index = ctx.session_cheats.len().saturating_sub(1);
-                        ctx.overlay.close_add_cheat_modal();
-                        ctx.overlay.focus_cheat(new_index);
-                        ctx.overlay.set_status_message(format!(
-                            "[cheat] added {}",
-                            ctx.session_cheats.entries()[new_index].raw_code
-                        ));
-                    }
-                }
-                Err(err) => ctx
-                    .overlay
-                    .set_status_message(format!("Invalid cheat code '{}': {err}", raw_code.trim())),
-            }
-            ctx.window.request_redraw();
-            false
-        }
+        OverlayCommand::AppAction(action) => return dispatch_app_action(action, ctx, control_flow),
+        OverlayCommand::ToggleCheat(index) => handle_toggle_cheat(index, ctx),
+        OverlayCommand::RemoveCheat(index) => handle_remove_cheat(index, ctx),
+        OverlayCommand::SubmitCheatCode(raw_code) => handle_submit_cheat_code(raw_code, ctx),
     }
+    false
 }
 
 fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<bool, String> {
@@ -1107,18 +1111,14 @@ fn run() -> Result<(), String> {
                         return;
                     }
 
-                    loop {
-                        let message = match client.try_recv() {
-                            Ok(next) => next,
-                            Err(err) => {
-                                eprintln!("Netplay receive failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                        };
-                        let Some(message) = message else {
-                            break;
-                        };
+                    while let Some(message) = match client.try_recv() {
+                        Ok(next) => next,
+                        Err(err) => {
+                            eprintln!("Netplay receive failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                    } {
                         if let Err(err) = crate::netplay::handle_netplay_server_message(
                             message,
                             rollback_engine,
