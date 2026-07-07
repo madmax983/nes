@@ -1,16 +1,16 @@
-use nes_mcp::{frame_chunk, publish_frame_with};
+use nes_mcp::{audio_chunk, publish_audio_with};
 use std::sync::mpsc;
 use std::time::Duration;
 use std::thread;
 
 #[test]
-fn havoc_test_publish_frame_deadlock() {
+fn havoc_test_publish_audio_deadlock() {
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
-        publish_frame_with(256, 240, |_| {
+        publish_audio_with(256, |_| {
             // This attempts to acquire the lock again, deadlocking the thread!
-            let _ = frame_chunk(0);
+            let _ = audio_chunk(0);
         });
         let _ = tx.send(());
     });
