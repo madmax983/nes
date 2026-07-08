@@ -14,10 +14,10 @@ use crate::cheat_codes::{CheatCode, CheatCodeError};
 use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuMmioRead, CpuSnapshot, CpuWrite};
 use crate::mapper::{
     Axrom, AxromState, Camerica, CamericaState, Cnrom, CnromState, ColorDreams, ColorDreamsState,
-    Fme7, Fme7State, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State, Namco108, Namco108State,
-    Nrom, Uxrom, UxromState,
+    Fme7, Fme7State, Gxrom, GxromState, Mmc1, Mmc1State, Mmc2, Mmc2State, Mmc3, Mmc3State, Mmc4,
+    Mmc4State, Namco108, Namco108State, Nrom, Uxrom, UxromState,
 };
-use crate::ppu::{Ppu, PpuSnapshot};
+use crate::ppu::{CHR_FETCH_BUF_LEN, Ppu, PpuSnapshot};
 use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
@@ -29,6 +29,7 @@ const PRG_32K_BYTES: usize = 32 * 1024;
 const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
 const CHR_8K_BYTES: usize = 8 * 1024;
+const CHR_4K_BYTES: usize = 4 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
 
 /// Represents a standard NES controller button.
@@ -280,6 +281,8 @@ enum MapperDeltaKind {
     Camerica(CamericaState),
     Namco108(Namco108State),
     Fme7(Fme7State),
+    Mmc2(Mmc2State),
+    Mmc4(Mmc4State),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -306,6 +309,8 @@ enum LoadedMapper {
     Camerica(Camerica),
     Namco108(Namco108),
     Fme7(Fme7),
+    Mmc2(Mmc2),
+    Mmc4(Mmc4),
 }
 
 impl LoadedMapper {
@@ -322,6 +327,8 @@ impl LoadedMapper {
             Self::Camerica(mapper) => mapper.read_prg(addr),
             Self::Namco108(mapper) => mapper.read_prg(addr),
             Self::Fme7(mapper) => mapper.read_prg(addr),
+            Self::Mmc2(mapper) => mapper.read_prg(addr),
+            Self::Mmc4(mapper) => mapper.read_prg(addr),
         }
     }
 
@@ -338,6 +345,8 @@ impl LoadedMapper {
             Self::Camerica(mapper) => mapper.write_prg(addr, value),
             Self::Namco108(mapper) => mapper.write_prg(addr, value),
             Self::Fme7(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc2(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc4(mapper) => mapper.write_prg(addr, value),
         }
     }
 
@@ -348,6 +357,7 @@ impl LoadedMapper {
         match self {
             Self::Mmc3(mapper) => mapper.read_prg_ram(addr),
             Self::Fme7(mapper) => mapper.read_prg_ram(addr),
+            Self::Mmc4(mapper) => mapper.read_prg_ram(addr),
             _ => None,
         }
     }
@@ -358,6 +368,7 @@ impl LoadedMapper {
         match self {
             Self::Mmc3(mapper) => mapper.write_prg_ram(addr, value),
             Self::Fme7(mapper) => mapper.write_prg_ram(addr, value),
+            Self::Mmc4(mapper) => mapper.write_prg_ram(addr, value),
             _ => {}
         }
     }
@@ -371,6 +382,8 @@ impl LoadedMapper {
             Self::Camerica(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Namco108(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Fme7(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Mmc2(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Mmc4(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             _ => None,
         }
     }
@@ -380,7 +393,29 @@ impl LoadedMapper {
             Self::Axrom(mapper) => Some(mapper.mirroring()),
             Self::Mmc3(mapper) => Some(mapper.mirroring()),
             Self::Fme7(mapper) => Some(mapper.mirroring()),
+            Self::Mmc2(mapper) => Some(mapper.mirroring()),
+            Self::Mmc4(mapper) => Some(mapper.mirroring()),
             _ => None,
+        }
+    }
+
+    /// Whether this mapper wants per-pattern-fetch CHR notifications (the
+    /// MMC2/MMC4 tile latch). Used to gate PPU CHR-fetch recording so
+    /// non-latching mappers pay zero cost in the render path.
+    #[must_use]
+    fn wants_chr_fetch_notify(&self) -> bool {
+        matches!(self, Self::Mmc2(_) | Self::Mmc4(_))
+    }
+
+    /// Forwards a PPU pattern-table fetch address to the mapper's CHR latch.
+    /// Returns `true` when the mapper's CHR window changed and must be re-synced
+    /// to the PPU. All non-latching mappers are a no-op returning `false`.
+    #[must_use]
+    fn notify_ppu_chr_fetch(&mut self, addr: u16) -> bool {
+        match self {
+            Self::Mmc2(mapper) => mapper.notify_ppu_chr_fetch(addr),
+            Self::Mmc4(mapper) => mapper.notify_ppu_chr_fetch(addr),
+            _ => false,
         }
     }
 
@@ -409,6 +444,8 @@ impl LoadedMapper {
             Self::Camerica(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             Self::Namco108(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             Self::Fme7(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Mmc2(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Mmc4(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             _ => {}
         }
     }
@@ -423,6 +460,8 @@ impl LoadedMapper {
             Self::Camerica(mapper) => mapper.chr_writable(),
             Self::Namco108(mapper) => mapper.chr_writable(),
             Self::Fme7(mapper) => mapper.chr_writable(),
+            Self::Mmc2(mapper) => mapper.chr_writable(),
+            Self::Mmc4(mapper) => mapper.chr_writable(),
             _ => false,
         }
     }
@@ -470,6 +509,14 @@ impl LoadedMapper {
                 let state = after.state();
                 (before.state() != state).then_some(MapperDeltaKind::Fme7(state))
             }
+            (Self::Mmc2(before), Self::Mmc2(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc2(state))
+            }
+            (Self::Mmc4(before), Self::Mmc4(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc4(state))
+            }
             _ => Some(MapperDeltaKind::Replace(Some(after.clone()))),
         }?;
 
@@ -490,6 +537,8 @@ impl LoadedMapper {
             Self::Camerica(mapper) => MapperDeltaKind::Camerica(mapper.state()),
             Self::Namco108(mapper) => MapperDeltaKind::Namco108(mapper.state()),
             Self::Fme7(mapper) => MapperDeltaKind::Fme7(mapper.state()),
+            Self::Mmc2(mapper) => MapperDeltaKind::Mmc2(mapper.state()),
+            Self::Mmc4(mapper) => MapperDeltaKind::Mmc4(mapper.state()),
         };
 
         Some(MapperDelta { kind })
@@ -562,6 +611,20 @@ impl LoadedMapper {
             }
             MapperDeltaKind::Fme7(state) => {
                 let Self::Fme7(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(state.clone());
+            }
+            MapperDeltaKind::Mmc2(state) => {
+                let Self::Mmc2(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(*state);
+            }
+            MapperDeltaKind::Mmc4(state) => {
+                let Self::Mmc4(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
@@ -1397,6 +1460,8 @@ impl NesCore {
             3 => self.build_cnrom(prg_rom, chr_rom),
             4 => self.build_mmc3(prg_rom, chr_rom, mirroring),
             7 => self.build_axrom(prg_rom),
+            9 => self.build_mmc2(prg_rom, chr_rom),
+            10 => self.build_mmc4(prg_rom, chr_rom),
             11 => self.build_color_dreams(prg_rom, chr_rom),
             66 => self.build_gxrom(prg_rom, chr_rom),
             69 => self.build_fme7(prg_rom, chr_rom),
@@ -1549,6 +1614,44 @@ impl NesCore {
         )))
     }
 
+    fn build_mmc2(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        // MMC2 (Punch-Out!!): switchable 8KB PRG bank + fixed last three banks.
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        // MMC2 titles ship CHR-ROM in 4KB banks (at least 8KB).
+        if chr_rom.len() < CHR_8K_BYTES || !chr_rom.len().is_multiple_of(CHR_4K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc2(Mmc2::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_mmc4(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        // MMC4 (Fire Emblem): switchable 16KB PRG bank + fixed last 16KB bank.
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_16K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        // MMC4 titles ship CHR-ROM in 4KB banks (at least 8KB).
+        if chr_rom.len() < CHR_8K_BYTES || !chr_rom.len().is_multiple_of(CHR_4K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc4(Mmc4::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
     fn build_mmc3(
         &self,
         prg_rom: &[u8],
@@ -1598,6 +1701,15 @@ impl NesCore {
     }
 
     fn sync_mapper_chr_window(&mut self) {
+        // Gate per-pattern-fetch CHR recording to mappers that use the tile
+        // latch (MMC2/MMC4). This is the single source of truth and is re-run on
+        // every load and PRG-write remap, so the flag can never go stale.
+        let wants_fetch = self
+            .mapper
+            .as_ref()
+            .is_some_and(LoadedMapper::wants_chr_fetch_notify);
+        self.ppu.set_chr_fetch_recording(wants_fetch);
+
         let Some(mapper) = self.mapper.as_ref() else {
             return;
         };
@@ -1753,6 +1865,16 @@ impl NesCore {
                     ^ (u64::from(mapper.read_prg(0xA000)) << 16)
                     ^ (u64::from(mapper.irq_pending()) << 32)
             }
+            Some(LoadedMapper::Mmc2(mapper)) => {
+                0x54 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+            }
+            Some(LoadedMapper::Mmc4(mapper)) => {
+                0x55 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+            }
         }
     }
 
@@ -1832,10 +1954,36 @@ impl NesCore {
                         self.ppu.ctrl(),
                     );
                 }
+                self.pump_mapper_chr_fetches();
             }
             if let Some(request) = dmc_request {
                 self.apply_dmc_dma_request(request);
             }
+        }
+    }
+
+    /// Drains the PPU's per-dot pattern-fetch log into the mapper's CHR tile
+    /// latch (MMC2/MMC4). When a latch flips, the mapper's CHR window changed,
+    /// so it is re-synced to the PPU (deferred to the next prefetch boundary,
+    /// exactly like an MMC3 mid-frame CHR split). For every non-latching mapper
+    /// the PPU records nothing, so `take_chr_fetches` returns 0 and this is a
+    /// single cheap early return — zero behavior change.
+    fn pump_mapper_chr_fetches(&mut self) {
+        let mut buf = [0_u16; CHR_FETCH_BUF_LEN];
+        let count = self.ppu.take_chr_fetches(&mut buf);
+        if count == 0 {
+            return;
+        }
+        let mut changed = false;
+        if let Some(mapper) = self.mapper.as_mut() {
+            for &addr in &buf[..count] {
+                if mapper.notify_ppu_chr_fetch(addr) {
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.sync_mapper_chr_window();
         }
     }
 
@@ -1857,6 +2005,7 @@ impl NesCore {
                         self.ppu.ctrl(),
                     );
                 }
+                self.pump_mapper_chr_fetches();
             }
             if let Some(chained) = dmc_request {
                 let byte = self.cpu.read_byte(chained.addr);
