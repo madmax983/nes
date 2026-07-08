@@ -521,17 +521,58 @@ impl Mmc3 {
     pub fn write_prg(&mut self, addr: u16, value: u8) {
         <Self as Mapper>::write_prg(self, addr, value);
     }
+
+    /// Reads a byte from the `$6000..=$7FFF` PRG-RAM window.
+    ///
+    /// When the chip is disabled (`$A001` bit 7 clear) the region floats; the
+    /// open bus is approximated as `0xFF`. This is the shared implementation
+    /// used both by the `Mapper::read_prg` `$6000` arm and the CPU-bus
+    /// `read_prg_ram` route so the two can never diverge.
+    #[must_use]
+    fn prg_ram_read(&self, addr: u16) -> u8 {
+        if self.prg_ram_enabled {
+            self.prg_ram[usize::from(addr - PRG_RAM_BASE)]
+        } else {
+            0xFF
+        }
+    }
+
+    /// Writes a byte into the `$6000..=$7FFF` PRG-RAM window.
+    ///
+    /// Writes land only when the chip is enabled and not write-protected
+    /// (`$A001` bit 7 set, bit 6 clear); otherwise they are ignored. Shared by
+    /// the `Mapper::write_prg` `$6000` arm and the CPU-bus `write_prg_ram`
+    /// route.
+    fn prg_ram_write(&mut self, addr: u16, value: u8) {
+        if self.prg_ram_enabled && !self.prg_ram_write_protect {
+            self.prg_ram[usize::from(addr - PRG_RAM_BASE)] = value;
+        }
+    }
+
+    /// Reads PRG-RAM for the CPU bus, or `None` when `addr` is outside the
+    /// `$6000..=$7FFF` window.
+    #[must_use]
+    pub fn read_prg_ram(&self, addr: u16) -> Option<u8> {
+        (PRG_RAM_BASE..=PRG_RAM_END)
+            .contains(&addr)
+            .then(|| self.prg_ram_read(addr))
+    }
+
+    /// Writes PRG-RAM from the CPU bus; ignores addresses outside
+    /// `$6000..=$7FFF`.
+    pub fn write_prg_ram(&mut self, addr: u16, value: u8) {
+        if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
+            self.prg_ram_write(addr, value);
+        }
+    }
 }
 
 impl Mapper for Mmc3 {
     fn read_prg(&self, addr: u16) -> u8 {
         if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
-            // $6000-$7FFF: 8KB PRG-RAM. When the chip is disabled ($A001 bit 7
-            // clear) the region floats; approximate the open bus as 0xFF.
-            if self.prg_ram_enabled {
-                return self.prg_ram[usize::from(addr - PRG_RAM_BASE)];
-            }
-            return 0xFF;
+            // $6000-$7FFF: 8KB PRG-RAM (shared with the CPU-bus read_prg_ram
+            // route so behavior can never diverge).
+            return self.prg_ram_read(addr);
         }
         if addr < 0x8000 {
             return 0xFF;
@@ -543,11 +584,8 @@ impl Mapper for Mmc3 {
 
     fn write_prg(&mut self, addr: u16, value: u8) {
         if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
-            // Writes land only when the chip is enabled and not write-protected
-            // ($A001 bit 7 set, bit 6 clear); otherwise they are ignored.
-            if self.prg_ram_enabled && !self.prg_ram_write_protect {
-                self.prg_ram[usize::from(addr - PRG_RAM_BASE)] = value;
-            }
+            // Shared with the CPU-bus write_prg_ram route.
+            self.prg_ram_write(addr, value);
             return;
         }
         if addr < 0x8000 {

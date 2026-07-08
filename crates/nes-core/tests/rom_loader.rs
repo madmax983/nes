@@ -562,6 +562,77 @@ fn cnrom_chr_bank_switch_via_prg_write_changes_background_pixels() {
 }
 
 #[test]
+fn mmc3_prg_ram_is_readable_and_writable_through_cpu_bus() {
+    // Synthetic MMC3 ROM with a valid reset vector in the last fixed bank.
+    let mut rom = sample_ines(4, 4);
+    let prg_start = 16;
+    let last_bank = prg_start + 7 * 8 * 1024;
+    rom[last_bank + 0x1FFC] = 0x00;
+    rom[last_bank + 0x1FFD] = 0xE0;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    // Enable PRG-RAM chip (bit 7), no write protect.
+    core.write_cpu_bus(0xA001, 0x80);
+
+    // CPU write to $6000 must be visible on a subsequent CPU read: the write is
+    // routed through the mapper's PRG-RAM (not just flat memory).
+    core.write_cpu_bus(0x6000, 0x5A);
+    core.write_cpu_bus(0x7FFF, 0xC3);
+    assert_eq!(core.read_memory(0x6000), 0x5A);
+    assert_eq!(core.read_memory(0x7FFF), 0xC3);
+}
+
+#[test]
+fn mmc3_prg_ram_write_protect_and_chip_disable_behave() {
+    let mut rom = sample_ines(4, 4);
+    let prg_start = 16;
+    let last_bank = prg_start + 7 * 8 * 1024;
+    rom[last_bank + 0x1FFC] = 0x00;
+    rom[last_bank + 0x1FFD] = 0xE0;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    // Chip enabled, not protected: store a byte.
+    core.write_cpu_bus(0xA001, 0x80);
+    core.write_cpu_bus(0x6000, 0x11);
+    assert_eq!(core.read_memory(0x6000), 0x11);
+
+    // Chip enabled + write protect (bit 6): writes are ignored.
+    core.write_cpu_bus(0xA001, 0xC0);
+    core.write_cpu_bus(0x6000, 0x22);
+    assert_eq!(core.read_memory(0x6000), 0x11);
+
+    // Chip disabled (bit 7 clear): region reads as open bus (0xFF).
+    core.write_cpu_bus(0xA001, 0x00);
+    assert_eq!(core.read_memory(0x6000), 0xFF);
+
+    // Re-enable: the original protected-era contents survive.
+    core.write_cpu_bus(0xA001, 0x80);
+    assert_eq!(core.read_memory(0x6000), 0x11);
+}
+
+#[test]
+fn non_wram_mapper_leaves_6000_7fff_as_flat_ram() {
+    // NROM has no PRG-RAM: $6000-$7FFF must behave as ordinary flat RAM,
+    // exactly as before PRG-RAM routing was added.
+    let mut rom = sample_ines(0, 1);
+    let prg_start = 16;
+    rom[prg_start + 0x3FFC] = 0x00;
+    rom[prg_start + 0x3FFD] = 0x80;
+
+    let mut core = NesCore::new();
+    core.load_ines_rom(&rom).unwrap();
+
+    core.write_cpu_bus(0x6000, 0x7E);
+    core.write_cpu_bus(0x7FFF, 0x81);
+    assert_eq!(core.read_memory(0x6000), 0x7E);
+    assert_eq!(core.read_memory(0x7FFF), 0x81);
+}
+
+#[test]
 fn invalid_ines_magic_is_rejected() {
     let mut core = NesCore::new();
     let err = core.load_ines_rom(&[0_u8; 16]).unwrap_err();
