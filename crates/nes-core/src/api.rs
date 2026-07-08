@@ -463,7 +463,7 @@ impl LoadedMapper {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state.clone());
             }
             MapperDeltaKind::Replace(_) => {
                 debug_assert!(
@@ -1722,9 +1722,13 @@ mod tests {
         mmc3.write_prg(0xC000, 1); // IRQ reload value
         mmc3.write_prg(0xC001, 0); // IRQ reload clear
         mmc3.write_prg(0xE001, 0); // IRQ enable
-        // Trigger A12 edges to decrement counter and trigger IRQ (visible scanline < 240)
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
+        // Drive two full visible scanlines of A12 edges (BG=$0000, sprites=$1000)
+        // to reload then decrement the counter to zero.
+        for scanline in 0..2 {
+            for dot in 0..=340 {
+                mmc3.on_ppu_dot(scanline, dot, true, 0x08);
+            }
+        }
 
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.irq_pending());
@@ -1744,8 +1748,11 @@ mod tests {
 
         let mut mapper = LoadedMapper::Mmc3(mmc3);
 
-        mapper.on_ppu_dot(0, 260, true, 0x08);
-        mapper.on_ppu_dot(0, 260, true, 0x08);
+        for scanline in 0..2 {
+            for dot in 0..=340 {
+                mapper.on_ppu_dot(scanline, dot, true, 0x08);
+            }
+        }
 
         assert!(mapper.irq_pending());
     }
@@ -1847,8 +1854,11 @@ mod tests {
         mmc3.write_prg(0xC000, 1);
         mmc3.write_prg(0xC001, 0);
         mmc3.write_prg(0xE001, 0);
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
+        for scanline in 0..2 {
+            for dot in 0..=340 {
+                mmc3.on_ppu_dot(scanline, dot, true, 0x08);
+            }
+        }
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.irq_pending());
     }

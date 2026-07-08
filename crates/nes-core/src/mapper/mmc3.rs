@@ -6,9 +6,36 @@ use super::Mapper;
 const PRG_BANK_8K: usize = 8 * 1024;
 const CHR_BANK_1K: usize = 1024;
 const CHR_WINDOW_BYTES: usize = 8 * 1024;
+/// 8KB of cartridge PRG-RAM (WRAM) mapped at CPU `$6000..=$7FFF`.
+const PRG_RAM_BYTES: usize = 8 * 1024;
+const PRG_RAM_BASE: u16 = 0x6000;
+const PRG_RAM_END: u16 = 0x7FFF;
 const PPUCTRL_SPRITE_TABLE_ADDR: u8 = 0x08;
 const PPUCTRL_BG_TABLE_ADDR: u8 = 0x10;
 const PPUCTRL_SPRITE_SIZE_8X16: u8 = 0x20;
+
+/// $A001 bit 7: PRG-RAM chip enable (1 = enabled).
+const PRG_RAM_CHIP_ENABLE: u8 = 0x80;
+/// $A001 bit 6: PRG-RAM write protect (1 = writes denied).
+const PRG_RAM_WRITE_PROTECT: u8 = 0x40;
+
+/// Number of PPU dots the PPU A12 line must remain continuously low before a
+/// rising edge is allowed to clock the MMC3 scanline counter.
+///
+/// Real hardware filters A12 with an RC network that suppresses edges arriving
+/// sooner than ~3 M2 (CPU) cycles after A12 last went low. Three CPU cycles is
+/// ~8-10 PPU dots; nesdev documents values in that range. We use 10 (the high
+/// end of the documented range). This suppresses two classes of spurious edge:
+///
+/// 1. The ~40 short nametable→pattern edges each scanline (only ~4 low dots),
+///    which occur whenever the background uses the upper pattern table.
+/// 2. The marginal ~9-dot low window in horizontal blank (dummy nametable
+///    fetches + the idle dot), which would otherwise add a second, mistimed
+///    clock in configurations where the background uses `$1000`.
+///
+/// while still catching the single genuine edge per scanline (preceded by a
+/// long low window of 60+ dots) in every standard rendering configuration.
+const A12_FILTER_DOTS: u16 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 4 (MMC3): banked PRG/CHR with scanline IRQ support.
@@ -26,9 +53,20 @@ pub struct Mmc3 {
     irq_reload: bool,
     irq_enabled: bool,
     irq_pending: bool,
+    /// 8KB cartridge PRG-RAM at `$6000..=$7FFF`.
+    prg_ram: Vec<u8>,
+    /// $A001 bit 7 — PRG-RAM chip enable.
+    prg_ram_enabled: bool,
+    /// $A001 bit 6 — PRG-RAM write protect.
+    prg_ram_write_protect: bool,
+    /// Previous PPU A12 level, for rising-edge detection. Transient PPU-timing
+    /// state; deliberately excluded from the save-state snapshot.
+    prev_a12: bool,
+    /// Number of consecutive PPU dots A12 has been low. Transient; not snapshotted.
+    a12_low_dots: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Mmc3State {
     pub bank_select: u8,
     pub bank_registers: [u8; 8],
@@ -38,6 +76,9 @@ pub(crate) struct Mmc3State {
     pub irq_reload: bool,
     pub irq_enabled: bool,
     pub irq_pending: bool,
+    pub prg_ram: Vec<u8>,
+    pub prg_ram_enabled: bool,
+    pub prg_ram_write_protect: bool,
 }
 
 impl Mmc3 {
@@ -78,6 +119,11 @@ impl Mmc3 {
             irq_reload: false,
             irq_enabled: false,
             irq_pending: false,
+            prg_ram: vec![0_u8; PRG_RAM_BYTES],
+            prg_ram_enabled: true,
+            prg_ram_write_protect: false,
+            prev_a12: false,
+            a12_low_dots: 0,
         }
     }
 
@@ -126,6 +172,11 @@ impl Mmc3 {
             irq_reload: false,
             irq_enabled: false,
             irq_pending: false,
+            prg_ram: vec![0_u8; PRG_RAM_BYTES],
+            prg_ram_enabled: true,
+            prg_ram_write_protect: false,
+            prev_a12: false,
+            a12_low_dots: 0,
         }
     }
 
@@ -163,8 +214,10 @@ impl Mmc3 {
 
     #[must_use]
     fn prg_bank_for_slot(&self, slot: usize) -> u8 {
-        let reg6 = self.normalize_prg_bank(self.bank_registers[6] & 0x3F);
-        let reg7 = self.normalize_prg_bank(self.bank_registers[7] & 0x3F);
+        // PRG bank registers are already masked to 6 bits when written ($8001),
+        // so no second `& 0x3F` is needed here.
+        let reg6 = self.normalize_prg_bank(self.bank_registers[6]);
+        let reg7 = self.normalize_prg_bank(self.bank_registers[7]);
         let fixed_hi = self.second_last_prg_bank();
         let fixed_last = self.last_prg_bank();
 
@@ -321,6 +374,9 @@ impl Mmc3 {
             irq_reload: self.irq_reload,
             irq_enabled: self.irq_enabled,
             irq_pending: self.irq_pending,
+            prg_ram: self.prg_ram.clone(),
+            prg_ram_enabled: self.prg_ram_enabled,
+            prg_ram_write_protect: self.prg_ram_write_protect,
         }
     }
 
@@ -333,25 +389,59 @@ impl Mmc3 {
         self.irq_reload = state.irq_reload;
         self.irq_enabled = state.irq_enabled;
         self.irq_pending = state.irq_pending;
+        if state.prg_ram.len() == self.prg_ram.len() {
+            self.prg_ram.copy_from_slice(&state.prg_ram);
+        } else {
+            self.prg_ram = state.prg_ram;
+            self.prg_ram.resize(PRG_RAM_BYTES, 0);
+        }
+        self.prg_ram_enabled = state.prg_ram_enabled;
+        self.prg_ram_write_protect = state.prg_ram_write_protect;
     }
 
-    /// Advances scanline IRQ logic based on current PPU dot.
+    /// Advances the scanline IRQ logic for a single PPU dot.
+    ///
+    /// This reconstructs the PPU A12 line (bit 12 of the PPU address bus) from
+    /// the deterministic background/sprite fetch schedule and clocks the MMC3
+    /// counter on filtered A12 rising edges, exactly like the hardware. It
+    /// replaces the previous heuristic (one inferred clock per scanline at a
+    /// PPUCTRL-derived dot), which mistimed or dropped IRQs — the bug that broke
+    /// screen splits in games such as Tecmo Super Bowl.
     pub fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool, ppu_ctrl: u8) {
-        let Some(clock_dot) = Self::irq_clock_dot(ppu_ctrl) else {
-            return;
-        };
-        if !rendering_enabled || dot != clock_dot {
-            return;
-        }
-        if scanline >= 240 && scanline != 261 {
-            return;
+        let a12 = Self::a12_high(scanline, dot, rendering_enabled, ppu_ctrl);
+
+        if a12 {
+            // Rising edge: only clock if A12 has been low long enough to clear
+            // the hardware filter (this rejects the many short nametable→pattern
+            // edges during normal rendering).
+            if !self.prev_a12 && self.a12_low_dots >= A12_FILTER_DOTS {
+                self.clock_irq_counter();
+            }
+            self.a12_low_dots = 0;
+        } else {
+            self.a12_low_dots = self.a12_low_dots.saturating_add(1);
         }
 
+        self.prev_a12 = a12;
+    }
+
+    /// Clocks the MMC3 scanline counter using the canonical MMC3B/C sequence.
+    ///
+    /// From the nesdev "MMC3" wiki (IRQ operation):
+    /// > When the IRQ is clocked (filtered A12 0→1), if the counter is zero or a
+    /// > reload is pending, it is reloaded with the latch value; otherwise it is
+    /// > decremented. Then, if the counter is now zero and IRQs are enabled, an
+    /// > IRQ is asserted.
+    ///
+    /// With this ordering a latch of `L` (after a `$C001` reload request) first
+    /// reloads to `L`, then decrements on each following clock, so the IRQ fires
+    /// on the `(L + 1)`-th clock.
+    fn clock_irq_counter(&mut self) {
         if self.irq_counter == 0 || self.irq_reload {
             self.irq_counter = self.irq_latch;
             self.irq_reload = false;
         } else {
-            self.irq_counter = self.irq_counter.saturating_sub(1);
+            self.irq_counter -= 1;
         }
 
         if self.irq_counter == 0 && self.irq_enabled {
@@ -359,20 +449,65 @@ impl Mmc3 {
         }
     }
 
+    /// Reconstructs the PPU A12 level (address bit 12) for a given PPU dot.
+    ///
+    /// A12 is high whenever the address on the PPU bus targets the upper pattern
+    /// table (`$1000..=$1FFF`). During a rendering scanline (visible lines
+    /// `0..=239` and the pre-render line `261`) with rendering enabled, the PPU
+    /// walks a fixed fetch schedule:
+    ///
+    /// * dots `1..=256`   — background tile fetches in 8-dot groups
+    ///   (NT, AT, pattern-low, pattern-high). The NT/AT fetches read `$2xxx`
+    ///   (A12 = 0); the two pattern fetches use the background pattern table
+    ///   selected by PPUCTRL bit 4.
+    /// * dots `257..=320` — sprite pattern fetches (8 sprites × 8 dots). The two
+    ///   garbage nametable fetches read `$2xxx` (A12 = 0); the two pattern
+    ///   fetches use the sprite pattern table selected by PPUCTRL bit 3.
+    /// * dots `321..=336` — the first two background tiles of the next line
+    ///   (background pattern table again).
+    /// * dots `0`, `337..=340` — idle / dummy nametable fetches (A12 = 0).
+    ///
+    /// 8x16 sprites approximation: in 8x16 mode each sprite selects its pattern
+    /// table from tile bit 0, which is per-sprite OAM data not available here. We
+    /// approximate the sprite fetch window as A12 = 1, which reproduces the
+    /// standard single filtered rising edge for the common `BG = $0000` layout.
+    ///
+    /// When rendering is disabled the PPU address is driven by the static VRAM
+    /// address `v`, which is not visible from this hook and produces no periodic
+    /// A12 rises, so A12 is treated as low (no clocks). CHR reads of `$1xxx`
+    /// during forced blanking are out of scope.
     #[must_use]
-    fn irq_clock_dot(ppu_ctrl: u8) -> Option<u16> {
-        if ppu_ctrl & PPUCTRL_SPRITE_SIZE_8X16 != 0 {
-            // 8x16 sprite timing depends on per-sprite tile parity and real A12 filtering.
-            // Keep the legacy approximation until the fetch pipeline is modeled explicitly.
-            return Some(260);
+    fn a12_high(scanline: u16, dot: u16, rendering_enabled: bool, ppu_ctrl: u8) -> bool {
+        if !rendering_enabled {
+            return false;
+        }
+        let is_rendering_line = scanline < 240 || scanline == 261;
+        if !is_rendering_line {
+            return false;
         }
 
         let bg_uses_high = ppu_ctrl & PPUCTRL_BG_TABLE_ADDR != 0;
         let sprite_uses_high = ppu_ctrl & PPUCTRL_SPRITE_TABLE_ADDR != 0;
-        match (bg_uses_high, sprite_uses_high) {
-            (false, true) => Some(260),
-            (true, false) => Some(325),
-            _ => None,
+        let sprite_8x16 = ppu_ctrl & PPUCTRL_SPRITE_SIZE_8X16 != 0;
+
+        match dot {
+            // Background tile fetches for this line, and the two prefetch tiles
+            // for the next line: pattern fetches occupy the last four dots of
+            // each 8-dot group.
+            1..=256 => ((dot - 1) % 8 >= 4) && bg_uses_high,
+            321..=336 => ((dot - 321) % 8 >= 4) && bg_uses_high,
+            // Sprite pattern fetches.
+            257..=320 => {
+                if (dot - 257) % 8 < 4 {
+                    false
+                } else if sprite_8x16 {
+                    true
+                } else {
+                    sprite_uses_high
+                }
+            }
+            // dot 0 (idle) and dots 337..=340 (dummy nametable fetches).
+            _ => false,
         }
     }
 
@@ -390,12 +525,31 @@ impl Mmc3 {
 
 impl Mapper for Mmc3 {
     fn read_prg(&self, addr: u16) -> u8 {
+        if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
+            // $6000-$7FFF: 8KB PRG-RAM. When the chip is disabled ($A001 bit 7
+            // clear) the region floats; approximate the open bus as 0xFF.
+            if self.prg_ram_enabled {
+                return self.prg_ram[usize::from(addr - PRG_RAM_BASE)];
+            }
+            return 0xFF;
+        }
+        if addr < 0x8000 {
+            return 0xFF;
+        }
         let slot = ((usize::from(addr) - 0x8000) / PRG_BANK_8K).min(3);
         let bank = self.prg_bank_for_slot(slot);
         self.read_prg_bank(bank, addr)
     }
 
     fn write_prg(&mut self, addr: u16, value: u8) {
+        if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
+            // Writes land only when the chip is enabled and not write-protected
+            // ($A001 bit 7 set, bit 6 clear); otherwise they are ignored.
+            if self.prg_ram_enabled && !self.prg_ram_write_protect {
+                self.prg_ram[usize::from(addr - PRG_RAM_BASE)] = value;
+            }
+            return;
+        }
         if addr < 0x8000 {
             return;
         }
@@ -419,7 +573,10 @@ impl Mapper for Mmc3 {
                 };
             }
             0xA001..=0xBFFF if addr & 1 == 1 => {
-                // PRG RAM protect is currently ignored.
+                // PRG-RAM protect register: bit 7 enables the chip, bit 6 write
+                // protects it.
+                self.prg_ram_enabled = value & PRG_RAM_CHIP_ENABLE != 0;
+                self.prg_ram_write_protect = value & PRG_RAM_WRITE_PROTECT != 0;
             }
             0xC000..=0xDFFE if addr & 1 == 0 => {
                 self.irq_latch = value;
@@ -443,6 +600,37 @@ impl Mapper for Mmc3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Total number of PPU dots in one scanline (0..=340).
+    const DOTS_PER_SCANLINE: u16 = 341;
+
+    /// Common Tecmo-style rendering config: 8x8 sprites, background pattern
+    /// table `$0000` (bit 4 clear), sprite pattern table `$1000` (bit 3 set).
+    const CTRL_BG_LOW_SPR_HIGH: u8 = PPUCTRL_SPRITE_TABLE_ADDR;
+
+    /// Drives every PPU dot of one scanline through the IRQ hook.
+    fn run_scanline(m: &mut Mmc3, scanline: u16, ctrl: u8) {
+        for dot in 0..DOTS_PER_SCANLINE {
+            m.on_ppu_dot(scanline, dot, true, ctrl);
+        }
+    }
+
+    /// Measures how many times the scanline counter is clocked during a single
+    /// steady-state rendering scanline for the given PPUCTRL configuration.
+    fn clocks_per_scanline(ctrl: u8) -> u32 {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xC000, 100); // high latch so clocks show up as decrements
+        m.write_prg(0xC001, 0); // request reload
+        // Prime steady-state rendering: consumes the reload and settles the A12
+        // filter so the measured scanline reflects normal operation.
+        for scanline in 0..3 {
+            run_scanline(&mut m, scanline, ctrl);
+        }
+        let before = m.state().irq_counter;
+        run_scanline(&mut m, 3, ctrl);
+        let after = m.state().irq_counter;
+        u32::from(before.saturating_sub(after))
+    }
 
     #[test]
     fn from_prg_chr_short_inputs_do_not_panic_on_reads() {
@@ -629,59 +817,158 @@ mod tests {
     fn mmc3_c001_clears_counter_for_mmc3c_behavior() {
         let mut m = Mmc3::new(8, 8);
 
-        // Set latch to 5 and start counting
+        // Set latch to 5 and request a reload.
         m.write_prg(0xC000, 5); // latch = 5
         m.write_prg(0xC001, 0); // reload + clear counter
         m.write_prg(0xE001, 0); // enable IRQ
 
-        // First clock: counter reloads from latch (5)
-        m.on_ppu_dot(0, 260, true, 0x08);
+        // First scanline's filtered A12 edge reloads the counter from the latch.
+        run_scanline(&mut m, 0, CTRL_BG_LOW_SPR_HIGH);
         assert_eq!(m.state().irq_counter, 5);
 
-        // Decrement twice: counter = 3
-        m.on_ppu_dot(1, 260, true, 0x08);
-        m.on_ppu_dot(2, 260, true, 0x08);
+        // Two more scanlines decrement to 3.
+        run_scanline(&mut m, 1, CTRL_BG_LOW_SPR_HIGH);
+        run_scanline(&mut m, 2, CTRL_BG_LOW_SPR_HIGH);
         assert_eq!(m.state().irq_counter, 3);
 
-        // Write $C001 mid-count: should clear counter to 0 and set reload
+        // Writing $C001 mid-count clears the counter and arms a reload (MMC3C).
         m.write_prg(0xC001, 0);
         assert_eq!(m.state().irq_counter, 0);
         assert!(m.state().irq_reload);
 
-        // Next clock: counter reloads from latch (5) again
-        m.on_ppu_dot(3, 260, true, 0x08);
+        // Next scanline reloads from the latch (5) again.
+        run_scanline(&mut m, 3, CTRL_BG_LOW_SPR_HIGH);
         assert_eq!(m.state().irq_counter, 5);
     }
 
     #[test]
-    fn mmc3_irq_uses_previous_scanline_phase_when_bg_uses_high_table() {
+    fn mmc3_irq_clocks_once_per_scanline_when_bg_uses_high_table() {
+        // Background pattern table $1000 (bit 4), sprites $0000: the single
+        // filtered A12 rising edge lands in the next-line prefetch window.
+        let ctrl = PPUCTRL_BG_TABLE_ADDR;
+        assert_eq!(clocks_per_scanline(ctrl), 1);
+
         let mut m = Mmc3::new(8, 8);
         m.write_prg(0xC000, 1);
         m.write_prg(0xC001, 0);
         m.write_prg(0xE001, 0);
 
-        m.on_ppu_dot(0, 260, true, 0x10);
-        assert_eq!(m.state().irq_counter, 0);
+        run_scanline(&mut m, 0, ctrl); // reloads counter to 1
+        assert_eq!(m.state().irq_counter, 1);
         assert!(!m.irq_pending());
 
-        m.on_ppu_dot(0, 325, true, 0x10);
-        assert_eq!(m.state().irq_counter, 1);
-
-        m.on_ppu_dot(1, 325, true, 0x10);
+        run_scanline(&mut m, 1, ctrl); // 1 -> 0 -> IRQ
         assert!(m.irq_pending());
     }
 
     #[test]
-    fn mmc3_irq_does_not_clock_when_bg_and_sprites_share_pattern_table_in_8x8_mode() {
+    fn mmc3_irq_does_not_clock_when_bg_and_sprites_share_pattern_table_0000() {
+        // With both background and sprites in pattern table $0000, A12 never
+        // rises during rendering, so the counter is never clocked.
+        assert_eq!(clocks_per_scanline(0x00), 0);
+
         let mut m = Mmc3::new(8, 8);
         m.write_prg(0xC000, 1);
         m.write_prg(0xC001, 0);
         m.write_prg(0xE001, 0);
 
-        m.on_ppu_dot(0, 260, true, 0x00);
-        m.on_ppu_dot(0, 324, true, 0x00);
+        run_scanline(&mut m, 0, 0x00);
+        run_scanline(&mut m, 1, 0x00);
         assert_eq!(m.state().irq_counter, 0);
         assert!(!m.irq_pending());
+    }
+
+    #[test]
+    fn mmc3_a12_filter_suppresses_spurious_edges_when_sharing_high_table() {
+        // Both background and sprites in $1000 produce ~40 short A12 rising
+        // edges per scanline (each preceded by only ~4 low dots) plus the ~9-dot
+        // horizontal-blank low window. All fall under the filter threshold, so
+        // the counter is never clocked — matching the hardware fact that a
+        // shared pattern table cannot drive the scanline IRQ.
+        let ctrl = PPUCTRL_BG_TABLE_ADDR | PPUCTRL_SPRITE_TABLE_ADDR;
+        assert_eq!(clocks_per_scanline(ctrl), 0);
+    }
+
+    #[test]
+    fn mmc3_irq_clocks_once_per_scanline_for_8x16_sprites() {
+        // 8x16 sprites with background in $0000: the sprite-fetch window is
+        // approximated as A12 high, giving exactly one filtered edge per line.
+        let ctrl = PPUCTRL_SPRITE_SIZE_8X16; // 8x16, BG=$0000
+        assert_eq!(clocks_per_scanline(ctrl), 1);
+    }
+
+    #[test]
+    fn mmc3_irq_not_clocked_during_vblank_scanlines() {
+        // Scanlines 240..=260 do not perform rendering fetches, so no clocks.
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0xC000, 1);
+        m.write_prg(0xC001, 0);
+        m.write_prg(0xE001, 0);
+
+        for scanline in 240..=260 {
+            run_scanline(&mut m, scanline, CTRL_BG_LOW_SPR_HIGH);
+        }
+        assert_eq!(m.state().irq_counter, 0);
+        assert!(!m.irq_pending());
+    }
+
+    #[test]
+    fn mmc3_prg_ram_read_write_round_trip() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x6000, 0xAB);
+        m.write_prg(0x6001, 0xCD);
+        m.write_prg(0x7FFF, 0xEF);
+        assert_eq!(m.read_prg(0x6000), 0xAB);
+        assert_eq!(m.read_prg(0x6001), 0xCD);
+        assert_eq!(m.read_prg(0x7FFF), 0xEF);
+    }
+
+    #[test]
+    fn mmc3_prg_ram_write_protect_blocks_writes() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x6000, 0x11);
+        // Enable chip (bit 7) + write protect (bit 6).
+        m.write_prg(0xA001, PRG_RAM_CHIP_ENABLE | PRG_RAM_WRITE_PROTECT);
+        m.write_prg(0x6000, 0x22); // ignored
+        assert_eq!(m.read_prg(0x6000), 0x11);
+
+        // Clear write protect (chip still enabled): writes land again.
+        m.write_prg(0xA001, PRG_RAM_CHIP_ENABLE);
+        m.write_prg(0x6000, 0x33);
+        assert_eq!(m.read_prg(0x6000), 0x33);
+    }
+
+    #[test]
+    fn mmc3_prg_ram_disabled_chip_reads_open_bus_and_ignores_writes() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x6000, 0x44);
+        // Disable the chip entirely (bit 7 clear).
+        m.write_prg(0xA001, 0x00);
+        assert_eq!(m.read_prg(0x6000), 0xFF); // open-bus approximation
+        m.write_prg(0x6000, 0x55); // ignored while disabled
+
+        // Re-enable and confirm the original contents survived.
+        m.write_prg(0xA001, PRG_RAM_CHIP_ENABLE);
+        assert_eq!(m.read_prg(0x6000), 0x44);
+    }
+
+    #[test]
+    fn mmc3_prg_ram_participates_in_state_snapshot() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x6000, 0x9A);
+        m.write_prg(0x7FFF, 0x5C);
+        m.write_prg(0xA001, PRG_RAM_CHIP_ENABLE | PRG_RAM_WRITE_PROTECT);
+
+        let state = m.state();
+        assert_eq!(state.prg_ram[0], 0x9A);
+        assert_eq!(state.prg_ram[PRG_RAM_BYTES - 1], 0x5C);
+        assert!(state.prg_ram_enabled);
+        assert!(state.prg_ram_write_protect);
+
+        let mut restored = Mmc3::new(8, 8);
+        restored.restore_state(state);
+        assert_eq!(restored.read_prg(0x6000), 0x9A);
+        assert_eq!(restored.read_prg(0x7FFF), 0x5C);
     }
 }
 
@@ -700,10 +987,17 @@ mod more_tests {
     }
 
     #[test]
-    fn mmc3_prg_ram_protect_is_ignored() {
+    fn mmc3_prg_ram_protect_register_updates_flags() {
         let mut m = Mmc3::new(8, 8);
-        // PRG RAM protect is currently ignored, but test coverage is missing.
-        m.write_prg(0xA001, 0x00); // Does nothing.
+        // Chip enabled, write-protected.
+        m.write_prg(0xA001, PRG_RAM_CHIP_ENABLE | PRG_RAM_WRITE_PROTECT);
+        assert!(m.state().prg_ram_enabled);
+        assert!(m.state().prg_ram_write_protect);
+
+        // Chip disabled.
+        m.write_prg(0xA001, 0x00);
+        assert!(!m.state().prg_ram_enabled);
+        assert!(!m.state().prg_ram_write_protect);
     }
 
     #[test]
