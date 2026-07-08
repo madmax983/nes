@@ -645,7 +645,7 @@ fn invalid_ines_magic_is_rejected() {
 
 #[test]
 fn unsupported_mapper_is_rejected() {
-    let rom = sample_ines(69, 2);
+    let rom = sample_ines(5, 2);
     let mut core = NesCore::new();
     let err = core.load_ines_rom(&rom).unwrap_err();
 
