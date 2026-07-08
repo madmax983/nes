@@ -2962,3 +2962,68 @@ mod tests_format {
         assert!(out2.contains(long));
     }
 }
+
+#[test]
+fn sta_opcode_absolute_y() {
+    let mut cpu = Cpu::new(0x8000);
+    cpu.write_byte(0x8000, 0x99); // STA Absolute Y
+    cpu.write_byte(0x8001, 0x10);
+    cpu.write_byte(0x8002, 0x80);
+
+    cpu.y = 0x05;
+    cpu.a = 0xAA;
+    let _ = cpu.step_with_trace();
+    assert_eq!(cpu.read_byte(0x8015), 0xAA);
+}
+
+#[test]
+fn txs_opcode() {
+    let mut cpu = Cpu::new(0x8000);
+    cpu.write_byte(0x8000, 0x9A); // TXS
+    cpu.x = 0xFD;
+    let _ = cpu.step_with_trace();
+    assert_eq!(cpu.sp, 0xFD);
+}
+
+#[test]
+fn sta_opcode_absolute_x() {
+    let mut cpu = Cpu::new(0x8000);
+    cpu.write_byte(0x8000, 0x9D); // STA Absolute X
+    cpu.write_byte(0x8001, 0x10);
+    cpu.write_byte(0x8002, 0x80);
+
+    cpu.x = 0x05;
+    cpu.a = 0xAA;
+    let _ = cpu.step_with_trace();
+    assert_eq!(cpu.read_byte(0x8015), 0xAA);
+}
+
+#[test]
+fn lsr_opcode_absolute_x() {
+    let mut cpu = Cpu::new(0x8000);
+    cpu.write_byte(0x8000, 0x5E); // LSR Absolute X
+    cpu.write_byte(0x8001, 0x10);
+    cpu.write_byte(0x8002, 0x80);
+    cpu.x = 0x05;
+
+    cpu.write_byte(0x8015, 0b00000011);
+    cpu.status.set_carry(true);
+    let _ = cpu.step_with_trace();
+    assert_eq!(cpu.read_byte(0x8015), 0b00000001);
+    assert!(cpu.status.carry());
+}
+
+#[test]
+fn rol_opcode_absolute_x() {
+    let mut cpu = Cpu::new(0x8000);
+    cpu.write_byte(0x8000, 0x3E); // ROL Absolute X
+    cpu.write_byte(0x8001, 0x10);
+    cpu.write_byte(0x8002, 0x80);
+    cpu.x = 0x05;
+
+    cpu.write_byte(0x8015, 0b10000000);
+    cpu.status.set_carry(true);
+    let _ = cpu.step_with_trace();
+    assert_eq!(cpu.read_byte(0x8015), 0b00000001);
+    assert!(cpu.status.carry());
+}
