@@ -401,3 +401,59 @@ mod tests {
         assert_eq!(code_n7_n6_n5.compare(), Some(0xFF));
     }
 }
+
+#[cfg(test)]
+mod mutant_hunting {
+    use super::*;
+
+    #[test]
+    fn cheat_code_raw_is_correct() {
+        let code = CheatCode::from_str("SXTPOU").unwrap();
+        assert_eq!(code.raw(), "SXTPOU");
+        // Kills: replace CheatCode::raw -> &str with ""
+        // Kills: replace CheatCode::raw -> &str with "xyzzy"
+        assert_ne!(code.raw(), "");
+        assert_ne!(code.raw(), "xyzzy");
+    }
+
+    #[test]
+    fn cheat_code_address_is_correct() {
+        let code = CheatCode::from_str("SXTPOU").unwrap();
+        // Kills: replace CheatCode::address -> u16 with 0
+        // Kills: replace CheatCode::address -> u16 with 1
+        assert_eq!(code.address(), 0x9BE1);
+        assert_ne!(code.address(), 0);
+        assert_ne!(code.address(), 1);
+    }
+
+    #[test]
+    fn cheat_code_value_is_correct() {
+        let code = CheatCode::from_str("SXTPOU").unwrap();
+        // Kills: replace CheatCode::value -> u8 with 0
+        // Kills: replace CheatCode::value -> u8 with 1
+        assert_eq!(code.value(), 0xAD);
+        assert_ne!(code.value(), 0);
+        assert_ne!(code.value(), 1);
+    }
+
+    #[test]
+    fn cheat_code_compare_is_correct() {
+        let code_8 = CheatCode::from_str("ZEXPYGLA").unwrap();
+        // Kills: replace CheatCode::compare -> Option<u8> with None
+        // Kills: replace CheatCode::compare -> Option<u8> with Some(0)
+        // Kills: replace CheatCode::compare -> Option<u8> with Some(1)
+        assert_eq!(code_8.compare(), Some(0x03));
+        assert_ne!(code_8.compare(), None);
+        assert_ne!(code_8.compare(), Some(0));
+        assert_ne!(code_8.compare(), Some(1));
+    }
+
+    #[test]
+    fn cheat_code_applies_to_returns_correct_bool() {
+        let code_8 = CheatCode::from_str("ZEXPYGLA").unwrap();
+        // Kills: replace CheatCode::applies_to -> bool with true
+        // Kills: replace CheatCode::applies_to -> bool with false
+        assert!(code_8.applies_to(0x94A7, 0x03));
+        assert!(!code_8.applies_to(0x94A8, 0x03));
+    }
+}
