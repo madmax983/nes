@@ -29,3 +29,7 @@
 ## 2025-05-15 - [read_line unbounded memory leak/OOM vulnerability]
 **Learning:** `std::io::BufRead::read_line` reads until a newline, which means malicious clients sending an unbounded stream of bytes without `\n` can exhaust memory and cause an Out-Of-Memory panic in parsers (like MCP, Netplay Relay, and JSON streams).
 **Action:** When parsing line-based protocols, never use `read_line` directly on an untrusted `BufRead` stream. Instead, use bounded wrappers like `std::io::Read::take` to limit the maximum header or line size, or count the bytes read into a `String` and manually error if they exceed safe thresholds.
+
+## 2025-02-21 - [API Test Coverage Improvement]
+**Learning:** `nes-core` API had hidden coverage gaps in `CoreSnapshot::mapper_delta` (especially handling different mapper swaps and differences in CHR mappings) and `Command` processing.
+**Action:** Wrote robust integration-style unit tests that instantiate the Core and save/apply state deltas directly across different mapper families (e.g. MMC1 -> MMC1, MMC1 -> MMC3 with modified CHR RAM) to trigger all complex match arms securely without relying on internal getter access.
