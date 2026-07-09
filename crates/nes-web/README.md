@@ -24,6 +24,7 @@ This is the end-to-end execution path used by the web demo:
 ## Build for WebAssembly
 
 ```powershell
+rustup target add wasm32-unknown-unknown
 cargo build -p nes-web --target wasm32-unknown-unknown
 ```
 
