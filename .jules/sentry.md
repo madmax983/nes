@@ -33,3 +33,7 @@
 ## 2025-02-21 - [API Test Coverage Improvement]
 **Learning:** `nes-core` API had hidden coverage gaps in `CoreSnapshot::mapper_delta` (especially handling different mapper swaps and differences in CHR mappings) and `Command` processing.
 **Action:** Wrote robust integration-style unit tests that instantiate the Core and save/apply state deltas directly across different mapper families (e.g. MMC1 -> MMC1, MMC1 -> MMC3 with modified CHR RAM) to trigger all complex match arms securely without relying on internal getter access.
+
+## 2026-05-27 - Serde Array and PPM encoder panic/OOM vulnerabilities
+**Learning:** Utilities that allocate buffers based on untrusted size parameters or handle length-restricted fixed arrays can easily fail without proper test coverage for those error boundaries.
+**Action:** When working on serialization or image rendering primitives, explicitly write tests targeting oversize bounds, buffer length mismatches, and `unwrap_err` states to ensure panics or unexpected conditions are cleanly handled by the type system.

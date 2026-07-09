@@ -80,4 +80,10 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         assert_eq!(err.to_string(), "frame size overflow");
     }
+
+    #[test]
+    fn encode_ppm_returns_error_on_buffer_too_large() {
+        let err = encode_ppm(1, 1, &[1, 2, 3, 255, 4, 5, 6, 255]).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    }
 }
