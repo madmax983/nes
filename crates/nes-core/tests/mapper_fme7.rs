@@ -162,3 +162,23 @@ fn fme7_chr_ram_when_absent_is_writable() {
     m.sync_chr_ram_from_ppu_window(&window);
     assert_eq!(m.chr_window()[0], 0x77);
 }
+
+#[test]
+fn fme7_normalizes_inputs_and_guards_out_of_range_access() {
+    // Undersized/odd PRG padded to whole 8KB banks; undersized/odd CHR-ROM
+    // padded up to a whole window and left non-writable.
+    let mut m = Fme7::from_prg_chr(vec![0x11; PRG_8K + 3], vec![0x22; CHR_8K + 5]);
+    assert!(!m.chr_writable());
+    assert_eq!(m.chr_window().len(), CHR_8K);
+
+    // A sync request on CHR-ROM is a no-op early return.
+    let mut window = [0_u8; CHR_8K];
+    window[0] = 0x7E;
+    m.sync_chr_ram_from_ppu_window(&window);
+    assert_ne!(m.chr_window()[0], 0x7E);
+
+    // Reads below $6000 return open bus; $C000-$FFFF writes (5B audio) are no-ops.
+    assert_eq!(m.read_prg(0x5000), 0xFF);
+    m.write_prg(0xC000, 0x55); // audio command register: ignored
+    m.write_prg(0xE000, 0x55); // audio data register: ignored
+}

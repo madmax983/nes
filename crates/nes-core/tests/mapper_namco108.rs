@@ -79,3 +79,47 @@ fn namco108_register_values_masked_to_six_bits() {
     select_register(&mut mapper, 6, 0xC5); // 0xC5 & 0x3F = 5
     assert_eq!(mapper.read_prg(0x8000), 5);
 }
+
+const CHR_WINDOW: usize = 8 * 1024;
+
+#[test]
+fn namco108_chr_ram_when_chr_absent_syncs_and_reads_back() {
+    // Empty CHR -> a writable 8KB CHR-RAM window. Undersized/odd PRG is padded
+    // up to a whole number of 8KB banks. The CHR-RAM write-back path re-applies
+    // the fixed 2KB/1KB slot layout in reverse.
+    let mut m = Namco108::from_prg_chr(vec![0x11; PRG_8K + 5], vec![]);
+    assert!(m.chr_writable());
+
+    let mut window = [0_u8; CHR_WINDOW];
+    window[0x0000] = 0xAA; // R0 2KB slot at $0000
+    window[0x0800] = 0xBB; // R1 2KB slot at $0800
+    window[0x1000] = 0xCC; // R2 1KB slot at $1000
+    window[0x1C00] = 0xDD; // R5 1KB slot at $1C00
+    m.sync_chr_ram_from_ppu_window(&window);
+
+    let mapped = m.chr_window();
+    assert_eq!(mapped[0x0000], 0xAA);
+    assert_eq!(mapped[0x0800], 0xBB);
+    assert_eq!(mapped[0x1000], 0xCC);
+    assert_eq!(mapped[0x1C00], 0xDD);
+}
+
+#[test]
+fn namco108_reads_and_writes_below_8000_are_guarded() {
+    let mut m = Namco108::from_prg_chr(prg_with_bank_markers(4), chr_with_bank_markers(8));
+    assert_eq!(m.read_prg(0x0000), 0xFF);
+    assert_eq!(m.read_prg(0x7FFF), 0xFF);
+    m.write_prg(0x4000, 0x55); // ignored, must not panic
+    assert_eq!(m.read_prg(0x0000), 0xFF);
+}
+
+#[test]
+fn namco108_non_multiple_chr_rom_is_padded_and_not_writable() {
+    // Non-empty CHR shorter than 8KB is padded up to the window; a non-1KB
+    // multiple is rounded up. It remains CHR-ROM (not writable).
+    let short = Namco108::from_prg_chr(prg_with_bank_markers(4), vec![0x22; 500]);
+    assert!(!short.chr_writable());
+    let odd = Namco108::from_prg_chr(prg_with_bank_markers(4), vec![0x22; CHR_WINDOW + 3]);
+    assert!(!odd.chr_writable());
+    assert_eq!(odd.chr_window().len(), CHR_WINDOW);
+}

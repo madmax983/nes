@@ -56,3 +56,15 @@ fn camerica_exposes_writable_chr_ram() {
     mapper.sync_chr_ram_from_ppu_window(&window);
     assert_eq!(mapper.chr_window()[7], 0x99);
 }
+
+#[test]
+fn camerica_normalizes_empty_and_odd_prg() {
+    // Empty PRG is padded to one 16KB bank; an odd length is rounded up.
+    let empty = Camerica::from_prg_rom(vec![]);
+    assert_eq!(empty.selected_bank(), 0);
+    let odd = Camerica::from_prg_rom(vec![0x11; PRG_16K + 7]);
+    // Reads never panic and CHR-RAM is always present.
+    let _ = odd.read_prg(0x8000);
+    assert!(odd.chr_writable());
+    assert_eq!(odd.chr_window().len(), CHR_8K);
+}

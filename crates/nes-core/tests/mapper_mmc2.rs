@@ -237,3 +237,40 @@ fn mmc2_chr_latch_rebanks_background_through_ppu_render_path() {
          (baseline={baseline:?}, latched={latched:?})"
     );
 }
+
+#[test]
+fn mmc2_chr_ram_when_chr_absent_syncs_both_halves() {
+    // Empty CHR -> writable 8KB CHR-RAM; odd PRG length is padded to whole 8KB
+    // banks. The CHR-RAM write-back copies each 4KB half into its mapped bank.
+    let mut m = Mmc2::from_prg_chr(vec![0x11; 4 * PRG_8K + 5], vec![]);
+    assert!(m.chr_writable());
+
+    // Map the high half to a distinct 4KB bank so the two write-backs don't alias.
+    m.write_prg(0xE000, 1); // FE high half -> 4KB bank 1 (low half stays bank 0)
+
+    let mut window = [0_u8; 8 * 1024];
+    window[0x0000] = 0xAA; // low 4KB half
+    window[0x1000] = 0xBB; // high 4KB half
+    m.sync_chr_ram_from_ppu_window(&window);
+
+    let mapped = m.chr_window();
+    assert_eq!(mapped[0x0000], 0xAA);
+    assert_eq!(mapped[0x1000], 0xBB);
+}
+
+#[test]
+fn mmc2_reads_and_writes_below_8000_and_unmapped_region_are_guarded() {
+    let mut m = Mmc2::from_prg_chr(prg_with_bank_markers(4), chr_with_bank_markers(4));
+    assert_eq!(m.read_prg(0x0000), 0xFF);
+    m.write_prg(0x4000, 0x55); // below $8000: ignored
+    m.write_prg(0x8000, 0x55); // $8000-$9FFF unmapped on MMC2: ignored
+    assert_eq!(m.read_prg(0x0000), 0xFF);
+}
+
+#[test]
+fn mmc2_non_multiple_chr_rom_is_padded() {
+    // Non-empty CHR that is not a 4KB multiple is rounded up and stays CHR-ROM.
+    let m = Mmc2::from_prg_chr(prg_with_bank_markers(4), vec![0x22; 2 * CHR_4K + 3]);
+    assert!(!m.chr_writable());
+    assert_eq!(m.chr_window().len(), 8 * 1024);
+}

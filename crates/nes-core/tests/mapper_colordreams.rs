@@ -68,3 +68,18 @@ fn color_dreams_wraps_bank_selects_modulo_available_banks() {
     assert_eq!(mapper.read_prg(0x8000), 0x11);
     assert_eq!(mapper.chr_window()[0], 0xA1);
 }
+
+#[test]
+fn color_dreams_normalizes_undersized_and_odd_inputs() {
+    // Undersized PRG is padded to 32KB (and an odd length rounded up); a
+    // non-8KB-multiple CHR-ROM is rounded up to a whole window.
+    let m = ColorDreams::from_prg_chr(vec![0x11; PRG_32K + 5], vec![0x22; CHR_8K + 3]);
+    assert_eq!(m.read_prg(0x8000), 0x11);
+    // CHR-ROM is not writable, so a sync request is a no-op early return.
+    assert!(!m.chr_writable());
+    let mut m = m;
+    let mut window = [0_u8; CHR_8K];
+    window[0] = 0x7E;
+    m.sync_chr_ram_from_ppu_window(&window); // ignored (CHR-ROM)
+    assert_ne!(m.chr_window()[0], 0x7E);
+}
