@@ -53,3 +53,8 @@ fn havoc_dos_macro_wait_hang() {
     rx.recv_timeout(Duration::from_millis(500))
         .expect("timeout");
 }
+
+#[test]
+fn mcp_havoc_crash_test() {
+    // This is a dummy test to ensure this file exists and tests compile
+}
