@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Unnecessary Clone before Fallible Function]
+**Learning:** Calling `.cloned()` on an iterator to extract an item before passing it to a fallible validation function (`check_draft`) results in a wasted heap allocation if the function fails.
+**Action:** Remove `.cloned()`, borrow the value to the fallible function, and only clone the data upon success.

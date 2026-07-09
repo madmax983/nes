@@ -451,16 +451,15 @@ pub fn select_profile(
         let Some(found) = profiles
             .iter()
             .find(|profile| profile.profile.id == override_id)
-            .cloned()
         else {
             return Err(format!(
                 "RTA manual profile override '{}' was not found",
                 override_id
             ));
         };
-        check_draft(&found)?;
+        check_draft(found)?;
         return Ok(ProfileSelection {
-            selected: found,
+            selected: found.clone(),
             source: ProfileSelectionSource::ManualOverride,
         });
     }
