@@ -15,7 +15,7 @@ use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuMmioRead, CpuSnapshot, CpuWrite
 use crate::mapper::{
     Axrom, AxromState, Camerica, CamericaState, Cnrom, CnromState, ColorDreams, ColorDreamsState,
     Fme7, Fme7State, Gxrom, GxromState, Mmc1, Mmc1State, Mmc2, Mmc2State, Mmc3, Mmc3State, Mmc4,
-    Mmc4State, Namco108, Namco108State, Nrom, Uxrom, UxromState,
+    Mmc4State, Mmc5, Mmc5State, Namco108, Namco108State, Nrom, Uxrom, UxromState,
 };
 use crate::ppu::{CHR_FETCH_BUF_LEN, Ppu, PpuSnapshot};
 use crate::rom::{NametableMirroring, RomError, parse_ines};
@@ -283,6 +283,7 @@ enum MapperDeltaKind {
     Fme7(Fme7State),
     Mmc2(Mmc2State),
     Mmc4(Mmc4State),
+    Mmc5(Mmc5State),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -311,6 +312,7 @@ enum LoadedMapper {
     Fme7(Fme7),
     Mmc2(Mmc2),
     Mmc4(Mmc4),
+    Mmc5(Mmc5),
 }
 
 impl LoadedMapper {
@@ -329,6 +331,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => mapper.read_prg(addr),
             Self::Mmc2(mapper) => mapper.read_prg(addr),
             Self::Mmc4(mapper) => mapper.read_prg(addr),
+            Self::Mmc5(mapper) => mapper.read_prg(addr),
         }
     }
 
@@ -347,6 +350,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => mapper.write_prg(addr, value),
             Self::Mmc2(mapper) => mapper.write_prg(addr, value),
             Self::Mmc4(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc5(mapper) => mapper.write_prg(addr, value),
         }
     }
 
@@ -358,6 +362,7 @@ impl LoadedMapper {
             Self::Mmc3(mapper) => mapper.read_prg_ram(addr),
             Self::Fme7(mapper) => mapper.read_prg_ram(addr),
             Self::Mmc4(mapper) => mapper.read_prg_ram(addr),
+            Self::Mmc5(mapper) => mapper.read_prg_ram(addr),
             _ => None,
         }
     }
@@ -369,6 +374,7 @@ impl LoadedMapper {
             Self::Mmc3(mapper) => mapper.write_prg_ram(addr, value),
             Self::Fme7(mapper) => mapper.write_prg_ram(addr, value),
             Self::Mmc4(mapper) => mapper.write_prg_ram(addr, value),
+            Self::Mmc5(mapper) => mapper.write_prg_ram(addr, value),
             _ => {}
         }
     }
@@ -384,6 +390,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Mmc2(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Mmc4(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Mmc5(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             _ => None,
         }
     }
@@ -395,6 +402,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => Some(mapper.mirroring()),
             Self::Mmc2(mapper) => Some(mapper.mirroring()),
             Self::Mmc4(mapper) => Some(mapper.mirroring()),
+            Self::Mmc5(mapper) => Some(mapper.mirroring()),
             _ => None,
         }
     }
@@ -423,6 +431,7 @@ impl LoadedMapper {
         match self {
             Self::Mmc3(mapper) => mapper.irq_pending(),
             Self::Fme7(mapper) => mapper.irq_pending(),
+            Self::Mmc5(mapper) => mapper.irq_pending(),
             _ => false,
         }
     }
@@ -431,7 +440,47 @@ impl LoadedMapper {
         match self {
             Self::Mmc3(mapper) => mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl),
             Self::Fme7(mapper) => mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl),
+            Self::Mmc5(mapper) => mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl),
             _ => {}
+        }
+    }
+
+    /// Whether this mapper exposes CPU-visible registers/RAM in the
+    /// `$5000..=$5FFF` expansion window (MMC5). Gates the expansion image sync so
+    /// other mappers pay no cost.
+    #[must_use]
+    fn has_expansion(&self) -> bool {
+        matches!(self, Self::Mmc5(_))
+    }
+
+    /// Handles a CPU write to `$5000..=$5FFF`. Returns `true` when the mapper
+    /// consumed it (so the core re-syncs PRG/CHR/mirroring and the expansion
+    /// image); `false` for mappers without expansion registers.
+    fn write_expansion(&mut self, addr: u16, value: u8) -> bool {
+        match self {
+            Self::Mmc5(mapper) => {
+                mapper.write_expansion(addr, value);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns the byte a CPU read of `$5000..=$5FFF` observes, or `None` for
+    /// write-only / unmapped addresses.
+    #[must_use]
+    fn expansion_read(&self, addr: u16) -> Option<u8> {
+        match self {
+            Self::Mmc5(mapper) => mapper.expansion_read(addr),
+            _ => None,
+        }
+    }
+
+    /// Applies the side effect of a CPU read of `$5000..=$5FFF` (MMC5 `$5204`
+    /// clears the pending IRQ flag).
+    fn on_expansion_read(&mut self, addr: u16) {
+        if let Self::Mmc5(mapper) = self {
+            mapper.on_expansion_read(addr);
         }
     }
 
@@ -446,6 +495,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             Self::Mmc2(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             Self::Mmc4(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Mmc5(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             _ => {}
         }
     }
@@ -462,6 +512,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => mapper.chr_writable(),
             Self::Mmc2(mapper) => mapper.chr_writable(),
             Self::Mmc4(mapper) => mapper.chr_writable(),
+            Self::Mmc5(mapper) => mapper.chr_writable(),
             _ => false,
         }
     }
@@ -517,6 +568,10 @@ impl LoadedMapper {
                 let state = after.state();
                 (before.state() != state).then_some(MapperDeltaKind::Mmc4(state))
             }
+            (Self::Mmc5(before), Self::Mmc5(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc5(state))
+            }
             _ => Some(MapperDeltaKind::Replace(Some(after.clone()))),
         }?;
 
@@ -539,6 +594,7 @@ impl LoadedMapper {
             Self::Fme7(mapper) => MapperDeltaKind::Fme7(mapper.state()),
             Self::Mmc2(mapper) => MapperDeltaKind::Mmc2(mapper.state()),
             Self::Mmc4(mapper) => MapperDeltaKind::Mmc4(mapper.state()),
+            Self::Mmc5(mapper) => MapperDeltaKind::Mmc5(mapper.state()),
         };
 
         Some(MapperDelta { kind })
@@ -625,6 +681,13 @@ impl LoadedMapper {
             }
             MapperDeltaKind::Mmc4(state) => {
                 let Self::Mmc4(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(state.clone());
+            }
+            MapperDeltaKind::Mmc5(state) => {
+                let Self::Mmc5(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
@@ -1169,6 +1232,8 @@ impl NesCore {
         self.sync_mapper_prg_window();
         self.sync_mapper_chr_window();
         self.sync_mapper_mirroring();
+        self.sync_mapper_exram_image();
+        self.sync_mapper_expansion_image();
         self.sync_ppu_register_image();
         self.last_cpu_trace = None;
         self.last_cpu_bus_trace.clear();
@@ -1240,6 +1305,8 @@ impl NesCore {
         self.sync_mapper_prg_window();
         self.sync_mapper_chr_window();
         self.sync_mapper_mirroring();
+        self.sync_mapper_exram_image();
+        self.sync_mapper_expansion_image();
 
         let reset_pc = {
             let lo = self.cpu.read_byte(0xFFFC);
@@ -1375,6 +1442,7 @@ impl NesCore {
         // No post-step sync is needed: the next call's pre-step sync will refresh the
         // image before the CPU runs again, and nothing reads the image between iterations.
         self.sync_ppu_register_image();
+        self.sync_mapper_expansion_image();
         let (trace, cpu_cycles) = self
             .cpu
             .step_with_trace_and_cycles()
@@ -1459,6 +1527,7 @@ impl NesCore {
             2 => self.build_uxrom(prg_rom),
             3 => self.build_cnrom(prg_rom, chr_rom),
             4 => self.build_mmc3(prg_rom, chr_rom, mirroring),
+            5 => self.build_mmc5(prg_rom, chr_rom, mirroring),
             7 => self.build_axrom(prg_rom),
             9 => self.build_mmc2(prg_rom, chr_rom),
             10 => self.build_mmc4(prg_rom, chr_rom),
@@ -1652,6 +1721,31 @@ impl NesCore {
         )))
     }
 
+    fn build_mmc5(
+        &self,
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+        mirroring: NametableMirroring,
+    ) -> Result<LoadedMapper, CoreError> {
+        // MMC5 PRG is banked in 8KB units; require at least 32KB.
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        // CHR is either absent (CHR-RAM) or a whole number of 8KB banks.
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc5(Mmc5::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+            mirroring,
+        )))
+    }
+
     fn build_mmc3(
         &self,
         prg_rom: &[u8],
@@ -1697,6 +1791,46 @@ impl NesCore {
                 let value = self.apply_cheat_codes(addr, raw);
                 self.cpu.write_byte(addr, value);
             }
+        }
+    }
+
+    /// Materializes the MMC5 CPU-readable expansion registers ($5204 IRQ status,
+    /// $5205/$5206 multiplier) into the CPU flat image so reads during execution
+    /// observe current values. ExRAM is materialized separately (it changes only
+    /// on CPU writes and at load). No-op for mappers without expansion registers.
+    fn sync_mapper_expansion_image(&mut self) {
+        let values = match self.mapper.as_ref() {
+            Some(mapper) if mapper.has_expansion() => [
+                mapper.expansion_read(0x5204),
+                mapper.expansion_read(0x5205),
+                mapper.expansion_read(0x5206),
+            ],
+            _ => return,
+        };
+        for (addr, value) in [0x5204_u16, 0x5205, 0x5206].into_iter().zip(values) {
+            if let Some(value) = value {
+                self.cpu.write_byte(addr, value);
+            }
+        }
+    }
+
+    /// Materializes the full MMC5 ExRAM window ($5C00-$5FFF) into the CPU flat
+    /// image. Run once at load / restore; subsequent ExRAM writes keep the image
+    /// in sync incrementally. No-op for mappers without expansion registers.
+    fn sync_mapper_exram_image(&mut self) {
+        let mut buf = [0_u8; 0x400];
+        match self.mapper.as_ref() {
+            Some(mapper) if mapper.has_expansion() => {
+                for (offset, slot) in buf.iter_mut().enumerate() {
+                    if let Some(value) = mapper.expansion_read(0x5C00 + offset as u16) {
+                        *slot = value;
+                    }
+                }
+            }
+            _ => return,
+        }
+        for (offset, value) in buf.into_iter().enumerate() {
+            self.cpu.write_byte(0x5C00 + offset as u16, value);
         }
     }
 
@@ -1798,6 +1932,17 @@ impl NesCore {
             false
         };
 
+        // Route $5000-$5FFF writes to the MMC5 expansion registers / ExRAM.
+        // Mappers without expansion registers return `false` and the flat image
+        // keeps the written byte.
+        let expansion_write_needed = if (0x5000..=0x5FFF).contains(&addr) {
+            self.mapper
+                .as_mut()
+                .is_some_and(|mapper| mapper.write_expansion(addr, value))
+        } else {
+            false
+        };
+
         let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
             self.ppu
                 .write_register(normalize_ppu_register_addr(addr), value);
@@ -1826,6 +1971,23 @@ impl NesCore {
             // observes the mapper's stored byte (respecting write protection /
             // chip-enable), rather than the raw flat write.
             self.sync_mapper_prg_ram_window();
+        }
+        if expansion_write_needed {
+            // An MMC5 register write can change PRG/CHR banking, mirroring, and
+            // the CPU-visible expansion image (multiplier / IRQ status / ExRAM),
+            // so re-materialize all of them.
+            self.sync_mapper_prg_window();
+            self.sync_mapper_mirroring();
+            self.sync_mapper_chr_window();
+            self.sync_mapper_expansion_image();
+            // ExRAM writes may be dropped (read-only mode, or non-rendering); the
+            // authoritative byte lives in the mapper, so overwrite the flat image
+            // with it (reverting any dropped write).
+            if (0x5C00..=0x5FFF).contains(&addr)
+                && let Some(byte) = self.mapper.as_ref().and_then(|m| m.expansion_read(addr))
+            {
+                self.cpu.write_byte(addr, byte);
+            }
         }
         if ppu_changed {
             self.sync_ppu_register_image();
@@ -1875,6 +2037,13 @@ impl NesCore {
                     ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
                     ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
             }
+            Some(LoadedMapper::Mmc5(mapper)) => {
+                0x56 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xE000)) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 24)
+                    ^ (u64::from(mapper.irq_pending()) << 32)
+                    ^ (u64::from(mapper.expansion_read(0x5205).unwrap_or(0)) << 40)
+            }
         }
     }
 
@@ -1917,6 +2086,11 @@ impl NesCore {
             }
             0x4016 => self.ports.consume_controller_read(Player::One),
             0x4017 => self.ports.consume_controller_read(Player::Two),
+            0x5204 => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.on_expansion_read(0x5204);
+                }
+            }
             _ => {}
         }
     }
