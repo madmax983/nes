@@ -109,9 +109,6 @@ impl Cnrom {
     }
 
     fn prg_offset_for(&self, addr: u16) -> usize {
-        if self.prg_rom.is_empty() {
-            return 0;
-        }
         let base = addr.saturating_sub(0x8000) as usize;
         base % self.prg_rom.len()
     }

@@ -590,4 +590,29 @@ mod tests {
         assert_eq!(restored.read_prg(0x6000), 0x9A);
         assert_eq!(restored.irq_counter, 0x1234);
     }
+
+    #[test]
+    fn fme7_restore_state_resizes_wram() {
+        let prg = vec![0; 32 * 1024];
+        let chr = vec![0; 8 * 1024];
+        let mut m = Fme7::from_prg_chr(prg.clone(), chr.clone());
+        let mut state = m.state();
+        state.wram = vec![0; 100]; // Truncate WRAM to force resize logic
+        m.restore_state(state);
+        assert_eq!(m.wram.len(), WRAM_BYTES);
+    }
+
+    #[test]
+    fn fme7_from_prg_chr_pads_unaligned_prg_rom() {
+        let prg = vec![0; 8192 + 1];
+        let m = Fme7::from_prg_chr(prg, vec![]);
+        assert_eq!(m.prg_rom.len(), 16384);
+    }
+
+    #[test]
+    fn fme7_from_prg_chr_pads_chr_rom() {
+        let chr = vec![0; 1024 + 1];
+        let m = Fme7::from_prg_chr(vec![0; 8192], chr);
+        assert_eq!(m.chr_data.len(), 8192);
+    }
 }

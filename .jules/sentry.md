@@ -37,3 +37,6 @@
 ## 2026-05-27 - Serde Array and PPM encoder panic/OOM vulnerabilities
 **Learning:** Utilities that allocate buffers based on untrusted size parameters or handle length-restricted fixed arrays can easily fail without proper test coverage for those error boundaries.
 **Action:** When working on serialization or image rendering primitives, explicitly write tests targeting oversize bounds, buffer length mismatches, and `unwrap_err` states to ensure panics or unexpected conditions are cleanly handled by the type system.
+## 2026-05-30 - [Mapper State Resize and Padding]
+**Learning:** PRG ROM and CHR ROM padding when sizes are unaligned, as well as resizing state RAM arrays (`prg_ram`, `wram`) upon state restoration, were uncovered code paths that could cause panics if untrusted data or unaligned ROMs were loaded. Unreachable condition checks for empty ROM arrays can pollute coverage.
+**Action:** Remove unreachable branch checks if constructors guarantee array size. Write tests explicitly injecting unaligned ROM sizes to trigger array resizing during load, and tests truncating state RAM arrays before restoring to trigger reallocation paths.

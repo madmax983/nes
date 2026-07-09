@@ -431,4 +431,20 @@ mod tests {
         assert_eq!(restored.read_prg(0x6000), 0x9A);
         assert_eq!(restored.chr_window()[0x0000], 1); // FD low bank after latch
     }
+
+    #[test]
+    fn mmc4_from_prg_chr_pads_unaligned_prg_rom() {
+        let prg = vec![0; 16384 + 1];
+        let m = Mmc4::from_prg_chr(prg, vec![]);
+        assert_eq!(m.prg_rom.len(), 32768);
+    }
+
+    #[test]
+    fn mmc4_restore_state_resizes_prg_ram() {
+        let mut m = Mmc4::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+        let mut state = m.state();
+        state.prg_ram = vec![0; 100]; // Truncate to force resize logic
+        m.restore_state(state);
+        assert_eq!(m.prg_ram.len(), PRG_RAM_BYTES);
+    }
 }

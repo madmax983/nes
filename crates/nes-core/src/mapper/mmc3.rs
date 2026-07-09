@@ -1049,4 +1049,31 @@ mod more_tests {
         assert!(!state.irq_enabled);
         assert!(!state.irq_pending);
     }
+
+    #[test]
+    fn mmc3_restore_state_resizes_prg_ram() {
+        let mut m = Mmc3::new(8, 8);
+        let mut state = m.state();
+        state.prg_ram = vec![0; 100]; // Truncate to force resize
+        m.restore_state(state);
+        assert_eq!(m.prg_ram.len(), PRG_RAM_BYTES);
+    }
+
+    #[test]
+    fn mmc3_unmapped_prg_read_returns_open_bus() {
+        let m = Mmc3::new(8, 8);
+        assert_eq!(m.read_prg(0x4000), 0xFF);
+    }
+
+    #[test]
+    fn mmc3_unmapped_prg_write_is_ignored() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x4000, 0x12); // Should return early, not panicking
+    }
+
+    #[test]
+    fn mmc3_write_fallback_arm_is_safe() {
+        let mut m = Mmc3::new(8, 8);
+        m.write_prg(0x8002, 0); // Hits the `_ => {}` arm in the match
+    }
 }
