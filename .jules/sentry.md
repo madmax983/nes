@@ -25,3 +25,7 @@
 ## 2026-05-09 - Testing precise bitwise values for hashes and cheat codes
 **Learning:** Checking for mere non-zero output `assert_ne!(hash, 0)` is insufficient for bitwise operations (`|`, `&`, `^`) in hashes or parsers, as multiple operators can produce non-zero or identical outputs. For instance, `|` and `^` are functionally identical if the operands do not have overlapping bits set.
 **Action:** When testing bitwise hash/parsing logic, calculate and `assert_eq!` the exact expected bit pattern instead of just non-zero outputs to effectively kill mutants.
+
+## 2025-05-15 - [read_line unbounded memory leak/OOM vulnerability]
+**Learning:** `std::io::BufRead::read_line` reads until a newline, which means malicious clients sending an unbounded stream of bytes without `\n` can exhaust memory and cause an Out-Of-Memory panic in parsers (like MCP, Netplay Relay, and JSON streams).
+**Action:** When parsing line-based protocols, never use `read_line` directly on an untrusted `BufRead` stream. Instead, use bounded wrappers like `std::io::Read::take` to limit the maximum header or line size, or count the bytes read into a `String` and manually error if they exceed safe thresholds.

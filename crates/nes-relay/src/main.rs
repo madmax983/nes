@@ -7,7 +7,7 @@
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -294,9 +294,11 @@ fn read_client_message(
     line: &mut String,
 ) -> Result<Option<ClientMessage>, String> {
     line.clear();
-    let bytes_read = reader
-        .read_line(line)
+    let bytes_read = read_line_bounded(reader, line, 1048576)
         .map_err(|err| format!("failed to read socket line: {err}"))?;
+    if bytes_read >= 1048576 && !line.ends_with('\n') {
+        return Err("client message exceeded maximum length".to_owned());
+    }
     if bytes_read == 0 {
         return Ok(None);
     }
@@ -378,9 +380,54 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
     Ok(())
 }
 
+fn read_line_bounded(
+    reader: &mut impl std::io::BufRead,
+    line: &mut String,
+    limit: usize,
+) -> Result<usize, std::io::Error> {
+    let mut total_read = 0;
+    loop {
+        let (done, used) = {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                return Ok(total_read);
+            }
+
+            let mut newline_idx = None;
+            let mut check_len = available.len();
+            if total_read + check_len > limit {
+                check_len = limit - total_read;
+            }
+
+            for (i, &b) in available[..check_len].iter().enumerate() {
+                if b == b'\n' {
+                    newline_idx = Some(i);
+                    break;
+                }
+            }
+
+            if let Some(idx) = newline_idx {
+                let bytes = &available[..=idx];
+                line.push_str(&String::from_utf8_lossy(bytes));
+                (true, idx + 1)
+            } else {
+                let bytes = &available[..check_len];
+                line.push_str(&String::from_utf8_lossy(bytes));
+                (total_read + check_len >= limit, check_len)
+            }
+        };
+
+        reader.consume(used);
+        total_read += used;
+        if done {
+            return Ok(total_read);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{BufReader, Write};
     use std::net::{Shutdown, TcpListener, TcpStream};
     use std::sync::atomic::AtomicU64;
     use std::sync::mpsc;
@@ -726,6 +773,7 @@ mod tests {
     }
 
     #[test]
+
     fn read_client_message_parses_and_detects_eof_and_errors() {
         let (mut client, server) = connected_pair();
         client
@@ -942,7 +990,8 @@ mod tests {
             client.flush().expect("flush write");
             let mut line = String::new();
             let mut reader = BufReader::new(client);
-            let _ = reader.read_line(&mut line).expect("read joined response");
+            let _ = crate::read_line_bounded(&mut reader, &mut line, 1024)
+                .expect("read joined response");
             line
         });
 

@@ -356,13 +356,18 @@ fn handle_tools_call(
 pub fn read_framed_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, String> {
     let mut content_length = None::<usize>;
     let mut line = String::new();
+    let mut total_header_bytes: usize = 0;
 
     loop {
         line.clear();
 
-        let read = reader
-            .read_line(&mut line)
+        let remaining = 8193usize.saturating_sub(total_header_bytes);
+        let read = read_line_bounded(reader, &mut line, remaining)
             .map_err(|err| format!("failed reading header line: {err}"))?;
+        total_header_bytes = total_header_bytes.saturating_add(read);
+        if total_header_bytes > 8192 || (read == remaining && !line.ends_with('\n')) {
+            return Err("MCP headers exceeded maximum length".to_owned());
+        }
         if read == 0 {
             if content_length.is_none() {
                 return Ok(None);
@@ -408,6 +413,51 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
         .and_then(|_| writer.write_all(&payload))
         .and_then(|_| writer.flush())
         .map_err(|err| format!("failed writing framed response: {err}"))
+}
+
+fn read_line_bounded(
+    reader: &mut impl std::io::BufRead,
+    line: &mut String,
+    limit: usize,
+) -> Result<usize, std::io::Error> {
+    let mut total_read = 0;
+    loop {
+        let (done, used) = {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                return Ok(total_read);
+            }
+
+            let mut newline_idx = None;
+            let mut check_len = available.len();
+            if total_read + check_len > limit {
+                check_len = limit - total_read;
+            }
+
+            for (i, &b) in available[..check_len].iter().enumerate() {
+                if b == b'\n' {
+                    newline_idx = Some(i);
+                    break;
+                }
+            }
+
+            if let Some(idx) = newline_idx {
+                let bytes = &available[..=idx];
+                line.push_str(&String::from_utf8_lossy(bytes));
+                (true, idx + 1)
+            } else {
+                let bytes = &available[..check_len];
+                line.push_str(&String::from_utf8_lossy(bytes));
+                (total_read + check_len >= limit, check_len)
+            }
+        };
+
+        reader.consume(used);
+        total_read += used;
+        if done {
+            return Ok(total_read);
+        }
+    }
 }
 
 #[cfg(test)]
