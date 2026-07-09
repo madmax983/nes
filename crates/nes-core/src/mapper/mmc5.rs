@@ -51,12 +51,19 @@ enum PrgSource {
 /// CPU access-mode rules, the fill-mode registers, and the scanline IRQ
 /// (`$5203`/`$5204`).
 ///
+/// Also implemented: the 8x16-sprite CHR "A/B" bank split. In 8x16 sprite mode
+/// (PPUCTRL bit 5 set) sprite pattern fetches use the "A" register set
+/// (`$5120..=$5127`) while background fetches use the "B" register set
+/// (`$5128..=$512B`, mirrored across the 8KB window); when 8x16 mode is off both
+/// use the "A" set. The mapper exposes the background window via
+/// [`Mmc5::chr_bg_window`] and latches the 8x16 flag from the PPUCTRL byte passed
+/// to [`Mmc5::on_ppu_dot`].
+///
 /// Deferred / stubbed (see the crate PR notes): the 5B-style audio registers
 /// (`$5000..=$5015`) are stored but not synthesized; the vertical split
-/// (`$5200..=$5202`) is stored but not rendered; ExRAM-as-nametable and
+/// (`$5200..=$5202`) is stored but not rendered; and ExRAM-as-nametable and
 /// extended-attribute rendering are not wired into the PPU (ExRAM is still fully
-/// readable/writable by the CPU); and the 8x16-sprite CHR "A/B" split falls back
-/// to the "A" register set for the whole 8KB CHR window.
+/// readable/writable by the CPU).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mmc5 {
     prg_rom: Vec<u8>,
@@ -120,6 +127,13 @@ pub struct Mmc5 {
     /// Whether rendering was enabled at the last observed PPU dot; gates ExRAM
     /// writes in modes 0/1. Transient; not snapshotted.
     rendering_active: bool,
+    /// Whether the PPU is in 8x16-sprite mode (PPUCTRL bit 5), latched from the
+    /// most recent [`Mmc5::on_ppu_dot`]. Selects the CHR "B" background window.
+    /// Transient; not snapshotted.
+    sprite_8x16: bool,
+    /// Set when `sprite_8x16` changes so the core re-pushes the background CHR
+    /// window to the PPU. Transient; not snapshotted.
+    chr_bg_dirty: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -250,6 +264,8 @@ impl Mmc5 {
             exram: vec![0; EXRAM_BYTES],
             scanline_counter: 0,
             rendering_active: false,
+            sprite_8x16: false,
+            chr_bg_dirty: false,
         }
     }
 
@@ -331,6 +347,8 @@ impl Mmc5 {
         self.scanline_counter = 0;
         self.rendering_active = false;
         self.in_frame = false;
+        self.sprite_8x16 = false;
+        self.chr_bg_dirty = false;
     }
 
     // --- PRG ----------------------------------------------------------------
@@ -552,31 +570,62 @@ impl Mmc5 {
     }
 
     /// Returns the currently mapped 8KB CHR window built from the "A" register
-    /// set per the `$5101` CHR mode. The 8x16-sprite "A/B" split is not modeled
-    /// (the "A" set is used for the whole window; see the struct docs).
+    /// set (`$5120..=$5127`) per the `$5101` CHR mode. This is the sprite window
+    /// in 8x16 mode and the window for everything otherwise.
     #[must_use]
     pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
+        self.build_chr_window(false)
+    }
+
+    /// Returns the 8KB background CHR window built from the "B" register set
+    /// (`$5128..=$512B`), or `None` when 8x16-sprite mode is inactive (in which
+    /// case backgrounds share the "A" window from [`Mmc5::chr_window`]).
+    ///
+    /// The "B" set holds only four registers; they are mirrored across the 8KB
+    /// window exactly as the corresponding "A" registers would map for the active
+    /// `$5101` CHR mode (register index `i` of the "A" set becomes `i & 3` of the
+    /// "B" set), matching MMC5 hardware.
+    #[must_use]
+    pub fn chr_bg_window(&self) -> Option<[u8; CHR_WINDOW_BYTES]> {
+        self.sprite_8x16.then(|| self.build_chr_window(true))
+    }
+
+    /// Consumes the "background CHR window changed" flag (set when the 8x16-sprite
+    /// mode latch flips). The core polls this per PPU dot to know when to re-push
+    /// the background window to the PPU.
+    pub fn take_chr_bg_dirty(&mut self) -> bool {
+        core::mem::take(&mut self.chr_bg_dirty)
+    }
+
+    /// Builds a flat 8KB CHR window from either the "A" set (`use_b == false`) or
+    /// the "B" set (`use_b == true`, mirrored across the window) per `$5101`.
+    #[must_use]
+    fn build_chr_window(&self, use_b: bool) -> [u8; CHR_WINDOW_BYTES] {
+        // Register value for A-set index `idx`; the B-set has four registers and
+        // is addressed by `idx & 3`.
+        let reg = |idx: usize| -> u8 {
+            if use_b {
+                self.chr_b[idx & 3]
+            } else {
+                self.chr_a[idx]
+            }
+        };
         let mut window = [0_u8; CHR_WINDOW_BYTES];
         match self.chr_mode {
             0 => {
-                // 8KB: $5127.
-                self.copy_chr(self.chr_bank_units(self.chr_a[7]), 8 * 1024, 0, &mut window);
+                // 8KB: $5127 / $512B.
+                self.copy_chr(self.chr_bank_units(reg(7)), 8 * 1024, 0, &mut window);
             }
             1 => {
-                // 4KB: $5123 low, $5127 high.
-                self.copy_chr(self.chr_bank_units(self.chr_a[3]), 4 * 1024, 0, &mut window);
-                self.copy_chr(
-                    self.chr_bank_units(self.chr_a[7]),
-                    4 * 1024,
-                    4 * 1024,
-                    &mut window,
-                );
+                // 4KB: $5123/$5127 (A) or $512B mirrored (B).
+                self.copy_chr(self.chr_bank_units(reg(3)), 4 * 1024, 0, &mut window);
+                self.copy_chr(self.chr_bank_units(reg(7)), 4 * 1024, 4 * 1024, &mut window);
             }
             2 => {
-                // 2KB: $5121, $5123, $5125, $5127.
+                // 2KB: $5121, $5123, $5125, $5127 (A) or $5129/$512B mirrored (B).
                 for (i, &reg_idx) in [1_usize, 3, 5, 7].iter().enumerate() {
                     self.copy_chr(
-                        self.chr_bank_units(self.chr_a[reg_idx]),
+                        self.chr_bank_units(reg(reg_idx)),
                         2 * 1024,
                         i * 2 * 1024,
                         &mut window,
@@ -584,10 +633,10 @@ impl Mmc5 {
                 }
             }
             _ => {
-                // 1KB: $5120..=$5127.
+                // 1KB: $5120..=$5127 (A) or $5128..=$512B mirrored (B).
                 for slot in 0..8 {
                     self.copy_chr(
-                        self.chr_bank_units(self.chr_a[slot]),
+                        self.chr_bank_units(reg(slot)),
                         CHR_BANK_1K,
                         slot * CHR_BANK_1K,
                         &mut window,
@@ -694,8 +743,15 @@ impl Mmc5 {
     /// flag is set while rendering visible lines and cleared at post-render /
     /// vblank. This is an accepted approximation (documented in the PR notes) and
     /// may differ from hardware by up to one scanline.
-    pub fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool, _ppu_ctrl: u8) {
+    pub fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool, ppu_ctrl: u8) {
         self.rendering_active = rendering_enabled;
+        // Latch the 8x16-sprite flag (PPUCTRL bit 5). A change flips which CHR
+        // "B" background window applies, so signal the core to re-push it.
+        let sprite_8x16 = ppu_ctrl & 0x20 != 0;
+        if sprite_8x16 != self.sprite_8x16 {
+            self.sprite_8x16 = sprite_8x16;
+            self.chr_bg_dirty = true;
+        }
         if dot != 0 {
             return;
         }
@@ -896,6 +952,45 @@ mod tests {
         m.write_expansion(0x5120, 4); // slot0 bank = 256 + 4 = 260
         let window = m.chr_window();
         assert_eq!(window[0], 260u16 as u8);
+    }
+
+    #[test]
+    fn chr_bg_window_uses_b_set_only_in_8x16_mode() {
+        let mut m = Mmc5::new(8, 16);
+        m.write_expansion(0x5101, 0); // CHR mode 0 (8KB)
+        m.write_expansion(0x5127, 0); // A-set 8KB bank 0 (sprite window)
+        m.write_expansion(0x512B, 1); // B-set 8KB bank 1 (background window)
+
+        // 8x8 mode (PPUCTRL bit 5 clear): no separate background window.
+        m.on_ppu_dot(0, 0, true, 0x00);
+        assert!(m.chr_bg_window().is_none());
+        assert_eq!(m.chr_window()[0], 0); // A-set bank 0
+
+        // 8x16 mode (PPUCTRL bit 5 set): background window comes from the B-set.
+        m.on_ppu_dot(0, 0, true, 0x20);
+        assert!(m.take_chr_bg_dirty(), "flag latches on 8x16 transition");
+        let bg = m
+            .chr_bg_window()
+            .expect("8x16 mode exposes a background window");
+        // 8KB bank 1 begins at 1KB-bank index 8; `Mmc5::new` fills each 1KB bank
+        // with its own index, so the first byte reads 8.
+        assert_eq!(bg[0], 8); // B-set 8KB bank 1
+        assert_eq!(m.chr_window()[0], 0); // sprite window still A-set 8KB bank 0
+    }
+
+    #[test]
+    fn chr_bg_window_b_set_mirrors_in_1k_mode() {
+        let mut m = Mmc5::new(8, 16);
+        m.write_expansion(0x5101, 3); // CHR mode 3 (1KB)
+        m.on_ppu_dot(0, 0, true, 0x20); // enable 8x16
+        for reg in 0..4u16 {
+            m.write_expansion(0x5128 + reg, (reg + 8) as u8); // B-set banks 8..12
+        }
+        let bg = m.chr_bg_window().unwrap();
+        // Four B registers mirror across the eight 1KB slots.
+        for slot in 0..8usize {
+            assert_eq!(bg[slot * CHR_BANK_1K], (8 + (slot & 3)) as u8);
+        }
     }
 
     #[test]

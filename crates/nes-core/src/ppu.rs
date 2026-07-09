@@ -220,6 +220,11 @@ pub struct Ppu {
     chr_writable: bool,
     live_chr: Box<[u8; CHR_BYTES]>,
     pending_live_chr_updates: VecDeque<PendingLiveChrWindowUpdate>,
+    /// Separate background CHR window for MMC5 8x16-sprite mode, where background
+    /// fetches use the "B" bank set while sprites keep using `chr`. `None` for
+    /// every other case (backgrounds then read `live_chr`), keeping the common
+    /// path allocation-free. Transient; re-derived from the mapper after load.
+    bg_chr: Option<Box<[u8; CHR_BYTES]>>,
     live_ctrl: u8,
     live_scroll_x: u8,
     live_scroll_y: u8,
@@ -340,6 +345,7 @@ impl Ppu {
             chr_writable: true,
             live_chr: Box::new([0; CHR_BYTES]),
             pending_live_chr_updates: VecDeque::new(),
+            bg_chr: None,
             live_ctrl: 0,
             live_scroll_x: 0,
             live_scroll_y: 0,
@@ -381,6 +387,7 @@ impl Ppu {
         self.chr_writable = chr_rom.is_empty();
         *self.live_chr = self.chr;
         self.pending_live_chr_updates.clear();
+        self.bg_chr = None;
         self.live_ctrl = self.ctrl;
         self.live_scroll_x = self.scroll_x;
         self.live_scroll_y = self.scroll_y;
@@ -414,6 +421,44 @@ impl Ppu {
             self.pending_live_chr_updates.clear();
         }
         self.mark_render_state_dirty();
+    }
+
+    /// Sets (or clears) the separate background CHR window used by MMC5 8x16
+    /// sprite mode. `Some(window)` routes background pattern fetches through the
+    /// "B" bank set while sprites keep using `chr`; `None` (the common case)
+    /// makes backgrounds fall back to `live_chr`, keeping the fast path
+    /// allocation-free for every non-MMC5 mapper.
+    pub fn set_bg_chr_window(&mut self, window: Option<&[u8]>) {
+        match window {
+            Some(window) => {
+                let buf = self.bg_chr.get_or_insert_with(|| Box::new([0; CHR_BYTES]));
+                buf.fill(0);
+                let copy_len = window.len().min(CHR_BYTES);
+                buf[..copy_len].copy_from_slice(&window[..copy_len]);
+            }
+            None => self.bg_chr = None,
+        }
+        self.mark_render_state_dirty();
+    }
+
+    /// CHR source for the live background renderer: the MMC5 "B" background
+    /// window when present, otherwise the delayed `live_chr` view.
+    #[inline]
+    fn live_bg_chr(&self) -> &[u8; CHR_BYTES] {
+        match &self.bg_chr {
+            Some(bg) => bg,
+            None => &self.live_chr,
+        }
+    }
+
+    /// CHR source for the full-frame background renderer: the MMC5 "B" background
+    /// window when present, otherwise the base `chr` store.
+    #[inline]
+    fn full_bg_chr(&self) -> &[u8; CHR_BYTES] {
+        match &self.bg_chr {
+            Some(bg) => bg,
+            None => &self.chr,
+        }
     }
 
     /// Enables or disables recording of PPU pattern-table fetch addresses.
@@ -480,6 +525,7 @@ impl Ppu {
         self.render_capture_valid = false;
         *self.live_chr = self.chr;
         self.pending_live_chr_updates.clear();
+        self.bg_chr = None;
         self.live_ctrl = self.ctrl;
         self.live_scroll_x = self.scroll_x;
         self.live_scroll_y = self.scroll_y;
@@ -516,6 +562,9 @@ impl Ppu {
         live_chr[..live_chr_len].copy_from_slice(&snapshot.live_chr[..live_chr_len]);
         self.live_chr = live_chr;
         self.pending_live_chr_updates = snapshot.pending_live_chr_updates;
+        // bg_chr is transient: the core re-pushes the MMC5 background window via
+        // set_bg_chr_window() right after load_state.
+        self.bg_chr = None;
         self.live_ctrl = snapshot.live_ctrl;
         self.live_scroll_x = snapshot.live_scroll_x;
         self.live_scroll_y = snapshot.live_scroll_y;
@@ -1076,7 +1125,14 @@ impl Ppu {
     }
 
     fn background_palette_index(&self, x: usize, y: usize) -> (u8, bool) {
-        self.background_palette_index_impl(x, y, self.ctrl, self.scroll_x, self.scroll_y, &self.chr)
+        self.background_palette_index_impl(
+            x,
+            y,
+            self.ctrl,
+            self.scroll_x,
+            self.scroll_y,
+            self.full_bg_chr(),
+        )
     }
 
     fn background_palette_index_live(&self, x: usize, y: usize) -> (u8, bool) {
@@ -1086,7 +1142,7 @@ impl Ppu {
             self.live_ctrl,
             self.live_scroll_x,
             self.live_scroll_y,
-            self.live_chr.as_ref(),
+            self.live_bg_chr(),
         )
     }
 
@@ -1275,8 +1331,10 @@ impl Ppu {
         // trigger; recording both mirrors the real per-tile bus reads.
         self.record_chr_fetch(pattern_addr);
         self.record_chr_fetch(pattern_addr + 8);
-        let plane0 = self.live_chr[pattern_addr as usize];
-        let plane1 = self.live_chr[(pattern_addr + 8) as usize];
+        let (plane0, plane1) = {
+            let src = self.live_bg_chr();
+            (src[pattern_addr as usize], src[(pattern_addr + 8) as usize])
+        };
         let attr = self.read_ppu_data(key.attr_addr);
         let palette = (attr >> key.attr_shift) & 0x03;
         let palette_base = 0x3F00 + (u16::from(palette) * 4);

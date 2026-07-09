@@ -395,6 +395,25 @@ impl LoadedMapper {
         }
     }
 
+    /// Separate background CHR window (MMC5 8x16-sprite mode). `None` for every
+    /// mapper without an A/B CHR split, in which case backgrounds share the
+    /// single [`LoadedMapper::chr_window`].
+    fn chr_bg_window(&self) -> Option<[u8; CHR_8K_BYTES]> {
+        match self {
+            Self::Mmc5(mapper) => mapper.chr_bg_window(),
+            _ => None,
+        }
+    }
+
+    /// Consumes the MMC5 "background CHR window changed" flag (the 8x16-sprite
+    /// latch flipped). Always `false` for other mappers.
+    fn take_chr_bg_dirty(&mut self) -> bool {
+        match self {
+            Self::Mmc5(mapper) => mapper.take_chr_bg_dirty(),
+            _ => false,
+        }
+    }
+
     fn mirroring_override(&self) -> Option<NametableMirroring> {
         match self {
             Self::Axrom(mapper) => Some(mapper.mirroring()),
@@ -1845,12 +1864,19 @@ impl NesCore {
         self.ppu.set_chr_fetch_recording(wants_fetch);
 
         let Some(mapper) = self.mapper.as_ref() else {
+            self.ppu.set_bg_chr_window(None);
             return;
         };
+        let bg_window = mapper.chr_bg_window();
         let Some((chr_window, writable)) = mapper.chr_window() else {
+            self.ppu.set_bg_chr_window(None);
             return;
         };
         self.ppu.set_chr_window(&chr_window, writable);
+        // MMC5 8x16-sprite mode supplies a separate background ("B" bank) window;
+        // every other mapper returns `None` and backgrounds share `chr_window`.
+        self.ppu
+            .set_bg_chr_window(bg_window.as_ref().map(|w| &w[..]));
     }
 
     fn sync_mapper_mirroring(&mut self) {
@@ -2120,6 +2146,7 @@ impl NesCore {
             let dmc_request = self.apu.step_cpu_cycle(self.paused);
             for _ in 0..3 {
                 self.ppu.step_dot();
+                let mut bg_resync = false;
                 if let Some(mapper) = self.mapper.as_mut() {
                     mapper.on_ppu_dot(
                         self.ppu.scanline(),
@@ -2127,6 +2154,12 @@ impl NesCore {
                         self.ppu.rendering_enabled_for_mapper_irq(),
                         self.ppu.ctrl(),
                     );
+                    bg_resync = mapper.take_chr_bg_dirty();
+                }
+                if bg_resync {
+                    // The MMC5 8x16-sprite latch flipped: re-push the background
+                    // ("B" bank) CHR window so backgrounds render from it.
+                    self.sync_mapper_chr_window();
                 }
                 self.pump_mapper_chr_fetches();
             }
@@ -2171,6 +2204,7 @@ impl NesCore {
             for _ in 0..3 {
                 self.scheduler.step_ppu_cycle();
                 self.ppu.step_dot();
+                let mut bg_resync = false;
                 if let Some(mapper) = self.mapper.as_mut() {
                     mapper.on_ppu_dot(
                         self.ppu.scanline(),
@@ -2178,6 +2212,12 @@ impl NesCore {
                         self.ppu.rendering_enabled_for_mapper_irq(),
                         self.ppu.ctrl(),
                     );
+                    bg_resync = mapper.take_chr_bg_dirty();
+                }
+                if bg_resync {
+                    // The MMC5 8x16-sprite latch flipped: re-push the background
+                    // ("B" bank) CHR window so backgrounds render from it.
+                    self.sync_mapper_chr_window();
                 }
                 self.pump_mapper_chr_fetches();
             }

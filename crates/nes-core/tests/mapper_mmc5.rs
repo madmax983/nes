@@ -249,6 +249,92 @@ fn mmc5_chr_bank_switch_changes_rendered_pixels() {
     );
 }
 
+/// Builds an MMC5 ROM with two 8KB CHR banks whose pixels render in distinct
+/// palette color indices: bank 0 => index 1 everywhere (plane0 set), bank 1 =>
+/// index 2 everywhere (plane1 set). A spin loop sits at $E000.
+fn build_ab_chr_rom() -> Vec<u8> {
+    let mut rom = ines(4, 2); // 64KB PRG, 16KB CHR (two 8KB banks)
+    let prg_len = 4 * 16 * 1024;
+    install_spin_loop(&mut rom, prg_len);
+
+    let chr = 16 + prg_len;
+    let bank_8k = 8 * 1024;
+    for i in 0..bank_8k {
+        let within_tile = i % 16;
+        // Bank 0: plane0 (bytes 0..8 of each tile) set => color index 1.
+        rom[chr + i] = if within_tile < 8 { 0xFF } else { 0x00 };
+        // Bank 1: plane1 (bytes 8..16 of each tile) set => color index 2.
+        rom[chr + bank_8k + i] = if within_tile < 8 { 0x00 } else { 0xFF };
+    }
+    rom
+}
+
+/// Renders a full frame of a screen tiled with tile $01 plus one sprite, in
+/// CHR mode 0 (8KB) with the "A" set ($5127) pointing at `a_bank` and the "B"
+/// set ($512B) at `b_bank`. Returns `(background_pixel, sprite_pixel)` RGB.
+fn render_ab_split(sprite_8x16: bool, a_bank: u8, b_bank: u8) -> ([u8; 3], [u8; 3]) {
+    let mut core = NesCore::new();
+    core.load_ines_rom(&build_ab_chr_rom()).unwrap();
+
+    core.write_cpu_bus(0x5101, 0); // CHR mode 0 (8KB)
+    core.write_cpu_bus(0x5127, a_bank); // A-set 8KB bank (sprites, and BG in 8x8)
+    core.write_cpu_bus(0x512B, b_bank); // B-set 8KB bank (BG in 8x16)
+
+    // PPUCTRL: BG pattern table $0000, sprite size per `sprite_8x16`.
+    let ctrl = if sprite_8x16 { 0x20 } else { 0x00 };
+    core.write_cpu_bus(0x2000, ctrl);
+
+    write_ppu_data(&mut core, 0x3F00, &[0x0F, 0x16, 0x2A, 0x11]); // BG palette 0
+    write_ppu_data(&mut core, 0x3F10, &[0x0F, 0x12, 0x27, 0x11]); // sprite palette 0
+    write_ppu_data(&mut core, 0x2000, &[0x01_u8; 960]); // full nametable of tile $01
+
+    // Sprite 0 at (x=100, y=100), tile $00, front priority, palette 0.
+    core.write_cpu_bus(0x2003, 0x00); // OAMADDR = 0
+    core.write_cpu_bus(0x2004, 100); // Y (rendered top = Y + 1 = 101)
+    core.write_cpu_bus(0x2004, 0x00); // tile index
+    core.write_cpu_bus(0x2004, 0x00); // attributes (front, palette 0)
+    core.write_cpu_bus(0x2004, 100); // X
+
+    core.write_cpu_bus(0x2005, 0x00);
+    core.write_cpu_bus(0x2005, 0x00);
+    core.write_cpu_bus(0x2001, 0x1E); // show BG + sprites incl. leftmost 8px
+
+    core.execute(Command::StepFrame).unwrap();
+    let frame = core.framebuffer_rgba();
+    let background = pixel_rgb(&frame, 200, 100); // away from the sprite: pure BG
+    let sprite = pixel_rgb(&frame, 104, 108); // inside sprite (x 100..108, y 101..117)
+    (background, sprite)
+}
+
+#[test]
+fn mmc5_8x16_sprite_chr_bank_split() {
+    // 8x8 mode: backgrounds use the "A" set ($5127 -> bank 0, color index 1).
+    let (bg_8x8, _) = render_ab_split(false, 0, 1);
+    // 8x16 mode: backgrounds switch to the "B" set ($512B -> bank 1, index 2),
+    // while sprites keep using the "A" set (bank 0, index 1).
+    let (bg_8x16, sprite_a0) = render_ab_split(true, 0, 1);
+    // Swap the A/B banks: BG (B-set) and sprite (A-set) colors must both flip.
+    let (bg_8x16_swapped, sprite_a1) = render_ab_split(true, 1, 0);
+
+    assert_ne!(
+        bg_8x8, bg_8x16,
+        "enabling 8x16 sprites must route backgrounds through the MMC5 B-set \
+         (bg_8x8={bg_8x8:?}, bg_8x16={bg_8x16:?})"
+    );
+    assert_ne!(
+        bg_8x16, bg_8x16_swapped,
+        "background pixels must follow the B-set bank ($512B)"
+    );
+    assert_ne!(
+        sprite_a0, sprite_a1,
+        "sprite pixels must follow the A-set bank ($5127)"
+    );
+    assert_ne!(
+        bg_8x16, sprite_a0,
+        "in 8x16 mode BG (B-set) and sprite (A-set) render from different banks"
+    );
+}
+
 #[test]
 fn mmc5_state_hash_and_save_state_round_trip() {
     let mut rom = ines(4, 1);
