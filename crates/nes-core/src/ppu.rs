@@ -35,6 +35,12 @@ const CHR_BYTES: usize = 8 * 1024;
 const NAMETABLE_RAM_BYTES: usize = 2 * 1024;
 const PALETTE_RAM_BYTES: usize = 32;
 
+/// Capacity of the per-dot pattern-fetch address log used by the MMC2/MMC4 CHR
+/// tile latch. A single `step_dot` performs at most one background tile fetch
+/// (low + high plane = 2 addresses) plus one sprite pattern-slot prefetch
+/// (2 addresses); 8 gives comfortable headroom.
+pub(crate) const CHR_FETCH_BUF_LEN: usize = 8;
+
 const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (84, 84, 84),
     (0, 30, 116),
@@ -240,6 +246,16 @@ pub struct Ppu {
     render_revision: u64,
     bg_tile_cache: BgTileCache,
     sprite_scanline_cache: SpriteScanlineCache,
+    /// When set, pattern-table fetch addresses are recorded during `step_dot`
+    /// so the MMC2/MMC4 CHR tile latch can observe them. Enabled by the core
+    /// only for those mappers; all other mappers leave this off, so the render
+    /// path pays nothing and behaves identically. Transient (not snapshotted);
+    /// re-established by the core after load via `set_chr_fetch_recording`.
+    record_chr_fetches: bool,
+    /// Pattern-fetch addresses recorded during the current dot, drained by the
+    /// per-dot mapper pump in the core.
+    chr_fetch_buf: [u16; CHR_FETCH_BUF_LEN],
+    chr_fetch_len: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -350,6 +366,9 @@ impl Ppu {
             render_revision: 0,
             bg_tile_cache: BgTileCache::default(),
             sprite_scanline_cache: SpriteScanlineCache::default(),
+            record_chr_fetches: false,
+            chr_fetch_buf: [0; CHR_FETCH_BUF_LEN],
+            chr_fetch_len: 0,
         }
     }
 
@@ -395,6 +414,37 @@ impl Ppu {
             self.pending_live_chr_updates.clear();
         }
         self.mark_render_state_dirty();
+    }
+
+    /// Enables or disables recording of PPU pattern-table fetch addresses.
+    ///
+    /// The core turns this on only for the MMC2/MMC4 mappers, whose CHR tile
+    /// latch must observe pattern fetches. For every other mapper it stays off,
+    /// so `step_dot` records nothing and the render path is unchanged.
+    pub fn set_chr_fetch_recording(&mut self, enabled: bool) {
+        self.record_chr_fetches = enabled;
+        if !enabled {
+            self.chr_fetch_len = 0;
+        }
+    }
+
+    /// Drains the pattern-fetch addresses recorded during the most recent
+    /// `step_dot` into `out`, returning how many were written. Always returns 0
+    /// unless recording is enabled (see [`Ppu::set_chr_fetch_recording`]).
+    pub fn take_chr_fetches(&mut self, out: &mut [u16; CHR_FETCH_BUF_LEN]) -> usize {
+        let len = self.chr_fetch_len;
+        out[..len].copy_from_slice(&self.chr_fetch_buf[..len]);
+        self.chr_fetch_len = 0;
+        len
+    }
+
+    /// Records a pattern-table fetch address for the CHR tile latch. Cheap
+    /// no-op when recording is disabled or the per-dot log is already full.
+    fn record_chr_fetch(&mut self, addr: u16) {
+        if self.record_chr_fetches && self.chr_fetch_len < CHR_FETCH_BUF_LEN {
+            self.chr_fetch_buf[self.chr_fetch_len] = addr;
+            self.chr_fetch_len += 1;
+        }
     }
 
     /// Updates current nametable mirroring mode.
@@ -491,6 +541,9 @@ impl Ppu {
         self.render_revision = 0;
         self.bg_tile_cache = BgTileCache::default();
         self.sprite_scanline_cache = SpriteScanlineCache::default();
+        // record_chr_fetches is re-established by the core after load_state;
+        // just clear any stale pending fetches.
+        self.chr_fetch_len = 0;
         self.framebuffer = blank_framebuffer();
         self.render_full_framebuffer();
     }
@@ -542,6 +595,11 @@ impl Ppu {
 
     /// Advances one PPU dot.
     pub fn step_dot(&mut self) {
+        // Start each dot with an empty pattern-fetch log (only tracked for the
+        // MMC2/MMC4 CHR latch; a no-op otherwise).
+        if self.record_chr_fetches {
+            self.chr_fetch_len = 0;
+        }
         if self.scanline == PRE_RENDER_SCANLINE
             && self.dot == DOTS_PER_SCANLINE - 2
             && self.odd_frame
@@ -1212,6 +1270,11 @@ impl Ppu {
     fn populate_bg_tile_cache(&mut self, key: BgTileCacheKey) {
         let tile_index = self.read_ppu_data(key.nametable_addr);
         let pattern_addr = key.pattern_base + (u16::from(tile_index) * 16) + u16::from(key.fine_y);
+        // Report both plane fetches to the mapper's CHR tile latch (MMC2/MMC4).
+        // The high-plane address (`+8`) is what matches the `$_FD8`/`$_FE8`
+        // trigger; recording both mirrors the real per-tile bus reads.
+        self.record_chr_fetch(pattern_addr);
+        self.record_chr_fetch(pattern_addr + 8);
         let plane0 = self.live_chr[pattern_addr as usize];
         let plane1 = self.live_chr[(pattern_addr + 8) as usize];
         let attr = self.read_ppu_data(key.attr_addr);
@@ -1359,6 +1422,15 @@ impl Ppu {
         scanline: usize,
         chr: &[u8; CHR_BYTES],
     ) -> Option<(u8, u8)> {
+        let pattern_addr = self.sprite_pattern_addr(sprite_index, scanline)?;
+        Some((chr[pattern_addr as usize], chr[(pattern_addr + 8) as usize]))
+    }
+
+    /// Computes the CHR pattern-table address of a sprite's low plane for the
+    /// given scanline, or `None` when the sprite is not in range. Shared by the
+    /// plane fetch and the MMC2/MMC4 CHR-latch recording so both see identical
+    /// addresses.
+    fn sprite_pattern_addr(&self, sprite_index: usize, scanline: usize) -> Option<u16> {
         let base = sprite_index * 4;
         let sprite_y = usize::from(self.oam[base]).wrapping_add(1);
         let sprite_height = if self.ctrl & CTRL_SPRITE_SIZE_8X16 != 0 {
@@ -1392,7 +1464,7 @@ impl Ppu {
             table + u16::from(tile) * 16 + u16::from(local_y)
         };
 
-        Some((chr[pattern_addr as usize], chr[(pattern_addr + 8) as usize]))
+        Some(pattern_addr)
     }
 
     fn prefetch_sprite_pattern_slot(&mut self) {
@@ -1418,6 +1490,13 @@ impl Ppu {
         let Some(sprite_index) = self.nth_scanline_sprite(target_scanline as usize, slot) else {
             return;
         };
+        // Report the sprite pattern fetch to the mapper's CHR tile latch. This
+        // is the real sprite fetch window (dots 257-320), so recording here
+        // matches hardware timing for the high ($1FD8/$1FE8) latch triggers.
+        if let Some(addr) = self.sprite_pattern_addr(sprite_index, target_scanline as usize) {
+            self.record_chr_fetch(addr);
+            self.record_chr_fetch(addr + 8);
+        }
         let Some((plane0, plane1)) =
             self.sprite_pattern_planes(sprite_index, target_scanline as usize, &self.chr)
         else {

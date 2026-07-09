@@ -1,23 +1,41 @@
 //! Cartridge PRG mapper abstractions and implementations.
 
 mod axrom;
+mod camerica;
 mod cnrom;
+mod colordreams;
+mod fme7;
 mod gxrom;
 mod mmc1;
+mod mmc2;
 mod mmc3;
+mod mmc4;
+mod namco108;
 mod nrom;
 mod uxrom;
 
 pub use axrom::Axrom;
 pub(crate) use axrom::AxromState;
+pub use camerica::Camerica;
+pub(crate) use camerica::CamericaState;
 pub use cnrom::Cnrom;
 pub(crate) use cnrom::CnromState;
+pub use colordreams::ColorDreams;
+pub(crate) use colordreams::ColorDreamsState;
+pub use fme7::Fme7;
+pub(crate) use fme7::Fme7State;
 pub use gxrom::Gxrom;
 pub(crate) use gxrom::GxromState;
 pub use mmc1::Mmc1;
 pub(crate) use mmc1::Mmc1State;
+pub use mmc2::Mmc2;
+pub(crate) use mmc2::Mmc2State;
 pub use mmc3::Mmc3;
 pub(crate) use mmc3::Mmc3State;
+pub use mmc4::Mmc4;
+pub(crate) use mmc4::Mmc4State;
+pub use namco108::Namco108;
+pub(crate) use namco108::Namco108State;
 pub use nrom::Nrom;
 pub use uxrom::Uxrom;
 pub(crate) use uxrom::UxromState;

@@ -433,7 +433,10 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
-    matches!(mapper_id, 0 | 1 | 2 | 4)
+    matches!(
+        mapper_id,
+        0 | 1 | 2 | 3 | 4 | 7 | 9 | 10 | 11 | 66 | 69 | 71 | 206
+    )
 }
 
 #[cfg(test)]
@@ -611,10 +614,13 @@ mod tests {
 
     #[test]
     fn mapper_supported_by_core_matches_core_surface() {
-        assert!(mapper_supported_by_core(0));
-        assert!(mapper_supported_by_core(1));
-        assert!(mapper_supported_by_core(2));
-        assert!(mapper_supported_by_core(4));
-        assert!(!mapper_supported_by_core(69));
+        for id in [0, 1, 2, 3, 4, 7, 9, 10, 11, 66, 69, 71, 206] {
+            assert!(
+                mapper_supported_by_core(id),
+                "mapper {id} should be supported"
+            );
+        }
+        assert!(!mapper_supported_by_core(5));
+        assert!(!mapper_supported_by_core(163));
     }
 }

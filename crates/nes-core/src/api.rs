@@ -13,10 +13,11 @@ use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cheat_codes::{CheatCode, CheatCodeError};
 use crate::cpu::{Cpu, CpuBusAccess, CpuError, CpuMmioRead, CpuSnapshot, CpuWrite};
 use crate::mapper::{
-    Axrom, AxromState, Cnrom, CnromState, Gxrom, GxromState, Mmc1, Mmc1State, Mmc3, Mmc3State,
-    Nrom, Uxrom, UxromState,
+    Axrom, AxromState, Camerica, CamericaState, Cnrom, CnromState, ColorDreams, ColorDreamsState,
+    Fme7, Fme7State, Gxrom, GxromState, Mmc1, Mmc1State, Mmc2, Mmc2State, Mmc3, Mmc3State, Mmc4,
+    Mmc4State, Namco108, Namco108State, Nrom, Uxrom, UxromState,
 };
-use crate::ppu::{Ppu, PpuSnapshot};
+use crate::ppu::{CHR_FETCH_BUF_LEN, Ppu, PpuSnapshot};
 use crate::rom::{NametableMirroring, RomError, parse_ines};
 use crate::scheduler::{Scheduler, SchedulerSnapshot};
 
@@ -28,6 +29,7 @@ const PRG_32K_BYTES: usize = 32 * 1024;
 const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
 const CHR_8K_BYTES: usize = 8 * 1024;
+const CHR_4K_BYTES: usize = 4 * 1024;
 const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
 
 /// Represents a standard NES controller button.
@@ -275,6 +277,12 @@ enum MapperDeltaKind {
     Axrom(AxromState),
     Gxrom(GxromState),
     Mmc3(Mmc3State),
+    ColorDreams(ColorDreamsState),
+    Camerica(CamericaState),
+    Namco108(Namco108State),
+    Fme7(Fme7State),
+    Mmc2(Mmc2State),
+    Mmc4(Mmc4State),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -297,6 +305,12 @@ enum LoadedMapper {
     Axrom(Axrom),
     Gxrom(Gxrom),
     Mmc3(Mmc3),
+    ColorDreams(ColorDreams),
+    Camerica(Camerica),
+    Namco108(Namco108),
+    Fme7(Fme7),
+    Mmc2(Mmc2),
+    Mmc4(Mmc4),
 }
 
 impl LoadedMapper {
@@ -309,6 +323,12 @@ impl LoadedMapper {
             Self::Axrom(mapper) => mapper.read_prg(addr),
             Self::Gxrom(mapper) => mapper.read_prg(addr),
             Self::Mmc3(mapper) => mapper.read_prg(addr),
+            Self::ColorDreams(mapper) => mapper.read_prg(addr),
+            Self::Camerica(mapper) => mapper.read_prg(addr),
+            Self::Namco108(mapper) => mapper.read_prg(addr),
+            Self::Fme7(mapper) => mapper.read_prg(addr),
+            Self::Mmc2(mapper) => mapper.read_prg(addr),
+            Self::Mmc4(mapper) => mapper.read_prg(addr),
         }
     }
 
@@ -321,6 +341,35 @@ impl LoadedMapper {
             Self::Axrom(mapper) => mapper.write_prg(addr, value),
             Self::Gxrom(mapper) => mapper.write_prg(addr, value),
             Self::Mmc3(mapper) => mapper.write_prg(addr, value),
+            Self::ColorDreams(mapper) => mapper.write_prg(addr, value),
+            Self::Camerica(mapper) => mapper.write_prg(addr, value),
+            Self::Namco108(mapper) => mapper.write_prg(addr, value),
+            Self::Fme7(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc2(mapper) => mapper.write_prg(addr, value),
+            Self::Mmc4(mapper) => mapper.write_prg(addr, value),
+        }
+    }
+
+    /// Reads a byte from cartridge PRG-RAM (`$6000..=$7FFF`), or `None` when the
+    /// mapper has no work RAM at `addr`. Mappers without PRG-RAM return `None`
+    /// so the CPU flat image at `$6000..=$7FFF` is left untouched.
+    fn read_prg_ram(&self, addr: u16) -> Option<u8> {
+        match self {
+            Self::Mmc3(mapper) => mapper.read_prg_ram(addr),
+            Self::Fme7(mapper) => mapper.read_prg_ram(addr),
+            Self::Mmc4(mapper) => mapper.read_prg_ram(addr),
+            _ => None,
+        }
+    }
+
+    /// Writes a byte to cartridge PRG-RAM (`$6000..=$7FFF`). Mappers without
+    /// work RAM ignore the write.
+    fn write_prg_ram(&mut self, addr: u16, value: u8) {
+        match self {
+            Self::Mmc3(mapper) => mapper.write_prg_ram(addr, value),
+            Self::Fme7(mapper) => mapper.write_prg_ram(addr, value),
+            Self::Mmc4(mapper) => mapper.write_prg_ram(addr, value),
+            _ => {}
         }
     }
 
@@ -329,6 +378,12 @@ impl LoadedMapper {
             Self::Mmc3(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Cnrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             Self::Gxrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::ColorDreams(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Camerica(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Namco108(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Fme7(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Mmc2(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
+            Self::Mmc4(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
             _ => None,
         }
     }
@@ -337,20 +392,46 @@ impl LoadedMapper {
         match self {
             Self::Axrom(mapper) => Some(mapper.mirroring()),
             Self::Mmc3(mapper) => Some(mapper.mirroring()),
+            Self::Fme7(mapper) => Some(mapper.mirroring()),
+            Self::Mmc2(mapper) => Some(mapper.mirroring()),
+            Self::Mmc4(mapper) => Some(mapper.mirroring()),
             _ => None,
+        }
+    }
+
+    /// Whether this mapper wants per-pattern-fetch CHR notifications (the
+    /// MMC2/MMC4 tile latch). Used to gate PPU CHR-fetch recording so
+    /// non-latching mappers pay zero cost in the render path.
+    #[must_use]
+    fn wants_chr_fetch_notify(&self) -> bool {
+        matches!(self, Self::Mmc2(_) | Self::Mmc4(_))
+    }
+
+    /// Forwards a PPU pattern-table fetch address to the mapper's CHR latch.
+    /// Returns `true` when the mapper's CHR window changed and must be re-synced
+    /// to the PPU. All non-latching mappers are a no-op returning `false`.
+    #[must_use]
+    fn notify_ppu_chr_fetch(&mut self, addr: u16) -> bool {
+        match self {
+            Self::Mmc2(mapper) => mapper.notify_ppu_chr_fetch(addr),
+            Self::Mmc4(mapper) => mapper.notify_ppu_chr_fetch(addr),
+            _ => false,
         }
     }
 
     fn irq_pending(&self) -> bool {
         match self {
             Self::Mmc3(mapper) => mapper.irq_pending(),
+            Self::Fme7(mapper) => mapper.irq_pending(),
             _ => false,
         }
     }
 
     fn on_ppu_dot(&mut self, scanline: u16, dot: u16, rendering_enabled: bool, ppu_ctrl: u8) {
-        if let Self::Mmc3(mapper) = self {
-            mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl);
+        match self {
+            Self::Mmc3(mapper) => mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl),
+            Self::Fme7(mapper) => mapper.on_ppu_dot(scanline, dot, rendering_enabled, ppu_ctrl),
+            _ => {}
         }
     }
 
@@ -359,6 +440,12 @@ impl LoadedMapper {
             Self::Cnrom(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             Self::Gxrom(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             Self::Mmc3(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::ColorDreams(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Camerica(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Namco108(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Fme7(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Mmc2(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
+            Self::Mmc4(mapper) => mapper.sync_chr_ram_from_ppu_window(window),
             _ => {}
         }
     }
@@ -369,6 +456,12 @@ impl LoadedMapper {
             Self::Cnrom(mapper) => mapper.chr_writable(),
             Self::Gxrom(mapper) => mapper.chr_writable(),
             Self::Mmc3(mapper) => mapper.chr_writable(),
+            Self::ColorDreams(mapper) => mapper.chr_writable(),
+            Self::Camerica(mapper) => mapper.chr_writable(),
+            Self::Namco108(mapper) => mapper.chr_writable(),
+            Self::Fme7(mapper) => mapper.chr_writable(),
+            Self::Mmc2(mapper) => mapper.chr_writable(),
+            Self::Mmc4(mapper) => mapper.chr_writable(),
             _ => false,
         }
     }
@@ -400,6 +493,30 @@ impl LoadedMapper {
                 let state = after.state();
                 (before.state() != state).then_some(MapperDeltaKind::Mmc3(state))
             }
+            (Self::ColorDreams(before), Self::ColorDreams(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::ColorDreams(state))
+            }
+            (Self::Camerica(before), Self::Camerica(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Camerica(state))
+            }
+            (Self::Namco108(before), Self::Namco108(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Namco108(state))
+            }
+            (Self::Fme7(before), Self::Fme7(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Fme7(state))
+            }
+            (Self::Mmc2(before), Self::Mmc2(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc2(state))
+            }
+            (Self::Mmc4(before), Self::Mmc4(after)) => {
+                let state = after.state();
+                (before.state() != state).then_some(MapperDeltaKind::Mmc4(state))
+            }
             _ => Some(MapperDeltaKind::Replace(Some(after.clone()))),
         }?;
 
@@ -416,6 +533,12 @@ impl LoadedMapper {
             Self::Axrom(mapper) => MapperDeltaKind::Axrom(mapper.state()),
             Self::Gxrom(mapper) => MapperDeltaKind::Gxrom(mapper.state()),
             Self::Mmc3(mapper) => MapperDeltaKind::Mmc3(mapper.state()),
+            Self::ColorDreams(mapper) => MapperDeltaKind::ColorDreams(mapper.state()),
+            Self::Camerica(mapper) => MapperDeltaKind::Camerica(mapper.state()),
+            Self::Namco108(mapper) => MapperDeltaKind::Namco108(mapper.state()),
+            Self::Fme7(mapper) => MapperDeltaKind::Fme7(mapper.state()),
+            Self::Mmc2(mapper) => MapperDeltaKind::Mmc2(mapper.state()),
+            Self::Mmc4(mapper) => MapperDeltaKind::Mmc4(mapper.state()),
         };
 
         Some(MapperDelta { kind })
@@ -463,7 +586,49 @@ impl LoadedMapper {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
+                mapper.restore_state(state.clone());
+            }
+            MapperDeltaKind::ColorDreams(state) => {
+                let Self::ColorDreams(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
                 mapper.restore_state(*state);
+            }
+            MapperDeltaKind::Camerica(state) => {
+                let Self::Camerica(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(*state);
+            }
+            MapperDeltaKind::Namco108(state) => {
+                let Self::Namco108(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(*state);
+            }
+            MapperDeltaKind::Fme7(state) => {
+                let Self::Fme7(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(state.clone());
+            }
+            MapperDeltaKind::Mmc2(state) => {
+                let Self::Mmc2(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(*state);
+            }
+            MapperDeltaKind::Mmc4(state) => {
+                let Self::Mmc4(mapper) = self else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                };
+                mapper.restore_state(state.clone());
             }
             MapperDeltaKind::Replace(_) => {
                 debug_assert!(
@@ -1295,7 +1460,13 @@ impl NesCore {
             3 => self.build_cnrom(prg_rom, chr_rom),
             4 => self.build_mmc3(prg_rom, chr_rom, mirroring),
             7 => self.build_axrom(prg_rom),
+            9 => self.build_mmc2(prg_rom, chr_rom),
+            10 => self.build_mmc4(prg_rom, chr_rom),
+            11 => self.build_color_dreams(prg_rom, chr_rom),
             66 => self.build_gxrom(prg_rom, chr_rom),
+            69 => self.build_fme7(prg_rom, chr_rom),
+            71 => self.build_camerica(prg_rom),
+            206 => self.build_namco108(prg_rom, chr_rom),
             _ => Err(CoreError::RomLoadFailed(RomError::UnsupportedMapper(
                 mapper_id,
             ))),
@@ -1377,6 +1548,110 @@ impl NesCore {
         )))
     }
 
+    fn build_color_dreams(
+        &self,
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+    ) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_32K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_camerica(&self, prg_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_BANK_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Camerica(Camerica::from_prg_rom(
+            prg_rom.to_vec(),
+        )))
+    }
+
+    fn build_namco108(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if chr_rom.is_empty() || !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Namco108(Namco108::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_fme7(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        if prg_rom.len() < PRG_16K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        if !chr_rom.is_empty() && !chr_rom.len().is_multiple_of(CHR_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Fme7(Fme7::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_mmc2(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        // MMC2 (Punch-Out!!): switchable 8KB PRG bank + fixed last three banks.
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_8K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        // MMC2 titles ship CHR-ROM in 4KB banks (at least 8KB).
+        if chr_rom.len() < CHR_8K_BYTES || !chr_rom.len().is_multiple_of(CHR_4K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc2(Mmc2::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
+    fn build_mmc4(&self, prg_rom: &[u8], chr_rom: &[u8]) -> Result<LoadedMapper, CoreError> {
+        // MMC4 (Fire Emblem): switchable 16KB PRG bank + fixed last 16KB bank.
+        if prg_rom.len() < PRG_32K_BYTES || !prg_rom.len().is_multiple_of(PRG_16K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                prg_rom.len(),
+            )));
+        }
+        // MMC4 titles ship CHR-ROM in 4KB banks (at least 8KB).
+        if chr_rom.len() < CHR_8K_BYTES || !chr_rom.len().is_multiple_of(CHR_4K_BYTES) {
+            return Err(CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(
+                chr_rom.len(),
+            )));
+        }
+        Ok(LoadedMapper::Mmc4(Mmc4::from_prg_chr(
+            prg_rom.to_vec(),
+            chr_rom.to_vec(),
+        )))
+    }
+
     fn build_mmc3(
         &self,
         prg_rom: &[u8],
@@ -1401,16 +1676,40 @@ impl NesCore {
     }
 
     fn sync_mapper_prg_window(&mut self) {
+        if let Some(mapper) = self.mapper.as_ref() {
+            for addr in 0x8000..=0xFFFF {
+                let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
+                self.cpu.write_byte(addr, value);
+            }
+        }
+        // Materialize the $6000-$7FFF PRG-RAM window for mappers that expose
+        // work RAM. Mappers without WRAM return `None` for every address, so
+        // the CPU flat image is left exactly as before.
+        self.sync_mapper_prg_ram_window();
+    }
+
+    fn sync_mapper_prg_ram_window(&mut self) {
         let Some(mapper) = self.mapper.as_ref() else {
             return;
         };
-        for addr in 0x8000..=0xFFFF {
-            let value = self.apply_cheat_codes(addr, mapper.read_prg(addr));
-            self.cpu.write_byte(addr, value);
+        for addr in 0x6000..=0x7FFF {
+            if let Some(raw) = mapper.read_prg_ram(addr) {
+                let value = self.apply_cheat_codes(addr, raw);
+                self.cpu.write_byte(addr, value);
+            }
         }
     }
 
     fn sync_mapper_chr_window(&mut self) {
+        // Gate per-pattern-fetch CHR recording to mappers that use the tile
+        // latch (MMC2/MMC4). This is the single source of truth and is re-run on
+        // every load and PRG-write remap, so the flag can never go stale.
+        let wants_fetch = self
+            .mapper
+            .as_ref()
+            .is_some_and(LoadedMapper::wants_chr_fetch_notify);
+        self.ppu.set_chr_fetch_recording(wants_fetch);
+
         let Some(mapper) = self.mapper.as_ref() else {
             return;
         };
@@ -1485,6 +1784,20 @@ impl NesCore {
             false
         };
 
+        // Route $6000-$7FFF writes to cartridge PRG-RAM. Mappers without work
+        // RAM ignore the write and re-materialize nothing, so the flat image
+        // keeps the written byte exactly as before.
+        let prg_ram_write_needed = if (0x6000..=0x7FFF).contains(&addr) {
+            if let Some(mapper) = self.mapper.as_mut() {
+                mapper.write_prg_ram(addr, value);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
             self.ppu
                 .write_register(normalize_ppu_register_addr(addr), value);
@@ -1507,6 +1820,12 @@ impl NesCore {
             self.sync_mapper_prg_window();
             self.sync_mapper_mirroring();
             self.sync_mapper_chr_window();
+        }
+        if prg_ram_write_needed {
+            // Re-materialize the $6000-$7FFF window so a subsequent CPU read
+            // observes the mapper's stored byte (respecting write protection /
+            // chip-enable), rather than the raw flat write.
+            self.sync_mapper_prg_ram_window();
         }
         if ppu_changed {
             self.sync_ppu_register_image();
@@ -1531,6 +1850,30 @@ impl NesCore {
             Some(LoadedMapper::Mmc3(mapper)) => {
                 0x40 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
                     ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+            }
+            Some(LoadedMapper::ColorDreams(mapper)) => {
+                0x50 ^ u64::from(mapper.selected_prg_bank())
+                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
+            }
+            Some(LoadedMapper::Camerica(mapper)) => 0x51 ^ u64::from(mapper.selected_bank()),
+            Some(LoadedMapper::Namco108(mapper)) => {
+                0x52 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+            }
+            Some(LoadedMapper::Fme7(mapper)) => {
+                0x53 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+                    ^ (u64::from(mapper.irq_pending()) << 32)
+            }
+            Some(LoadedMapper::Mmc2(mapper)) => {
+                0x54 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+            }
+            Some(LoadedMapper::Mmc4(mapper)) => {
+                0x55 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
             }
         }
     }
@@ -1611,10 +1954,36 @@ impl NesCore {
                         self.ppu.ctrl(),
                     );
                 }
+                self.pump_mapper_chr_fetches();
             }
             if let Some(request) = dmc_request {
                 self.apply_dmc_dma_request(request);
             }
+        }
+    }
+
+    /// Drains the PPU's per-dot pattern-fetch log into the mapper's CHR tile
+    /// latch (MMC2/MMC4). When a latch flips, the mapper's CHR window changed,
+    /// so it is re-synced to the PPU (deferred to the next prefetch boundary,
+    /// exactly like an MMC3 mid-frame CHR split). For every non-latching mapper
+    /// the PPU records nothing, so `take_chr_fetches` returns 0 and this is a
+    /// single cheap early return — zero behavior change.
+    fn pump_mapper_chr_fetches(&mut self) {
+        let mut buf = [0_u16; CHR_FETCH_BUF_LEN];
+        let count = self.ppu.take_chr_fetches(&mut buf);
+        if count == 0 {
+            return;
+        }
+        let mut changed = false;
+        if let Some(mapper) = self.mapper.as_mut() {
+            for &addr in &buf[..count] {
+                if mapper.notify_ppu_chr_fetch(addr) {
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            self.sync_mapper_chr_window();
         }
     }
 
@@ -1636,6 +2005,7 @@ impl NesCore {
                         self.ppu.ctrl(),
                     );
                 }
+                self.pump_mapper_chr_fetches();
             }
             if let Some(chained) = dmc_request {
                 let byte = self.cpu.read_byte(chained.addr);
@@ -1722,9 +2092,13 @@ mod tests {
         mmc3.write_prg(0xC000, 1); // IRQ reload value
         mmc3.write_prg(0xC001, 0); // IRQ reload clear
         mmc3.write_prg(0xE001, 0); // IRQ enable
-        // Trigger A12 edges to decrement counter and trigger IRQ (visible scanline < 240)
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
+        // Drive two full visible scanlines of A12 edges (BG=$0000, sprites=$1000)
+        // to reload then decrement the counter to zero.
+        for scanline in 0..2 {
+            for dot in 0..=340 {
+                mmc3.on_ppu_dot(scanline, dot, true, 0x08);
+            }
+        }
 
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.irq_pending());
@@ -1744,8 +2118,11 @@ mod tests {
 
         let mut mapper = LoadedMapper::Mmc3(mmc3);
 
-        mapper.on_ppu_dot(0, 260, true, 0x08);
-        mapper.on_ppu_dot(0, 260, true, 0x08);
+        for scanline in 0..2 {
+            for dot in 0..=340 {
+                mapper.on_ppu_dot(scanline, dot, true, 0x08);
+            }
+        }
 
         assert!(mapper.irq_pending());
     }
@@ -1847,8 +2224,11 @@ mod tests {
         mmc3.write_prg(0xC000, 1);
         mmc3.write_prg(0xC001, 0);
         mmc3.write_prg(0xE001, 0);
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
-        mmc3.on_ppu_dot(0, 260, true, 0x08);
+        for scanline in 0..2 {
+            for dot in 0..=340 {
+                mmc3.on_ppu_dot(scanline, dot, true, 0x08);
+            }
+        }
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.irq_pending());
     }
@@ -2220,6 +2600,162 @@ mod tests_rom_loader_internal {
             err,
             CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
         ));
+    }
+
+    #[test]
+    fn test_build_new_mapper_size_validation_errors() {
+        let core = NesCore::new();
+        let mirror = NametableMirroring::Horizontal;
+
+        // Mapper 11 (Color Dreams): PRG must be a positive multiple of 32KB;
+        // CHR (when present) a multiple of 8KB.
+        assert!(core.build_mapper(11, &[0; 16 * 1024], &[], mirror).is_err());
+        assert!(
+            core.build_mapper(11, &[0; 32 * 1024], &[0; 10 * 1024], mirror)
+                .is_err()
+        );
+
+        // Mapper 71 (Camerica): PRG at least 32KB and a multiple of 16KB.
+        assert!(core.build_mapper(71, &[0; 8 * 1024], &[], mirror).is_err());
+
+        // Mapper 206 (Namco-108): PRG >= 32KB, multiple of 8KB; CHR required and
+        // a multiple of 8KB.
+        assert!(
+            core.build_mapper(206, &[0; 16 * 1024], &[0; 8 * 1024], mirror)
+                .is_err()
+        );
+        assert!(
+            core.build_mapper(206, &[0; 32 * 1024], &[], mirror)
+                .is_err()
+        );
+        assert!(
+            core.build_mapper(206, &[0; 32 * 1024], &[0; 10 * 1024], mirror)
+                .is_err()
+        );
+
+        // Mapper 69 (FME-7): PRG >= 16KB, multiple of 8KB; CHR multiple of 8KB.
+        assert!(core.build_mapper(69, &[0; 8 * 1024], &[], mirror).is_err());
+        assert!(
+            core.build_mapper(69, &[0; 16 * 1024], &[0; 10 * 1024], mirror)
+                .is_err()
+        );
+
+        // Mapper 9 (MMC2): PRG >= 32KB, multiple of 8KB; CHR >= 8KB, multiple of 4KB.
+        assert!(
+            core.build_mapper(9, &[0; 16 * 1024], &[0; 8 * 1024], mirror)
+                .is_err()
+        );
+        assert!(
+            core.build_mapper(9, &[0; 32 * 1024], &[0; 4 * 1024], mirror)
+                .is_err()
+        );
+
+        // Mapper 10 (MMC4): PRG >= 32KB, multiple of 16KB; CHR >= 8KB, multiple of 4KB.
+        assert!(
+            core.build_mapper(10, &[0; 16 * 1024], &[0; 8 * 1024], mirror)
+                .is_err()
+        );
+        assert!(
+            core.build_mapper(10, &[0; 32 * 1024], &[0; 4 * 1024], mirror)
+                .is_err()
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests_new_mapper_deltas {
+    //! Covers the per-mapper `delta_to` / `snapshot_delta` / `apply_delta`
+    //! fan-out arms added for mappers 11/71/206/69/9/10. Each round trip mutates
+    //! a mapper, captures the delta, and asserts that applying it reconciles a
+    //! fresh copy back to the mutated state.
+    use super::*;
+
+    fn round_trip(before: LoadedMapper, mutate: impl FnOnce(&mut LoadedMapper)) {
+        let mut after = before.clone();
+        mutate(&mut after);
+
+        // Exercise the per-variant `chr_writable` fan-out arm.
+        let _ = before.chr_writable();
+
+        // The mutated mapper must produce a full-state snapshot delta for its
+        // variant (exercises the `snapshot_delta` arm).
+        assert!(
+            after.snapshot_delta().is_some(),
+            "mutated mapper should yield a snapshot delta"
+        );
+
+        // `delta_to` captures the mutation as a variant-specific delta...
+        let delta = before
+            .delta_to(&after)
+            .expect("a mutated mapper must produce a delta");
+
+        // ...and applying it reconciles a fresh copy of `before` into `after`.
+        let mut target = before.clone();
+        target.apply_delta(&delta, &[0_u8; CHR_8K_BYTES]);
+        assert!(
+            target.delta_to(&after).is_none(),
+            "apply_delta should reconcile the mapper runtime state"
+        );
+    }
+
+    #[test]
+    fn colordreams_delta_round_trip() {
+        let before = LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+        ));
+        round_trip(before, |m| m.write_prg(0x8000, 0x01)); // select PRG bank 1
+    }
+
+    #[test]
+    fn camerica_delta_round_trip() {
+        let before = LoadedMapper::Camerica(Camerica::from_prg_rom(vec![0; 64 * 1024]));
+        round_trip(before, |m| m.write_prg(0xC000, 0x02)); // select bank 2
+    }
+
+    #[test]
+    fn namco108_delta_round_trip() {
+        let before = LoadedMapper::Namco108(Namco108::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+        ));
+        round_trip(before, |m| {
+            m.write_prg(0x8000, 6); // select register 6 (R6 -> $8000 slot)
+            m.write_prg(0x8001, 3); // bank 3
+        });
+    }
+
+    #[test]
+    fn fme7_delta_round_trip() {
+        let before = LoadedMapper::Fme7(Fme7::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        round_trip(before, |m| {
+            m.write_prg(0x8000, 0x09); // command: PRG reg for $8000 slot
+            m.write_prg(0xA000, 3); // bank 3
+        });
+    }
+
+    #[test]
+    fn mmc2_delta_round_trip() {
+        let before = LoadedMapper::Mmc2(Mmc2::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        round_trip(before, |m| m.write_prg(0xA000, 2)); // select $8000 bank 2
+    }
+
+    #[test]
+    fn mmc4_delta_round_trip() {
+        let before = LoadedMapper::Mmc4(Mmc4::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        round_trip(before, |m| m.write_prg(0xA000, 1)); // select $8000 bank 1
+    }
+
+    #[test]
+    fn unchanged_new_mappers_produce_no_delta() {
+        // The `then_some(..)` false path: an unmutated mapper yields no delta.
+        let cd = LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+        ));
+        assert!(cd.delta_to(&cd.clone()).is_none());
+        let fme7 = LoadedMapper::Fme7(Fme7::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        assert!(fme7.delta_to(&fme7.clone()).is_none());
     }
 }
 
