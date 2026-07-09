@@ -1,4 +1,3 @@
-
 use std::io::{BufReader, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -266,7 +265,6 @@ fn writer_loop(
     Ok(())
 }
 
-
 fn reader_loop(stream: TcpStream, tx: Sender<ServerMessage>) -> Result<(), String> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
@@ -482,7 +480,11 @@ pub fn handle_netplay_server_message(
     Ok(())
 }
 
-fn read_line_bounded(reader: &mut impl std::io::BufRead, line: &mut String, limit: usize) -> Result<usize, std::io::Error> {
+fn read_line_bounded(
+    reader: &mut impl std::io::BufRead,
+    line: &mut String,
+    limit: usize,
+) -> Result<usize, std::io::Error> {
     let mut total_read = 0;
     loop {
         let (done, used) = {
@@ -676,7 +678,7 @@ mod tests {
 
     #[test]
 
-fn reader_loop_forwards_messages_and_reports_relay_close() {
+    fn reader_loop_forwards_messages_and_reports_relay_close() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
         let addr = listener.local_addr().expect("listener addr");
         let client_stream = TcpStream::connect(addr).expect("connect client");

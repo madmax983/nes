@@ -1,4 +1,3 @@
-
 //! Model Context Protocol (MCP) host server integration.
 //!
 //! This module provides the `McpHost`, a background server that bridges the
@@ -416,7 +415,11 @@ fn write_framed_message(writer: &mut impl Write, value: &Value) -> Result<(), St
         .map_err(|err| format!("failed writing framed response: {err}"))
 }
 
-fn read_line_bounded(reader: &mut impl std::io::BufRead, line: &mut String, limit: usize) -> Result<usize, std::io::Error> {
+fn read_line_bounded(
+    reader: &mut impl std::io::BufRead,
+    line: &mut String,
+    limit: usize,
+) -> Result<usize, std::io::Error> {
     let mut total_read = 0;
     loop {
         let (done, used) = {

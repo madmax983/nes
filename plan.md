@@ -1,5 +1,12 @@
-1. **Fix Memory Leak/Infinite Loop in `read_framed_message` in `nes-desktop/src/mcp_host.rs`**: I added a `total_header_bytes` limit check when reading headers to avoid infinite loops when malicious clients send unbounded streams without newlines, protecting against OOM.
-2. **Fix Memory Leak/Infinite Loop in `read_stdio_message` in `nes-mcp/src/main.rs`**: I added a `total_header_bytes` limit check similarly.
-3. **Fix Memory Leak/Infinite Loop in `read_client_message` in `nes-relay/src/main.rs` and `reader_loop` in `nes-desktop/src/netplay.rs`**: Replaced unbounded `read_line` with buffered bounded reads and returned errors when lines exceed a reasonable size (1MB limit for messages). Wait, I also replaced `BufReader`'s `read_line` with standard `Read::take` to limit the unbounded reads before falling back to `read_line`.
-4. **Fix Unreachable coverage**: Confirmed that the `unreachable!()` statements are either unreachables because of logic invariants (so cannot be tested normally without panics). Added testing for `decode_unofficial_rmw_addressing` and verified tests passed.
-5. **Pre-commit and verify**: Run `cargo clippy`, `cargo test`, and `cargo fmt`.
+1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
+   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
+   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
+   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+
+2. **Update imports in `main.rs`**
+   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+
+3. **Complete pre commit steps**
+   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+
+4. **Submit the PR**

@@ -1,4 +1,3 @@
-
 //! The `nes-relay` server application.
 //!
 //! This binary runs a TCP relay server that facilitates peer-to-peer multiplayer matching
@@ -290,7 +289,6 @@ fn handle_client(
     Ok(())
 }
 
-
 fn read_client_message(
     reader: &mut BufReader<TcpStream>,
     line: &mut String,
@@ -382,7 +380,11 @@ fn cleanup_client(state: &Arc<Mutex<RelayState>>, room: &str, player: u8) -> Res
     Ok(())
 }
 
-fn read_line_bounded(reader: &mut impl std::io::BufRead, line: &mut String, limit: usize) -> Result<usize, std::io::Error> {
+fn read_line_bounded(
+    reader: &mut impl std::io::BufRead,
+    line: &mut String,
+    limit: usize,
+) -> Result<usize, std::io::Error> {
     let mut total_read = 0;
     loop {
         let (done, used) = {
@@ -772,7 +774,7 @@ mod tests {
 
     #[test]
 
-fn read_client_message_parses_and_detects_eof_and_errors() {
+    fn read_client_message_parses_and_detects_eof_and_errors() {
         let (mut client, server) = connected_pair();
         client
             .write_all(br#"{"type":"ping","nonce":42}"#)
@@ -988,7 +990,8 @@ fn read_client_message_parses_and_detects_eof_and_errors() {
             client.flush().expect("flush write");
             let mut line = String::new();
             let mut reader = BufReader::new(client);
-            let _ = crate::read_line_bounded(&mut reader, &mut line, 1024).expect("read joined response");
+            let _ = crate::read_line_bounded(&mut reader, &mut line, 1024)
+                .expect("read joined response");
             line
         });
 

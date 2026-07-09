@@ -1,4 +1,3 @@
-
 use std::io::{self, BufRead, BufReader, Write};
 
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
@@ -276,7 +275,6 @@ fn handle_tools_call(
     Ok(Some(call_result))
 }
 
-
 fn read_stdio_message(reader: &mut impl BufRead) -> Result<Option<Vec<u8>>, McpError> {
     let mut content_length = None::<usize>;
     let mut line = String::new();
@@ -341,7 +339,11 @@ fn write_stdio_message(writer: &mut impl Write, value: &Value) -> Result<(), Mcp
         .map_err(|err| McpError::Protocol(format!("failed writing stdio response: {err}")))
 }
 
-fn read_line_bounded(reader: &mut impl std::io::BufRead, line: &mut String, limit: usize) -> Result<usize, std::io::Error> {
+fn read_line_bounded(
+    reader: &mut impl std::io::BufRead,
+    line: &mut String,
+    limit: usize,
+) -> Result<usize, std::io::Error> {
     let mut total_read = 0;
     loop {
         let (done, used) = {
@@ -553,7 +555,7 @@ mod tests {
 
     #[test]
 
-fn read_stdio_message_handles_errors() {
+    fn read_stdio_message_handles_errors() {
         let mut reader = b"Content-Length: abc\r\n\r\n".as_slice();
         let err = read_stdio_message(&mut reader).unwrap_err();
         assert!(
