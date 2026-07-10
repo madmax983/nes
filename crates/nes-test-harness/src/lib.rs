@@ -34,27 +34,82 @@ pub use rom_paths::*;
 
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
+/// Represents a hardware write to the APU registers during integration tests.
+///
+/// This struct is used to generate an execution trace of all audio events triggered by the CPU,
+/// which can then be hashed using [`apu_write_hash`] to detect cycle-accuracy regressions.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::ApuWriteEvent;
+///
+/// let event = ApuWriteEvent { cpu_cycle: 1234, addr: 0x4000, value: 0x8F };
+/// assert_eq!(event.addr, 0x4000);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle since emulator power-on when this write occurred.
     pub cpu_cycle: u64,
+    /// The 16-bit address on the system bus being written to (e.g., `0x4000`).
     pub addr: u16,
+    /// The 8-bit value written by the CPU.
     pub value: u8,
 }
 
+/// Statistical breakdown of an audio waveform.
+///
+/// Useful for determining if a generated waveform is completely silent, excessively loud,
+/// offset from zero, or heavily clipped.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::audio_stats;
+///
+/// let samples = [1000, -1000, 1000, -1000];
+/// let stats = audio_stats(&samples);
+/// assert_eq!(stats.peak, 1000);
+/// assert_eq!(stats.dc_offset, 0.0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioStats {
+    /// The total number of `i16` samples processed.
     pub sample_count: usize,
+    /// Root Mean Square: A measure of the waveform's overall power/loudness.
     pub rms: f64,
+    /// The maximum absolute amplitude found in the samples.
     pub peak: i16,
+    /// The average amplitude of the waveform. Should ideally be close to `0.0`.
     pub dc_offset: f64,
+    /// The percentage `[0.0, 1.0]` of samples that hit the `i16` bounds (-32768 or 32767).
     pub clipping_ratio: f64,
 }
 
+/// The mathematical result of comparing two audio waveforms.
+///
+/// Used by integration tests to determine if the emulator's generated audio matches a
+/// known-good reference recording.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::compare_waveforms;
+///
+/// let a = [0, 100, 200, 100, 0];
+/// let b = [0, 99, 201, 100, 0];
+/// let result = compare_waveforms(&a, &b, 4);
+/// assert!(result.correlation > 0.99);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct WaveformComparison {
+    /// The number of samples processed (the minimum length of the two input slices).
     pub samples_compared: usize,
+    /// The Pearson correlation coefficient `[-1.0, 1.0]` indicating phase and shape similarity.
     pub correlation: f64,
+    /// The ratio of the loudness between the two waveforms.
     pub rms_ratio: f64,
+    /// The average difference in decibels between the frequency spectrums of both waveforms.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -97,6 +152,25 @@ pub fn collect_apu_register_writes(
     Ok(writes)
 }
 
+/// Computes a stable, deterministic FNV-1a hash of a sequence of [`ApuWriteEvent`]s.
+///
+/// This is heavily utilized in cycle-accurate integration testing. Instead of storing massive
+/// text files of execution logs, the test harness steps the emulator, captures all APU writes,
+/// and hashes them. A single mistimed CPU cycle or incorrect register value will drastically
+/// alter the hash, catching the regression immediately.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{ApuWriteEvent, apu_write_hash};
+///
+/// let events = [
+///     ApuWriteEvent { cpu_cycle: 10, addr: 0x4000, value: 0x80 },
+///     ApuWriteEvent { cpu_cycle: 15, addr: 0x4015, value: 0x01 },
+/// ];
+/// let hash = apu_write_hash(&events);
+/// assert_ne!(hash, 0);
+/// ```
 #[must_use]
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -177,6 +251,20 @@ pub fn capture_audio_window(
         .map_err(|err| format!("audio capture failed after warmup: {err}"))
 }
 
+/// Computes a stable, deterministic FNV-1a hash of a raw PCM audio stream.
+///
+/// Useful for validating that deterministic hardware behavior (like the APU length counters)
+/// produces the exact same bit-for-bit output across different runs, assuming the same ROM
+/// and inputs.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::waveform_hash;
+///
+/// let hash = waveform_hash(&[0, 10, -10, 0]);
+/// assert_ne!(hash, 0);
+/// ```
 #[must_use]
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
@@ -187,6 +275,21 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
     hash
 }
 
+/// Computes a high-level statistical analysis of an audio waveform.
+///
+/// This function extracts human-readable metrics like RMS (loudness), Peak amplitude, and
+/// DC Offset from raw `i16` samples. It is particularly helpful for debugging APU mixers.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::audio_stats;
+///
+/// let stats = audio_stats(&[0, 32000, 0, -32000]);
+/// assert_eq!(stats.peak, 32000);
+/// assert_eq!(stats.dc_offset, 0.0);
+/// assert!(stats.rms > 0.0);
+/// ```
 #[must_use]
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
@@ -225,6 +328,22 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
     }
 }
 
+/// Generates a Root Mean Square (RMS) volume envelope over a sliding window of audio samples.
+///
+/// This reduces a high-frequency waveform down to a low-frequency representation of its
+/// loudness over time. It is useful for visually analyzing APU envelope generators or sweeps
+/// without the noise of the underlying carrier wave.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rms_envelope;
+///
+/// let samples = [100, -100, 50, -50];
+/// let envelope = rms_envelope(&samples, 2);
+/// assert_eq!(envelope.len(), 2);
+/// assert!(envelope[0] > envelope[1]); // Volume goes down
+/// ```
 #[must_use]
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
@@ -327,6 +446,24 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
     Ok(samples)
 }
 
+/// Analyzes the structural and spectral similarities between two audio waveforms.
+///
+/// This is the primary verification tool for the emulator's APU audio generation. It compares
+/// the generated output (`lhs`) against a known-good recording (`rhs`). Because slight floating
+/// point differences or filter variations can cause bit-level divergence, this function relies
+/// on mathematical correlation and FFT magnitude differences to measure similarity, rather than
+/// strict equality.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::compare_waveforms;
+///
+/// let generated = [0, 100, 200, 100];
+/// let golden = [0, 99, 201, 100];
+/// let comparison = compare_waveforms(&generated, &golden, 4);
+/// assert!(comparison.correlation > 0.99); // Highly similar
+/// ```
 #[must_use]
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
@@ -372,6 +509,22 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
     }
 }
 
+/// Calculates the magnitude spectrum of an audio waveform in decibels (dB) using a Discrete Fourier Transform.
+///
+/// This converts the audio from the time domain (amplitude over time) to the frequency domain
+/// (power per frequency band).
+///
+/// Note: This is an O(N^2) DFT implementation meant only for small test inputs (`fft_size` < 1024),
+/// not a fast O(N log N) FFT for real-time DSP.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::fft_log_mag_db;
+///
+/// let bins = fft_log_mag_db(&[0, 100, 0, -100, 0, 100, 0, -100], 8);
+/// assert!(!bins.is_empty());
+/// ```
 #[must_use]
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
@@ -414,6 +567,21 @@ fn hann_window(idx: usize, len: usize) -> f64 {
     0.5 - 0.5 * phase.cos()
 }
 
+/// Parses the 16-byte iNES header of a ROM file to determine its Mapper ID.
+///
+/// It supports both the legacy iNES 1.0 format and the modern NES 2.0 format, ensuring that
+/// the extended upper nibbles of the mapper ID are properly parsed.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::detect_mapper_id;
+///
+/// let mut header = [0_u8; 16];
+/// header[0..4].copy_from_slice(b"NES\x1A");
+/// header[6] = 0x40; // Mapper 4, Lower nibble
+/// assert_eq!(detect_mapper_id(&header), Some(4));
+/// ```
 #[must_use]
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
@@ -431,6 +599,20 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     }
 }
 
+/// Returns `true` if the given iNES Mapper ID is fully implemented by the `NesCore`.
+///
+/// This is useful for test harnesses that iterate over directories of `.nes` files and need
+/// to dynamically skip ROMs that require unsupported mappers (like VRC6 or MMC5).
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::mapper_supported_by_core;
+///
+/// assert!(mapper_supported_by_core(0)); // NROM is supported
+/// assert!(mapper_supported_by_core(4)); // MMC3 is supported
+/// assert!(!mapper_supported_by_core(999)); // Unknown mapper
+/// ```
 #[must_use]
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(

@@ -3,6 +3,27 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Extracts the absolute path to the Super Mario Bros ROM from the `nes.toml` configuration file.
+///
+/// If `roms.smb` is not explicitly set, it will gracefully fallback to checking `desktop.rom_path`
+/// as a convenience.
+///
+/// ## Panics
+///
+/// Panics if the path is not configured in `nes.toml` or if the file does not exist on disk.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::smb_rom_path;
+///
+/// // Only runs if the user has SMB configured locally
+/// if Path::new("nes.toml").exists() {
+///     // let path = smb_rom_path();
+///     // assert!(Path::new(&path).exists());
+/// }
+/// ```
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +39,23 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Extracts the absolute path to the generic CPU test ROM (`nestest.nes`) from the configuration file.
+///
+/// ## Panics
+///
+/// Panics if `roms.nestest` is missing from `nes.toml` or if the file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::nestest_rom_path;
+///
+/// if Path::new("nes.toml").exists() {
+///     // let path = nestest_rom_path();
+///     // assert!(path.ends_with("nestest.nes"));
+/// }
+/// ```
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +65,23 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Extracts the absolute path to Blargg's CPU step integration test (`instr_test-v5/rom_singles/01-basics.nes`).
+///
+/// ## Panics
+///
+/// Panics if `roms.blargg_cpu` is missing from `nes.toml` or if the file does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::blargg_cpu_rom_path;
+///
+/// if Path::new("nes.toml").exists() {
+///     // let path = blargg_cpu_rom_path();
+///     // assert!(path.ends_with(".nes"));
+/// }
+/// ```
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +93,27 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Resolves a sorted list of absolute paths to every `.nes` file in Brad Smith's audio integration test suite.
+///
+/// The harness uses this to dynamically generate test cases for all APU channels (Square, Triangle, Noise, DMC)
+/// and run them in batch.
+///
+/// ## Panics
+///
+/// Panics if `roms.bbbradsmith_audio_suite_dir` is missing from `nes.toml`, if the directory does not exist,
+/// or if no `.nes` files are found inside.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::bbbradsmith_audio_suite_rom_paths;
+///
+/// if Path::new("nes.toml").exists() {
+///     // let roms = bbbradsmith_audio_suite_rom_paths();
+///     // assert!(!roms.is_empty());
+/// }
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +144,26 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Retrieves the path to the directory containing the "golden" `.pcm` audio reference files for the APU suite.
+///
+/// When the emulator runs an audio test ROM, it records the output and compares it structurally against
+/// the PCM file located in this directory.
+///
+/// ## Panics
+///
+/// Panics if `roms.bbbradsmith_audio_golden_dir` is missing from `nes.toml` or if the directory does not exist.
+///
+/// ## Examples
+///
+/// ```rust
+/// use std::path::Path;
+/// use nes_test_harness::bbbradsmith_audio_golden_dir_path;
+///
+/// if Path::new("nes.toml").exists() {
+///     // let dir = bbbradsmith_audio_golden_dir_path();
+///     // assert!(Path::new(&dir).is_dir());
+/// }
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();

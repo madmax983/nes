@@ -1,6 +1,19 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Resolves the canonical file path for the pre-compiled `homebrew.nes` test ROM.
+///
+/// This resolves relative to the `CARGO_MANIFEST_DIR` of the `nes-test-harness` crate, ensuring
+/// that tests run from anywhere in the workspace will correctly locate the file in `roms/homebrew/`.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
