@@ -654,22 +654,24 @@ fn handle_save_state(
     Ok(DispatchOutput::StateSlot { slot })
 }
 
+/// ⚡ Bolt Optimization:
+/// Removing the `.cloned()` allocation here prevents deep-copying the entire
+/// `CoreSnapshot` struct (which contains large arrays/vectors for emulator state)
+/// every time a state is loaded. This eliminates significant heap allocation
+/// overhead on the hot path for TAS workflows and rewind features.
 fn handle_load_state(
     core: &mut NesCore,
     params: &ToolParams,
 ) -> Result<DispatchOutput, DispatchError> {
     let slot = parse_slot(params);
-    let snapshot = {
-        let slots = saved_states()
-            .lock()
-            .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-        slots.get(&slot).cloned()
-    };
-    let Some(snapshot) = snapshot else {
+    let slots = saved_states()
+        .lock()
+        .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
+    let Some(snapshot) = slots.get(&slot) else {
         return Err(DispatchError::StateSlotNotFound(slot));
     };
 
-    core.load_state(&snapshot);
+    core.load_state(snapshot);
     Ok(DispatchOutput::StateSlot { slot })
 }
 

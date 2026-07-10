@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Optimized Dispatch and Rollback State Loading]**
+**Learning:** `CoreSnapshot` structs contain large arrays and vectors for the emulator RAM/ROM state. Using `.cloned()` when getting these from maps (e.g. `slots.get(&slot).cloned()`) forces a very expensive deep copy on every load/rollback.
+**Action:** Remove `.cloned()` and pass the borrowed reference directly to `core.load_state(snapshot)`. In `nes-netplay/src/rollback.rs`, rely on Rust's NLL (Non-Lexical Lifetimes) to let the borrow drop immediately after `load_state`, allowing subsequent mutable calls like `self.clear_from` without borrow checker conflicts.

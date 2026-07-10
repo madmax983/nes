@@ -681,6 +681,12 @@ impl RollbackEngine {
         );
     }
 
+    /// ⚡ Bolt Optimization:
+    /// Removing the `.cloned()` allocation inside this function prevents deep-copying
+    /// the `CoreSnapshot` on every network misprediction. By leveraging Rust's NLL
+    /// (Non-Lexical Lifetimes), we can pass a borrowed reference directly to `core.load_state()`.
+    /// The borrow drops immediately, allowing `self.clear_from` to mutate the map
+    /// without lifetime conflicts. This removes 1 heavy heap allocation per rollback event.
     fn rollback_from(&mut self, core: &mut NesCore, start_frame: u64) -> Result<(), RollbackError> {
         let rollback_span = self.next_frame.saturating_sub(start_frame);
         if rollback_span > u64::from(self.config.max_rollback_frames) {
@@ -694,9 +700,8 @@ impl RollbackEngine {
         let snapshot = self
             .snapshots
             .get(&start_frame)
-            .cloned()
             .ok_or(RollbackError::MissingSnapshot(start_frame))?;
-        core.load_state(&snapshot);
+        core.load_state(snapshot);
         self.clear_from(start_frame);
 
         for frame in start_frame..self.next_frame {
