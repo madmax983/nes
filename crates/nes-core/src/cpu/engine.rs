@@ -2411,7 +2411,10 @@ impl Cpu {
         // ($2002 VBlank clear, $2007 PPU data, $4015 APU status, $4016/$4017 controllers)
         // regardless of trace_enabled.
         match resolved {
-            0x2002 | 0x2007 | 0x4015 | 0x4016 | 0x4017 => {
+            // $5204 is the MMC5 scanline-IRQ status register; reading it clears
+            // the pending flag (handled in apply_cpu_read_side_effect). Harmless
+            // to record for other mappers, which ignore the side effect.
+            0x2002 | 0x2007 | 0x4015 | 0x4016 | 0x4017 | 0x5204 => {
                 self.mmio_reads.borrow_mut().push(CpuMmioRead {
                     addr: resolved,
                     bus_cycle,
