@@ -3,6 +3,21 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Retrieves the Super Mario Bros ROM path from the `nes.toml` configuration.
+///
+/// Falls back to `desktop.rom_path` if `roms.smb` is not configured.
+///
+/// ## Panics
+/// Panics if the path is missing from configuration or if the file does not exist on disk.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::smb_rom_path;
+///
+/// let path = smb_rom_path();
+/// assert!(!path.is_empty());
+/// ```
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +33,19 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Retrieves the `nestest.nes` ROM path from the `nes.toml` configuration.
+///
+/// ## Panics
+/// Panics if the path is missing from configuration or if the file does not exist on disk.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::nestest_rom_path;
+///
+/// let path = nestest_rom_path();
+/// assert!(!path.is_empty());
+/// ```
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +55,19 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Retrieves the Blargg CPU behavior test ROM path from the `nes.toml` configuration.
+///
+/// ## Panics
+/// Panics if the path is missing from configuration or if the file does not exist on disk.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::blargg_cpu_rom_path;
+///
+/// let path = blargg_cpu_rom_path();
+/// assert!(!path.is_empty());
+/// ```
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +79,21 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Recursively discovers all NES ROM paths located within the configured bbbradsmith audio suite directory.
+///
+/// Returns an alphabetically sorted list of file paths ending in `.nes`.
+///
+/// ## Panics
+/// Panics if the directory is missing from configuration, does not exist, or contains no `.nes` files.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::bbbradsmith_audio_suite_rom_paths;
+///
+/// let paths = bbbradsmith_audio_suite_rom_paths();
+/// assert!(!paths.is_empty());
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +124,20 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Retrieves the output directory path for saving/loading golden audio `.pcm` waveforms
+/// for the bbbradsmith audio suite.
+///
+/// ## Panics
+/// Panics if the path is missing from configuration or if the directory does not exist.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::bbbradsmith_audio_golden_dir_path;
+///
+/// let path = bbbradsmith_audio_golden_dir_path();
+/// assert!(!path.is_empty());
+/// ```
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
