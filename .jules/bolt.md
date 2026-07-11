@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[Optimized Array Returns over Vec]**
+**Learning:** Found a hot path function `chr_regions` returning `Vec<(usize, usize, usize)>` up to 8 items, causing a heap allocation on every CHR RAM sync execution in MMC5.
+**Action:** Replaced the `Vec` return type with a stack-allocated tuple `([(usize, usize, usize); 8], usize)` tracking the valid length, eliminating the heap allocation completely.
