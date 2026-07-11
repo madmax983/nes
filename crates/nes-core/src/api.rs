@@ -661,7 +661,7 @@ impl LoadedMapper {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::ColorDreams(state) => {
                 let Self::ColorDreams(mapper) = self else {
@@ -689,7 +689,7 @@ impl LoadedMapper {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc2(state) => {
                 let Self::Mmc2(mapper) = self else {
@@ -703,14 +703,14 @@ impl LoadedMapper {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc5(state) => {
                 let Self::Mmc5(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Replace(_) => {
                 debug_assert!(

@@ -380,7 +380,7 @@ impl Mmc3 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Mmc3State) {
+    pub(crate) fn restore_state(&mut self, state: &Mmc3State) {
         self.bank_select = state.bank_select;
         self.bank_registers = state.bank_registers;
         self.mirroring = state.mirroring;
@@ -392,7 +392,7 @@ impl Mmc3 {
         if state.prg_ram.len() == self.prg_ram.len() {
             self.prg_ram.copy_from_slice(&state.prg_ram);
         } else {
-            self.prg_ram = state.prg_ram;
+            self.prg_ram = state.prg_ram.clone();
             self.prg_ram.resize(PRG_RAM_BYTES, 0);
         }
         self.prg_ram_enabled = state.prg_ram_enabled;
@@ -798,7 +798,7 @@ mod tests {
         let state = original.state();
 
         let mut restored = Mmc3::new(8, 8);
-        restored.restore_state(state);
+        restored.restore_state(&state);
 
         assert_eq!(restored.bank_select, 0x55);
         assert_eq!(restored.bank_registers, [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -1004,7 +1004,7 @@ mod tests {
         assert!(state.prg_ram_write_protect);
 
         let mut restored = Mmc3::new(8, 8);
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.read_prg(0x6000), 0x9A);
         assert_eq!(restored.read_prg(0x7FFF), 0x5C);
     }

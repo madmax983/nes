@@ -310,7 +310,7 @@ impl Mmc5 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Mmc5State) {
+    pub(crate) fn restore_state(&mut self, state: &Mmc5State) {
         self.prg_mode = state.prg_mode;
         self.chr_mode = state.chr_mode;
         self.prg_ram_protect1 = state.prg_ram_protect1;
@@ -334,13 +334,13 @@ impl Mmc5 {
         if state.prg_ram.len() == self.prg_ram.len() {
             self.prg_ram.copy_from_slice(&state.prg_ram);
         } else {
-            self.prg_ram = state.prg_ram;
+            self.prg_ram = state.prg_ram.clone();
             self.prg_ram.resize(PRG_RAM_BYTES, 0);
         }
         if state.exram.len() == EXRAM_BYTES {
             self.exram.copy_from_slice(&state.exram);
         } else {
-            self.exram = state.exram;
+            self.exram = state.exram.clone();
             self.exram.resize(EXRAM_BYTES, 0);
         }
         // Transient timing state is reset on restore.
@@ -1130,7 +1130,7 @@ mod tests {
 
         let state = m.state();
         let mut restored = Mmc5::new(8, 16);
-        restored.restore_state(state);
+        restored.restore_state(&state);
 
         assert_eq!(restored.read_prg(0x8000), 2);
         assert_eq!(restored.chr_window()[0], 9);
