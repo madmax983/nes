@@ -217,7 +217,8 @@ impl PerfMetrics {
 
 fn print_metrics_table(snapshot: &MetricsSnapshot, metrics: &PerfMetrics) {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL)
+    table
+        .load_preset(UTF8_FULL)
         .apply_modifier(comfy_table::modifiers::UTF8_ROUND_CORNERS)
         .apply_modifier(comfy_table::modifiers::UTF8_SOLID_INNER_BORDERS);
     table.set_header(vec![
