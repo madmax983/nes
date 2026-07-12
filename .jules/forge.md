@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring target_delay nested logic in netplay_stats update]
+**Learning:** Found nested logic in `crates/nes-desktop/src/main.rs` checking `if let Some(stats) = netplay_stats.as_ref()` and later mutating it via `if let Some(stats) = netplay_stats.as_mut()`. This created a "Pyramid of Doom" and unnecessary reassessment of `Option`.
+**Action:** Extracted the common block under `if let Some(stats) = netplay_stats.as_mut()` which cleanly scoped both reading from `stats` to determine `target_delay` and assigning it back, dramatically improving readability.

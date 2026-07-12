@@ -1150,24 +1150,21 @@ fn run() -> Result<(), String> {
                             NETPLAY_AUTO_DELAY_MIN_FRAMES,
                             NETPLAY_AUTO_DELAY_MAX_FRAMES,
                         );
-                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
-                            recommended_input_delay_frames(
+                        if let Some(stats) = netplay_stats.as_mut() {
+                            let target_delay = recommended_input_delay_frames(
                                 stats.latest_rtt_ms,
                                 stats.jitter_ms,
                                 NETPLAY_AUTO_DELAY_MIN_FRAMES,
                                 max_auto_delay,
                                 current_delay,
-                            )
-                        } else {
-                            current_delay
-                        };
-                        if should_update_input_delay(target_delay, current_delay) {
-                            if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
-                                eprintln!("Netplay adaptive delay update failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                            if let Some(stats) = netplay_stats.as_mut() {
+                            );
+
+                            if should_update_input_delay(target_delay, current_delay) {
+                                if let Err(err) = rollback_engine.set_input_delay_frames(target_delay) {
+                                    eprintln!("Netplay adaptive delay update failed: {err}");
+                                    *control_flow = ControlFlow::Exit;
+                                    return;
+                                }
                                 stats.input_delay_frames = target_delay;
                                 eprintln!(
                                     "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
@@ -1176,9 +1173,9 @@ fn run() -> Result<(), String> {
                                     stats.latest_rtt_ms_or_zero(),
                                     stats.jitter_ms
                                 );
+                            } else {
+                                stats.input_delay_frames = current_delay;
                             }
-                        } else if let Some(stats) = netplay_stats.as_mut() {
-                            stats.input_delay_frames = current_delay;
                         }
 
                         if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
