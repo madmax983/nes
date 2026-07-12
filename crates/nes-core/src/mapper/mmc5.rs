@@ -1176,4 +1176,58 @@ mod tests {
         assert_eq!(m.split_regs[0], 0x80);
         assert_eq!(m.split_regs[2], 0x10);
     }
+    #[test]
+    fn from_prg_chr_resizes_short_roms() {
+        use crate::rom::NametableMirroring;
+        let m = Mmc5::from_prg_chr(vec![0; 8192], vec![0; 1024], NametableMirroring::Horizontal);
+        assert_eq!(m.prg_bank_count_8k, 4); // 32KB PRG min (4 x 8KB)
+    }
+
+    #[test]
+    fn restore_state_handles_different_lengths() {
+        let mut m = Mmc5::new(4, 8);
+        let mut state = m.state();
+        state.prg_ram = vec![0; 1024];
+        state.exram = vec![0; 512];
+        m.restore_state(state);
+        assert_eq!(m.state().prg_ram.len(), PRG_RAM_BYTES);
+        assert_eq!(m.state().exram.len(), EXRAM_BYTES);
+    }
+
+    #[test]
+    fn chr_window_build_modes_0_1_2() {
+        let mut m = Mmc5::new(4, 8);
+
+        m.write_expansion(0x5101, 0);
+        m.write_expansion(0x5127, 3);
+        let _w = m.build_chr_window(false);
+        m.write_expansion(0x5101, 1);
+        m.write_expansion(0x5123, 1);
+        m.write_expansion(0x5127, 2);
+        let _w = m.build_chr_window(false);
+        m.write_expansion(0x5101, 2);
+        m.write_expansion(0x5121, 1);
+        m.write_expansion(0x5123, 2);
+        m.write_expansion(0x5125, 3);
+        m.write_expansion(0x5127, 4);
+        let _w = m.build_chr_window(false);
+    }
+
+    #[test]
+    fn write_exram_modes() {
+        let mut m = Mmc5::new(4, 8);
+        m.write_expansion(0x5104, 2);
+        m.write_exram(0x5C00, 42);
+        assert_eq!(m.expansion_read(0x5C00).unwrap(), 42);
+        m.write_expansion(0x5104, 3);
+        m.write_exram(0x5C00, 99);
+        assert_eq!(m.expansion_read(0x5C00).unwrap(), 42);
+        m.write_expansion(0x5104, 0);
+        m.rendering_active = false;
+        m.write_exram(0x5C00, 99);
+        assert_eq!(m.expansion_read(0x5C00).unwrap(), 42);
+        m.rendering_active = true;
+        m.write_exram(0x5C00, 99);
+        assert_eq!(m.expansion_read(0x5C00).unwrap(), 99);
+    }
 }
