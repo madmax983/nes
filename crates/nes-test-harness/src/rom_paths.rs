@@ -4,6 +4,16 @@ use std::path::Path;
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
 #[allow(dead_code)]
+/// Resolves the file path for the Super Mario Bros ROM, which is heavily used across
+/// `nes-ai` and `nes-desktop` tests to assert deterministic inputs, boot timing, and Wayland compatibility.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::smb_rom_path;
+///
+/// let path = smb_rom_path();
+/// ```
 pub fn smb_rom_path() -> String {
     let config = load_config();
     let rom_path = config
@@ -19,6 +29,17 @@ pub fn smb_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Resolves the file path for the nestest validation ROM.
+/// This ROM asserts that the 6502 CPU implementation accurately handles all valid instructions
+/// and unofficial opcodes without failure.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::nestest_rom_path;
+///
+/// let path = nestest_rom_path();
+/// ```
 pub fn nestest_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.nestest.unwrap_or_else(|| {
@@ -28,6 +49,16 @@ pub fn nestest_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Resolves the file path for the Blargg CPU behavior test suite ROM.
+/// This suite verifies complex timing and interaction between the CPU, PPU, and memory map.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::blargg_cpu_rom_path;
+///
+/// let path = blargg_cpu_rom_path();
+/// ```
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.blargg_cpu.unwrap_or_else(|| {
@@ -39,6 +70,17 @@ pub fn blargg_cpu_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Discovers all audio test ROMs from the `bbbradsmith` suite.
+/// These ROMs are used to systematically isolate APU channels (Square, Triangle, Noise, DMC)
+/// to prove that waveform synthesis exactly matches known-good reference states.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::bbbradsmith_audio_suite_rom_paths;
+///
+/// let paths = bbbradsmith_audio_suite_rom_paths();
+/// ```
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.unwrap_or_else(|| {
@@ -69,6 +111,17 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
 }
 
 #[allow(dead_code)]
+/// Resolves the directory path containing known-good ("golden") `.pcm` recordings.
+/// Tests utilize this directory to stream expected audio and perform frequency/RMS analysis
+/// against the emulator's live output to detect audio regressions.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use nes_test_harness::bbbradsmith_audio_golden_dir_path;
+///
+/// let path = bbbradsmith_audio_golden_dir_path();
+/// ```
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.unwrap_or_else(|| {
