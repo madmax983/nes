@@ -35,26 +35,53 @@ pub use rom_paths::*;
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Represents a write to an APU register during a frame.
 pub struct ApuWriteEvent {
+    /// CPU cycle number when the write occurred.
+    /// CPU cycle number when the write occurred.
     pub cpu_cycle: u64,
+    /// Address written to.
+    /// Address written to.
     pub addr: u16,
+    /// Value written.
+    /// Value written.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Basic statistics about a 16-bit audio waveform.
 pub struct AudioStats {
+    /// Number of samples in the waveform.
+    /// Number of samples in the waveform.
     pub sample_count: usize,
+    /// Root mean square (RMS) amplitude.
+    /// Root mean square (RMS) amplitude.
     pub rms: f64,
+    /// Peak amplitude value.
+    /// Peak amplitude value.
     pub peak: i16,
+    /// DC offset (mean sample value).
+    /// DC offset (mean sample value).
     pub dc_offset: f64,
+    /// Ratio of samples at maximum amplitude (-32768 or 32767).
+    /// Ratio of samples at maximum amplitude (-32768 or 32767).
     pub clipping_ratio: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Comparison metrics between two audio waveforms.
 pub struct WaveformComparison {
+    /// Number of samples compared (the minimum of the two lengths).
+    /// Number of samples compared (the minimum of the two lengths).
     pub samples_compared: usize,
+    /// Pearson correlation coefficient (-1.0 to 1.0).
+    /// Pearson correlation coefficient (-1.0 to 1.0).
     pub correlation: f64,
+    /// Ratio of the two waveforms RMS amplitudes.
+    /// Ratio of the two waveforms RMS amplitudes.
     pub rms_ratio: f64,
+    /// Mean absolute difference in dB between their magnitude spectra.
+    /// Mean absolute difference in dB between their magnitude spectra.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -98,6 +125,7 @@ pub fn collect_apu_register_writes(
 }
 
 #[must_use]
+/// Hashes a list of APU write events.
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for event in writes {
@@ -178,6 +206,7 @@ pub fn capture_audio_window(
 }
 
 #[must_use]
+/// Hashes a 16-bit audio waveform.
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for sample in samples {
@@ -188,6 +217,7 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
 }
 
 #[must_use]
+/// Calculates basic statistics for a 16-bit audio waveform.
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
         return AudioStats {
@@ -226,6 +256,7 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
 }
 
 #[must_use]
+/// Calculates the RMS amplitude envelope of a waveform using a sliding window.
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
         return Vec::new();
@@ -328,6 +359,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
 }
 
 #[must_use]
+/// Compares two waveforms and returns detailed metrics.
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
     if n == 0 {
@@ -373,6 +405,7 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 }
 
 #[must_use]
+/// Calculates the log magnitude (dB) spectrum of a waveform using an FFT.
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
         return Vec::new();
@@ -415,6 +448,7 @@ fn hann_window(idx: usize, len: usize) -> f64 {
 }
 
 #[must_use]
+/// Extracts the iNES mapper ID from the 16-byte header of a ROM image.
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
         return None;
@@ -432,6 +466,7 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 }
 
 #[must_use]
+/// Returns true if the core supports the given iNES mapper ID.
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(
         mapper_id,

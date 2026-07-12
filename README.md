@@ -45,14 +45,6 @@ Netplay settings are configured in `[netplay]` (see `nes.example.toml`).
 
 Desktop/TUI launch commands:
 
-First, copy the example configuration:
-
-```powershell
-cp nes.example.toml nes.toml
-```
-
-Then, launch the emulator:
-
 ```powershell
 cargo run -p nes-desktop --release -- ./roms/homebrew/homebrew.nes
 cargo run -p nes-desktop --release -- --config ./nes.toml

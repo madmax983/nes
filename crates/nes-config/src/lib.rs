@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Default path to the configuration file.
 pub const DEFAULT_CONFIG_PATH: &str = "nes.toml";
@@ -26,7 +26,7 @@ const DEFAULT_NETPLAY_MAX_ROLLBACK_FRAMES: u32 = 240;
 const DEFAULT_NETPLAY_HASH_CHECK_EVERY_FRAMES: u64 = 120;
 
 /// Execution granularity for the emulator loop.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum StepModeConfig {
     /// Step the emulator one CPU instruction at a time.
@@ -37,7 +37,7 @@ pub enum StepModeConfig {
 }
 
 /// Runtime configuration for desktop and windowing features.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DesktopConfig {
     /// Path to the ROM file to load on startup.
@@ -80,7 +80,7 @@ impl Default for DesktopConfig {
 }
 
 /// File paths to ROM files used for testing and validation.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RomPathsConfig {
     /// Path to Super Mario Bros ROM.
@@ -96,7 +96,7 @@ pub struct RomPathsConfig {
 }
 
 /// Settings for rollback netcode and online multiplayer.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct NetplayConfig {
     /// Toggles netplay rollback engine.
@@ -130,7 +130,7 @@ impl Default for NetplayConfig {
 }
 
 /// Settings for the rewind and state history engine.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TimeMachineConfig {
     /// Toggles time machine functionality.
@@ -155,7 +155,7 @@ impl Default for TimeMachineConfig {
 }
 
 /// The root configuration object combining all sub-sections.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct NesConfig {
     /// Desktop configuration.
@@ -206,7 +206,12 @@ impl NesConfig {
             if default_path.exists() {
                 Self::load(default_path)
             } else {
-                Ok(Self::default())
+                let config = Self::default();
+                if let Ok(toml_string) = toml::to_string_pretty(&config) {
+                    let _ = fs::write(default_path, toml_string);
+                    println!("Info: Created default configuration file at {}", default_path.display());
+                }
+                Ok(config)
             }
         }
     }

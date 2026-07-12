@@ -83,6 +83,12 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         .rom_path
         .or_else(|| config.desktop.rom_path.clone())
         .or_else(|| config.roms.smb.clone())
+        .or_else(|| {
+            if std::path::Path::new("./roms/homebrew/homebrew.nes").exists() {
+                eprintln!("Warning: Provided ROM path not found or not configured. Falling back to bundled homebrew ROM.");
+                Some("./roms/homebrew/homebrew.nes".to_owned())
+            } else { None }
+        })
         .ok_or_else(|| {
             format!(
                 "ROM path not configured. Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in {DEFAULT_CONFIG_PATH}."
