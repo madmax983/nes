@@ -127,12 +127,12 @@ impl TimeMachine {
 
         thread::spawn(move || {
             let mut timeline = CompressedTimeline::new(max_frames, policy);
-            loop {
-                match work_rx.recv() {
-                    Ok(WorkerMsg::Record { frame_id, snapshot }) => {
+            while let Ok(msg) = work_rx.recv() {
+                match msg {
+                    WorkerMsg::Record { frame_id, snapshot } => {
                         timeline.push(frame_id, *snapshot);
                     }
-                    Ok(WorkerMsg::Reconstruct { target_frame }) => {
+                    WorkerMsg::Reconstruct { target_frame } => {
                         if let Some(snapshot) = timeline.reconstruct(target_frame) {
                             let _ = reply_tx.send(WorkerReply::Reconstructed {
                                 frame_id: target_frame,
@@ -140,7 +140,7 @@ impl TimeMachine {
                             });
                         }
                     }
-                    Ok(WorkerMsg::Shutdown) | Err(_) => break,
+                    WorkerMsg::Shutdown => break,
                 }
             }
         });

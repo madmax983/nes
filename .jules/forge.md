@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Refactoring loop-match-break to while-let patterns**
+**Learning:** `loop { match x.try_recv() { Ok(m) => ... Err(_) => break } }` or similar patterns involving early breaks out of a match block mapped directly to receiving values are unnecessarily verbose and indent the main logic. This obscures the iteration condition.
+**Action:** Use `while let Some(msg) = match x.try_recv() { Ok(m) => Some(m), ... => None } { ... }` or `while let Ok(msg) = x.recv() { ... }` where possible to keep the loop condition inline and clarify the termination semantics.

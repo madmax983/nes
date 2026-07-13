@@ -654,19 +654,18 @@ fn make_protocol_state(
 
 fn drain_protocol_results(renderer: &mut ProtocolRenderer) -> bool {
     let mut fallback_to_halfblocks = false;
-    loop {
-        match renderer.results_rx.try_recv() {
-            Ok(result) => {
-                renderer.pending_resize = false;
-                match result {
-                    Ok(state) => renderer.current_state = Some(state),
-                    Err(_) => fallback_to_halfblocks = true,
-                }
-            }
-            Err(TryRecvError::Empty) => return fallback_to_halfblocks,
-            Err(TryRecvError::Disconnected) => return true,
+    while let Some(result) = match renderer.results_rx.try_recv() {
+        Ok(res) => Some(res),
+        Err(TryRecvError::Empty) => None,
+        Err(TryRecvError::Disconnected) => return true,
+    } {
+        renderer.pending_resize = false;
+        match result {
+            Ok(state) => renderer.current_state = Some(state),
+            Err(_) => fallback_to_halfblocks = true,
         }
     }
+    fallback_to_halfblocks
 }
 
 fn render_video_region(frame: &mut Frame<'_>, runtime: &mut TuiRuntime, area: Rect) {

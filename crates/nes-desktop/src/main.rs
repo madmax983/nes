@@ -1107,18 +1107,14 @@ fn run() -> Result<(), String> {
                         return;
                     }
 
-                    loop {
-                        let message = match client.try_recv() {
-                            Ok(next) => next,
-                            Err(err) => {
-                                eprintln!("Netplay receive failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                                return;
-                            }
-                        };
-                        let Some(message) = message else {
-                            break;
-                        };
+                    while let Some(message) = match client.try_recv() {
+                        Ok(next) => next,
+                        Err(err) => {
+                            eprintln!("Netplay receive failed: {err}");
+                            *control_flow = ControlFlow::Exit;
+                            return;
+                        }
+                    } {
                         if let Err(err) = crate::netplay::handle_netplay_server_message(
                             message,
                             rollback_engine,
