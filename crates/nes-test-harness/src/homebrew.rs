@@ -1,6 +1,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Returns the path to the dynamically built homebrew test ROM used by standard GUI tests.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_test_harness::default_homebrew_rom_path;
+///
+/// let path = default_homebrew_rom_path();
+/// ```
 #[must_use]
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
