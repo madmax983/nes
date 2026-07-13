@@ -190,3 +190,15 @@ mod tests {
         assert_eq!(mapper.chr_data.len(), 16 * 1024);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn cnrom_uncovered_lines() {
+        let mut m = Cnrom::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+        let _ = m.read_prg(0x5FFF);
+        m.write_prg(0x5FFF, 0x12);
+    }
+}

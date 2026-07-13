@@ -310,3 +310,14 @@ mod tests {
         assert_eq!(restored.chr_window()[0x1000], 5);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn namco108_uncovered_lines() {
+        let m = Namco108::from_prg_chr(vec![0; 16384], vec![]);
+        let _ = m.read_prg(0x5FFF);
+    }
+}

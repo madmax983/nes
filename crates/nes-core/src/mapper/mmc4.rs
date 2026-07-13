@@ -432,3 +432,20 @@ mod tests {
         assert_eq!(restored.chr_window()[0x0000], 1); // FD low bank after latch
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn mmc4_uncovered_lines() {
+        let m = Mmc4::from_prg_chr(vec![0; 16384 + 1], vec![]);
+        assert_eq!(m.prg_rom.len(), 16384 * 2);
+
+        let mut m = Mmc4::from_prg_chr(vec![0; 16384 * 2], vec![]);
+        let mut state = m.state();
+        state.prg_ram.resize(2, 0);
+        m.restore_state(state);
+        assert_eq!(m.prg_ram.len(), 8192);
+    }
+}

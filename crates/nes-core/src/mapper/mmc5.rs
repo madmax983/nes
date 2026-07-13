@@ -1177,3 +1177,76 @@ mod tests {
         assert_eq!(m.split_regs[2], 0x10);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn mmc5_uncovered_lines_init() {
+        let m = Mmc5::from_prg_chr(vec![0; 4 * 8192 + 1], vec![], NametableMirroring::Vertical);
+        assert_eq!(m.prg_rom.len(), 40960);
+
+        let m = Mmc5::from_prg_chr(
+            vec![0; 4 * 8192],
+            vec![0; 8192 + 1],
+            NametableMirroring::Vertical,
+        );
+        assert_eq!(m.chr_data.len(), 9216);
+    }
+
+    #[test]
+    fn mmc5_uncovered_restore_state() {
+        let mut m = Mmc5::from_prg_chr(vec![0; 4 * 8192], vec![], NametableMirroring::Vertical);
+        let mut state = m.state();
+        state.prg_ram.resize(2, 0);
+        m.restore_state(state);
+        assert_eq!(m.prg_ram.len(), 65536);
+
+        let mut state2 = m.state();
+        state2.exram.resize(2, 0);
+        m.restore_state(state2);
+        assert_eq!(m.exram.len(), 1024);
+    }
+
+    #[test]
+    fn mmc5_uncovered_nametable_mirroring() {
+        let _ = Mmc5::from_prg_chr(vec![], vec![], NametableMirroring::OneScreenLower);
+        let _ = Mmc5::from_prg_chr(vec![], vec![], NametableMirroring::OneScreenUpper);
+    }
+
+    #[test]
+    fn mmc5_uncovered_default_arm_and_exram() {
+        let mut m = Mmc5::from_prg_chr(vec![0; 4 * 8192], vec![], NametableMirroring::Vertical);
+        m.write_prg(0x51FF, 0);
+
+        assert_eq!(m.read_prg(0x5FFF), 0xFF);
+
+        m.rendering_active = true;
+        m.exram_mode = 0;
+        m.exram[0] = 0;
+        let _ = m.read_prg(0x5C00);
+
+        m.exram_mode = 1;
+        let _ = m.read_prg(0x5C00);
+
+        m.exram_mode = 2;
+        let _ = m.read_prg(0x5C00);
+
+        m.exram_mode = 3;
+        let _ = m.read_prg(0x5C00);
+    }
+
+    #[test]
+    fn mmc5_uncovered_ppu_dot() {
+        let mut m = Mmc5::from_prg_chr(vec![0; 4 * 8192], vec![], NametableMirroring::Vertical);
+        m.nametable_mapping = 0b00_10_01_00;
+        assert_eq!(m.mirroring(), NametableMirroring::Horizontal);
+
+        m.in_frame = false;
+        m.on_ppu_dot(20, 20, true, 0);
+        m.on_ppu_dot(20, 0, true, 0);
+        m.on_ppu_dot(21, 0, true, 0);
+        m.on_ppu_dot(240, 0, true, 0);
+    }
+}

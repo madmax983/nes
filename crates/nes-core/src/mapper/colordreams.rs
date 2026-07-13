@@ -242,3 +242,15 @@ mod tests {
         assert_eq!(restored.selected_chr_bank(), 3);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn colordreams_uncovered_lines() {
+        let mut m = ColorDreams::from_prg_chr(vec![0; 32768], vec![0; 8192]);
+        let _ = m.read_prg(0x5FFF);
+        m.write_prg(0x5FFF, 0x12);
+    }
+}

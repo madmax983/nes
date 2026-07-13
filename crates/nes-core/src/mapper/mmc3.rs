@@ -1050,3 +1050,20 @@ mod more_tests {
         assert!(!state.irq_pending);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn mmc3_uncovered_lines() {
+        let mut m = Mmc3::new(8, 8);
+        assert_eq!(m.read_prg(0x5FFF), 0xFF);
+        m.write_prg(0x5FFF, 0x12);
+
+        let mut state = m.state();
+        state.prg_ram.resize(2, 0);
+        m.restore_state(state);
+        assert_eq!(m.prg_ram.len(), 8192);
+    }
+}

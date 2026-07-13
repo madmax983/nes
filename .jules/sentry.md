@@ -37,3 +37,7 @@
 ## 2026-05-27 - Serde Array and PPM encoder panic/OOM vulnerabilities
 **Learning:** Utilities that allocate buffers based on untrusted size parameters or handle length-restricted fixed arrays can easily fail without proper test coverage for those error boundaries.
 **Action:** When working on serialization or image rendering primitives, explicitly write tests targeting oversize bounds, buffer length mismatches, and `unwrap_err` states to ensure panics or unexpected conditions are cleanly handled by the type system.
+
+## 2025-07-13 - Mapper Truncation and Fallback Branches
+**Learning:** `from_prg_chr` construction paths in some mappers (MMC4, MMC5, FME7) resize arrays to meet alignment boundaries, but if shorter arrays were loaded previously they can escape unit testing. Similarly, PPU state machines (like MMC5's `on_ppu_dot`) had edge cases for first dots of a scanline and fallback arms for `write_prg` that weren't exercised in `test_harness`.
+**Action:** When working with dynamically sized ROM loads for mappers, always mock loads with short and unaligned lengths, and provide complete coverage for dot-exact state machines.

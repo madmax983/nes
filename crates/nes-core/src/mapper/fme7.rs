@@ -591,3 +591,25 @@ mod tests {
         assert_eq!(restored.irq_counter, 0x1234);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn fme7_uncovered_lines() {
+        let m = Fme7::from_prg_chr(vec![0; 8192 + 1], vec![]);
+        assert_eq!(m.prg_rom.len(), 16384);
+
+        let m = Fme7::from_prg_chr(vec![0; 16384], vec![0; 1024 + 1]);
+        assert_eq!(m.chr_data.len(), 8192); // CHR is padded to 8k
+
+        let mut m = Fme7::from_prg_chr(vec![0; 16384], vec![]);
+        let mut state = m.state();
+        state.wram.resize(2, 0);
+        m.restore_state(state);
+        assert_eq!(m.wram.len(), 8192);
+
+        assert_eq!(m.read_prg(0x5FFF), 0xFF);
+    }
+}
