@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Visualizes TAS movies as a Piano Roll BMP image.
+#[cfg(all(feature = "nova", feature = "tas"))]
+pub mod tas_piano_roll;
