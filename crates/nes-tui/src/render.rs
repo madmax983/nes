@@ -648,3 +648,68 @@ mod tests {
         frame[idx + 3] = 0xFF;
     }
 }
+
+#[cfg(test)]
+mod mutant_tests {
+    use super::*;
+
+    #[test]
+    fn test_quarter_block_glyph_mutants() {
+        assert_eq!(quarter_block_glyph(0), " ");
+        assert_eq!(quarter_block_glyph(1), "\u{2598}");
+        assert_eq!(quarter_block_glyph(2), "\u{259D}");
+        assert_eq!(quarter_block_glyph(3), "\u{2580}");
+        assert_eq!(quarter_block_glyph(4), "\u{2596}");
+        assert_eq!(quarter_block_glyph(5), "\u{258C}");
+        assert_eq!(quarter_block_glyph(6), "\u{259E}");
+        assert_eq!(quarter_block_glyph(7), "\u{259B}");
+        assert_eq!(quarter_block_glyph(8), "\u{2597}");
+        assert_eq!(quarter_block_glyph(9), "\u{259A}");
+        assert_eq!(quarter_block_glyph(10), "\u{2590}");
+        assert_eq!(quarter_block_glyph(11), "\u{259C}");
+        assert_eq!(quarter_block_glyph(12), "\u{2584}");
+        assert_eq!(quarter_block_glyph(13), "\u{2599}");
+        assert_eq!(quarter_block_glyph(14), "\u{259F}");
+        assert_eq!(quarter_block_glyph(15), "\u{2588}");
+        assert_eq!(quarter_block_glyph(16), "\u{2588}");
+    }
+
+    #[test]
+    fn test_rgb_error_sq_mutants() {
+        assert_eq!(rgb_error_sq((10, 10, 10), (10, 10, 10)), 0);
+        assert_eq!(rgb_error_sq((0, 0, 0), (2, 3, 4)), 29);
+        assert_eq!(rgb_error_sq((100, 100, 100), (50, 60, 70)), 5000);
+        assert_eq!(rgb_error_sq((255, 255, 255), (0, 0, 0)), 195075);
+    }
+
+    #[test]
+    fn test_choose_quarter_mask_and_palette_mutants() {
+        let p1 = (0, 0, 0);
+        let p2 = (255, 255, 255);
+        let p3 = (128, 128, 128);
+
+        // All same color
+        let (mask, fg, _bg) = choose_quarter_mask_and_palette([p1, p1, p1, p1]);
+        assert_eq!(mask, 0b1111);
+        assert_eq!(fg, p1);
+
+        let (mask, fg, _bg) = choose_quarter_mask_and_palette([p2, p1, p2, p1]);
+        let p2_is_fg = fg == p2;
+        let expected = if p2_is_fg { 0b0101 } else { 0b1010 };
+        assert_eq!(mask, expected);
+
+        let (mask, fg, _bg) = choose_quarter_mask_and_palette([p1, p1, p2, p2]);
+        let p2_is_fg = fg == p2;
+        let expected = if p2_is_fg { 0b1100 } else { 0b0011 };
+        assert_eq!(mask, expected);
+
+        let (mask, fg, _bg) = choose_quarter_mask_and_palette([p1, p2, p2, p2]);
+        let p2_is_fg = fg == p2;
+        let expected = if p2_is_fg { 0b1110 } else { 0b0001 };
+        assert_eq!(mask, expected);
+
+        // Mix 3 colors to hit fallback / nearest mapping
+        let (mask, _, _) = choose_quarter_mask_and_palette([p1, p2, p3, p1]);
+        assert!(mask < 16, "Mask should be in 4-bit range");
+    }
+}

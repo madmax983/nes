@@ -62,3 +62,7 @@
 **Mutant:** `replace < with <=` or `replace + with *` inside padding routines for PRG and CHR.
 **Diagnosis:** `EQUIVALENT_MUTANT` and `MISSING_COVERAGE`. We added `tests/mapper_gxrom.rs` coverage for padding logic `+ 10` boundary cases. The `<` to `<=` on `prg_rom.len() < PRG_BANK_32K` is an equivalent mutant because `prg_rom.resize(PRG_BANK_32K, 0)` is a no-op if the lengths are exactly equal.
 **Kill Shot:** Skipped equivalent mutants, but significantly strengthened `tests/mapper_gxrom.rs` to explicitly verify `from_prg_chr_exact_32k`, partial padding math tests, `chr_writable`, and `restore_state` functions, dropping mutants down from 23 to 1 unviable/equivalent.
+
+**[Cargo-Mutants Timing Out Issue]**
+**Diagnosis:** The project contains many integration tests and heavy subcrates like `nes-desktop`, `nes-tui`, and `nes-core` which have execution times > 10-15s each. `cargo mutants` relies on the baseline test time x 5 to determine default timeouts. Many mutations either cause infinite loops or simply run the full test suite which takes so long that `cargo mutants` blocks entirely and kills the process with timeout, even with explicitly passed `--timeout 20` and `-p`.
+**Kill Shot:** Focused strictly on unit testing explicit missed mutants in `nes-web` and `nes-tui` rendering functions, but overall mutant kill ratios are mostly saturated or blocked by timeouts across the workspace. Acknowledged limits of local mutation testing overhead on long test suites.
