@@ -3,6 +3,13 @@ use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
+/// Retrieves the file path for the Super Mario Bros (SMB) ROM from the `nes.toml` configuration file.
+///
+/// If `roms.smb` is not explicitly set, this function will fall back to `desktop.rom_path`.
+///
+/// ## Panics
+///
+/// Panics if the configuration file is missing, the field is unset, or if the referenced file does not exist on disk.
 #[allow(dead_code)]
 pub fn smb_rom_path() -> String {
     let config = load_config();
@@ -18,6 +25,11 @@ pub fn smb_rom_path() -> String {
     ensure_path_exists("SMB ROM", &rom_path)
 }
 
+/// Retrieves the file path for the nestest CPU diagnostic ROM from the `nes.toml` configuration file.
+///
+/// ## Panics
+///
+/// Panics if `roms.nestest` is unset, or if the referenced file does not exist on disk.
 #[allow(dead_code)]
 pub fn nestest_rom_path() -> String {
     let config = load_config();
@@ -27,6 +39,11 @@ pub fn nestest_rom_path() -> String {
     ensure_path_exists("NESTEST ROM", &rom_path)
 }
 
+/// Retrieves the file path for Blargg's CPU test ROM suite from the `nes.toml` configuration file.
+///
+/// ## Panics
+///
+/// Panics if `roms.blargg_cpu` is unset, or if the referenced file does not exist on disk.
 #[allow(dead_code)]
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
@@ -38,6 +55,13 @@ pub fn blargg_cpu_rom_path() -> String {
     ensure_path_exists("BLARGG CPU ROM", &rom_path)
 }
 
+/// Retrieves a list of paths to all `.nes` files within the `bbbradsmith_audio_suite_dir` specified in `nes.toml`.
+///
+/// This suite is used for extensive automated audio regression testing.
+///
+/// ## Panics
+///
+/// Panics if the directory is missing in config, does not exist on disk, or contains no `.nes` files.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
@@ -68,6 +92,13 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     rom_paths
 }
 
+/// Retrieves the directory path containing the "golden" PCM output references for the `bbbradsmith` audio tests.
+///
+/// These reference `.pcm` files are compared directly against the emulator's generated audio output.
+///
+/// ## Panics
+///
+/// Panics if the directory is missing in config or does not exist on disk.
 #[allow(dead_code)]
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
