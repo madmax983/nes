@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract repetitive cheat logic into helper function]**
+**Learning:** `dispatch_overlay_command` had almost identical logic duplicated across `ToggleCheat`, `RemoveCheat`, and `SubmitCheatCode`. Each checked for errors, applied cheats to the core, and updated the overlay status message with slightly different success texts.
+**Action:** Extracted this into a generic `apply_and_sync_cheats<F>` helper that takes a closure to execute the specific operation (toggle/remove/add) and return a success message. This drastically reduces nesting and boilerplate, conforming to the DRY principle.
