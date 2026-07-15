@@ -1,3 +1,9 @@
+//! Utilities for visualizing PPU internal state.
+//!
+//! This module provides the `PpuVisualizer`, which extracts various PPU data structures
+//! (like pattern tables and nametables) and renders them into standard BMP images for debugging
+//! or display purposes.
+
 #![cfg(feature = "nova")]
 
 use crate::NesCore;
@@ -71,6 +77,7 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A utility for extracting and rendering PPU state as images.
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
