@@ -3043,3 +3043,60 @@ mod tests_api_coverage_gaps {
         assert_eq!(core.speed_permille(), 1500);
     }
 }
+
+#[cfg(test)]
+mod tests_mutants_api {
+    use super::*;
+
+    #[test]
+    fn test_button_bit_mask_coverage() {
+        assert_eq!(Button::A.bit_mask(), 0b0000_0001);
+        assert_eq!(Button::B.bit_mask(), 0b0000_0010);
+        assert_eq!(Button::Select.bit_mask(), 0b0000_0100);
+        assert_eq!(Button::Start.bit_mask(), 0b0000_1000);
+        assert_eq!(Button::Up.bit_mask(), 0b0001_0000);
+        assert_eq!(Button::Down.bit_mask(), 0b0010_0000);
+        assert_eq!(Button::Left.bit_mask(), 0b0100_0000);
+        assert_eq!(Button::Right.bit_mask(), 0b1000_0000);
+    }
+
+    #[test]
+    fn test_player_index() {
+        assert_eq!(Player::One.index(), 0);
+        assert_eq!(Player::Two.index(), 1);
+    }
+
+    #[test]
+    fn test_controller_ports() {
+        let mut ports = ControllerPorts::default();
+        ports.write_controller_strobe(1);
+        assert!(ports.controller_strobe);
+        ports.set_controller_bits(0b1010_1010, Player::One);
+        assert_eq!(ports.controllers[0].bits, 0b1010_1010);
+        assert_eq!(ports.controllers[0].shift, 0b1010_1010);
+
+        ports.write_controller_strobe(0);
+        assert!(!ports.controller_strobe);
+        ports.set_controller_bits(0b0101_0101, Player::One);
+        assert_eq!(ports.controllers[0].bits, 0b0101_0101);
+        assert_eq!(ports.controllers[0].shift, 0b1010_1010); // unaffected by bits when strobe off
+
+        let sample = ports.controller_port_sample(Player::One);
+        assert_eq!(sample, CONTROLLER_OPEN_BUS_MASK);
+
+        ports.consume_controller_read(Player::One);
+
+        let sample2 = ports.controller_port_sample(Player::One);
+        assert_eq!(sample2, CONTROLLER_OPEN_BUS_MASK | 1);
+
+        ports.consume_controller_read(Player::One);
+
+        let sample3 = ports.controller_port_sample(Player::One);
+        assert_eq!(sample3, CONTROLLER_OPEN_BUS_MASK);
+
+        // Test strobe reloading
+        ports.write_controller_strobe(1);
+        let sample4 = ports.controller_port_sample(Player::One);
+        assert_eq!(sample4, CONTROLLER_OPEN_BUS_MASK | 1);
+    }
+}

@@ -62,3 +62,5 @@
 **Mutant:** `replace < with <=` or `replace + with *` inside padding routines for PRG and CHR.
 **Diagnosis:** `EQUIVALENT_MUTANT` and `MISSING_COVERAGE`. We added `tests/mapper_gxrom.rs` coverage for padding logic `+ 10` boundary cases. The `<` to `<=` on `prg_rom.len() < PRG_BANK_32K` is an equivalent mutant because `prg_rom.resize(PRG_BANK_32K, 0)` is a no-op if the lengths are exactly equal.
 **Kill Shot:** Skipped equivalent mutants, but significantly strengthened `tests/mapper_gxrom.rs` to explicitly verify `from_prg_chr_exact_32k`, partial padding math tests, `chr_writable`, and `restore_state` functions, dropping mutants down from 23 to 1 unviable/equivalent.
+**Learning:** `cargo mutants` on `api.rs` consistently timeouts. Will log the attempt. Mutants for small files successfully killed.
+**Kill Shot:** All files have been processed. Some timeouts with `api.rs` and `cheat_codes.rs` on the main loop. I will submit the PR containing the valid unit tests.
