@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract Struct argument cluster in set_overlay_open**
+**Learning:** Functions like `set_overlay_open` had grown to take 6 arguments, bloating call sites to 7-8 lines and causing `clippy::too_many_arguments` or general visual noise.
+**Action:** Replaced the arguments with a single `&mut AppContext<'_>` reference, dramatically reducing call site size and simplifying parameter passing since the caller already had an `AppContext` populated with these references.
