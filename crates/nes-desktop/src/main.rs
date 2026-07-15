@@ -9,9 +9,9 @@ pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
 pub(crate) mod metrics;
+mod netplay;
 #[cfg(feature = "nova")]
 pub(crate) mod ppu_visualizer_window;
-mod netplay;
 pub(crate) mod session;
 use crate::config::*;
 use crate::metrics::PerfMetrics;
@@ -1481,10 +1481,7 @@ fn build_startup_table(
     #[cfg(feature = "nova")]
     {
         if runtime.ppu_visualizer_enabled {
-            table.add_row(vec![
-                Cell::new("Nova"),
-                Cell::new("PPU Visualizer Enabled"),
-            ]);
+            table.add_row(vec![Cell::new("Nova"), Cell::new("PPU Visualizer Enabled")]);
         }
         if runtime.auto_player_enabled {
             table.add_row(vec![
