@@ -32,6 +32,8 @@ pub(crate) struct RuntimeConfig {
     pub(crate) rta: Option<RtaRuntimeConfig>,
     #[cfg(feature = "nova")]
     pub(crate) auto_player_enabled: bool,
+    #[cfg(feature = "nova")]
+    pub ppu_visualizer_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,5 +191,7 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         rta,
         #[cfg(feature = "nova")]
         auto_player_enabled: runtime_args.auto_player_enabled,
+        #[cfg(feature = "nova")]
+        ppu_visualizer_enabled: runtime_args.ppu_visualizer_enabled,
     })
 }

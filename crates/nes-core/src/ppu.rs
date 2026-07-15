@@ -877,6 +877,12 @@ impl Ppu {
         self.oam[self.oam_addr as usize]
     }
 
+    /// Returns memory at the given PPU address without triggering side-effects.
+    #[cfg(feature = "nova")]
+    pub fn peek_ppu_memory(&self, addr: u16) -> u8 {
+        self.read_ppu_data(addr)
+    }
+
     /// Consumes a `$2007` read with buffered-read behavior.
     pub fn consume_data_read(&mut self) -> u8 {
         let addr = self.vram_addr & PPU_ADDR_MASK;

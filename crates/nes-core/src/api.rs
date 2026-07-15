@@ -1123,6 +1123,12 @@ impl NesCore {
         self.ppu.oam_byte(index)
     }
 
+    /// Peeks into PPU memory without triggering side-effects.
+    #[cfg(feature = "nova")]
+    pub fn ppu_peek_memory(&self, addr: u16) -> u8 {
+        self.ppu.peek_ppu_memory(addr)
+    }
+
     /// Returns target frames-per-second as milli-Hz.
     #[must_use]
     pub fn fps_milli(&self) -> u32 {

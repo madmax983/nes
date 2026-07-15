@@ -40,6 +40,8 @@ pub struct RuntimeArgs {
     pub rta_calibrate: bool,
     #[cfg(feature = "nova")]
     pub auto_player_enabled: bool,
+    #[cfg(feature = "nova")]
+    pub ppu_visualizer_enabled: bool,
 }
 
 /// Parses command-line arguments into the typed `RuntimeArgs` configuration.
@@ -80,6 +82,8 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         rta_calibrate: false,
         #[cfg(feature = "nova")]
         auto_player_enabled: false,
+        #[cfg(feature = "nova")]
+        ppu_visualizer_enabled: false,
     };
     let mut idx = 0_usize;
     while idx < args.len() {
@@ -427,6 +431,8 @@ mod tests {
             rta_calibrate: false,
             #[cfg(feature = "nova")]
             auto_player_enabled: false,
+            #[cfg(feature = "nova")]
+            ppu_visualizer_enabled: false,
         };
         assert_eq!(parsed, expected);
     }

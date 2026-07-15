@@ -9,6 +9,8 @@ pub(crate) mod config;
 pub(crate) mod gamepad;
 pub(crate) mod input;
 pub(crate) mod metrics;
+#[cfg(feature = "nova")]
+pub(crate) mod ppu_visualizer_window;
 mod netplay;
 pub(crate) mod session;
 use crate::config::*;
@@ -808,6 +810,12 @@ fn run() -> Result<(), String> {
     );
 
     #[cfg(feature = "nova")]
+    let mut ppu_visualizer_state = if runtime.ppu_visualizer_enabled {
+        Some(crate::ppu_visualizer_window::PpuVisualizerState::new(&event_loop).unwrap())
+    } else {
+        None
+    };
+
     let mut auto_player = if runtime.auto_player_enabled {
         Some(crate::auto_player::AutoPlayer::new())
     } else {
@@ -835,7 +843,12 @@ fn run() -> Result<(), String> {
             }
         };
     }
-    event_loop.run(move |event, _, control_flow| match event {
+    event_loop.run(move |event, _, control_flow| {
+        #[cfg(feature = "nova")]
+        if let Some(state) = ppu_visualizer_state.as_mut() {
+            state.handle_event(&event);
+        }
+        match event {
         Event::WindowEvent { event, .. } => match classify_window_event(&event) {
             WindowEventDecision::CloseRequested => {
                 if let Some(rta) = rta_manager.as_mut() {
@@ -1080,6 +1093,11 @@ fn run() -> Result<(), String> {
                 player.step(&mut core);
             }
 
+            #[cfg(feature = "nova")]
+            if let Some(state) = ppu_visualizer_state.as_mut() {
+                state.render(&core);
+            }
+
             if let Some(rollback_engine) = rollback.as_mut() {
                 let local_gamepad_bits =
                     crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
@@ -1303,6 +1321,7 @@ fn run() -> Result<(), String> {
         _ => {
             *control_flow = ControlFlow::WaitUntil(next_frame_deadline);
         }
+        }
     });
 }
 
@@ -1461,6 +1480,12 @@ fn build_startup_table(
     }
     #[cfg(feature = "nova")]
     {
+        if runtime.ppu_visualizer_enabled {
+            table.add_row(vec![
+                Cell::new("Nova"),
+                Cell::new("PPU Visualizer Enabled"),
+            ]);
+        }
         if runtime.auto_player_enabled {
             table.add_row(vec![
                 Cell::new("Nova"),
@@ -1496,6 +1521,8 @@ mod tests {
             mcp_bind_addr: "".to_string(),
             #[cfg(feature = "nova")]
             auto_player_enabled: true,
+            #[cfg(feature = "nova")]
+            ppu_visualizer_enabled: false,
         };
 
         let session = LoadedRomSession {
