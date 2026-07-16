@@ -71,6 +71,17 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A visualizer that extracts PPU state into BMP images for debugging.
+///
+/// # Examples
+///
+/// ```
+/// # use nes_core::NesCore;
+/// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+/// let core = NesCore::new();
+/// let bmp_bytes = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
+/// assert_eq!(&bmp_bytes[0..2], b"BM");
+/// ```
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {

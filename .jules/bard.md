@@ -26,3 +26,7 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+
+## 2024-07-16 - FME7 Intra-doc link panic
+**Confusion:** Developers and cargo doc experienced a warning regarding `[DOTS_PER_CPU_CYCLE]` in `mapper/fme7.rs`, linking to a private item `DOTS_PER_CPU_CYCLE` while the struct it resided on was documented as part of the public API. Additionally `nes-core` failed to pass `-W missing_docs` on missing docs in spatial_bot and ppu_visualizer.
+**Clarification:** Replaced `[DOTS_PER_CPU_CYCLE]` with `3` directly in the documentation comment for `advance_hardware_cycles`, added public structure and field level documentation to `BotRule`, `SpatialBot`, and `PpuVisualizer` under the experimental module.
