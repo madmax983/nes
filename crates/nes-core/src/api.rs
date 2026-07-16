@@ -1929,63 +1929,63 @@ impl NesCore {
         }
     }
 
-    fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
+    fn apply_remap_write(&mut self, addr: u16, value: u8) -> bool {
+        let mapper = match self.mapper.as_mut() {
+            Some(m) if addr >= 0x8000 => m,
+            _ => return false,
         };
+        let chr_window = self.ppu.chr_window_snapshot();
+        mapper.sync_chr_ram_from_ppu_window(&chr_window);
+        mapper.write_prg(addr, value);
+        true
+    }
 
-        // Route $6000-$7FFF writes to cartridge PRG-RAM. Mappers without work
-        // RAM ignore the write and re-materialize nothing, so the flat image
-        // keeps the written byte exactly as before.
-        let prg_ram_write_needed = if (0x6000..=0x7FFF).contains(&addr) {
-            if let Some(mapper) = self.mapper.as_mut() {
-                mapper.write_prg_ram(addr, value);
-                true
-            } else {
-                false
-            }
-        } else {
-            false
+    fn apply_prg_ram_write(&mut self, addr: u16, value: u8) -> bool {
+        let mapper = match self.mapper.as_mut() {
+            Some(m) if (0x6000..=0x7FFF).contains(&addr) => m,
+            _ => return false,
         };
+        mapper.write_prg_ram(addr, value);
+        true
+    }
 
-        // Route $5000-$5FFF writes to the MMC5 expansion registers / ExRAM.
-        // Mappers without expansion registers return `false` and the flat image
-        // keeps the written byte.
-        let expansion_write_needed = if (0x5000..=0x5FFF).contains(&addr) {
-            self.mapper
-                .as_mut()
-                .is_some_and(|mapper| mapper.write_expansion(addr, value))
-        } else {
-            false
-        };
-
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
-            self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
-            true
-        } else {
-            false
-        };
-
-        if (0x4000..=0x4017).contains(&addr) {
-            if addr == 0x4014 {
-                self.pending_oam_dma_page = Some(value);
-            } else if addr == 0x4016 {
-                self.ports.write_controller_strobe(value);
-            } else {
-                self.apu.write_register(addr, value);
-            }
+    fn apply_expansion_write(&mut self, addr: u16, value: u8) -> bool {
+        if !(0x5000..=0x5FFF).contains(&addr) {
+            return false;
         }
+        self.mapper
+            .as_mut()
+            .is_some_and(|mapper| mapper.write_expansion(addr, value))
+    }
+
+    fn apply_ppu_write(&mut self, addr: u16, value: u8) -> bool {
+        if !(0x2000..=0x3FFF).contains(&addr) {
+            return false;
+        }
+        self.ppu
+            .write_register(normalize_ppu_register_addr(addr), value);
+        true
+    }
+
+    fn apply_apu_io_write(&mut self, addr: u16, value: u8) {
+        if !(0x4000..=0x4017).contains(&addr) {
+            return;
+        }
+        if addr == 0x4014 {
+            self.pending_oam_dma_page = Some(value);
+        } else if addr == 0x4016 {
+            self.ports.write_controller_strobe(value);
+        } else {
+            self.apu.write_register(addr, value);
+        }
+    }
+
+    fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
+        let remap_needed = self.apply_remap_write(addr, value);
+        let prg_ram_write_needed = self.apply_prg_ram_write(addr, value);
+        let expansion_write_needed = self.apply_expansion_write(addr, value);
+        let ppu_changed = self.apply_ppu_write(addr, value);
+        self.apply_apu_io_write(addr, value);
 
         if remap_needed {
             self.sync_mapper_prg_window();
