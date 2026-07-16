@@ -42,3 +42,16 @@ fn nes_desktop_invalid_rom_permissions_prints_styled_error() {
     assert!(stderr.contains("Failed to read ROM at"));
     assert!(stderr.contains('.'));
 }
+
+#[test]
+fn nes_desktop_rom_path_not_configured_prints_styled_error() {
+    let output = Command::new(nes_desktop_bin())
+        .env_clear()
+        .output()
+        .expect("run nes-desktop");
+
+    let stderr = String::from_utf8(output.stderr).expect("stderr utf8");
+    assert!(stderr.contains("ROM path not configured"));
+    assert!(stderr.contains("Hint:"));
+    assert!(stderr.contains("Provide a positional ROM argument"));
+}
