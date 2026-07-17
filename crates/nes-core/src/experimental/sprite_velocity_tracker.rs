@@ -64,17 +64,11 @@ impl SpriteVelocityTracker {
                 let mut dy = i16::from(sprite.y) - i16::from(last_y);
 
                 // Heuristic for screen wrap: if it moves > 128 pixels in one frame, it likely wrapped.
-                if dx > 128 {
-                    dx -= 256;
-                } else if dx < -128 {
-                    dx += 256;
-                }
+                if dx > 128 { dx -= 256; }
+                else if dx < -128 { dx += 256; }
 
-                if dy > 128 {
-                    dy -= 256;
-                } else if dy < -128 {
-                    dy += 256;
-                }
+                if dy > 128 { dy -= 256; }
+                else if dy < -128 { dy += 256; }
 
                 self.velocities[idx] = Some(TrackedSprite {
                     index: sprite.index,
@@ -120,9 +114,7 @@ mod tests {
         oam1[3] = 50; // X
         core.load_cpu_bytes(0x0200, &oam1);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 {
-            let _ = core.execute(crate::Command::StepCpu);
-        }
+        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
 
         tracker.track(&core);
         let vels = tracker.velocities();
@@ -135,13 +127,52 @@ mod tests {
         oam2[3] = 49; // X moved by -1
         core.load_cpu_bytes(0x0200, &oam2);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 {
-            let _ = core.execute(crate::Command::StepCpu);
-        }
+        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
 
         tracker.track(&core);
         let vels2 = tracker.velocities();
         assert_eq!(vels2[0].dx, -1);
         assert_eq!(vels2[0].dy, 2);
+    }
+
+    #[test]
+    fn test_velocity_tracking_wrap_around() {
+        let mut core = NesCore::new();
+        let mut tracker = SpriteVelocityTracker::new();
+
+        // Frame 1 (near bottom right)
+        let mut oam1 = [0xff; 256];
+        oam1[0] = 250; // Y
+        oam1[3] = 250; // X
+        core.load_cpu_bytes(0x0200, &oam1);
+        core.write_cpu_bus(0x4014, 0x02);
+        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        tracker.track(&core);
+
+        // Frame 2 (wrapped to top left)
+        let mut oam2 = [0xff; 256];
+        oam2[0] = 5; // Y (moved by 11)
+        oam2[3] = 5; // X (moved by 11)
+        core.load_cpu_bytes(0x0200, &oam2);
+        core.write_cpu_bus(0x4014, 0x02);
+        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        tracker.track(&core);
+
+        let vels = tracker.velocities();
+        assert_eq!(vels[0].dx, 11);
+        assert_eq!(vels[0].dy, 11);
+
+        // Frame 3 (wrapped backwards)
+        let mut oam3 = [0xff; 256];
+        oam3[0] = 250; // Y (moved by -11)
+        oam3[3] = 250; // X (moved by -11)
+        core.load_cpu_bytes(0x0200, &oam3);
+        core.write_cpu_bus(0x4014, 0x02);
+        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        tracker.track(&core);
+
+        let vels2 = tracker.velocities();
+        assert_eq!(vels2[0].dx, -11);
+        assert_eq!(vels2[0].dy, -11);
     }
 }
