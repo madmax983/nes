@@ -1,7 +1,7 @@
-use std::thread;
+use nes_mcp::{audio_chunk, frame_chunk, publish_audio_with, publish_frame_with};
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
-use nes_mcp::{publish_frame_with, frame_chunk, publish_audio_with, audio_chunk};
 
 #[test]
 #[should_panic(expected = "timeout")]
