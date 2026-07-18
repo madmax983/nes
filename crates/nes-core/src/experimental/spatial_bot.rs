@@ -11,14 +11,46 @@ use crate::experimental::zone_tracker::ZoneTracker;
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
+/// A pact made between the realm's geometry and the controller.
+///
+/// Defines the specific decree: when a bounding box breaches `zone_id`,
+/// the bot shall relentlessly press `button` for exactly `duration_frames`.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::BotRule;
+/// # use nes_core::Button;
+/// let rule = BotRule {
+///     zone_id: 42,
+///     button: Button::B,
+///     duration_frames: 60, // A full second of glory at 60 FPS
+/// };
+/// ```
 pub struct BotRule {
+    /// The ID of the zone to monitor.
     pub zone_id: usize,
+    /// The button to press when the rule is triggered.
     pub button: Button,
+    /// The number of frames to hold the button down for.
     pub duration_frames: u32,
 }
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
+/// The grand puppeteer of the NES realm.
+///
+/// `SpatialBot` listens to the whispers of the `ZoneTracker`, translating ethereal
+/// coordinate boundaries into concrete controller inputs. Why rely on mortal thumbs
+/// when you can automate responses to game events based entirely on spatial logic?
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::SpatialBot;
+/// // Awaken the bot from its slumber!
+/// let bot = SpatialBot::new();
+/// ```
 pub struct SpatialBot {
     rules: Vec<BotRule>,
     active_presses: std::collections::HashMap<Button, u32>,
@@ -26,6 +58,14 @@ pub struct SpatialBot {
 
 #[cfg(feature = "nova")]
 impl SpatialBot {
+    /// Summons a fresh `SpatialBot` into existence, devoid of any knowledge or rules.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// let bot = SpatialBot::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {

@@ -71,6 +71,22 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// The clairvoyant lens into the PPU's soul.
+///
+/// `PpuVisualizer` peers through the complex veil of nametables, attributes, and pattern tables
+/// to manifest their raw beauty as recognizable BMP images. Why guess if your rendering logic
+/// works when you can simply look at the resulting tapestry?
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+/// # use nes_core::NesCore;
+/// let core = NesCore::new();
+/// // Behold the canvas!
+/// let bmp_bytes = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
+/// assert_eq!(&bmp_bytes[0..2], b"BM");
+/// ```
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
