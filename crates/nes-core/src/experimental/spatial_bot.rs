@@ -9,8 +9,6 @@ use crate::Command;
 #[cfg(feature = "nova")]
 use crate::experimental::zone_tracker::ZoneTracker;
 
-#[cfg(feature = "nova")]
-#[derive(Debug, Clone)]
 /// A pact made between the realm's geometry and the controller.
 ///
 /// Defines the specific decree: when a bounding box breaches `zone_id`,
@@ -27,17 +25,16 @@ use crate::experimental::zone_tracker::ZoneTracker;
 ///     duration_frames: 60, // A full second of glory at 60 FPS
 /// };
 /// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BotRule {
     /// The ID of the zone to monitor.
     pub zone_id: usize,
     /// The button to press when the rule is triggered.
-    pub button: Button,
+    pub button: crate::Button,
     /// The number of frames to hold the button down for.
     pub duration_frames: u32,
 }
 
-#[cfg(feature = "nova")]
-#[derive(Debug, Default, Clone)]
 /// The grand puppeteer of the NES realm.
 ///
 /// `SpatialBot` listens to the whispers of the `ZoneTracker`, translating ethereal
@@ -51,12 +48,12 @@ pub struct BotRule {
 /// // Awaken the bot from its slumber!
 /// let bot = SpatialBot::new();
 /// ```
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SpatialBot {
     rules: Vec<BotRule>,
-    active_presses: std::collections::HashMap<Button, u32>,
+    active_presses: std::collections::HashMap<crate::Button, u32>,
 }
 
-#[cfg(feature = "nova")]
 impl SpatialBot {
     /// Summons a fresh `SpatialBot` into existence, devoid of any knowledge or rules.
     ///
@@ -167,6 +164,17 @@ mod tests {
     use crate::Command;
     use crate::NesCore;
     use crate::experimental::zone_tracker::ZoneTracker;
+
+    #[test]
+    fn test_bot_rule_debug() {
+        let rule = BotRule {
+            zone_id: 1,
+            button: crate::Button::A,
+            duration_frames: 2,
+        };
+        let debug_str = format!("{:?}", rule);
+        assert!(debug_str.contains("BotRule"));
+    }
 
     #[test]
     fn test_spatial_bot_evaluation() {
