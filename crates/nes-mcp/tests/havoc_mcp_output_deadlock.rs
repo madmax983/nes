@@ -17,5 +17,6 @@ fn havoc_test_deadlock_publish_frame_with() {
         let _ = tx.send(());
     });
 
-    rx.recv_timeout(Duration::from_millis(100)).expect("timeout");
+    rx.recv_timeout(Duration::from_millis(100))
+        .expect("timeout");
 }
