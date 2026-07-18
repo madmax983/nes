@@ -64,11 +64,17 @@ impl SpriteVelocityTracker {
                 let mut dy = i16::from(sprite.y) - i16::from(last_y);
 
                 // Heuristic for screen wrap: if it moves > 128 pixels in one frame, it likely wrapped.
-                if dx > 128 { dx -= 256; }
-                else if dx < -128 { dx += 256; }
+                if dx > 128 {
+                    dx -= 256;
+                } else if dx < -128 {
+                    dx += 256;
+                }
 
-                if dy > 128 { dy -= 256; }
-                else if dy < -128 { dy += 256; }
+                if dy > 128 {
+                    dy -= 256;
+                } else if dy < -128 {
+                    dy += 256;
+                }
 
                 self.velocities[idx] = Some(TrackedSprite {
                     index: sprite.index,
@@ -114,7 +120,9 @@ mod tests {
         oam1[3] = 50; // X
         core.load_cpu_bytes(0x0200, &oam1);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        for _ in 0..180 {
+            let _ = core.execute(crate::Command::StepCpu);
+        }
 
         tracker.track(&core);
         let vels = tracker.velocities();
@@ -127,7 +135,9 @@ mod tests {
         oam2[3] = 49; // X moved by -1
         core.load_cpu_bytes(0x0200, &oam2);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        for _ in 0..180 {
+            let _ = core.execute(crate::Command::StepCpu);
+        }
 
         tracker.track(&core);
         let vels2 = tracker.velocities();
@@ -146,7 +156,9 @@ mod tests {
         oam1[3] = 250; // X
         core.load_cpu_bytes(0x0200, &oam1);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        for _ in 0..180 {
+            let _ = core.execute(crate::Command::StepCpu);
+        }
         tracker.track(&core);
 
         // Frame 2 (wrapped to top left)
@@ -155,7 +167,9 @@ mod tests {
         oam2[3] = 5; // X (moved by 11)
         core.load_cpu_bytes(0x0200, &oam2);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        for _ in 0..180 {
+            let _ = core.execute(crate::Command::StepCpu);
+        }
         tracker.track(&core);
 
         let vels = tracker.velocities();
@@ -168,7 +182,9 @@ mod tests {
         oam3[3] = 250; // X (moved by -11)
         core.load_cpu_bytes(0x0200, &oam3);
         core.write_cpu_bus(0x4014, 0x02);
-        for _ in 0..180 { let _ = core.execute(crate::Command::StepCpu); }
+        for _ in 0..180 {
+            let _ = core.execute(crate::Command::StepCpu);
+        }
         tracker.track(&core);
 
         let vels2 = tracker.velocities();
