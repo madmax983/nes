@@ -83,7 +83,11 @@ impl Mmc1 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Mmc1State) {
+    /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &Mmc1State) {
         self.control = state.control;
         self.shift_register = state.shift_register;
         self.shift_count = state.shift_count;
@@ -454,7 +458,7 @@ mod tests {
         m.write_prg(0x8000, 0x01);
         assert_eq!(m.shift_count, 3);
 
-        m.restore_state(s);
+        m.restore_state(&s);
         assert_eq!(m.shift_count, 1);
         assert!(!m.shift_is_reset());
     }

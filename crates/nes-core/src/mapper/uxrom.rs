@@ -64,7 +64,11 @@ impl Uxrom {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: UxromState) {
+    /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &UxromState) {
         self.selected_bank = usize::from(state.selected_bank) % self.bank_count;
     }
 
@@ -117,7 +121,7 @@ mod tests {
         mapper.write_prg(0x8000, 1);
         let state = mapper.state();
         let mut restored = Uxrom::new(2);
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(mapper.selected_bank(), restored.selected_bank());
     }
 

@@ -87,7 +87,11 @@ impl ColorDreams {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: ColorDreamsState) {
+    /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &ColorDreamsState) {
         self.selected_prg_bank = (usize::from(state.selected_prg_bank) % self.prg_bank_count) as u8;
         self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
     }
@@ -237,7 +241,7 @@ mod tests {
             vec![0_u8; 4 * PRG_BANK_32K],
             vec![0_u8; 4 * CHR_WINDOW_BYTES],
         );
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.selected_prg_bank(), 2);
         assert_eq!(restored.selected_chr_bank(), 3);
     }

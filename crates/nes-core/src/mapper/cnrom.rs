@@ -64,7 +64,11 @@ impl Cnrom {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: CnromState) {
+    /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &CnromState) {
         self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
     }
 
@@ -139,7 +143,7 @@ mod tests {
         mapper.write_prg(0x8000, 1);
         let state = mapper.state();
         let mut mapper_restored = Cnrom::from_prg_chr(prg, chr);
-        mapper_restored.restore_state(state);
+        mapper_restored.restore_state(&state);
         assert_eq!(
             mapper.selected_chr_bank(),
             mapper_restored.selected_chr_bank()

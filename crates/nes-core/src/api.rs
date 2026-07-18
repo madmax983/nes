@@ -626,91 +626,91 @@ impl LoadedMapper {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc1(state) => {
                 let Self::Mmc1(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Cnrom(state) => {
                 let Self::Cnrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Axrom(state) => {
                 let Self::Axrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Gxrom(state) => {
                 let Self::Gxrom(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc3(state) => {
                 let Self::Mmc3(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::ColorDreams(state) => {
                 let Self::ColorDreams(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Camerica(state) => {
                 let Self::Camerica(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Namco108(state) => {
                 let Self::Namco108(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Fme7(state) => {
                 let Self::Fme7(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc2(state) => {
                 let Self::Mmc2(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(*state);
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc4(state) => {
                 let Self::Mmc4(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Mmc5(state) => {
                 let Self::Mmc5(mapper) = self else {
                     debug_assert!(false, "mapper delta kind must match mapper variant");
                     return;
                 };
-                mapper.restore_state(state.clone());
+                mapper.restore_state(state);
             }
             MapperDeltaKind::Replace(_) => {
                 debug_assert!(
