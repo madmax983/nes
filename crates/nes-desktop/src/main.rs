@@ -17,7 +17,7 @@ use crate::session::*;
 
 use crate::gamepad::*;
 use crate::input::*;
-use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+use comfy_table::{Cell, Color as TableColor, Table, presets::NOTHING};
 use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
@@ -1376,7 +1376,7 @@ fn build_startup_table(
     rta_manager: Option<&RtaManager>,
 ) -> Table {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_preset(NOTHING);
     table.set_header(vec![
         Cell::new("Property").fg(TableColor::Cyan),
         Cell::new("Value").fg(TableColor::White),
