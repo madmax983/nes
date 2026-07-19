@@ -260,12 +260,18 @@ mod tests {
         // Wow!
         assert_eq!(cmds_hold.len(), 2);
         // decrement branch false test
-        let mut tracker_no_event = ZoneTracker::new();
+        let tracker_no_event = ZoneTracker::new();
         bot_hold.evaluate(&tracker_no_event); // decrements to 0
 
         assert_eq!(cmds_zero_press.len(), 2);
-        assert!(matches!(cmds_zero_press[0], Command::PressButton(Button::B)));
-        assert!(matches!(cmds_zero_press[1], Command::ReleaseButton(Button::B)));
+        assert!(matches!(
+            cmds_zero_press[0],
+            Command::PressButton(Button::B)
+        ));
+        assert!(matches!(
+            cmds_zero_press[1],
+            Command::ReleaseButton(Button::B)
+        ));
 
         let cmds_zero_release = bot_zero.evaluate(&empty_tracker);
         assert_eq!(cmds_zero_release.len(), 0);
