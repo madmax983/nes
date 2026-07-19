@@ -82,7 +82,11 @@ impl Namco108 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Namco108State) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &Namco108State) {
         self.bank_select = state.bank_select;
         self.bank_registers = state.bank_registers;
     }
@@ -305,7 +309,7 @@ mod tests {
 
         let mut restored =
             Namco108::from_prg_chr(prg_with_bank_markers(8), chr_with_bank_markers(8));
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.read_prg(0x8000), 3);
         assert_eq!(restored.chr_window()[0x1000], 5);
     }

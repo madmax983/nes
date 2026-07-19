@@ -60,7 +60,11 @@ impl Camerica {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: CamericaState) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &CamericaState) {
         self.selected_bank = usize::from(state.selected_bank) % self.bank_count;
     }
 
@@ -195,7 +199,7 @@ mod tests {
         assert_eq!(state.selected_bank, 3);
 
         let mut restored = Camerica::from_prg_rom(prg_with_markers(4));
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.selected_bank(), 3);
         assert_eq!(restored.read_prg(0x8000), 0x13);
     }
