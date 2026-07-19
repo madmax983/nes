@@ -2154,5 +2154,4 @@ mod tests {
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
     }
-
 }
