@@ -100,7 +100,7 @@ fn validate_action_allowed(action: AppAction, rollback_enabled: bool) -> Result<
 
 fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
     pressed
-        && (matches!(
+        && matches!(
             key,
             VirtualKeyCode::Up
                 | VirtualKeyCode::Down
@@ -111,9 +111,7 @@ fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
                 | VirtualKeyCode::Back
                 | VirtualKeyCode::F5
                 | VirtualKeyCode::F8
-        ) || matches!(
-            key,
-            VirtualKeyCode::A
+                | VirtualKeyCode::A
                 | VirtualKeyCode::E
                 | VirtualKeyCode::G
                 | VirtualKeyCode::I
@@ -129,7 +127,7 @@ fn overlay_input_requires_redraw(key: VirtualKeyCode, pressed: bool) -> bool {
                 | VirtualKeyCode::X
                 | VirtualKeyCode::Y
                 | VirtualKeyCode::Z
-        ))
+        )
 }
 
 fn menu_action_enabled(
