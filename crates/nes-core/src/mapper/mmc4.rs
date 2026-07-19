@@ -148,7 +148,7 @@ impl Mmc4 {
         }
     }
 
-    /// Restores state from a snapshot.
+        /// Restores state from a snapshot.
     ///
     /// Performance note: Takes state by reference to avoid heap allocations
     /// when restoring structs with large dynamically allocated fields.
