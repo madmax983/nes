@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Refactor God Functions in nes-desktop**
+**Learning:** The `run` function in `crates/nes-desktop/src/main.rs` had grown to over 700 lines with massive 9-level nesting due to inlining of event handlers and `AppAction` execution. This makes it extremely difficult to reason about desktop lifecycle.
+**Action:** Extract large match arms (like `execute_app_action` variants and keyboard decisions) into private handler functions to flatten the event loop and improve readability.

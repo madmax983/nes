@@ -220,7 +220,7 @@ struct AppContext<'a> {
     time_machine: &'a mut TimeMachine,
     rewind_held: &'a mut bool,
     metrics: &'a mut PerfMetrics,
-    keyboard_bits: u8,
+    keyboard_bits: &'a mut u8,
     gamepad_bits: &'a mut [u8; 2],
     window: &'a Window,
     rta_manager: &'a mut Option<RtaManager>,
@@ -341,135 +341,143 @@ fn execute_app_action(action: AppAction, ctx: &mut AppContext<'_>) -> Result<boo
     validate_action_allowed(action, ctx.rollback_enabled)?;
 
     match action {
-        AppAction::ToggleOverlay => {
-            set_overlay_open(
-                ctx.overlay,
-                !ctx.overlay.is_open(),
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::Resume => {
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::OpenCheats => {
-            if ctx.rta_manager.is_some() {
-                ctx.overlay
-                    .set_status_message("Cheats are unavailable while RTA mode is active");
-                return Ok(false);
-            }
-            if !ctx.overlay.is_open() {
-                set_overlay_open(
-                    ctx.overlay,
-                    true,
-                    ctx.core,
-                    ctx.audio_output,
-                    ctx.window,
-                    ctx.session,
-                )?;
-            }
-            ctx.overlay.open_cheats_panel();
-            ctx.window.set_title(&window_title(ctx.session, true));
-            Ok(false)
-        }
-        AppAction::OpenRom => {
-            if ctx.rta_manager.is_some() {
-                ctx.overlay
-                    .set_status_message("Open ROM is unavailable while RTA mode is active");
-                return Ok(false);
-            }
-            if !rom_picker_supported() {
-                ctx.overlay
-                    .set_status_message("Open ROM picker is unavailable on this platform build");
-                return Ok(false);
-            }
-            let Some(path) = pick_rom_path() else {
-                ctx.overlay.set_status_message("Open ROM cancelled");
-                return Ok(false);
-            };
-            let cleared_cheats = SessionCheats::new();
-            *ctx.session = load_rom_session(ctx.core, &path, &cleared_cheats)?;
-            ctx.session_cheats.clear();
-            reset_ephemeral_state(ctx);
-            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
-            ctx.overlay.clear_status_message();
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
-        AppAction::SaveSlot(slot) => {
-            if let Some(rta) = ctx.rta_manager.as_mut() {
-                let _ = rta.mark_forbidden_action(
-                    ForbiddenAction::SaveLoad,
-                    ctx.frame_index,
-                    Instant::now(),
-                );
-            }
-            let snapshot = ctx.core.save_state();
-            let slot_path = slot_path_for_selection(ctx.session, slot);
-            save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
-            refresh_slot_metadata(ctx.session)?;
-            ctx.overlay.focus_slot(slot, true);
-            ctx.overlay
-                .set_status_message(format!("[state] saved {}", slot_path.display()));
-            Ok(false)
-        }
-        AppAction::LoadSlot(slot) => {
-            if let Some(rta) = ctx.rta_manager.as_mut() {
-                let _ = rta.mark_forbidden_action(
-                    ForbiddenAction::SaveLoad,
-                    ctx.frame_index,
-                    Instant::now(),
-                );
-            }
-            let slot_path = slot_path_for_selection(ctx.session, slot);
-            let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
-            ctx.core.load_state(&snapshot);
-            apply_session_cheats(ctx.core, ctx.session_cheats)?;
-            reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
-            resync_restored_inputs(ctx.core, ctx.keyboard_bits, ctx.gamepad_bits)?;
-            reset_ephemeral_state(ctx);
-            refresh_slot_metadata(ctx.session)?;
-            ctx.overlay.focus_slot(slot, false);
-            ctx.overlay
-                .set_status_message(format!("[state] loaded {}", slot_path.display()));
-            Ok(false)
-        }
-        AppAction::Reset => {
-            ctx.core
-                .execute(Command::Reset)
-                .map_err(|err| format!("Reset failed: {err}"))?;
-            reset_ephemeral_state(ctx);
-            ctx.overlay.set_status_message("System reset");
-            set_overlay_open(
-                ctx.overlay,
-                false,
-                ctx.core,
-                ctx.audio_output,
-                ctx.window,
-                ctx.session,
-            )?;
-            Ok(false)
-        }
+        AppAction::ToggleOverlay => handle_toggle_overlay(ctx),
+        AppAction::Resume => handle_resume(ctx),
+        AppAction::OpenCheats => handle_open_cheats(ctx),
+        AppAction::OpenRom => handle_open_rom(ctx),
+        AppAction::SaveSlot(slot) => handle_save_slot(slot, ctx),
+        AppAction::LoadSlot(slot) => handle_load_slot(slot, ctx),
+        AppAction::Reset => handle_reset(ctx),
         AppAction::Quit => Ok(true),
     }
+}
+
+fn handle_toggle_overlay(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    set_overlay_open(
+        ctx.overlay,
+        !ctx.overlay.is_open(),
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
+fn handle_resume(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    set_overlay_open(
+        ctx.overlay,
+        false,
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
+fn handle_open_cheats(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if ctx.rta_manager.is_some() {
+        ctx.overlay
+            .set_status_message("Cheats are unavailable while RTA mode is active");
+        return Ok(false);
+    }
+    if !ctx.overlay.is_open() {
+        set_overlay_open(
+            ctx.overlay,
+            true,
+            ctx.core,
+            ctx.audio_output,
+            ctx.window,
+            ctx.session,
+        )?;
+    }
+    ctx.overlay.open_cheats_panel();
+    ctx.window.set_title(&window_title(ctx.session, true));
+    Ok(false)
+}
+
+fn handle_open_rom(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if ctx.rta_manager.is_some() {
+        ctx.overlay
+            .set_status_message("Open ROM is unavailable while RTA mode is active");
+        return Ok(false);
+    }
+    if !rom_picker_supported() {
+        ctx.overlay
+            .set_status_message("Open ROM picker is unavailable on this platform build");
+        return Ok(false);
+    }
+    let Some(path) = pick_rom_path() else {
+        ctx.overlay.set_status_message("Open ROM cancelled");
+        return Ok(false);
+    };
+    let cleared_cheats = SessionCheats::new();
+    *ctx.session = load_rom_session(ctx.core, &path, &cleared_cheats)?;
+    ctx.session_cheats.clear();
+    reset_ephemeral_state(ctx);
+    resync_restored_inputs(ctx.core, *ctx.keyboard_bits, ctx.gamepad_bits)?;
+    ctx.overlay.clear_status_message();
+    set_overlay_open(
+        ctx.overlay,
+        false,
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
+}
+
+fn handle_save_slot(slot: u8, ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if let Some(rta) = ctx.rta_manager.as_mut() {
+        let _ =
+            rta.mark_forbidden_action(ForbiddenAction::SaveLoad, ctx.frame_index, Instant::now());
+    }
+    let snapshot = ctx.core.save_state();
+    let slot_path = slot_path_for_selection(ctx.session, slot);
+    save_state_file(&slot_path, &ctx.session.rom_hash, &snapshot)?;
+    refresh_slot_metadata(ctx.session)?;
+    ctx.overlay.focus_slot(slot, true);
+    ctx.overlay
+        .set_status_message(format!("[state] saved {}", slot_path.display()));
+    Ok(false)
+}
+
+fn handle_load_slot(slot: u8, ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    if let Some(rta) = ctx.rta_manager.as_mut() {
+        let _ =
+            rta.mark_forbidden_action(ForbiddenAction::SaveLoad, ctx.frame_index, Instant::now());
+    }
+    let slot_path = slot_path_for_selection(ctx.session, slot);
+    let snapshot = load_state_file(&slot_path, &ctx.session.rom_hash)?;
+    ctx.core.load_state(&snapshot);
+    apply_session_cheats(ctx.core, ctx.session_cheats)?;
+    reconcile_core_pause_with_overlay(ctx.core, ctx.overlay.is_open())?;
+    resync_restored_inputs(ctx.core, *ctx.keyboard_bits, ctx.gamepad_bits)?;
+    reset_ephemeral_state(ctx);
+    refresh_slot_metadata(ctx.session)?;
+    ctx.overlay.focus_slot(slot, false);
+    ctx.overlay
+        .set_status_message(format!("[state] loaded {}", slot_path.display()));
+    Ok(false)
+}
+
+fn handle_reset(ctx: &mut AppContext<'_>) -> Result<bool, String> {
+    ctx.core
+        .execute(Command::Reset)
+        .map_err(|err| format!("Reset failed: {err}"))?;
+    reset_ephemeral_state(ctx);
+    ctx.overlay.set_status_message("System reset");
+    set_overlay_open(
+        ctx.overlay,
+        false,
+        ctx.core,
+        ctx.audio_output,
+        ctx.window,
+        ctx.session,
+    )?;
+    Ok(false)
 }
 
 fn reset_ephemeral_state(ctx: &mut AppContext<'_>) {
@@ -595,6 +603,76 @@ fn apply_gamepad_delta_commands(
     Ok(())
 }
 
+fn handle_keyboard_decision(
+    decision: KeyboardDecision,
+    ctx: &mut AppContext<'_>,
+    control_flow: &mut ControlFlow,
+) {
+    match decision {
+        KeyboardDecision::ToggleOverlay => {
+            let _ = dispatch_app_action(AppAction::ToggleOverlay, ctx, control_flow);
+        }
+        KeyboardDecision::ManualSaveState => {
+            if let Some(action) = slot_action_for_hotkey(true, ctx.overlay.selected_slot()) {
+                let _ = dispatch_app_action(action, ctx, control_flow);
+            }
+        }
+        KeyboardDecision::ManualLoadState => {
+            if let Some(action) = slot_action_for_hotkey(false, ctx.overlay.selected_slot()) {
+                let _ = dispatch_app_action(action, ctx, control_flow);
+            }
+        }
+        KeyboardDecision::SetRewindHeld(held) => {
+            // R: hold to rewind, release to resume.
+            *ctx.rewind_held = held;
+            if held && let Some(rta) = ctx.rta_manager.as_mut() {
+                let _ = rta.mark_forbidden_action(
+                    ForbiddenAction::Rewind,
+                    ctx.frame_index,
+                    Instant::now(),
+                );
+            }
+            if should_resume_after_rewind_hold(held) {
+                ctx.time_machine.resume();
+                if let Err(err) =
+                    resync_restored_inputs(ctx.core, *ctx.keyboard_bits, ctx.gamepad_bits)
+                {
+                    eprintln!("Input resync failed: {err}");
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+        }
+        KeyboardDecision::RtaManualSplit => {
+            if let Some(rta) = ctx.rta_manager.as_mut() {
+                let _ = rta.manual_split(ctx.frame_index, Instant::now());
+            }
+        }
+        KeyboardDecision::RtaFinish => {
+            if let Some(rta) = ctx.rta_manager.as_mut() {
+                let _ = rta.force_finish(ctx.frame_index, Instant::now());
+                let _ = rta.write_artifacts_if_finished();
+                if let Some(rta_config) = ctx.runtime.rta.as_ref() {
+                    let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
+                }
+            }
+        }
+        KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
+            *ctx.keyboard_bits = update_button_bits(*ctx.keyboard_bits, mask, pressed);
+        }
+        KeyboardDecision::ExecuteCore(command) => {
+            if let Some(action) = command_marks_rta_invalidation(command)
+                && let Some(rta) = ctx.rta_manager.as_mut()
+            {
+                let _ = rta.mark_forbidden_action(action, ctx.frame_index, Instant::now());
+            }
+            if let Err(err) = ctx.core.execute(command) {
+                eprintln!("Input command failed: {err}");
+                *control_flow = ControlFlow::Exit;
+            }
+        }
+        KeyboardDecision::Noop => {}
+    }
+}
 fn run() -> Result<(), String> {
     let runtime = resolve_runtime_config()?;
 
@@ -827,7 +905,7 @@ fn run() -> Result<(), String> {
                 time_machine: &mut time_machine,
                 rewind_held: &mut rewind_held,
                 metrics: &mut metrics,
-                keyboard_bits,
+                keyboard_bits: &mut keyboard_bits,
                 gamepad_bits: &mut gamepad_bits,
                 window: &window,
                 rta_manager: &mut rta_manager,
@@ -877,82 +955,11 @@ fn run() -> Result<(), String> {
                     rta_calibrate: rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 };
 
-                match classify_keyboard_input(key, pressed, mode) {
-                    KeyboardDecision::ToggleOverlay => {
-                        let mut ctx = build_ctx!();
-                        let _ = dispatch_app_action(AppAction::ToggleOverlay, &mut ctx, control_flow);
-                    }
-                    KeyboardDecision::ManualSaveState => {
-                        if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = build_ctx!();
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
-                        }
-                    }
-                    KeyboardDecision::ManualLoadState => {
-                        if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = build_ctx!();
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
-                        }
-                    }
-                    KeyboardDecision::SetRewindHeld(held) => {
-                        // R: hold to rewind, release to resume.
-                        rewind_held = held;
-                        if held
-                            && let Some(rta) = rta_manager.as_mut()
-                        {
-                            let _ = rta.mark_forbidden_action(
-                                ForbiddenAction::Rewind,
-                                frame_index,
-                                Instant::now(),
-                            );
-                        }
-                        if should_resume_after_rewind_hold(held) {
-                            time_machine.resume();
-                            // The restored snapshot's controller bits may reflect buttons
-                            // held at that historical frame. Release both pads so the
-                            // core's latch matches the host's live input state going forward.
-                            if let Err(err) =
-                                resync_restored_inputs(&mut core, keyboard_bits, &mut gamepad_bits)
-                            {
-                                eprintln!("Input resync failed: {err}");
-                                *control_flow = ControlFlow::Exit;
-                            }
-                        }
-                    }
-                    KeyboardDecision::RtaManualSplit => {
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.manual_split(frame_index, Instant::now());
-                        }
-                    }
-                    KeyboardDecision::RtaFinish => {
-                        if let Some(rta) = rta_manager.as_mut() {
-                            let _ = rta.force_finish(frame_index, Instant::now());
-                            let _ = rta.write_artifacts_if_finished();
-                            if let Some(rta_config) = runtime.rta.as_ref() {
-                                let _ = rta.write_calibration_draft(&rta_config.profiles_dir);
-                            }
-                        }
-                    }
-                    KeyboardDecision::UpdateKeyboardBits { mask, pressed } => {
-                        keyboard_bits = update_button_bits(keyboard_bits, mask, pressed);
-                    }
-                    KeyboardDecision::ExecuteCore(command) => {
-                        if let Some(action) = command_marks_rta_invalidation(command)
-                            && let Some(rta) = rta_manager.as_mut()
-                        {
-                            let _ = rta.mark_forbidden_action(action, frame_index, Instant::now());
-                        }
-                        if let Err(err) = core.execute(command) {
-                            eprintln!("Input command failed: {err}");
-                            *control_flow = ControlFlow::Exit;
-                        }
-                    }
-                    KeyboardDecision::Noop => {}
-                }
+                handle_keyboard_decision(
+                    classify_keyboard_input(key, pressed, mode),
+                    &mut build_ctx!(),
+                    control_flow,
+                );
             }
             WindowEventDecision::Resized { width, height } => {
                 if let Err(err) = pixels.resize_surface(width, height) {
