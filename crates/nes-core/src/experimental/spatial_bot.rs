@@ -9,14 +9,25 @@ use crate::Command;
 #[cfg(feature = "nova")]
 use crate::experimental::zone_tracker::ZoneTracker;
 
+/// A rule that defines an automated button press in response to a spatial zone event.
+///
+/// When an event triggers in `zone_id`, the bot will output `button` and hold it for
+/// `duration_frames`.
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
 pub struct BotRule {
+    /// The ID of the zone that triggers this rule.
     pub zone_id: usize,
+    /// The button to press when the event occurs.
     pub button: Button,
+    /// The number of frames to hold the button for.
     pub duration_frames: u32,
 }
 
+/// An automated bot that evaluates spatial events and generates controller inputs.
+///
+/// The bot evaluates events from a `ZoneTracker` and applies any configured `BotRule`s
+/// to output a sequence of `Command`s.
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
 pub struct SpatialBot {
@@ -26,6 +37,7 @@ pub struct SpatialBot {
 
 #[cfg(feature = "nova")]
 impl SpatialBot {
+    /// Creates a new `SpatialBot` with no rules or active presses.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -127,6 +139,28 @@ mod tests {
     use crate::Command;
     use crate::NesCore;
     use crate::experimental::zone_tracker::ZoneTracker;
+
+    #[test]
+    fn test_spatial_bot_derives() {
+        let bot = SpatialBot::default();
+        let cloned_bot = bot.clone();
+        assert_eq!(format!("{:?}", bot), format!("{:?}", cloned_bot));
+
+        let rule = BotRule {
+            zone_id: 1,
+            button: Button::A,
+            duration_frames: 10,
+        };
+        let cloned_rule = rule.clone();
+        assert_eq!(format!("{:?}", rule), format!("{:?}", cloned_rule));
+    }
+
+    #[test]
+    fn test_spatial_bot_new() {
+        let bot = SpatialBot::new();
+        assert!(bot.rules.is_empty());
+        assert!(bot.active_presses.is_empty());
+    }
 
     #[test]
     fn test_spatial_bot_evaluation() {
