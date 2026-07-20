@@ -1373,66 +1373,54 @@ impl NesCore {
     /// core.execute(Command::PressButton(Button::A)).unwrap();
     /// ```
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
-        let (player, bits) = match command {
-            Command::SetControllerState(bits) => (Player::One, bits),
-            Command::SetController2State(bits) => (Player::Two, bits),
-            Command::PressButton(button) => (
-                Player::One,
-                self.ports.controllers[0].bits | button.bit_mask(),
-            ),
-            Command::PressButton2(button) => (
-                Player::Two,
-                self.ports.controllers[1].bits | button.bit_mask(),
-            ),
-            Command::ReleaseButton(button) => (
-                Player::One,
-                self.ports.controllers[0].bits & !button.bit_mask(),
-            ),
-            Command::ReleaseButton2(button) => (
-                Player::Two,
-                self.ports.controllers[1].bits & !button.bit_mask(),
-            ),
-            Command::Pause => {
-                self.paused = true;
-                return Ok(());
+        match command {
+            Command::SetControllerState(bits) => self.update_controller(Player::One, bits),
+            Command::SetController2State(bits) => self.update_controller(Player::Two, bits),
+            Command::PressButton(button) => {
+                let bits = self.ports.controllers[0].bits | button.bit_mask();
+                self.update_controller(Player::One, bits);
             }
-            Command::Resume => {
-                self.paused = false;
-                return Ok(());
+            Command::PressButton2(button) => {
+                let bits = self.ports.controllers[1].bits | button.bit_mask();
+                self.update_controller(Player::Two, bits);
             }
-            Command::Reset => {
-                self.reset_runtime();
-                return Ok(());
+            Command::ReleaseButton(button) => {
+                let bits = self.ports.controllers[0].bits & !button.bit_mask();
+                self.update_controller(Player::One, bits);
             }
+            Command::ReleaseButton2(button) => {
+                let bits = self.ports.controllers[1].bits & !button.bit_mask();
+                self.update_controller(Player::Two, bits);
+            }
+            Command::Pause => self.paused = true,
+            Command::Resume => self.paused = false,
+            Command::Reset => self.reset_runtime(),
             Command::PowerCycle => {
                 self.reset_runtime();
                 self.speed_permille = DEFAULT_SPEED_PERMILLE;
-                return Ok(());
             }
             Command::StepCpu => {
                 self.step_single_instruction()?;
-                return Ok(());
             }
             Command::StepScanline => {
                 self.step_until_next_scanline()?;
-                return Ok(());
             }
             Command::StepFrame => {
                 self.step_until_next_frame()?;
-                return Ok(());
             }
             Command::SetSpeed(speed) => {
                 if speed == 0 {
                     return Err(CoreError::InvalidSpeed(speed));
                 }
                 self.speed_permille = speed;
-                return Ok(());
             }
-        };
+        }
+        Ok(())
+    }
 
+    fn update_controller(&mut self, player: Player, bits: u8) {
         self.ports.set_controller_bits(bits, player);
         self.sync_ppu_register_image();
-        Ok(())
     }
 
     /// Executes a readonly query against current state.
@@ -1930,93 +1918,76 @@ impl NesCore {
     }
 
     fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
+        match addr {
+            0x8000..=0xFFFF => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+                    let chr_window = self.ppu.chr_window_snapshot();
+                    mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                    mapper.write_prg(addr, value);
+                } else {
+                    return;
+                }
+                self.sync_mapper_prg_window();
+                self.sync_mapper_mirroring();
+                self.sync_mapper_chr_window();
             }
-        } else {
-            false
-        };
-
-        // Route $6000-$7FFF writes to cartridge PRG-RAM. Mappers without work
-        // RAM ignore the write and re-materialize nothing, so the flat image
-        // keeps the written byte exactly as before.
-        let prg_ram_write_needed = if (0x6000..=0x7FFF).contains(&addr) {
-            if let Some(mapper) = self.mapper.as_mut() {
-                mapper.write_prg_ram(addr, value);
-                true
-            } else {
-                false
+            0x6000..=0x7FFF => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Route $6000-$7FFF writes to cartridge PRG-RAM. Mappers without work
+                    // RAM ignore the write and re-materialize nothing, so the flat image
+                    // keeps the written byte exactly as before.
+                    mapper.write_prg_ram(addr, value);
+                } else {
+                    return;
+                }
+                // Re-materialize the $6000-$7FFF window so a subsequent CPU read
+                // observes the mapper's stored byte (respecting write protection /
+                // chip-enable), rather than the raw flat write.
+                self.sync_mapper_prg_ram_window();
             }
-        } else {
-            false
-        };
-
-        // Route $5000-$5FFF writes to the MMC5 expansion registers / ExRAM.
-        // Mappers without expansion registers return `false` and the flat image
-        // keeps the written byte.
-        let expansion_write_needed = if (0x5000..=0x5FFF).contains(&addr) {
-            self.mapper
-                .as_mut()
-                .is_some_and(|mapper| mapper.write_expansion(addr, value))
-        } else {
-            false
-        };
-
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
-            self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
-            true
-        } else {
-            false
-        };
-
-        if (0x4000..=0x4017).contains(&addr) {
-            if addr == 0x4014 {
-                self.pending_oam_dma_page = Some(value);
-            } else if addr == 0x4016 {
-                self.ports.write_controller_strobe(value);
-            } else {
-                self.apu.write_register(addr, value);
+            0x5000..=0x5FFF => {
+                let mut expansion_written = false;
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Route $5000-$5FFF writes to the MMC5 expansion registers / ExRAM.
+                    // Mappers without expansion registers return `false` and the flat image
+                    // keeps the written byte.
+                    expansion_written = mapper.write_expansion(addr, value);
+                }
+                if expansion_written {
+                    // An MMC5 register write can change PRG/CHR banking, mirroring, and
+                    // the CPU-visible expansion image (multiplier / IRQ status / ExRAM),
+                    // so re-materialize all of them.
+                    self.sync_mapper_prg_window();
+                    self.sync_mapper_mirroring();
+                    self.sync_mapper_chr_window();
+                    self.sync_mapper_expansion_image();
+                    // ExRAM writes may be dropped (read-only mode, or non-rendering); the
+                    // authoritative byte lives in the mapper, so overwrite the flat image
+                    // with it (reverting any dropped write).
+                    if (0x5C00..=0x5FFF).contains(&addr) {
+                        let byte = self.mapper.as_ref().and_then(|m| m.expansion_read(addr));
+                        if let Some(byte) = byte {
+                            self.cpu.write_byte(addr, byte);
+                        }
+                    }
+                }
             }
-        }
-
-        if remap_needed {
-            self.sync_mapper_prg_window();
-            self.sync_mapper_mirroring();
-            self.sync_mapper_chr_window();
-        }
-        if prg_ram_write_needed {
-            // Re-materialize the $6000-$7FFF window so a subsequent CPU read
-            // observes the mapper's stored byte (respecting write protection /
-            // chip-enable), rather than the raw flat write.
-            self.sync_mapper_prg_ram_window();
-        }
-        if expansion_write_needed {
-            // An MMC5 register write can change PRG/CHR banking, mirroring, and
-            // the CPU-visible expansion image (multiplier / IRQ status / ExRAM),
-            // so re-materialize all of them.
-            self.sync_mapper_prg_window();
-            self.sync_mapper_mirroring();
-            self.sync_mapper_chr_window();
-            self.sync_mapper_expansion_image();
-            // ExRAM writes may be dropped (read-only mode, or non-rendering); the
-            // authoritative byte lives in the mapper, so overwrite the flat image
-            // with it (reverting any dropped write).
-            if (0x5C00..=0x5FFF).contains(&addr)
-                && let Some(byte) = self.mapper.as_ref().and_then(|m| m.expansion_read(addr))
-            {
-                self.cpu.write_byte(addr, byte);
+            0x4000..=0x4017 => {
+                if addr == 0x4014 {
+                    self.pending_oam_dma_page = Some(value);
+                } else if addr == 0x4016 {
+                    self.ports.write_controller_strobe(value);
+                } else {
+                    self.apu.write_register(addr, value);
+                }
             }
-        }
-        if ppu_changed {
-            self.sync_ppu_register_image();
+            0x2000..=0x3FFF => {
+                self.ppu
+                    .write_register(normalize_ppu_register_addr(addr), value);
+                self.sync_ppu_register_image();
+            }
+            _ => {}
         }
     }
 

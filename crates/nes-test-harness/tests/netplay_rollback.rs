@@ -260,15 +260,14 @@ fn rollback_two_peer_soak_converges_under_faulty_network() {
         network.send_input(host_frame, 2, 1, scheduled2.frame, scheduled2.bits);
 
         for packet in network.drain_ready(host_frame) {
-            if packet.to_player == 1 {
-                let _ = peer1
-                    .rollback
-                    .ingest_remote_input(packet.input_frame, packet.bits);
+            let peer = if packet.to_player == 1 {
+                &mut peer1
             } else {
-                let _ = peer2
-                    .rollback
-                    .ingest_remote_input(packet.input_frame, packet.bits);
-            }
+                &mut peer2
+            };
+            let _ = peer
+                .rollback
+                .ingest_remote_input(packet.input_frame, packet.bits);
         }
 
         let step1 = peer1
