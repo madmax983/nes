@@ -71,6 +71,50 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
+/// A utility for extracting PPU state and visualizing it as BMP images.
+///
+/// This provides methods for dumping pattern tables and nametables (with scroll viewports)
+/// to easily view the internal graphical state of the NES.
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
