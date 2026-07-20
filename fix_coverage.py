@@ -19,7 +19,7 @@ test_case = """
 """
 
 if "test_spatial_bot_derives" not in content:
-    content = content.replace("    #[test]\n    fn test_spatial_bot_new() {", test_case + "\n    #[test]\n    fn test_spatial_bot_new() {")
+    content = content.replace("    #[test]\n    fn test_spatial_bot_evaluation() {", test_case + "\n    #[test]\n    fn test_spatial_bot_evaluation() {")
 
 with open("crates/nes-core/src/experimental/spatial_bot.rs", "w") as f:
     f.write(content)
