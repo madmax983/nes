@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**dispatch_output_value refactor**
+**Learning:** `dispatch_output_value` in `nes-mcp/src/protocol.rs` contained a massive God Function with a 150-line `match` block manually converting `DispatchOutput` variants into `serde_json::Value` objects. This was unnecessary since serde has an elegant tag system.
+**Action:** Derived `serde::Serialize` on the `DispatchOutput` enum using `#[serde(tag = "kind", rename_all = "snake_case")]` and reduced `dispatch_output_value` to a single `serde_json::to_value` call.
