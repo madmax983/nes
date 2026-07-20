@@ -280,7 +280,6 @@ mod tests {
     use super::*;
     use crate::NesCore;
 
-
     #[test]
     fn extract_pattern_table_returns_err_for_invalid_index() {
         // Just demonstrating that the structure is tested.

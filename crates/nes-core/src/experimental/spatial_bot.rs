@@ -140,7 +140,6 @@ mod tests {
     use crate::NesCore;
     use crate::experimental::zone_tracker::ZoneTracker;
 
-
     #[test]
     fn test_spatial_bot_new() {
         let bot = SpatialBot::new();
