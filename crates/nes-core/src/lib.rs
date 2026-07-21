@@ -24,8 +24,9 @@ pub mod serde_array;
 #[cfg(feature = "tas")]
 pub mod tas;
 
+pub use mapper::MapperDelta;
 pub use api::{
-    Button, Command, CoreError, CoreQuery, CoreSnapshot, EmulatorState, MapperDelta, NesCore,
+    Button, Command, CoreError, CoreQuery, CoreSnapshot, EmulatorState, NesCore,
     Player, QueryResult, RomLoadInfo,
 };
 pub use cheat_codes::{CheatCode, CheatCodeError};
