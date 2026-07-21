@@ -14,60 +14,76 @@ pub fn format_runtime_usage() -> String {
 
     table.add_row(vec![
         Cell::new("Core").fg(TableColor::Yellow),
-        Cell::new("--config <path>
+        Cell::new(
+            "--config <path>
 --cheat-code <code>
-[rom_path]"),
-        Cell::new("Path to config file
+[rom_path]",
+        ),
+        Cell::new(
+            "Path to config file
 Inject a Game Genie cheat
-Positional ROM to load"),
+Positional ROM to load",
+        ),
     ]);
 
     table.add_row(vec![
         Cell::new("MCP").fg(TableColor::Magenta),
-        Cell::new("--mcp-host
---mcp-bind <addr>"),
-        Cell::new("Enable MCP host
-Bind address for MCP"),
+        Cell::new(
+            "--mcp-host
+--mcp-bind <addr>",
+        ),
+        Cell::new(
+            "Enable MCP host
+Bind address for MCP",
+        ),
     ]);
 
     table.add_row(vec![
         Cell::new("Netplay").fg(TableColor::Blue),
-        Cell::new("--netplay
+        Cell::new(
+            "--netplay
 --netplay-relay <addr>
 --netplay-room <room>
 --netplay-player <1|2>
 --netplay-delay <f>
 --netplay-max-rollback <f>
---netplay-hash-every <f>"),
-        Cell::new("Enable Netplay
+--netplay-hash-every <f>",
+        ),
+        Cell::new(
+            "Enable Netplay
 Relay server address
 Room ID
 Player index
 Input delay frames
 Max rollback distance
-State hash sync interval"),
+State hash sync interval",
+        ),
     ]);
 
     table.add_row(vec![
         Cell::new("RTA").fg(TableColor::Green),
-        Cell::new("--rta
+        Cell::new(
+            "--rta
 --rta-profile <id>
 --rta-profiles-dir <path>
 --rta-runs-dir <path>
---rta-calibrate"),
-        Cell::new("Enable Speedrun Mode
+--rta-calibrate",
+        ),
+        Cell::new(
+            "Enable Speedrun Mode
 Override profile ID
 Path to RTA profiles
 Path to write run results
-Run in calibration mode"),
+Run in calibration mode",
+        ),
     ]);
 
-    format!("Usage: nes-desktop [OPTIONS] [rom_path]
+    format!(
+        "Usage: nes-desktop [OPTIONS] [rom_path]
 
-{table}")
+{table}"
+    )
 }
-
-
 
 /// Defines the configuration used by the desktop runtime.
 ///
