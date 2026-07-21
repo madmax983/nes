@@ -661,8 +661,8 @@ impl Mmc5 {
         }
         // Collect (dst_bank_offset, src_offset, len) then copy, to avoid holding
         // an immutable borrow of chr_data while mutating it.
-        let regions = self.chr_regions();
-        for (dst_off, src_off, len) in regions {
+        let (regions, count) = self.chr_regions();
+        for &(dst_off, src_off, len) in &regions[..count] {
             self.chr_data[dst_off..dst_off + len].copy_from_slice(&window[src_off..src_off + len]);
         }
     }
@@ -671,12 +671,14 @@ impl Mmc5 {
     /// describe how the 8KB window maps back into `chr_data` for the active CHR
     /// mode.
     #[must_use]
-    fn chr_regions(&self) -> Vec<(usize, usize, usize)> {
-        let mut out = Vec::new();
+    fn chr_regions(&self) -> ([(usize, usize, usize); 8], usize) {
+        let mut out = [(0, 0, 0); 8];
+        let mut count = 0;
         let mut push = |bank_units: usize, unit_size: usize, win_off: usize| {
             let total_units = (self.chr_data.len() / unit_size).max(1);
             let dst = (bank_units % total_units) * unit_size;
-            out.push((dst, win_off, unit_size));
+            out[count] = (dst, win_off, unit_size);
+            count += 1;
         };
         match self.chr_mode {
             0 => push(self.chr_bank_units(self.chr_a[7]), 8 * 1024, 0),
@@ -703,7 +705,7 @@ impl Mmc5 {
                 }
             }
         }
-        out
+        (out, count)
     }
 
     // --- Nametable / mirroring ---------------------------------------------
