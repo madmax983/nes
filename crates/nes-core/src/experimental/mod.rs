@@ -38,3 +38,6 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+/// Combines spatial queries and themes to selectively highlight entities.
+#[cfg(feature = "nova")]
+pub mod spatial_themer;
