@@ -1178,4 +1178,19 @@ mod tests {
         assert_eq!(m.split_regs[0], 0x80);
         assert_eq!(m.split_regs[2], 0x10);
     }
+
+    #[test]
+    fn sync_chr_ram_from_ppu_window_modes() {
+        let mut m = Mmc5::new(8, 8);
+        m.chr_writable = true;
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        window[0] = 42;
+        window[1024] = 43;
+
+        for mode in 0..=3 {
+            m.chr_mode = mode; // CHR mode
+            m.sync_chr_ram_from_ppu_window(&window);
+            assert_eq!(m.chr_data[0], 42);
+        }
+    }
 }
