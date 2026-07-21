@@ -1,7 +1,73 @@
 use nes_config::DEFAULT_CONFIG_PATH;
 
 pub const DEFAULT_MCP_BIND_ADDR: &str = "127.0.0.1:6502";
-pub const RUNTIME_USAGE: &str = "Usage: nes-desktop [--config <path>] [--cheat-code <code>] [--mcp-host] [--mcp-bind <addr>] [--netplay] [--netplay-relay <addr>] [--netplay-room <room>] [--netplay-player <1|2>] [--netplay-delay <frames>] [--netplay-max-rollback <frames>] [--netplay-hash-every <frames>] [--rta] [--rta-profile <id>] [--rta-profiles-dir <path>] [--rta-runs-dir <path>] [--rta-calibrate] [rom_path]";
+use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
+
+pub fn format_runtime_usage() -> String {
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    table.set_header(vec![
+        Cell::new("Category").fg(TableColor::Cyan),
+        Cell::new("Flags").fg(TableColor::Cyan),
+        Cell::new("Description").fg(TableColor::Cyan),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Core").fg(TableColor::Yellow),
+        Cell::new("--config <path>
+--cheat-code <code>
+[rom_path]"),
+        Cell::new("Path to config file
+Inject a Game Genie cheat
+Positional ROM to load"),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("MCP").fg(TableColor::Magenta),
+        Cell::new("--mcp-host
+--mcp-bind <addr>"),
+        Cell::new("Enable MCP host
+Bind address for MCP"),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("Netplay").fg(TableColor::Blue),
+        Cell::new("--netplay
+--netplay-relay <addr>
+--netplay-room <room>
+--netplay-player <1|2>
+--netplay-delay <f>
+--netplay-max-rollback <f>
+--netplay-hash-every <f>"),
+        Cell::new("Enable Netplay
+Relay server address
+Room ID
+Player index
+Input delay frames
+Max rollback distance
+State hash sync interval"),
+    ]);
+
+    table.add_row(vec![
+        Cell::new("RTA").fg(TableColor::Green),
+        Cell::new("--rta
+--rta-profile <id>
+--rta-profiles-dir <path>
+--rta-runs-dir <path>
+--rta-calibrate"),
+        Cell::new("Enable Speedrun Mode
+Override profile ID
+Path to RTA profiles
+Path to write run results
+Run in calibration mode"),
+    ]);
+
+    format!("Usage: nes-desktop [OPTIONS] [rom_path]
+
+{table}")
+}
+
+
 
 /// Defines the configuration used by the desktop runtime.
 ///
@@ -86,7 +152,8 @@ pub fn parse_runtime_args(args: &[String]) -> Result<RuntimeArgs, String> {
         let arg = &args[idx];
         if arg == "--help" || arg == "-h" {
             return Err(format!(
-                "{RUNTIME_USAGE}\nDefault config path: {DEFAULT_CONFIG_PATH}"
+                "{}\nDefault config path: {DEFAULT_CONFIG_PATH}",
+                format_runtime_usage()
             ));
         }
 
