@@ -14,6 +14,7 @@ mod mmc5;
 mod namco108;
 mod nrom;
 mod uxrom;
+pub(crate) mod loaded;
 
 pub use axrom::Axrom;
 pub(crate) use axrom::AxromState;
@@ -42,6 +43,9 @@ pub(crate) use namco108::Namco108State;
 pub use nrom::Nrom;
 pub use uxrom::Uxrom;
 pub(crate) use uxrom::UxromState;
+
+pub use loaded::MapperDelta;
+pub(crate) use loaded::{LoadedMapper, MapperDeltaKind};
 
 /// Common PRG read/write contract for cartridge mappers.
 ///
