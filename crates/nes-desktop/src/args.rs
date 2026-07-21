@@ -560,6 +560,7 @@ mod tests {
         assert!(help.contains("Usage: nes-desktop"));
         assert!(help.contains("Default config path"));
         assert!(help.contains("--cheat-code <code>"));
+        assert!(help.contains("Category"));
 
         let missing_bind = parse_runtime_args_with_timeout(vec!["--mcp-bind".to_owned()])
             .expect_err("missing mcp bind");
