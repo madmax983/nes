@@ -994,11 +994,11 @@ impl Ppu {
     fn apply_due_live_chr_updates(&mut self) {
         let current_cycle = self.cycle_in_frame();
         let mut applied = false;
-        while let Some(update) = self.pending_live_chr_updates.pop_front() {
+        while let Some(update) = self.pending_live_chr_updates.front() {
             if update.due_cycle_in_frame > current_cycle {
-                self.pending_live_chr_updates.push_front(update);
                 break;
             }
+            let update = self.pending_live_chr_updates.pop_front().unwrap();
             self.live_chr.fill(0);
             let copy_len = update.chr.len().min(CHR_BYTES);
             self.live_chr[..copy_len].copy_from_slice(&update.chr[..copy_len]);
@@ -1012,11 +1012,11 @@ impl Ppu {
     fn apply_due_live_bg_updates(&mut self) {
         let current_cycle = self.cycle_in_frame();
         let mut applied = false;
-        while let Some(update) = self.pending_live_bg_updates.pop_front() {
+        while let Some(update) = self.pending_live_bg_updates.front() {
             if update.due_cycle_in_frame > current_cycle {
-                self.pending_live_bg_updates.push_front(update);
                 break;
             }
+            let update = self.pending_live_bg_updates.pop_front().unwrap();
             let preserve_split_vertical = self.live_bg_tracks_vram_addr
                 && self.scanline < FRAME_HEIGHT as u16
                 && self.dot > FRAME_WIDTH as u16;
