@@ -15,4 +15,11 @@ fn help_flag_prints_usage_and_default_config_path() {
     assert!(stderr.contains("Usage: nes-desktop"));
     assert!(stderr.contains("Default config path:"));
     assert!(stderr.contains("--cheat-code <code>"));
+    assert!(stderr.contains("Category"));
+    assert!(stderr.contains("Flags"));
+    assert!(stderr.contains("Description"));
+    assert!(stderr.contains("Core"));
+    assert!(stderr.contains("MCP"));
+    assert!(stderr.contains("Netplay"));
+    assert!(stderr.contains("RTA"));
 }
