@@ -1200,15 +1200,7 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
         (1_i64, token)
     };
 
-    let parsed = if let Some(hex) = rest.strip_prefix('$') {
-        i64::from_str_radix(hex, 16).ok()
-    } else if let Some(bin) = rest.strip_prefix('%') {
-        i64::from_str_radix(bin, 2).ok()
-    } else if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
-        i64::from_str_radix(hex, 16).ok()
-    } else {
-        rest.parse::<i64>().ok()
-    };
+    let parsed = parse_number_literal(rest);
 
     let Some(value) = parsed else {
         if sign != 1 {
@@ -1328,8 +1320,39 @@ fn decode_string_literal(literal: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+fn parse_number_literal(s: &str) -> Option<i64> {
+    if let Some(hex) = s.strip_prefix('$') {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    if let Some(bin) = s.strip_prefix('%') {
+        return i64::from_str_radix(bin, 2).ok();
+    }
+    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    s.parse::<i64>().ok()
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn parse_number_literal_handles_valid_formats() {
+        assert_eq!(parse_number_literal("$1A"), Some(26));
+        assert_eq!(parse_number_literal("%1101"), Some(13));
+        assert_eq!(parse_number_literal("0x1A"), Some(26));
+        assert_eq!(parse_number_literal("0X1A"), Some(26));
+        assert_eq!(parse_number_literal("42"), Some(42));
+    }
+
+    #[test]
+    fn parse_number_literal_handles_invalid_formats() {
+        assert_eq!(parse_number_literal("$ZZ"), None);
+        assert_eq!(parse_number_literal("%12"), None);
+        assert_eq!(parse_number_literal("0xZZ"), None);
+        assert_eq!(parse_number_literal("not_a_number"), None);
+    }
+
     use super::*;
     use nes_core::{Command, NesCore};
 
