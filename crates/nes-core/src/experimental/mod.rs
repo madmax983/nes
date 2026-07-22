@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Applies a spotlight effect around a specific sprite, darkening the rest of the screen.
+#[cfg(feature = "nova")]
+pub mod flashlight_mode;
