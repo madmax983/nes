@@ -1320,8 +1320,6 @@ fn decode_string_literal(literal: &str) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-
-
 fn parse_number_literal(s: &str) -> Option<i64> {
     if let Some(hex) = s.strip_prefix('$') {
         return i64::from_str_radix(hex, 16).ok();
