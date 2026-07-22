@@ -71,6 +71,17 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A utility struct that renders NES PPU state (nametables, pattern tables) into viewable BMP images.
+///
+/// `PpuVisualizer` provides static methods to extract graphical data from a running [`crate::NesCore`] instance
+/// for debugging or visualization purposes.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+/// // PpuVisualizer provides static methods and doesn't need to be instantiated.
+/// ```
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {

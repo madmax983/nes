@@ -10,14 +10,39 @@ use crate::Command;
 use crate::experimental::zone_tracker::ZoneTracker;
 
 #[cfg(feature = "nova")]
+/// Defines a rule that maps a specific zone ID to a button press.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::BotRule;
+/// # use nes_core::Button;
+/// let rule = BotRule {
+///     zone_id: 1,
+///     button: Button::A,
+///     duration_frames: 10,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct BotRule {
+    /// The ID of the zone to monitor.
     pub zone_id: usize,
+    /// The controller button to press when an event occurs in the zone.
     pub button: Button,
+    /// How many frames to hold the button down after the event is triggered.
     pub duration_frames: u32,
 }
 
 #[cfg(feature = "nova")]
+/// A bot that automatically translates spatial zone events into NES controller inputs.
+///
+/// `SpatialBot` works in tandem with [`ZoneTracker`] to evaluate predefined rules.
+///
+/// ## Examples
+/// ```
+/// # use nes_core::experimental::spatial_bot::SpatialBot;
+/// let bot = SpatialBot::new();
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct SpatialBot {
     rules: Vec<BotRule>,
@@ -26,6 +51,14 @@ pub struct SpatialBot {
 
 #[cfg(feature = "nova")]
 impl SpatialBot {
+    /// Creates a new, empty `SpatialBot` with no active rules.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// let bot = SpatialBot::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
