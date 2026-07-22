@@ -1335,6 +1335,24 @@ fn parse_number_literal(s: &str) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn parse_number_literal_handles_valid_formats() {
+        assert_eq!(parse_number_literal("$1A"), Some(26));
+        assert_eq!(parse_number_literal("%1101"), Some(13));
+        assert_eq!(parse_number_literal("0x1A"), Some(26));
+        assert_eq!(parse_number_literal("0X1A"), Some(26));
+        assert_eq!(parse_number_literal("42"), Some(42));
+    }
+
+    #[test]
+    fn parse_number_literal_handles_invalid_formats() {
+        assert_eq!(parse_number_literal("$ZZ"), None);
+        assert_eq!(parse_number_literal("%12"), None);
+        assert_eq!(parse_number_literal("0xZZ"), None);
+        assert_eq!(parse_number_literal("not_a_number"), None);
+    }
+
     use super::*;
     use nes_core::{Command, NesCore};
 
