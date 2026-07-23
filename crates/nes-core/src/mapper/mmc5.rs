@@ -677,17 +677,39 @@ impl Mmc5 {
     fn chr_regions(&self) -> ([(usize, usize, usize); 8], usize) {
         let mut out = [(0, 0, 0); 8];
         let mut count = 0;
-        let push = |bank_units: usize, unit_size: usize, win_off: usize, out: &mut [(usize, usize, usize); 8], count: &mut usize| {
+        let push = |bank_units: usize,
+                    unit_size: usize,
+                    win_off: usize,
+                    out: &mut [(usize, usize, usize); 8],
+                    count: &mut usize| {
             let total_units = (self.chr_data.len() / unit_size).max(1);
             let dst = (bank_units % total_units) * unit_size;
             out[*count] = (dst, win_off, unit_size);
             *count += 1;
         };
         match self.chr_mode {
-            0 => push(self.chr_bank_units(self.chr_a[7]), 8 * 1024, 0, &mut out, &mut count),
+            0 => push(
+                self.chr_bank_units(self.chr_a[7]),
+                8 * 1024,
+                0,
+                &mut out,
+                &mut count,
+            ),
             1 => {
-                push(self.chr_bank_units(self.chr_a[3]), 4 * 1024, 0, &mut out, &mut count);
-                push(self.chr_bank_units(self.chr_a[7]), 4 * 1024, 4 * 1024, &mut out, &mut count);
+                push(
+                    self.chr_bank_units(self.chr_a[3]),
+                    4 * 1024,
+                    0,
+                    &mut out,
+                    &mut count,
+                );
+                push(
+                    self.chr_bank_units(self.chr_a[7]),
+                    4 * 1024,
+                    4 * 1024,
+                    &mut out,
+                    &mut count,
+                );
             }
             2 => {
                 for (i, &reg_idx) in [1_usize, 3, 5, 7].iter().enumerate() {
