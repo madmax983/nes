@@ -1,12 +1,121 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+1. **Create Feature File**: Create the file `crates/nes-core/src/experimental/waveform_visualizer.rs` by executing the following bash command:
+   ```bash
+   cat << 'EOF' > crates/nes-core/src/experimental/waveform_visualizer.rs
+   #![cfg(feature = "nova")]
 
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+   //! Experimental audio waveform visualizer.
+   //!
+   //! This module renders raw PCM audio samples into an oscilloscope-style BMP image.
 
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+   use crate::bmp::encode_bmp;
 
-4. **Submit the PR**
+   /// A utility for rendering an oscilloscope-style view of a slice of audio samples.
+   pub struct WaveformVisualizer;
+
+   impl WaveformVisualizer {
+       /// Renders a waveform of the given 16-bit PCM samples to a BMP image.
+       ///
+       /// ## Examples
+       ///
+       /// ```
+       /// # use nes_core::experimental::waveform_visualizer::WaveformVisualizer;
+       /// let samples = vec![0, 16384, 32767, 16384, 0, -16384, -32768, -16384];
+       /// let bmp = WaveformVisualizer::extract_waveform_bmp(&samples, 128, 64).unwrap();
+       /// assert_eq!(&bmp[0..2], b"BM");
+       /// ```
+       pub fn extract_waveform_bmp(
+           samples: &[i16],
+           width: usize,
+           height: usize,
+       ) -> Result<Vec<u8>, String> {
+           let mut rgba = vec![0u8; width * height * 4];
+
+           // Fill background with dark gray
+           for chunk in rgba.chunks_exact_mut(4) {
+               chunk[0] = 20;
+               chunk[1] = 20;
+               chunk[2] = 20;
+               chunk[3] = 255;
+           }
+
+           if samples.is_empty() || width == 0 || height == 0 {
+               return encode_bmp(width, height, &rgba);
+           }
+
+           let samples_per_pixel = (samples.len() as f32 / width as f32).max(1.0);
+           let center_y = height as i32 / 2;
+           let max_amplitude = 32768.0;
+
+           let mut prev_y = center_y;
+
+           for x in 0..width {
+               let sample_idx = ((x as f32) * samples_per_pixel) as usize;
+               let sample = if sample_idx < samples.len() {
+                   samples[sample_idx]
+               } else {
+                   *samples.last().unwrap()
+               };
+
+               let normalized = f32::from(sample) / max_amplitude; // -1.0 to 1.0
+
+               // In `encode_bmp`, y=0 is output last, so it's visually at the top of the image.
+               // Positive amplitude should go UP, meaning a smaller Y index.
+               let mut y = center_y - (normalized * (height as f32 / 2.0)) as i32;
+               y = y.clamp(0, height as i32 - 1);
+
+               // Draw line from prev_y to y
+               let (y0, y1) = if prev_y < y { (prev_y, y) } else { (y, prev_y) };
+               for ly in y0..=y1 {
+                   let pixel_idx = (ly as usize * width + x) * 4;
+                   rgba[pixel_idx] = 0;       // R
+                   rgba[pixel_idx + 1] = 255; // G
+                   rgba[pixel_idx + 2] = 0;   // B
+                   rgba[pixel_idx + 3] = 255; // A
+               }
+               prev_y = y;
+           }
+
+           encode_bmp(width, height, &rgba)
+       }
+   }
+
+   #[cfg(all(test, feature = "nova"))]
+   mod tests {
+       use super::*;
+
+       #[test]
+       fn extract_waveform_creates_bmp() {
+           let samples = vec![0, 1000, 2000, -1000, -2000];
+           let bmp = WaveformVisualizer::extract_waveform_bmp(&samples, 100, 50).unwrap();
+           assert_eq!(&bmp[0..2], b"BM");
+       }
+
+       #[test]
+       fn extract_waveform_handles_empty_samples() {
+           let samples = vec![];
+           let bmp = WaveformVisualizer::extract_waveform_bmp(&samples, 10, 10).unwrap();
+           assert_eq!(&bmp[0..2], b"BM");
+       }
+   }
+   EOF
+   ```
+2. **Verify Feature File**: Execute `cat crates/nes-core/src/experimental/waveform_visualizer.rs` to verify the creation and content of the file.
+3. **Expose Module**: Append the module declaration to `crates/nes-core/src/experimental/mod.rs` by executing:
+   ```bash
+   cat << 'EOF' >> crates/nes-core/src/experimental/mod.rs
+
+   /// Renders audio samples into an oscilloscope waveform image.
+   #[cfg(feature = "nova")]
+   pub mod waveform_visualizer;
+   EOF
+   ```
+4. **Verify Module Declaration**: Execute `tail -n 10 crates/nes-core/src/experimental/mod.rs` to verify that the module was added successfully.
+5. **Run Verifications**: Execute `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`, and `cargo fmt --all` in a bash session to ensure the build compiles correctly, passes all tests, and is properly formatted.
+6. **Pre-commit**: Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+7. **Submit PR**: Submit the changes with the branch name `nova-waveform-visualizer`, the title `🌟 Nova: Waveform Visualizer`, and the following exact description:
+   ```
+   💡 **The Spark:** I noticed we have a way to export audio to WAV and visualizers for memory/PPU, but no way to visualize the APU output itself. Could we render the actual waveforms?
+   🚀 **The Feature:** Implemented an oscilloscope-style `WaveformVisualizer` that renders 16-bit PCM audio samples into a BMP image.
+   🔮 **The Potential:** Could be used for debugging APU channels or generating dynamic UI assets representing the music/sound effects playing.
+   ⚠️ **Risk:** Low. Isolated in `src/experimental/waveform_visualizer.rs` and safely guarded behind the `nova` feature flag.
+   ```
