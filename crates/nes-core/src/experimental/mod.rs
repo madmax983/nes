@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Renders audio samples into an oscilloscope waveform image.
+#[cfg(feature = "nova")]
+pub mod waveform_visualizer;
