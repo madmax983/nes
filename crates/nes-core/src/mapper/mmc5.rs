@@ -1210,9 +1210,41 @@ mod tests {
 
     #[test]
     fn test_chr_regions_no_allocation() {
-        let m = Mmc5::new(8, 8);
+        let mut m = Mmc5::new(8, 8);
+        m.chr_mode = 3;
         let (regions, count) = m.chr_regions();
         assert!(count <= 8);
+        assert_eq!(count, 8);
+        let _type_check: ([(usize, usize, usize); 8], usize) = (regions, count);
+    }
+
+    #[test]
+    fn test_chr_regions_mode_0() {
+        let mut m = Mmc5::new(8, 8);
+        m.chr_mode = 0;
+        let (regions, count) = m.chr_regions();
+        assert!(count <= 8);
+        assert_eq!(count, 1);
+        let _type_check: ([(usize, usize, usize); 8], usize) = (regions, count);
+    }
+
+    #[test]
+    fn test_chr_regions_mode_1() {
+        let mut m = Mmc5::new(8, 8);
+        m.chr_mode = 1;
+        let (regions, count) = m.chr_regions();
+        assert!(count <= 8);
+        assert_eq!(count, 2);
+        let _type_check: ([(usize, usize, usize); 8], usize) = (regions, count);
+    }
+
+    #[test]
+    fn test_chr_regions_mode_2() {
+        let mut m = Mmc5::new(8, 8);
+        m.chr_mode = 2;
+        let (regions, count) = m.chr_regions();
+        assert!(count <= 8);
+        assert_eq!(count, 4);
         let _type_check: ([(usize, usize, usize); 8], usize) = (regions, count);
     }
 }
