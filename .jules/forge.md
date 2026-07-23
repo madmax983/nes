@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Guard Clauses]**
+**Learning:** Found deeply nested if-let conditions in argument parsing logic (config.rs and nes-dsl/lib.rs) where the `if let Some(x) = y` structure caused an unnecessary pyramid of doom.
+**Action:** Flatten these using early return guard clauses like `let Some(x) = y else { return; }` and extract inline parsing into specialized helper functions like `parse_numeric_literal`.
