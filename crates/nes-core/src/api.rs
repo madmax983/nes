@@ -79,6 +79,14 @@ impl Button {
 }
 
 /// Represents the controller port for a player.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::Player;
+/// let p1 = Player::One;
+/// let p2 = Player::Two;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Player {
     /// Controller port 1.
@@ -155,6 +163,14 @@ impl ControllerPorts {
 
 /// Commands that can be executed by the [`NesCore`] to change its state
 /// or advance the emulation.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{Command, Button};
+/// let step_cmd = Command::StepFrame;
+/// let press_cmd = Command::PressButton(Button::A);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     /// Pause emulation stepping.
@@ -189,6 +205,13 @@ pub enum Command {
 
 /// Queries that can be sent to the [`NesCore`] to inspect its current state
 /// without advancing the emulation.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::CoreQuery;
+/// let query = CoreQuery::EmulatorState;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreQuery {
     /// Returns paused/speed/controller state.
@@ -205,6 +228,16 @@ pub enum CoreQuery {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Lightweight machine status query response.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, CoreQuery, QueryResult};
+/// let mut core = NesCore::new();
+/// if let QueryResult::EmulatorState(state) = core.query(CoreQuery::EmulatorState) {
+///     assert!(!state.paused);
+/// }
+/// ```
 pub struct EmulatorState {
     /// Pause state.
     pub paused: bool,
@@ -217,6 +250,17 @@ pub struct EmulatorState {
 }
 
 /// The result of executing a [`CoreQuery`] on the [`NesCore`].
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, CoreQuery, QueryResult};
+/// let mut core = NesCore::new();
+/// match core.query(CoreQuery::FpsMilli) {
+///     QueryResult::FpsMilli(fps) => assert_eq!(fps, 60_000),
+///     _ => panic!("Unexpected result"),
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryResult {
     /// [`CoreQuery::EmulatorState`] response.
@@ -233,6 +277,19 @@ pub enum QueryResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Complete serializable machine snapshot for save-state support.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, CoreSnapshot, Command};
+/// let mut core = NesCore::new();
+/// // ... load ROM ...
+/// let snapshot = core.save_state();
+/// // ... make changes ...
+/// core.execute(Command::StepFrame).unwrap();
+/// // ... restore state ...
+/// core.load_state(&snapshot);
+/// ```
 pub struct CoreSnapshot {
     /// Pause state.
     pub paused: bool,
@@ -288,6 +345,20 @@ enum MapperDeltaKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Metadata returned after successfully loading a ROM.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore};
+/// let mut core = NesCore::new();
+/// // Dummy ROM bytes
+/// let mut dummy_rom = vec![
+///     0x4E, 0x45, 0x53, 0x1A, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+/// ];
+/// dummy_rom.extend(vec![0x00; 16 * 1024 + 8 * 1024]);
+/// let info = core.load_ines_rom(&dummy_rom).unwrap();
+/// assert_eq!(info.mapper_id, 0); // NROM
+/// ```
 pub struct RomLoadInfo {
     /// Mapper ID from iNES header.
     pub mapper_id: u8,
@@ -820,6 +891,15 @@ pub struct NesCore {
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::{NesCore, Command, CoreError};
+/// let mut core = NesCore::new();
+/// // Setting speed to 0 returns InvalidSpeed
+/// assert_eq!(core.execute(Command::SetSpeed(0)), Err(CoreError::InvalidSpeed(0)));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreError {
     /// Command is not currently supported by the runtime mode.
