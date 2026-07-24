@@ -273,6 +273,11 @@ mod tests {
     use crate::NesCore;
 
     #[test]
+    fn test_ppu_visualizer_debug_clone() {
+        let _ = PpuVisualizer;
+    }
+
+    #[test]
     fn extract_pattern_table_returns_bmp() {
         let core = NesCore::new();
         let bmp = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
