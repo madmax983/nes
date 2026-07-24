@@ -26,3 +26,7 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+
+## 2024-04-27 - Added Missing Documentation for Experimental Modules
+**Confusion:** Missing documentation for structs and functions in `nes-core/src/experimental/spatial_bot.rs` and `nes-core/src/experimental/ppu_visualizer.rs` resulted in rustdoc warnings and confusion on their usage.
+**Clarification:** Added thorough `///` comments containing `## Examples` sections to `SpatialBot`, `BotRule`, and `PpuVisualizer` as well as their methods, ensuring users understand how to configure the spatial bot rules and extract BMP images from the PPU state.

@@ -9,14 +9,48 @@ use crate::Command;
 #[cfg(feature = "nova")]
 use crate::experimental::zone_tracker::ZoneTracker;
 
+/// A rule defining how the bot reacts to a specific zone event.
+///
+/// When an event triggers in `zone_id`, the bot will press the specified `button`
+/// and hold it for `duration_frames`.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::BotRule;
+/// # use nes_core::Button;
+/// let rule = BotRule {
+///     zone_id: 1,
+///     button: Button::A,
+///     duration_frames: 10,
+/// };
+/// assert_eq!(rule.zone_id, 1);
+/// ```
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
 pub struct BotRule {
+    /// The ID of the zone that triggers this rule.
     pub zone_id: usize,
+    /// The button to press when the rule is triggered.
     pub button: Button,
+    /// The number of frames to hold the button down.
     pub duration_frames: u32,
 }
 
+/// An automated bot that issues controller commands based on spatial events.
+///
+/// The [`SpatialBot`] tracks zone events using a [`crate::experimental::zone_tracker::ZoneTracker`] and evaluates them against
+/// a set of configured [`BotRule`]s. When an event occurs, it generates the appropriate
+/// `PressButton` and `ReleaseButton` commands.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::SpatialBot;
+/// # use nes_core::Button;
+/// let mut bot = SpatialBot::new();
+/// bot.add_rule(1, Button::A, 10);
+/// ```
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
 pub struct SpatialBot {
@@ -26,6 +60,14 @@ pub struct SpatialBot {
 
 #[cfg(feature = "nova")]
 impl SpatialBot {
+    /// Creates a new, empty [`SpatialBot`].
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// let bot = SpatialBot::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -40,7 +82,7 @@ impl SpatialBot {
     /// and hold it for `duration_frames`. If the event triggers while the button is already being
     /// held, the duration is refreshed.
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// ```
     /// # use nes_core::experimental::spatial_bot::SpatialBot;
@@ -63,7 +105,7 @@ impl SpatialBot {
     /// matches a configured rule, the corresponding button is pressed, and its hold
     /// duration is updated. Buttons whose hold duration has expired are released.
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// ```
     /// # use nes_core::experimental::spatial_bot::SpatialBot;
