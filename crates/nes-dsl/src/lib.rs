@@ -1183,6 +1183,22 @@ fn validate_symbol(symbol: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn parse_number_prefix(token: &str) -> Option<i64> {
+    if let Some(hex) = token.strip_prefix('$') {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    if let Some(bin) = token.strip_prefix('%') {
+        return i64::from_str_radix(bin, 2).ok();
+    }
+    if let Some(hex) = token
+        .strip_prefix("0x")
+        .or_else(|| token.strip_prefix("0X"))
+    {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    token.parse::<i64>().ok()
+}
+
 fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
     let token = input.trim();
     if token.is_empty() {
@@ -1200,15 +1216,7 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
         (1_i64, token)
     };
 
-    let parsed = if let Some(hex) = rest.strip_prefix('$') {
-        i64::from_str_radix(hex, 16).ok()
-    } else if let Some(bin) = rest.strip_prefix('%') {
-        i64::from_str_radix(bin, 2).ok()
-    } else if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
-        i64::from_str_radix(hex, 16).ok()
-    } else {
-        rest.parse::<i64>().ok()
-    };
+    let parsed = parse_number_prefix(rest);
 
     let Some(value) = parsed else {
         if sign != 1 {
