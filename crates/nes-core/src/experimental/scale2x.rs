@@ -110,4 +110,60 @@ mod tests {
         let dst = Scale2x::scale(&src, 4, 4);
         assert_eq!(dst.len(), 0);
     }
+
+    fn set_pixel(src: &mut [u8], x: usize, y: usize, color: u8) {
+        let idx = (y * 3 + x) * 4;
+        src[idx] = color;
+        src[idx + 1] = color;
+        src[idx + 2] = color;
+        src[idx + 3] = 255;
+    }
+
+    #[test]
+    fn test_scale2x_all_corners() {
+        let mut src = vec![0; 3 * 3 * 4];
+
+        let get_dst = |dst: &[u8], x: usize, y: usize| -> u8 {
+            let idx = (y * 6 + x) * 4;
+            dst[idx]
+        };
+
+        set_pixel(&mut src, 1, 1, 100); // center (e4)
+
+        // Case 1: Top-Left (e1 == e3)
+        set_pixel(&mut src, 1, 0, 10); // top
+        set_pixel(&mut src, 0, 1, 10); // left
+        set_pixel(&mut src, 2, 1, 20); // right
+        set_pixel(&mut src, 1, 2, 30); // bottom
+        let dst = Scale2x::scale(&src, 3, 3);
+        assert_eq!(get_dst(&dst, 2, 2), 10); // e40
+        assert_eq!(get_dst(&dst, 3, 2), 100); // e41
+
+        // Case 2: Top-Right (e1 == e5)
+        set_pixel(&mut src, 1, 0, 10); // top
+        set_pixel(&mut src, 0, 1, 20); // left
+        set_pixel(&mut src, 2, 1, 10); // right
+        set_pixel(&mut src, 1, 2, 30); // bottom
+        let dst = Scale2x::scale(&src, 3, 3);
+        assert_eq!(get_dst(&dst, 3, 2), 10); // e41
+        assert_eq!(get_dst(&dst, 2, 2), 100); // e40
+
+        // Case 3: Bottom-Left (e7 == e3)
+        set_pixel(&mut src, 1, 0, 20); // top
+        set_pixel(&mut src, 0, 1, 10); // left
+        set_pixel(&mut src, 2, 1, 30); // right
+        set_pixel(&mut src, 1, 2, 10); // bottom
+        let dst = Scale2x::scale(&src, 3, 3);
+        assert_eq!(get_dst(&dst, 2, 3), 10); // e42
+        assert_eq!(get_dst(&dst, 3, 3), 100); // e43
+
+        // Case 4: Bottom-Right (e7 == e5)
+        set_pixel(&mut src, 1, 0, 20); // top
+        set_pixel(&mut src, 0, 1, 30); // left
+        set_pixel(&mut src, 2, 1, 10); // right
+        set_pixel(&mut src, 1, 2, 10); // bottom
+        let dst = Scale2x::scale(&src, 3, 3);
+        assert_eq!(get_dst(&dst, 3, 3), 10); // e43
+        assert_eq!(get_dst(&dst, 2, 3), 100); // e42
+    }
 }
