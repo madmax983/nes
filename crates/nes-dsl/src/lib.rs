@@ -1338,9 +1338,19 @@ fn decode_string_literal(literal: &str) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use nes_core::{Command, NesCore};
 
+    #[test]
+    fn parse_number_prefix_handles_all_bases() {
+        assert_eq!(super::parse_number_prefix("$10"), Some(16));
+        assert_eq!(super::parse_number_prefix("%1010"), Some(10));
+        assert_eq!(super::parse_number_prefix("0x10"), Some(16));
+        assert_eq!(super::parse_number_prefix("0X10"), Some(16));
+        assert_eq!(super::parse_number_prefix("10"), Some(10));
+        assert_eq!(super::parse_number_prefix("invalid"), None);
+    }
     #[test]
     fn assembles_labels_branches_and_vectors() {
         let source = r#"
