@@ -135,17 +135,19 @@ where
         };
         apply(value)?;
         *idx += 2;
-        Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
+        return Ok(true);
+    }
+
+    if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
         if value.is_empty() {
             return Err(format!("missing value after {flag}="));
         }
         apply(value)?;
         *idx += 1;
-        Ok(true)
-    } else {
-        Ok(false)
+        return Ok(true);
     }
+
+    Ok(false)
 }
 
 /// Parses a string representation of a non-negative integer into a `u64`.
