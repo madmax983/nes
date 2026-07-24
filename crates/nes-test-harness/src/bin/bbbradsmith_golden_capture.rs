@@ -111,23 +111,25 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
     for arg in &pass_through {
         if arg != "--force" {
             return Err(format!(
-                "unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force"
+                "{} unknown argument '{arg}'. supported: --config <path>, --config=<path>, --force",
+                "Error:".with(Color::Red).bold()
             ));
         }
     }
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite".to_owned()
+        format!("{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite", "Error:".with(Color::Red).bold())
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output".to_owned()
+        format!("{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output", "Error:".with(Color::Red).bold())
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
     if !suite_dir_path.is_dir() {
         return Err(format!(
-            "bbbradsmith audio suite directory does not exist or is not a directory: {}",
+            "{} bbbradsmith audio suite directory does not exist or is not a directory: {}",
+            "Error:".with(Color::Red).bold(),
             suite_dir_path.display()
         ));
     }
