@@ -171,6 +171,21 @@ mod tests {
     use crate::experimental::zone_tracker::ZoneTracker;
 
     #[test]
+    fn test_spatial_bot_debug_clone() {
+        let bot = SpatialBot::default();
+        let _ = bot.clone();
+        let _ = format!("{:?}", bot);
+
+        let rule = BotRule {
+            zone_id: 1,
+            button: crate::Button::A,
+            duration_frames: 10,
+        };
+        let _ = rule.clone();
+        let _ = format!("{:?}", rule);
+    }
+
+    #[test]
     fn test_spatial_bot_evaluation() {
         let mut core = NesCore::new();
         let mut tracker = ZoneTracker::new();
