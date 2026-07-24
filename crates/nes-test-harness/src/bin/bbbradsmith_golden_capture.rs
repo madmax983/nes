@@ -119,10 +119,16 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        format!("{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite", "Error:".with(Color::Red).bold())
+        format!(
+            "{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite",
+            "Error:".with(Color::Red).bold()
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        format!("{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output", "Error:".with(Color::Red).bold())
+        format!(
+            "{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output",
+            "Error:".with(Color::Red).bold()
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
