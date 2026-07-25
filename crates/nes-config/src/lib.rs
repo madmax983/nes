@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crossterm::style::Stylize;
 use serde::Deserialize;
 
 /// Default path to the configuration file.
@@ -181,11 +182,21 @@ impl NesConfig {
         let bytes = fs::read_to_string(path).map_err(|err| {
             if err.kind() == std::io::ErrorKind::NotFound {
                 format!(
-                    "failed to read config '{}': file not found. Hint: copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                    "{} Could not find the config file at '{}'.\n{} copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                    "Error:".with(crossterm::style::Color::Red).bold(),
                     path.display()
+                        .to_string()
+                        .with(crossterm::style::Color::Yellow),
+                    "Hint:".with(crossterm::style::Color::Cyan).bold()
                 )
             } else {
-                format!("failed to read config '{}': {err}", path.display())
+                format!(
+                    "{} Failed to read config at '{}': {err}",
+                    "Error:".with(crossterm::style::Color::Red).bold(),
+                    path.display()
+                        .to_string()
+                        .with(crossterm::style::Color::Yellow)
+                )
             }
         })?;
         toml::from_str::<Self>(&bytes)
@@ -331,16 +342,16 @@ room = "arena"
     fn load_returns_error_for_missing_file() {
         let path = temp_config_path("missing");
         let err = NesConfig::load(&path).expect_err("missing config should fail");
-        assert!(err.contains("failed to read config"));
-        assert!(err.contains("Hint: copy the example profile"));
+        assert!(err.contains("Could not find the config file"));
+        assert!(err.contains("copy the example profile"));
     }
 
     #[test]
     fn load_returns_underlying_error_for_non_not_found_io_errors() {
         let path = std::path::Path::new("."); // Reading a directory should cause IsADirectory or similar OS error
         let err = NesConfig::load(path).expect_err("loading a directory should fail");
-        assert!(err.contains("failed to read config"));
-        assert!(!err.contains("Hint: copy the example profile"));
+        assert!(err.contains("Failed to read config"));
+        assert!(!err.contains("copy the example profile"));
     }
 
     #[test]
