@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Unused Doc Comment]**
+**Learning:** Rustdoc does not generate documentation for statements inside a function body. Placing a doc comment (`///`) inside a function will trigger an `unused doc comment` compilation error under strict warning checks (`-D warnings`).
+**Action:** Use standard comments (`//`) instead of doc comments (`///`) when adding explanatory comments *inside* a function body in Rust.

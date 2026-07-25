@@ -171,7 +171,7 @@ pub struct LoggingPolicy {
     pub save_input_log: bool,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TriggerRule {
     pub address: u16,
@@ -516,7 +516,7 @@ enum TriggerSlot {
     Split(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct TriggerRuntime {
     rule: TriggerRule,
     cooldown: u32,
@@ -794,6 +794,9 @@ impl RtaManager {
     ///     None, // No active calibration drafting
     /// );
     /// ```
+    /// **⚡ Bolt Optimization:** Removed unnecessary heap/stack cloning when copying TriggerRules.
+    /// By deriving `Copy` on `TriggerRule` and `TriggerRuntime`, we avoid 4+N `.clone()` calls during
+    /// `RtaManager` initialization on the hot path (improving RTA reset speed).
     pub fn new(
         profile: RtaProfile,
         rom_hash: String,
@@ -802,22 +805,16 @@ impl RtaManager {
     ) -> Self {
         let mut triggers =
             Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(4 + profile.splits.len());
-        triggers.push((
-            TriggerSlot::Start,
-            TriggerRuntime::new(profile.start.clone()),
-        ));
-        triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end.clone())));
-        if let Some(rule) = profile.pause.clone() {
+        triggers.push((TriggerSlot::Start, TriggerRuntime::new(profile.start)));
+        triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end)));
+        if let Some(rule) = profile.pause {
             triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule)));
         }
-        if let Some(rule) = profile.resume.clone() {
+        if let Some(rule) = profile.resume {
             triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule)));
         }
         for (idx, split) in profile.splits.iter().enumerate() {
-            triggers.push((
-                TriggerSlot::Split(idx),
-                TriggerRuntime::new(split.trigger.clone()),
-            ));
+            triggers.push((TriggerSlot::Split(idx), TriggerRuntime::new(split.trigger)));
         }
 
         let split_events = Vec::with_capacity(profile.splits.len());
