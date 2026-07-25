@@ -1482,6 +1482,66 @@ fn setup_rta_manager(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn setup_rta_manager_calibrate_mode_without_override_but_matched_hash_succeeds() {
+        use nes_desktop::rta::{ProfileStatus, RtaProfile, RtaRuntimeConfig};
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir().join(format!("test_rta_cal_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let profile = RtaProfile {
+            id: "existing-profile".to_string(),
+            rom_hashes: vec!["matchedhash".to_string()],
+            status: ProfileStatus::Published,
+            ..RtaProfile::default()
+        };
+
+        let toml_string = toml::to_string(&profile).unwrap();
+        std::fs::write(dir.join("existing-profile.toml"), toml_string).unwrap();
+
+
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: true,
+            profile_id_override: None,
+        };
+
+        let manager = super::setup_rta_manager(&config, "matchedhash").expect("Should succeed");
+        assert!(manager.is_calibrating());
+        assert_eq!(manager.profile_id(), "existing-profile");
+    }
+
+    #[test]
+    fn setup_rta_manager_play_mode_with_match_succeeds() {
+        use nes_desktop::rta::{ProfileStatus, RtaProfile, RtaRuntimeConfig};
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir().join(format!("test_rta_play_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let profile = RtaProfile {
+            id: "existing-profile".to_string(),
+            rom_hashes: vec!["matchedhash".to_string()],
+            status: ProfileStatus::Published,
+            ..RtaProfile::default()
+        };
+
+        let toml_string = toml::to_string(&profile).unwrap();
+        std::fs::write(dir.join("existing-profile.toml"), toml_string).unwrap();
+
+
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: false,
+            profile_id_override: None,
+        };
+
+        let manager = super::setup_rta_manager(&config, "matchedhash").expect("Should succeed");
+        assert!(!manager.is_calibrating());
+        assert_eq!(manager.profile_id(), "existing-profile");
+    }
+
+    #[test]
     fn setup_rta_manager_creates_manager_or_fails() {
         use nes_desktop::rta::RtaRuntimeConfig;
         use std::path::PathBuf;
@@ -1499,6 +1559,57 @@ mod tests {
             err.contains("does not exist"),
             "Expected file error, got {err}"
         );
+    }
+
+    #[test]
+    fn setup_rta_manager_calibrate_without_override_fails() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir();
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: true,
+            profile_id_override: None,
+        };
+
+        let err = super::setup_rta_manager(&config, "fakehash").expect_err("Should fail");
+        assert!(err.contains("requires --rta-profile"), "Got err: {err}");
+    }
+
+    #[test]
+    fn setup_rta_manager_calibrate_with_override_succeeds() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir();
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: true,
+            profile_id_override: Some("new-profile".to_string()),
+        };
+
+        let manager = super::setup_rta_manager(&config, "fakehash").expect("Should succeed");
+        assert!(manager.is_calibrating());
+    }
+
+    #[test]
+    fn setup_rta_manager_play_mode_without_match_fails() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir();
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: false,
+            profile_id_override: None,
+        };
+
+        let err = super::setup_rta_manager(&config, "fakehash").expect_err("Should fail");
+        assert!(err.contains("Failed to enter RTA mode"), "Got err: {err}");
     }
 
     #[test]

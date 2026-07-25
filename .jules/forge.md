@@ -51,7 +51,3 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
-
-**[Setup Extraction: RTA Manager]**
-**Learning:** `nes-desktop::main::run()` had a giant block of inline logic strictly for parsing configurations and selecting an RTA profile (Calibration/Run). This created a huge cognitive footprint in the event loop setup function.
-**Action:** Extract the complex `RtaManager` initialization into a private `setup_rta_manager(rta_config, rom_hash)` helper function to flatten `run()` and isolate the profile decision tree.
