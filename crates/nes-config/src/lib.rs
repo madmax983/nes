@@ -182,8 +182,7 @@ impl NesConfig {
         let bytes = fs::read_to_string(path).map_err(|err| {
             if err.kind() == std::io::ErrorKind::NotFound {
                 format!(
-                    "{} Could not find the config file at '{}'.
-{} copy the example profile (e.g. cp nes.example.toml nes.toml)",
+                    "{} Could not find the config file at '{}'.\n{} copy the example profile (e.g. cp nes.example.toml nes.toml)",
                     "Error:".with(crossterm::style::Color::Red).bold(),
                     path.display()
                         .to_string()
