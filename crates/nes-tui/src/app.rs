@@ -76,3 +76,73 @@ pub fn map_key_event_to_command(key_code: KeyCode, pressed: bool) -> Option<Brid
 
     Some(BridgeCommand { core })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::KeyCode;
+    use nes_core::{Button, Command};
+
+    #[test]
+    fn should_map_keys_to_correct_button_presses() {
+        let cases = vec![
+            (KeyCode::Char('z'), Button::A),
+            (KeyCode::Char('Z'), Button::A),
+            (KeyCode::Char('x'), Button::B),
+            (KeyCode::Char('X'), Button::B),
+            (KeyCode::Enter, Button::Start),
+            (KeyCode::Tab, Button::Select),
+            (KeyCode::Char('c'), Button::Select),
+            (KeyCode::Char('C'), Button::Select),
+            (KeyCode::Up, Button::Up),
+            (KeyCode::Down, Button::Down),
+            (KeyCode::Left, Button::Left),
+            (KeyCode::Right, Button::Right),
+        ];
+
+        for (key, expected_button) in cases {
+            // Test pressed
+            let cmd_pressed =
+                map_key_event_to_command(key, true).expect("Key should map to a valid button");
+            assert_eq!(cmd_pressed.core, Command::PressButton(expected_button));
+
+            // Test released
+            let cmd_released =
+                map_key_event_to_command(key, false).expect("Key should map to a valid button");
+            assert_eq!(cmd_released.core, Command::ReleaseButton(expected_button));
+        }
+    }
+
+    #[test]
+    fn should_return_none_for_unmapped_keys() {
+        let unmapped_keys = vec![
+            KeyCode::Char('a'),
+            KeyCode::Char('1'),
+            KeyCode::Esc,
+            KeyCode::Backspace,
+        ];
+
+        for key in unmapped_keys {
+            assert!(map_key_event_to_command(key, true).is_none());
+            assert!(map_key_event_to_command(key, false).is_none());
+        }
+    }
+
+    #[test]
+    fn should_return_correct_tool_name_for_bridge_command() {
+        let press_cmd = BridgeCommand {
+            core: Command::PressButton(Button::A),
+        };
+        assert_eq!(press_cmd.tool_name(), "press_button");
+
+        let release_cmd = BridgeCommand {
+            core: Command::ReleaseButton(Button::B),
+        };
+        assert_eq!(release_cmd.tool_name(), "release_button");
+
+        let unsupported_cmd = BridgeCommand {
+            core: Command::StepFrame,
+        };
+        assert_eq!(unsupported_cmd.tool_name(), "unsupported");
+    }
+}
