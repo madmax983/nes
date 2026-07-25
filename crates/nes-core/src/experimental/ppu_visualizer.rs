@@ -71,6 +71,22 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A diagnostic tool for rendering internal Picture Processing Unit (PPU) state as images.
+///
+/// The `PpuVisualizer` exists to provide human-readable visual feedback of the emulator's
+/// internal graphics memory. Instead of inspecting raw bytes or arrays, developers can
+/// generate BMP images of pattern tables and nametables (complete with scroll indicators)
+/// to debug rendering logic and palette configurations.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+/// # use nes_core::NesCore;
+/// let core = NesCore::new();
+/// let bmp_bytes = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
+/// assert_eq!(&bmp_bytes[0..2], b"BM");
+/// ```
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
