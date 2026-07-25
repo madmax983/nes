@@ -1482,6 +1482,22 @@ fn setup_rta_manager(
 #[cfg(test)]
 mod tests {
     #[test]
+    fn setup_rta_manager_creates_manager_or_fails() {
+        use std::path::PathBuf;
+        use nes_desktop::rta::RtaRuntimeConfig;
+
+        let config = RtaRuntimeConfig {
+            profiles_dir: PathBuf::from("non_existent_dir"),
+            runs_dir: PathBuf::from("."),
+            calibrate: false,
+            profile_id_override: None,
+        };
+
+        let err = super::setup_rta_manager(&config, "fakehash").expect_err("Should fail due to missing dir");
+        assert!(err.contains("does not exist"), "Expected file error, got {err}");
+    }
+
+    #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
         use std::path::PathBuf;
