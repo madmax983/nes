@@ -1481,12 +1481,19 @@ fn setup_rta_manager(
 
 #[cfg(test)]
 mod tests {
+
     #[test]
     fn setup_rta_manager_calibrate_mode_without_override_but_matched_hash_succeeds() {
         use nes_desktop::rta::{ProfileStatus, RtaProfile, RtaRuntimeConfig};
         use std::path::PathBuf;
 
-        let dir = std::env::temp_dir().join(format!("test_rta_cal_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "test_rta_cal_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let profile = RtaProfile {
             id: "existing-profile".to_string(),
@@ -1497,7 +1504,6 @@ mod tests {
 
         let toml_string = toml::to_string(&profile).unwrap();
         std::fs::write(dir.join("existing-profile.toml"), toml_string).unwrap();
-
 
         let config = RtaRuntimeConfig {
             profiles_dir: dir.clone(),
@@ -1516,7 +1522,13 @@ mod tests {
         use nes_desktop::rta::{ProfileStatus, RtaProfile, RtaRuntimeConfig};
         use std::path::PathBuf;
 
-        let dir = std::env::temp_dir().join(format!("test_rta_play_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "test_rta_play_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let profile = RtaProfile {
             id: "existing-profile".to_string(),
@@ -1527,7 +1539,6 @@ mod tests {
 
         let toml_string = toml::to_string(&profile).unwrap();
         std::fs::write(dir.join("existing-profile.toml"), toml_string).unwrap();
-
 
         let config = RtaRuntimeConfig {
             profiles_dir: dir.clone(),
