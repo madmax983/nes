@@ -805,10 +805,7 @@ impl RtaManager {
     ) -> Self {
         let mut triggers =
             Vec::<(TriggerSlot, TriggerRuntime)>::with_capacity(4 + profile.splits.len());
-        triggers.push((
-            TriggerSlot::Start,
-            TriggerRuntime::new(profile.start),
-        ));
+        triggers.push((TriggerSlot::Start, TriggerRuntime::new(profile.start)));
         triggers.push((TriggerSlot::End, TriggerRuntime::new(profile.end)));
         if let Some(rule) = profile.pause {
             triggers.push((TriggerSlot::Pause, TriggerRuntime::new(rule)));
@@ -817,10 +814,7 @@ impl RtaManager {
             triggers.push((TriggerSlot::Resume, TriggerRuntime::new(rule)));
         }
         for (idx, split) in profile.splits.iter().enumerate() {
-            triggers.push((
-                TriggerSlot::Split(idx),
-                TriggerRuntime::new(split.trigger),
-            ));
+            triggers.push((TriggerSlot::Split(idx), TriggerRuntime::new(split.trigger)));
         }
 
         let split_events = Vec::with_capacity(profile.splits.len());
