@@ -5,8 +5,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
 use crossterm::style::Stylize;
+use serde::Deserialize;
 
 /// Default path to the configuration file.
 pub const DEFAULT_CONFIG_PATH: &str = "nes.toml";
@@ -185,14 +185,18 @@ impl NesConfig {
                     "{} Could not find the config file at '{}'.
 {} copy the example profile (e.g. cp nes.example.toml nes.toml)",
                     "Error:".with(crossterm::style::Color::Red).bold(),
-                    path.display().to_string().with(crossterm::style::Color::Yellow),
+                    path.display()
+                        .to_string()
+                        .with(crossterm::style::Color::Yellow),
                     "Hint:".with(crossterm::style::Color::Cyan).bold()
                 )
             } else {
                 format!(
                     "{} Failed to read config at '{}': {err}",
                     "Error:".with(crossterm::style::Color::Red).bold(),
-                    path.display().to_string().with(crossterm::style::Color::Yellow)
+                    path.display()
+                        .to_string()
+                        .with(crossterm::style::Color::Yellow)
                 )
             }
         })?;
