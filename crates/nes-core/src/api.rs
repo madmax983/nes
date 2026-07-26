@@ -537,60 +537,28 @@ impl LoadedMapper {
     }
 
     fn delta_to(&self, after: &Self) -> Option<MapperDelta> {
+        macro_rules! compare_mapper {
+            ($before:expr, $after:expr, $kind:ident) => {{
+                let state = $after.state();
+                ($before.state() != state).then_some(MapperDeltaKind::$kind(state))
+            }};
+        }
+
         let kind = match (self, after) {
             (Self::Nrom(_), Self::Nrom(_)) => return None,
-            (Self::Uxrom(before), Self::Uxrom(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Uxrom(state))
-            }
-            (Self::Mmc1(before), Self::Mmc1(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Mmc1(state))
-            }
-            (Self::Cnrom(before), Self::Cnrom(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Cnrom(state))
-            }
-            (Self::Axrom(before), Self::Axrom(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Axrom(state))
-            }
-            (Self::Gxrom(before), Self::Gxrom(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Gxrom(state))
-            }
-            (Self::Mmc3(before), Self::Mmc3(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Mmc3(state))
-            }
-            (Self::ColorDreams(before), Self::ColorDreams(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::ColorDreams(state))
-            }
-            (Self::Camerica(before), Self::Camerica(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Camerica(state))
-            }
-            (Self::Namco108(before), Self::Namco108(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Namco108(state))
-            }
-            (Self::Fme7(before), Self::Fme7(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Fme7(state))
-            }
-            (Self::Mmc2(before), Self::Mmc2(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Mmc2(state))
-            }
-            (Self::Mmc4(before), Self::Mmc4(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Mmc4(state))
-            }
-            (Self::Mmc5(before), Self::Mmc5(after)) => {
-                let state = after.state();
-                (before.state() != state).then_some(MapperDeltaKind::Mmc5(state))
-            }
+            (Self::Uxrom(before), Self::Uxrom(after)) => compare_mapper!(before, after, Uxrom),
+            (Self::Mmc1(before), Self::Mmc1(after)) => compare_mapper!(before, after, Mmc1),
+            (Self::Cnrom(before), Self::Cnrom(after)) => compare_mapper!(before, after, Cnrom),
+            (Self::Axrom(before), Self::Axrom(after)) => compare_mapper!(before, after, Axrom),
+            (Self::Gxrom(before), Self::Gxrom(after)) => compare_mapper!(before, after, Gxrom),
+            (Self::Mmc3(before), Self::Mmc3(after)) => compare_mapper!(before, after, Mmc3),
+            (Self::ColorDreams(before), Self::ColorDreams(after)) => compare_mapper!(before, after, ColorDreams),
+            (Self::Camerica(before), Self::Camerica(after)) => compare_mapper!(before, after, Camerica),
+            (Self::Namco108(before), Self::Namco108(after)) => compare_mapper!(before, after, Namco108),
+            (Self::Fme7(before), Self::Fme7(after)) => compare_mapper!(before, after, Fme7),
+            (Self::Mmc2(before), Self::Mmc2(after)) => compare_mapper!(before, after, Mmc2),
+            (Self::Mmc4(before), Self::Mmc4(after)) => compare_mapper!(before, after, Mmc4),
+            (Self::Mmc5(before), Self::Mmc5(after)) => compare_mapper!(before, after, Mmc5),
             _ => Some(MapperDeltaKind::Replace(Some(after.clone()))),
         }?;
 
@@ -620,98 +588,31 @@ impl LoadedMapper {
     }
 
     fn apply_delta(&mut self, delta: &MapperDelta, chr_window: &[u8; CHR_8K_BYTES]) {
+        macro_rules! restore {
+            ($variant:ident, $state:expr) => {
+                if let Self::$variant(mapper) = self {
+                    mapper.restore_state($state.clone());
+                } else {
+                    debug_assert!(false, "mapper delta kind must match mapper variant");
+                    return;
+                }
+            };
+        }
+
         match &delta.kind {
-            MapperDeltaKind::Uxrom(state) => {
-                let Self::Uxrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Mmc1(state) => {
-                let Self::Mmc1(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Cnrom(state) => {
-                let Self::Cnrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Axrom(state) => {
-                let Self::Axrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Gxrom(state) => {
-                let Self::Gxrom(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Mmc3(state) => {
-                let Self::Mmc3(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(state.clone());
-            }
-            MapperDeltaKind::ColorDreams(state) => {
-                let Self::ColorDreams(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Camerica(state) => {
-                let Self::Camerica(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Namco108(state) => {
-                let Self::Namco108(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Fme7(state) => {
-                let Self::Fme7(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(state.clone());
-            }
-            MapperDeltaKind::Mmc2(state) => {
-                let Self::Mmc2(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(*state);
-            }
-            MapperDeltaKind::Mmc4(state) => {
-                let Self::Mmc4(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(state.clone());
-            }
-            MapperDeltaKind::Mmc5(state) => {
-                let Self::Mmc5(mapper) = self else {
-                    debug_assert!(false, "mapper delta kind must match mapper variant");
-                    return;
-                };
-                mapper.restore_state(state.clone());
-            }
+            MapperDeltaKind::Uxrom(state) => restore!(Uxrom, state),
+            MapperDeltaKind::Mmc1(state) => restore!(Mmc1, state),
+            MapperDeltaKind::Cnrom(state) => restore!(Cnrom, state),
+            MapperDeltaKind::Axrom(state) => restore!(Axrom, state),
+            MapperDeltaKind::Gxrom(state) => restore!(Gxrom, state),
+            MapperDeltaKind::Mmc3(state) => restore!(Mmc3, state),
+            MapperDeltaKind::ColorDreams(state) => restore!(ColorDreams, state),
+            MapperDeltaKind::Camerica(state) => restore!(Camerica, state),
+            MapperDeltaKind::Namco108(state) => restore!(Namco108, state),
+            MapperDeltaKind::Fme7(state) => restore!(Fme7, state),
+            MapperDeltaKind::Mmc2(state) => restore!(Mmc2, state),
+            MapperDeltaKind::Mmc4(state) => restore!(Mmc4, state),
+            MapperDeltaKind::Mmc5(state) => restore!(Mmc5, state),
             MapperDeltaKind::Replace(_) => {
                 debug_assert!(
                     false,
@@ -1373,65 +1274,52 @@ impl NesCore {
     /// core.execute(Command::PressButton(Button::A)).unwrap();
     /// ```
     pub fn execute(&mut self, command: Command) -> Result<(), CoreError> {
-        let (player, bits) = match command {
-            Command::SetControllerState(bits) => (Player::One, bits),
-            Command::SetController2State(bits) => (Player::Two, bits),
-            Command::PressButton(button) => (
-                Player::One,
-                self.ports.controllers[0].bits | button.bit_mask(),
-            ),
-            Command::PressButton2(button) => (
-                Player::Two,
-                self.ports.controllers[1].bits | button.bit_mask(),
-            ),
-            Command::ReleaseButton(button) => (
-                Player::One,
-                self.ports.controllers[0].bits & !button.bit_mask(),
-            ),
-            Command::ReleaseButton2(button) => (
-                Player::Two,
-                self.ports.controllers[1].bits & !button.bit_mask(),
-            ),
-            Command::Pause => {
-                self.paused = true;
+        macro_rules! handle_state {
+            ($player:expr, $bits:expr) => {{
+                self.ports.set_controller_bits($bits, $player);
+                self.sync_ppu_register_image();
                 return Ok(());
+            }};
+        }
+
+        match command {
+            Command::SetControllerState(bits) => handle_state!(Player::One, bits),
+            Command::SetController2State(bits) => handle_state!(Player::Two, bits),
+            Command::PressButton(button) => {
+                handle_state!(Player::One, self.ports.controllers[0].bits | button.bit_mask())
             }
-            Command::Resume => {
-                self.paused = false;
-                return Ok(());
+            Command::PressButton2(button) => {
+                handle_state!(Player::Two, self.ports.controllers[1].bits | button.bit_mask())
             }
-            Command::Reset => {
-                self.reset_runtime();
-                return Ok(());
+            Command::ReleaseButton(button) => {
+                handle_state!(Player::One, self.ports.controllers[0].bits & !button.bit_mask())
             }
+            Command::ReleaseButton2(button) => {
+                handle_state!(Player::Two, self.ports.controllers[1].bits & !button.bit_mask())
+            }
+            Command::Pause => self.paused = true,
+            Command::Resume => self.paused = false,
+            Command::Reset => self.reset_runtime(),
             Command::PowerCycle => {
                 self.reset_runtime();
                 self.speed_permille = DEFAULT_SPEED_PERMILLE;
-                return Ok(());
             }
             Command::StepCpu => {
                 self.step_single_instruction()?;
-                return Ok(());
             }
             Command::StepScanline => {
                 self.step_until_next_scanline()?;
-                return Ok(());
             }
             Command::StepFrame => {
                 self.step_until_next_frame()?;
-                return Ok(());
             }
             Command::SetSpeed(speed) => {
                 if speed == 0 {
                     return Err(CoreError::InvalidSpeed(speed));
                 }
                 self.speed_permille = speed;
-                return Ok(());
             }
-        };
-
-        self.ports.set_controller_bits(bits, player);
-        self.sync_ppu_register_image();
+        }
         Ok(())
     }
 
@@ -2021,55 +1909,35 @@ impl NesCore {
     }
 
     fn mapper_hash_component(&self) -> u64 {
+        macro_rules! mix {
+            ($base:expr $(, $val:expr)+) => {{
+                let mut hash: u64 = $base;
+                let mut shift = 0;
+                $(
+                    hash ^= (u64::from($val)) << shift;
+                    shift += 8;
+                )+
+                let _ = shift;
+                hash
+            }};
+        }
+
         match self.mapper.as_ref() {
             None => 0,
             Some(LoadedMapper::Nrom(_)) => 0x10,
-            Some(LoadedMapper::Uxrom(mapper)) => 0x20 ^ mapper.selected_bank() as u64,
-            Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
-            Some(LoadedMapper::Cnrom(mapper)) => 0x35 ^ mapper.selected_chr_bank() as u64,
-            Some(LoadedMapper::Axrom(mapper)) => {
-                0x37 ^ u64::from(mapper.selected_bank())
-                    ^ (u64::from(mapper.selected_nametable_bank()) << 8)
-            }
-            Some(LoadedMapper::Gxrom(mapper)) => {
-                0x38 ^ u64::from(mapper.selected_prg_bank())
-                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
-            }
-            Some(LoadedMapper::Mmc3(mapper)) => {
-                0x40 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
-            }
-            Some(LoadedMapper::ColorDreams(mapper)) => {
-                0x50 ^ u64::from(mapper.selected_prg_bank())
-                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
-            }
-            Some(LoadedMapper::Camerica(mapper)) => 0x51 ^ u64::from(mapper.selected_bank()),
-            Some(LoadedMapper::Namco108(mapper)) => {
-                0x52 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
-            }
-            Some(LoadedMapper::Fme7(mapper)) => {
-                0x53 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
-                    ^ (u64::from(mapper.irq_pending()) << 32)
-            }
-            Some(LoadedMapper::Mmc2(mapper)) => {
-                0x54 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
-                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
-            }
-            Some(LoadedMapper::Mmc4(mapper)) => {
-                0x55 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
-                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
-            }
-            Some(LoadedMapper::Mmc5(mapper)) => {
-                0x56 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.read_prg(0xE000)) << 16)
-                    ^ (u64::from(mapper.chr_window()[0x0000]) << 24)
-                    ^ (u64::from(mapper.irq_pending()) << 32)
-                    ^ (u64::from(mapper.expansion_read(0x5205).unwrap_or(0)) << 40)
-            }
+            Some(LoadedMapper::Uxrom(mapper)) => mix!(0x20, mapper.selected_bank()),
+            Some(LoadedMapper::Mmc1(mapper)) => mix!(0x30, mapper.selected_prg_bank()),
+            Some(LoadedMapper::Cnrom(mapper)) => mix!(0x35, mapper.selected_chr_bank()),
+            Some(LoadedMapper::Axrom(mapper)) => mix!(0x37, mapper.selected_bank(), mapper.selected_nametable_bank()),
+            Some(LoadedMapper::Gxrom(mapper)) => mix!(0x38, mapper.selected_prg_bank(), mapper.selected_chr_bank()),
+            Some(LoadedMapper::Mmc3(mapper)) => mix!(0x40, mapper.read_prg(0x8000), mapper.read_prg(0xA000)),
+            Some(LoadedMapper::ColorDreams(mapper)) => mix!(0x50, mapper.selected_prg_bank(), mapper.selected_chr_bank()),
+            Some(LoadedMapper::Camerica(mapper)) => mix!(0x51, mapper.selected_bank()),
+            Some(LoadedMapper::Namco108(mapper)) => mix!(0x52, mapper.read_prg(0x8000), mapper.read_prg(0xA000)),
+            Some(LoadedMapper::Fme7(mapper)) => mix!(0x53, mapper.read_prg(0x8000), mapper.read_prg(0xA000), 0_u8, mapper.irq_pending() as u8),
+            Some(LoadedMapper::Mmc2(mapper)) => mix!(0x54, mapper.read_prg(0x8000), mapper.chr_window()[0x0000], mapper.chr_window()[0x1000]),
+            Some(LoadedMapper::Mmc4(mapper)) => mix!(0x55, mapper.read_prg(0x8000), mapper.chr_window()[0x0000], mapper.chr_window()[0x1000]),
+            Some(LoadedMapper::Mmc5(mapper)) => mix!(0x56, mapper.read_prg(0x8000), mapper.read_prg(0xE000), mapper.chr_window()[0x0000], mapper.irq_pending() as u8, mapper.expansion_read(0x5205).unwrap_or(0)),
         }
     }
 
@@ -2704,116 +2572,41 @@ mod tests_rom_loader_internal {
     fn test_build_mapper_unsupported_prg_layouts() {
         let core = NesCore::new();
 
+        macro_rules! assert_layout_err {
+            ($mapper:expr, $prg_len:expr, $chr_len:expr, $err_pattern:pat) => {
+                let err = core
+                    .build_mapper($mapper, &vec![0; $prg_len].into_boxed_slice(), &vec![0; $chr_len].into_boxed_slice(), NametableMirroring::Horizontal)
+                    .unwrap_err();
+                assert!(matches!(err, $err_pattern));
+            };
+        }
+
         // NROM
-        let err = core
-            .build_mapper(0, &[0; 48 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(49152))
-        ));
+        assert_layout_err!(0, 48 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(49152)));
 
         // MMC1
-        let err = core
-            .build_mapper(1, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
-        ));
+        assert_layout_err!(1, 16 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384)));
 
         // UXROM
-        let err = core
-            .build_mapper(2, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
-        ));
+        assert_layout_err!(2, 16 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384)));
 
         // CNROM
-        let err = core
-            .build_mapper(3, &[0; 48 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(49152))
-        ));
-
-        let err = core
-            .build_mapper(
-                3,
-                &[0; 16 * 1024],
-                &[0; 10 * 1024],
-                NametableMirroring::Horizontal,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240))
-        ));
+        assert_layout_err!(3, 48 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(49152)));
+        assert_layout_err!(3, 16 * 1024, 10 * 1024, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240)));
 
         // MMC3
-        let err = core
-            .build_mapper(4, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
-        ));
-
-        let err = core
-            .build_mapper(
-                4,
-                &[0; 32 * 1024],
-                &[0; 10 * 1024],
-                NametableMirroring::Horizontal,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240))
-        ));
+        assert_layout_err!(4, 16 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384)));
+        assert_layout_err!(4, 32 * 1024, 10 * 1024, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240)));
 
         // AXROM
-        let err = core
-            .build_mapper(7, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
-        ));
+        assert_layout_err!(7, 16 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384)));
 
         // GXROM
-        let err = core
-            .build_mapper(66, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384))
-        ));
-
-        let err = core
-            .build_mapper(
-                66,
-                &[0; 32 * 1024],
-                &[0; 10 * 1024],
-                NametableMirroring::Horizontal,
-            )
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240))
-        ));
+        assert_layout_err!(66, 16 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(16384)));
+        assert_layout_err!(66, 32 * 1024, 10 * 1024, CoreError::RomLoadFailed(RomError::UnsupportedPrgLayout(10240)));
 
         // Unsupported Mapper
-        let err = core
-            .build_mapper(99, &[0; 16 * 1024], &[], NametableMirroring::Horizontal)
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            CoreError::RomLoadFailed(RomError::UnsupportedMapper(99))
-        ));
+        assert_layout_err!(99, 16 * 1024, 0, CoreError::RomLoadFailed(RomError::UnsupportedMapper(99)));
     }
 
     #[test]
