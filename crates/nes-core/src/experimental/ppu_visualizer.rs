@@ -71,6 +71,19 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// A utility for visualizing the NES Picture Processing Unit (PPU) state.
+///
+/// `PpuVisualizer` provides methods to extract the raw graphics data from the
+/// NES emulator's memory and encode it into human-readable image formats (like BMP).
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::NesCore;
+/// # use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+/// let mut core = NesCore::new();
+/// let bmp_bytes = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
+/// ```
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {

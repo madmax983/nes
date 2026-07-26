@@ -9,14 +9,41 @@ use crate::Command;
 #[cfg(feature = "nova")]
 use crate::experimental::zone_tracker::ZoneTracker;
 
+/// A mapping rule that binds a spatial zone to a controller button press.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::BotRule;
+/// # use nes_core::Button;
+/// let rule = BotRule {
+///     zone_id: 1,
+///     button: Button::A,
+///     duration_frames: 10,
+/// };
+/// ```
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
 pub struct BotRule {
+    /// The ID of the zone that triggers this rule.
     pub zone_id: usize,
+    /// The controller button to press when the zone is triggered.
     pub button: Button,
+    /// The number of frames to hold the button down for.
     pub duration_frames: u32,
 }
 
+/// A bot that automatically presses buttons based on spatial zone events.
+///
+/// `SpatialBot` works in tandem with [`ZoneTracker`] to map in-game spatial
+/// activity to artificial controller inputs.
+///
+/// ## Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::SpatialBot;
+/// let bot = SpatialBot::new();
+/// ```
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
 pub struct SpatialBot {
@@ -26,6 +53,14 @@ pub struct SpatialBot {
 
 #[cfg(feature = "nova")]
 impl SpatialBot {
+    /// Creates a new, empty `SpatialBot`.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// let bot = SpatialBot::new();
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -127,6 +162,21 @@ mod tests {
     use crate::Command;
     use crate::NesCore;
     use crate::experimental::zone_tracker::ZoneTracker;
+
+    #[test]
+    fn test_spatial_bot_derives() {
+        let bot = SpatialBot::default();
+        let bot_clone = bot.clone();
+        let _ = format!("{:?}", bot_clone);
+
+        let rule = BotRule {
+            zone_id: 1,
+            button: crate::Button::A,
+            duration_frames: 1,
+        };
+        let rule_clone = rule.clone();
+        let _ = format!("{:?}", rule_clone);
+    }
 
     #[test]
     fn test_spatial_bot_evaluation() {
