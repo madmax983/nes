@@ -1,5 +1,5 @@
-use nes_core::NesCore;
 use nes_core::Command;
+use nes_core::NesCore;
 
 #[test]
 #[should_panic(expected = "index out of bounds")]
