@@ -76,7 +76,8 @@ Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>",
         fs::read(&rom_path).map_err(|e| format_rom_read_error(&rom_path.to_string_lossy(), &e))?;
     let rom_hash = sha256_hex(&rom);
 
-    let movie_json = fs::read(&movie_path).map_err(|e| format_tas_read_error(&movie_path.to_string_lossy(), &e))?;
+    let movie_json = fs::read(&movie_path)
+        .map_err(|e| format_tas_read_error(&movie_path.to_string_lossy(), &e))?;
     let movie: TasMovie = serde_json::from_slice(&movie_json)
         .map_err(|e| format!("Failed to parse TAS json: {e}"))?;
 

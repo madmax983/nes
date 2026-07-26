@@ -79,9 +79,13 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
         .map_err(|err| format_script_read_error(script_path, &err))?;
 
     let mut core = NesCore::new();
-    let rom_info = core
-        .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("{} Failed to load ROM: {}", "Error:".with(Color::Red).bold(), err))?;
+    let rom_info = core.load_ines_rom(&rom_bytes).map_err(|err| {
+        format!(
+            "{} Failed to load ROM: {}",
+            "Error:".with(Color::Red).bold(),
+            err
+        )
+    })?;
 
     println!("{}", "Executing Macro Script...".with(Color::Cyan).bold());
 
@@ -103,7 +107,13 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
     };
 
     let frames_elapsed = execute_macro_script(&mut core, &script_content, Some(&mut callback))
-        .map_err(|err| format!("{} Macro execution failed: {}", "Error:".with(Color::Red).bold(), err))?;
+        .map_err(|err| {
+            format!(
+                "{} Macro execution failed: {}",
+                "Error:".with(Color::Red).bold(),
+                err
+            )
+        })?;
 
     println!(
         "\r\x1B[2K{}",

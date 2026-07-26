@@ -141,8 +141,12 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             suite_dir_path.display()
         ));
     }
-    fs::create_dir_all(&golden_dir)
-        .map_err(|err| format!("{} failed to create golden directory '{golden_dir}': {err}", "Error:".with(Color::Red).bold()))?;
+    fs::create_dir_all(&golden_dir).map_err(|err| {
+        format!(
+            "{} failed to create golden directory '{golden_dir}': {err}",
+            "Error:".with(Color::Red).bold()
+        )
+    })?;
 
     let mut rom_paths = collect_suite_roms(suite_dir_path)?;
     rom_paths.sort_unstable_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
@@ -171,8 +175,13 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             .and_then(|name| name.to_str())
             .unwrap_or("<unknown>")
             .to_owned();
-        let rom_bytes = fs::read(&rom_path)
-            .map_err(|err| format!("{} failed to read ROM '{}': {err}", "Error:".with(Color::Red).bold(), rom_path.display()))?;
+        let rom_bytes = fs::read(&rom_path).map_err(|err| {
+            format!(
+                "{} failed to read ROM '{}': {err}",
+                "Error:".with(Color::Red).bold(),
+                rom_path.display()
+            )
+        })?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
             print_processing_progress(stdout, &rom_name, Color::Yellow);
@@ -280,7 +289,7 @@ fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
         let entry = entry.map_err(|err| {
             format!(
                 "{} failed to inspect directory entry in '{}': {err}",
-            "Error:".with(Color::Red).bold(),
+                "Error:".with(Color::Red).bold(),
                 suite_dir.display()
             )
         })?;

@@ -59,14 +59,23 @@ fn run() -> Result<(), String> {
         .get(3)
         .map(|value| value.parse::<usize>())
         .transpose()
-        .map_err(|e| format!("{} Failed to parse episodes: {e}", "Error:".with(Color::Red).bold()))?
+        .map_err(|e| {
+            format!(
+                "{} Failed to parse episodes: {e}",
+                "Error:".with(Color::Red).bold()
+            )
+        })?
         .unwrap_or(2);
     let artifact_dir = args.get(4).map(PathBuf::from);
 
     let profile_str = fs::read_to_string(&profile_path)
         .map_err(|e| format_profile_error(&profile_path.to_string_lossy(), &e))?;
-    let profile_cfg: AiProfileConfig =
-        toml::from_str(&profile_str).map_err(|e| format!("{} Failed to parse profile config: {e}", "Error:".with(Color::Red).bold()))?;
+    let profile_cfg: AiProfileConfig = toml::from_str(&profile_str).map_err(|e| {
+        format!(
+            "{} Failed to parse profile config: {e}",
+            "Error:".with(Color::Red).bold()
+        )
+    })?;
 
     let trainer_cfg = TrainerConfig {
         artifact_dir: artifact_dir.clone(),
@@ -77,7 +86,12 @@ fn run() -> Result<(), String> {
 
     let summary =
         evaluate_smb_control(&profile_cfg, &trainer_cfg, episodes, Some(&checkpoint_base))
-            .map_err(|e| format!("{} Evaluation failed: {e}", "Error:".with(Color::Red).bold()))?;
+            .map_err(|e| {
+                format!(
+                    "{} Evaluation failed: {e}",
+                    "Error:".with(Color::Red).bold()
+                )
+            })?;
 
     println!(
         "\n{}",
@@ -109,6 +123,12 @@ fn build_summary_table(average_return: f32, artifact_paths_len: usize) -> Table 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn format_profile_error_includes_path() {
+        let err = std::io::Error::new(std::io::ErrorKind::NotFound, "test");
+        let result = super::format_profile_error("test_path.toml", &err);
+        assert!(result.contains("test_path.toml"));
+    }
     use super::build_summary_table;
 
     #[test]
