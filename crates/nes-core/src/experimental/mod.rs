@@ -38,3 +38,6 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+/// Correlates OAM sprite coordinates with CPU RAM addresses.
+#[cfg(feature = "nova")]
+pub mod sprite_ram_correlator;
