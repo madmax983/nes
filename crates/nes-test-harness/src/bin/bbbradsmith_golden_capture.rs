@@ -118,10 +118,20 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
 
     let config = load_config(config_path.as_deref())?;
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite".to_owned()
+        format!(
+            "{} missing `roms.bbbradsmith_audio_suite_dir` in config for input ROM suite.
+{} Add this key to your nes.toml.",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        )
     })?;
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.ok_or_else(|| {
-        "missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output".to_owned()
+        format!(
+            "{} missing `roms.bbbradsmith_audio_golden_dir` in config for golden PCM output.
+{} Add this key to your nes.toml.",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        )
     })?;
 
     let suite_dir_path = Path::new(&suite_dir);
@@ -132,7 +142,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
         ));
     }
     fs::create_dir_all(&golden_dir)
-        .map_err(|err| format!("failed to create golden directory '{golden_dir}': {err}"))?;
+        .map_err(|err| format!("{} failed to create golden directory '{golden_dir}': {err}", "Error:".with(Color::Red).bold()))?;
 
     let mut rom_paths = collect_suite_roms(suite_dir_path)?;
     rom_paths.sort_unstable_by_key(|path| path.to_string_lossy().to_ascii_lowercase());
@@ -162,7 +172,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
             .unwrap_or("<unknown>")
             .to_owned();
         let rom_bytes = fs::read(&rom_path)
-            .map_err(|err| format!("failed to read ROM '{}': {err}", rom_path.display()))?;
+            .map_err(|err| format!("{} failed to read ROM '{}': {err}", "Error:".with(Color::Red).bold(), rom_path.display()))?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
         if !mapper_supported_by_core(mapper_id) {
             print_processing_progress(stdout, &rom_name, Color::Yellow);
@@ -262,13 +272,15 @@ fn collect_suite_roms(suite_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut roms = Vec::with_capacity(32);
     for entry in fs::read_dir(suite_dir).map_err(|err| {
         format!(
-            "failed to read suite directory '{}': {err}",
+            "{} failed to read suite directory '{}': {err}",
+            "Error:".with(Color::Red).bold(),
             suite_dir.display()
         )
     })? {
         let entry = entry.map_err(|err| {
             format!(
-                "failed to inspect directory entry in '{}': {err}",
+                "{} failed to inspect directory entry in '{}': {err}",
+            "Error:".with(Color::Red).bold(),
                 suite_dir.display()
             )
         })?;

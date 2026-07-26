@@ -20,7 +20,11 @@ fn main() {
         std::process::exit(0);
     }
     if args.len() != 3 {
-        eprintln!("Usage: nes-mcp-run-macro <rom_path> <script_path>");
+        eprintln!(
+            "{} missing or invalid number of arguments.
+Usage: nes-mcp-run-macro <rom_path> <script_path>",
+            "Error:".with(Color::Red).bold()
+        );
         std::process::exit(1);
     }
 
@@ -77,7 +81,7 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
     let mut core = NesCore::new();
     let rom_info = core
         .load_ines_rom(&rom_bytes)
-        .map_err(|err| format!("Failed to load ROM: {}", err))?;
+        .map_err(|err| format!("{} Failed to load ROM: {}", "Error:".with(Color::Red).bold(), err))?;
 
     println!("{}", "Executing Macro Script...".with(Color::Cyan).bold());
 
@@ -99,7 +103,7 @@ fn run(rom_path: &str, script_path: &str) -> Result<(), String> {
     };
 
     let frames_elapsed = execute_macro_script(&mut core, &script_content, Some(&mut callback))
-        .map_err(|err| format!("Macro execution failed: {}", err))?;
+        .map_err(|err| format!("{} Macro execution failed: {}", "Error:".with(Color::Red).bold(), err))?;
 
     println!(
         "\r\x1B[2K{}",

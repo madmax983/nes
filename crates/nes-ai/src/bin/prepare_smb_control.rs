@@ -17,6 +17,25 @@ fn main() {
     }
 }
 
+fn format_tas_read_error(tas_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the TAS json file at '{}'.
+{} Check the path.",
+            "Error:".with(Color::Red).bold(),
+            tas_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read TAS json at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            tas_path.with(Color::Yellow),
+            err
+        )
+    }
+}
+
 fn format_rom_read_error(rom_path: &str, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::NotFound {
         format!(
@@ -42,8 +61,11 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() != 4 {
-        eprintln!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
-        std::process::exit(1);
+        return Err(format!(
+            "{} missing or invalid number of arguments.
+Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>",
+            "Error:".with(Color::Red).bold()
+        ));
     }
 
     let rom_path = PathBuf::from(&args[1]);
@@ -54,7 +76,7 @@ fn run() -> Result<(), String> {
         fs::read(&rom_path).map_err(|e| format_rom_read_error(&rom_path.to_string_lossy(), &e))?;
     let rom_hash = sha256_hex(&rom);
 
-    let movie_json = fs::read(&movie_path).map_err(|e| format!("Failed to read TAS json: {e}"))?;
+    let movie_json = fs::read(&movie_path).map_err(|e| format_tas_read_error(&movie_path.to_string_lossy(), &e))?;
     let movie: TasMovie = serde_json::from_slice(&movie_json)
         .map_err(|e| format!("Failed to parse TAS json: {e}"))?;
 

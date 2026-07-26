@@ -12,6 +12,25 @@ use nes_ai::{
     trainer::{TrainerConfig, train_smb_control},
 };
 
+fn format_profile_error(profile_path: &str, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::NotFound {
+        format!(
+            "{} Could not find the AI profile config at '{}'.
+{} Check the path.",
+            "Error:".with(Color::Red).bold(),
+            profile_path.with(Color::Yellow),
+            "Hint:".with(Color::Cyan).bold()
+        )
+    } else {
+        format!(
+            "{} Failed to read profile config at '{}': {}",
+            "Error:".with(Color::Red).bold(),
+            profile_path.with(Color::Yellow),
+            err
+        )
+    }
+}
+
 fn main() {
     if let Err(err) = run() {
         eprintln!("\n{err}");
@@ -39,15 +58,15 @@ fn run() -> Result<(), String> {
         .get(2)
         .map(|value| value.parse::<usize>())
         .transpose()
-        .map_err(|e| format!("Failed to parse episodes: {e}"))?
+        .map_err(|e| format!("{} Failed to parse episodes: {e}", "Error:".with(Color::Red).bold()))?
         .unwrap_or(4);
     let checkpoint_dir = args.get(3).map(PathBuf::from);
     let artifact_dir = args.get(4).map(PathBuf::from);
 
     let profile_str = fs::read_to_string(&profile_path)
-        .map_err(|e| format!("Failed to read profile config: {e}"))?;
+        .map_err(|e| format_profile_error(&profile_path.to_string_lossy(), &e))?;
     let profile_cfg: AiProfileConfig =
-        toml::from_str(&profile_str).map_err(|e| format!("Failed to parse profile config: {e}"))?;
+        toml::from_str(&profile_str).map_err(|e| format!("{} Failed to parse profile config: {e}", "Error:".with(Color::Red).bold()))?;
 
     let trainer_cfg = TrainerConfig {
         checkpoint_dir: checkpoint_dir.clone(),
@@ -58,7 +77,7 @@ fn run() -> Result<(), String> {
     println!("{}", "Training AI Profile...".with(Color::Cyan).bold());
 
     let summary = train_smb_control(&profile_cfg, &trainer_cfg, episodes)
-        .map_err(|e| format!("Training failed: {e}"))?;
+        .map_err(|e| format!("{} Training failed: {e}", "Error:".with(Color::Red).bold()))?;
 
     println!(
         "\n{}",
