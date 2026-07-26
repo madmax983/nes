@@ -1909,35 +1909,55 @@ impl NesCore {
     }
 
     fn mapper_hash_component(&self) -> u64 {
-        macro_rules! mix {
-            ($base:expr $(, $val:expr)+) => {{
-                let mut hash: u64 = $base;
-                let mut shift = 0;
-                $(
-                    hash ^= (u64::from($val)) << shift;
-                    shift += 8;
-                )+
-                let _ = shift;
-                hash
-            }};
-        }
-
         match self.mapper.as_ref() {
             None => 0,
             Some(LoadedMapper::Nrom(_)) => 0x10,
-            Some(LoadedMapper::Uxrom(mapper)) => mix!(0x20, mapper.selected_bank()),
-            Some(LoadedMapper::Mmc1(mapper)) => mix!(0x30, mapper.selected_prg_bank()),
-            Some(LoadedMapper::Cnrom(mapper)) => mix!(0x35, mapper.selected_chr_bank()),
-            Some(LoadedMapper::Axrom(mapper)) => mix!(0x37, mapper.selected_bank(), mapper.selected_nametable_bank()),
-            Some(LoadedMapper::Gxrom(mapper)) => mix!(0x38, mapper.selected_prg_bank(), mapper.selected_chr_bank()),
-            Some(LoadedMapper::Mmc3(mapper)) => mix!(0x40, mapper.read_prg(0x8000), mapper.read_prg(0xA000)),
-            Some(LoadedMapper::ColorDreams(mapper)) => mix!(0x50, mapper.selected_prg_bank(), mapper.selected_chr_bank()),
-            Some(LoadedMapper::Camerica(mapper)) => mix!(0x51, mapper.selected_bank()),
-            Some(LoadedMapper::Namco108(mapper)) => mix!(0x52, mapper.read_prg(0x8000), mapper.read_prg(0xA000)),
-            Some(LoadedMapper::Fme7(mapper)) => mix!(0x53, mapper.read_prg(0x8000), mapper.read_prg(0xA000), 0_u8, mapper.irq_pending() as u8),
-            Some(LoadedMapper::Mmc2(mapper)) => mix!(0x54, mapper.read_prg(0x8000), mapper.chr_window()[0x0000], mapper.chr_window()[0x1000]),
-            Some(LoadedMapper::Mmc4(mapper)) => mix!(0x55, mapper.read_prg(0x8000), mapper.chr_window()[0x0000], mapper.chr_window()[0x1000]),
-            Some(LoadedMapper::Mmc5(mapper)) => mix!(0x56, mapper.read_prg(0x8000), mapper.read_prg(0xE000), mapper.chr_window()[0x0000], mapper.irq_pending() as u8, mapper.expansion_read(0x5205).unwrap_or(0)),
+            Some(LoadedMapper::Uxrom(mapper)) => 0x20 ^ mapper.selected_bank() as u64,
+            Some(LoadedMapper::Mmc1(mapper)) => 0x30 ^ mapper.selected_prg_bank() as u64,
+            Some(LoadedMapper::Cnrom(mapper)) => 0x35 ^ mapper.selected_chr_bank() as u64,
+            Some(LoadedMapper::Axrom(mapper)) => {
+                0x37 ^ u64::from(mapper.selected_bank())
+                    ^ (u64::from(mapper.selected_nametable_bank()) << 8)
+            }
+            Some(LoadedMapper::Gxrom(mapper)) => {
+                0x38 ^ u64::from(mapper.selected_prg_bank())
+                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
+            }
+            Some(LoadedMapper::Mmc3(mapper)) => {
+                0x40 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+            }
+            Some(LoadedMapper::ColorDreams(mapper)) => {
+                0x50 ^ u64::from(mapper.selected_prg_bank())
+                    ^ (u64::from(mapper.selected_chr_bank()) << 8)
+            }
+            Some(LoadedMapper::Camerica(mapper)) => 0x51 ^ u64::from(mapper.selected_bank()),
+            Some(LoadedMapper::Namco108(mapper)) => {
+                0x52 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+            }
+            Some(LoadedMapper::Fme7(mapper)) => {
+                0x53 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xA000)) << 16)
+                    ^ (u64::from(mapper.irq_pending()) << 32)
+            }
+            Some(LoadedMapper::Mmc2(mapper)) => {
+                0x54 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+            }
+            Some(LoadedMapper::Mmc4(mapper)) => {
+                0x55 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+            }
+            Some(LoadedMapper::Mmc5(mapper)) => {
+                0x56 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
+                    ^ (u64::from(mapper.read_prg(0xE000)) << 16)
+                    ^ (u64::from(mapper.chr_window()[0x0000]) << 24)
+                    ^ (u64::from(mapper.irq_pending()) << 32)
+                    ^ (u64::from(mapper.expansion_read(0x5205).unwrap_or(0)) << 40)
+            }
         }
     }
 

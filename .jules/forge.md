@@ -51,23 +51,3 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
-
-**Refactor execute in nes-core/src/api.rs**
-**Learning:** Found repetitive match arms inside `execute` where state updates were calling identical helper sequences.
-**Action:** Used macro_rules `handle_state!` to centralize the identical logic and reduce the boilerplate.
-
-**Refactor delta_to and apply_delta in nes-core/src/api.rs**
-**Learning:** `delta_to` and `apply_delta` had identical `match` arms mapping variants to logic, causing massive boilerplate and repetition across all mappers.
-**Action:** Used macro_rules `compare_mapper!` and `restore!` to DRY up the match statements in `delta_to` and `apply_delta`.
-
-**Refactor test_build_mapper_unsupported_prg_layouts in nes-core/src/api.rs**
-**Learning:** The test method had repetitive sequences of `core.build_mapper` calls followed by `assert!(matches!(...))`.
-**Action:** Extracted this into a macro `assert_layout_err!` to drastically reduce repetition and improve readability.
-
-**Refactor translate_gilrs_button and translate_gilrs_axis tests in nes-desktop/src/main.rs**
-**Learning:** The gamepad testing helper had dozens of repetitive assertions mapping Gilrs events to ApiButtons.
-**Action:** Used macros `assert_btn!` and `assert_axis!` to shrink the verbose assertions into simple, readable one-liners.
-
-**Refactor execute_app_action in nes-desktop/src/main.rs**
-**Learning:** The `execute_app_action` function repeated similar checks for `if let Some(rta) = ctx.rta_manager.as_mut()` across multiple arms.
-**Action:** Abstracted these repeated checks into macros `invalidate_rta!` and `block_if_rta_active!`.
