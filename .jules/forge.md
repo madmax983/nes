@@ -55,3 +55,7 @@
 **[Flattening nested let-else logic]**
 **Learning:** Found deeply nested if-else blocks combined with `let Some(...)` in `crates/nes-desktop/src/input.rs` and `crates/nes-desktop/src/rta.rs`.
 **Action:** Flatten the control flow by using early returns and extracting nested conditions. However, avoid forcing `let else` patterns where a `match` would be more efficient, such as in `mcp_host.rs` where re-parsing JSON to extract an error is an anti-pattern.
+
+**[Flattening nested logic cautiously]**
+**Learning:** Ensure you understand full control flows. Refactoring `let else` patterns correctly is key, and replacing a `match` expression must be done safely since the matched variable might be consumed, such as a `Result`. Calling `.unwrap_err()` in an `else` branch of an `if let Ok` will trigger a move error on `Result`. Use a `match` statement instead for unpacking both `Ok` and `Err` arms.
+**Action:** Be extremely cautious when touching logic dealing with `Result` and `Option` matching. Fall back to clean `match` statements where a partial move on `Result` might happen.
