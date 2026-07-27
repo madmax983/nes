@@ -614,32 +614,32 @@ fn run() -> Result<(), String> {
     let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
         let profiles = load_profiles(&rta_config.profiles_dir)?;
         let profile = if rta_config.calibrate {
-            match select_profile(
+            let result = select_profile(
                 &profiles,
                 &session.rom_hash,
                 rta_config.profile_id_override.as_deref(),
                 true,
-            ) {
-                Ok(selection) => selection.selected.profile,
-                Err(err) => {
-                    if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
-                        eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
-                            profile_id
-                        );
-                        RtaProfile {
-                            id: profile_id.clone(),
-                            rom_hashes: vec![session.rom_hash.clone()],
-                            status: ProfileStatus::Published,
-                            ..RtaProfile::default()
-                        }
-                    } else {
-                        return Err(format!(
-                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
-                            session.rom_hash
-                        ));
-                    }
+            );
+            if let Ok(selection) = result {
+                selection.selected.profile
+            } else if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
+                eprintln!(
+                    "[rta] calibration creating profile template '{}' ({})",
+                    profile_id,
+                    result.unwrap_err()
+                );
+                RtaProfile {
+                    id: profile_id.clone(),
+                    rom_hashes: vec![session.rom_hash.clone()],
+                    status: ProfileStatus::Published,
+                    ..RtaProfile::default()
                 }
+            } else {
+                return Err(format!(
+                    "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {}",
+                    session.rom_hash,
+                    result.unwrap_err()
+                ));
             }
         } else {
             select_profile(

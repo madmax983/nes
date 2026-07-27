@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Flattening nested let-else logic]**
+**Learning:** Found deeply nested if-else blocks combined with `let Some(...)` in `crates/nes-desktop/src/input.rs` and `crates/nes-desktop/src/rta.rs`.
+**Action:** Flatten the control flow by using early returns and extracting nested conditions. However, avoid forcing `let else` patterns where a `match` would be more efficient, such as in `mcp_host.rs` where re-parsing JSON to extract an error is an anti-pattern.

@@ -183,14 +183,12 @@ fn handle_client(mut stream: TcpStream, request_tx: &Sender<ToolRequest>) -> Res
 }
 
 fn handle_message(payload: &[u8], request_tx: &Sender<ToolRequest>) -> Option<Value> {
-    let request: RpcRequest = match serde_json::from_slice(payload) {
-        Ok(request) => request,
-        Err(err) => {
-            return Some(jsonrpc_error(
-                Value::Null,
-                RpcError::parse_error(format!("invalid JSON payload: {err}")),
-            ));
-        }
+    let Ok(request) = serde_json::from_slice::<RpcRequest>(payload) else {
+        let err = serde_json::from_slice::<RpcRequest>(payload).unwrap_err();
+        return Some(jsonrpc_error(
+            Value::Null,
+            RpcError::parse_error(format!("invalid JSON payload: {err}")),
+        ));
     };
 
     // **Performance optimization:** `RpcRequest` is an owned value obtained from deserialization,
