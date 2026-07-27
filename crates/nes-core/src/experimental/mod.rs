@@ -18,6 +18,8 @@ pub mod execution_graph;
 pub mod hitbox_visualizer;
 /// Identifies the most frequently executed CPU instructions.
 pub mod hotspot_profiler;
+/// Visualizes controller inputs on the framebuffer.
+pub mod input_overlay;
 /// Generates a visual heatmap of accessed memory regions.
 pub mod memory_heatmap;
 /// Provides memory visualization utilities for GUI consumption.
