@@ -974,6 +974,19 @@ impl NesCore {
     }
 
     /// Returns CPU register snapshot.
+    ///
+    /// Exposing a snapshot object allows tools (like external debuggers, memory inspectors, or TAS systems)
+    /// to inspect the exact state of the 6502 registers (`A`, `X`, `Y`, `PC`, `SP`, `P`) without
+    /// mutating the core or violating encapsulation.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// let snapshot = core.cpu_snapshot();
+    /// assert_eq!(snapshot.a, 0);
+    /// ```
     #[must_use]
     pub fn cpu_snapshot(&self) -> CpuSnapshot {
         self.cpu.snapshot()
@@ -1028,6 +1041,20 @@ impl NesCore {
     }
 
     /// Removes all configured cheat codes and restores the mapper PRG view.
+    ///
+    /// This function exists so that users can dynamically toggle cheats off during gameplay
+    /// without needing to restart the emulator or reload the entire ROM.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let mut core = NesCore::new();
+    /// core.add_cheat_code("SZLIVOVK"); // Infinite lives in Super Mario Bros.
+    /// assert_eq!(core.cheat_codes().len(), 1);
+    /// core.clear_cheat_codes();
+    /// assert_eq!(core.cheat_codes().len(), 0);
+    /// ```
     pub fn clear_cheat_codes(&mut self) {
         if self.cheat_codes.is_empty() {
             return;
