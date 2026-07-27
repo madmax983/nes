@@ -16,10 +16,10 @@ pub mod event_tracker;
 pub mod execution_graph;
 /// Draws visual bounding boxes over OAM sprites on the framebuffer.
 pub mod hitbox_visualizer;
-/// Visualizes controller inputs on the framebuffer.
-pub mod input_overlay;
 /// Identifies the most frequently executed CPU instructions.
 pub mod hotspot_profiler;
+/// Visualizes controller inputs on the framebuffer.
+pub mod input_overlay;
 /// Generates a visual heatmap of accessed memory regions.
 pub mod memory_heatmap;
 /// Provides memory visualization utilities for GUI consumption.
