@@ -19,3 +19,20 @@ pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
 
 /// The number of audio samples generated per frame (assuming 60 FPS).
 pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_frame_rgba_bytes_is_exact_buffer_size() {
+        // Assert the exact byte size needed for a 256x240 RGBA framebuffer
+        assert_eq!(FRAME_RGBA_BYTES, 245_760);
+    }
+
+    #[test]
+    fn test_audio_chunk_samples_is_correct_for_60hz() {
+        // Assert the exact number of samples for 44.1kHz at 60 FPS
+        assert_eq!(AUDIO_CHUNK_SAMPLES, 735);
+    }
+}
