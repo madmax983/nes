@@ -305,7 +305,7 @@ where
         apply(parse(val, flag)?);
         *idx += 2;
         Ok(true)
-    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
+    } else if let Some(val) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
         apply(parse(val, flag)?);
         *idx += 1;
         Ok(true)
