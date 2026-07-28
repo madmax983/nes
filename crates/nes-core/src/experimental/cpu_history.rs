@@ -118,6 +118,7 @@ impl CpuHistory {
     }
 }
 
+
 #[cfg(all(test, feature = "nova"))]
 mod tests {
     use super::*;
@@ -135,5 +136,43 @@ mod tests {
 
         let records = history.get_history();
         assert_eq!(records.len(), 2);
+    }
+
+    #[test]
+    fn history_default_creates_correct_capacity() {
+        let history = CpuHistory::default();
+        assert_eq!(history.capacity, 1024);
+        assert_eq!(history.count, 0);
+    }
+
+    #[test]
+    fn history_clear_resets_count_and_head() {
+        let core = NesCore::new();
+        let mut history = CpuHistory::new(2);
+
+        history.record(&core);
+        history.clear();
+        assert_eq!(history.count, 0);
+        assert_eq!(history.head, 0);
+        assert_eq!(history.get_history().len(), 0);
+    }
+
+    #[test]
+    fn history_record_handles_zero_capacity() {
+        let core = NesCore::new();
+        let mut history = CpuHistory::new(0);
+
+        history.record(&core);
+        assert_eq!(history.count, 0);
+        assert_eq!(history.get_history().len(), 0);
+    }
+
+    #[test]
+    fn history_get_history_without_wrap() {
+        let core = NesCore::new();
+        let mut history = CpuHistory::new(5);
+        history.record(&core);
+        history.record(&core);
+        assert_eq!(history.get_history().len(), 2);
     }
 }
