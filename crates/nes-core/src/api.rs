@@ -2476,6 +2476,59 @@ mod tests {
     }
 
     #[test]
+    fn should_return_chr_window_for_colordreams() {
+        let colordreams = ColorDreams::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::ColorDreams(colordreams);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_camerica() {
+        let camerica = Camerica::from_prg_rom(vec![0; 32 * 1024]);
+        let mapper = LoadedMapper::Camerica(camerica);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_namco108() {
+        let namco108 = Namco108::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Namco108(namco108);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_fme7() {
+        let fme7 = Fme7::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Fme7(fme7);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_mmc2() {
+        let mmc2 = Mmc2::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Mmc2(mmc2);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_mmc4() {
+        let mmc4 = Mmc4::from_prg_chr(vec![0; 32 * 1024], vec![]);
+        let mapper = LoadedMapper::Mmc4(mmc4);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
+    fn should_return_chr_window_for_mmc5() {
+        let mmc5 = Mmc5::from_prg_chr(
+            vec![0; 32 * 1024],
+            vec![],
+            crate::rom::NametableMirroring::Vertical,
+        );
+        let mapper = LoadedMapper::Mmc5(mmc5);
+        assert!(mapper.chr_window().is_some());
+    }
+
+    #[test]
     fn should_return_none_mirroring_override_for_nrom() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
