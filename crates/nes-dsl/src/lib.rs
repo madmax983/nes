@@ -1190,10 +1190,7 @@ fn parse_numeric_literal(rest: &str) -> Option<i64> {
     if let Some(bin) = rest.strip_prefix('%') {
         return i64::from_str_radix(bin, 2).ok();
     }
-    if let Some(hex) = rest.strip_prefix("0x") {
-        return i64::from_str_radix(hex, 16).ok();
-    }
-    if let Some(hex) = rest.strip_prefix("0X") {
+    if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
         return i64::from_str_radix(hex, 16).ok();
     }
     rest.parse::<i64>().ok()
