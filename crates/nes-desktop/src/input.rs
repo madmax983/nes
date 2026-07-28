@@ -377,6 +377,33 @@ mod tests {
             KeyboardDecision::Noop
         );
         assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F8, false, base_mode),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F9,
+                false,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                false,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
             classify_keyboard_input(
                 VirtualKeyCode::F5,
                 true,
