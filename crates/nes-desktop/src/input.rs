@@ -393,6 +393,17 @@ mod tests {
         );
         assert_eq!(
             classify_keyboard_input(
+                VirtualKeyCode::F9,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: false,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(
                 VirtualKeyCode::F10,
                 false,
                 KeyboardInputMode {
