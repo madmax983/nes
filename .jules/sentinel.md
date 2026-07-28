@@ -62,3 +62,7 @@
 **Mutant:** `replace < with <=` or `replace + with *` inside padding routines for PRG and CHR.
 **Diagnosis:** `EQUIVALENT_MUTANT` and `MISSING_COVERAGE`. We added `tests/mapper_gxrom.rs` coverage for padding logic `+ 10` boundary cases. The `<` to `<=` on `prg_rom.len() < PRG_BANK_32K` is an equivalent mutant because `prg_rom.resize(PRG_BANK_32K, 0)` is a no-op if the lengths are exactly equal.
 **Kill Shot:** Skipped equivalent mutants, but significantly strengthened `tests/mapper_gxrom.rs` to explicitly verify `from_prg_chr_exact_32k`, partial padding math tests, `chr_writable`, and `restore_state` functions, dropping mutants down from 23 to 1 unviable/equivalent.
+**[chr_window Mapper Methods Missing Tests]**
+**Mutant:** `api.rs` `LoadedMapper::chr_window()` deleted match arms for `ColorDreams`, `Camerica`, `Namco108`, `Fme7`, `Mmc2`, `Mmc4`, `Mmc5`
+**Diagnosis:** Missing test - No test called `chr_window()` on these instantiated mappers.
+**Kill Shot:** Added `should_return_chr_window_for_*` for all missing variants.
