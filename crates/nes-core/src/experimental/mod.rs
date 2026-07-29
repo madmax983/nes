@@ -22,6 +22,8 @@ pub mod hotspot_profiler;
 pub mod memory_heatmap;
 /// Provides memory visualization utilities for GUI consumption.
 pub mod memory_visualizer;
+/// Detects motion between frames by comparing pixel data.
+pub mod motion_detector;
 /// Renders nametable memory into visual representations.
 pub mod nametable_viewer;
 /// Performs spatial queries against Object Attribute Memory (OAM).
