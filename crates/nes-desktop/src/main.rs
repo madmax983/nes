@@ -22,7 +22,6 @@ use crossterm::style::{Color, Stylize};
 use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
-use nes_desktop::app::map_key_event_to_button_bit;
 use nes_desktop::audio::{AudioOutput, MAX_AUDIO_QUEUE_CHUNKS};
 use nes_desktop::manual_state::{load_state_file, save_state_file};
 use nes_desktop::menu::{
@@ -521,39 +520,6 @@ fn should_resume_after_rewind_hold(held: bool) -> bool {
     !held
 }
 
-fn release_all_buttons(core: &mut NesCore) {
-    for &button in &CONTROLLER_BUTTONS {
-        let _ = core.execute(Command::ReleaseButton(button));
-        let _ = core.execute(Command::ReleaseButton2(button));
-    }
-}
-
-fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
-        && let Some(mask) = map_key_event_to_button_bit(key_code)
-    {
-        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
-    }
-}
-
-fn resync_restored_inputs(
-    core: &mut NesCore,
-    keyboard_bits: u8,
-    gamepad_bits: &mut [u8; 2],
-) -> Result<(), String> {
-    release_all_buttons(core);
-    *gamepad_bits = [0; 2];
-    apply_gamepad_delta_commands(core, 0, keyboard_bits, nes_core::Player::One)
-}
-
-fn is_player_two_slot(player_index: usize) -> bool {
-    player_index == 1
-}
-
-fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
-    keyboard_bits | local_gamepad_bits
-}
-
 fn should_log_rollback(distance: u64) -> bool {
     distance > 0
 }
@@ -572,27 +538,6 @@ fn audio_queue_dropped(queued: bool) -> bool {
 
 fn should_capture_frame(every_n_frames: u64, frame_index: u64) -> bool {
     every_n_frames != 0 && frame_index.is_multiple_of(every_n_frames)
-}
-
-fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
-    if pressed {
-        current | mask
-    } else {
-        current & !mask
-    }
-}
-
-fn apply_gamepad_delta_commands(
-    core: &mut NesCore,
-    previous_bits: u8,
-    next_bits: u8,
-    player: nes_core::Player,
-) -> Result<(), String> {
-    for command in controller_state_delta_for_player(previous_bits, next_bits, player) {
-        core.execute(command)
-            .map_err(|err| format!("Gamepad command failed: {err}"))?;
-    }
-    Ok(())
 }
 
 fn run() -> Result<(), String> {
@@ -1519,17 +1464,16 @@ mod tests {
 
     use super::{
         FRAME_HEIGHT, FRAME_WIDTH, GAMEPAD_AXIS_THRESHOLD, GamepadSnapshot, NetplayRuntimeStats,
-        StepMode, WindowEventDecision, advance_core_for_host_frame, apply_gamepad_delta_commands,
-        apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
-        classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
-        element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        StepMode, WindowEventDecision, advance_core_for_host_frame, apply_overlay_keyboard_input,
+        audio_queue_dropped, capture_path_for_frame, classify_window_event, connected_gamepad_ids,
+        controller_state_delta_for_player, element_state_pressed, format_rom_read_error,
+        gamepad_assignments_changed, gamepad_slot_changed, gamepad_snapshot_to_bits,
+        is_player_two_slot, menu_action_enabled, merge_local_input_bits,
+        overlay_input_requires_redraw, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, rom_picker_supported, scaled_window_dimensions,
+        select_active_gamepad_ids, should_capture_frame, should_log_rollback,
+        should_resume_after_rewind_hold, should_trace_frame, should_update_input_delay,
+        slot_action_for_hotkey, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1606,25 +1550,6 @@ mod tests {
     fn adaptive_delay_returns_min_when_bounds_are_invalid() {
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 5, 5, 2), 5);
         assert_eq!(recommended_input_delay_frames(Some(80.0), 8.0, 6, 4, 2), 6);
-    }
-
-    #[test]
-    fn map_virtual_keycode_maps_all_supported_keys() {
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::RShift),
-            Some("ShiftRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
-        assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::Right),
-            Some("ArrowRight")
-        );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
     }
 
     #[test]
@@ -1914,98 +1839,6 @@ mod tests {
             }),
             0
         );
-    }
-
-    #[test]
-    fn update_button_bits_sets_and_clears_masks() {
-        let with_a = update_button_bits(0, Button::A.bit_mask(), true);
-        assert_eq!(with_a, Button::A.bit_mask());
-        // Pressing an already-set bit should be idempotent.
-        assert_eq!(
-            update_button_bits(with_a, Button::A.bit_mask(), true),
-            Button::A.bit_mask()
-        );
-        let with_ab = update_button_bits(with_a, Button::B.bit_mask(), true);
-        assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
-        let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
-        assert_eq!(cleared_a, Button::B.bit_mask());
-    }
-
-    #[test]
-    fn track_keyboard_bits_for_key_updates_controller_bits_and_ignores_hotkeys() {
-        let mut keyboard_bits = 0_u8;
-
-        track_keyboard_bits_for_key(VirtualKeyCode::Z, true, &mut keyboard_bits);
-        assert_eq!(keyboard_bits, Button::A.bit_mask());
-
-        track_keyboard_bits_for_key(VirtualKeyCode::F5, true, &mut keyboard_bits);
-        assert_eq!(
-            keyboard_bits,
-            Button::A.bit_mask(),
-            "manual save hotkey must not alter controller state"
-        );
-
-        track_keyboard_bits_for_key(VirtualKeyCode::Z, false, &mut keyboard_bits);
-        assert_eq!(keyboard_bits, 0);
-    }
-
-    #[test]
-    fn resync_restored_inputs_reapplies_keyboard_and_resets_gamepad_cache() {
-        let mut core = NesCore::new();
-        let mut gamepad_bits = [Button::Right.bit_mask(), Button::Start.bit_mask()];
-
-        resync_restored_inputs(&mut core, Button::A.bit_mask(), &mut gamepad_bits)
-            .expect("restored inputs should resync");
-
-        assert_eq!(
-            core.controller_bits(),
-            Button::A.bit_mask(),
-            "held keyboard input should be re-applied immediately"
-        );
-        assert_eq!(
-            core.controller2_bits(),
-            0,
-            "player-2 gamepad state should be cleared until the next poll replays it"
-        );
-        assert_eq!(
-            gamepad_bits,
-            [0, 0],
-            "gamepad cache must reset so held pads generate deltas on the next poll"
-        );
-    }
-
-    #[test]
-    fn apply_gamepad_delta_commands_updates_controller_bits() {
-        let mut core = NesCore::new();
-        apply_gamepad_delta_commands(
-            &mut core,
-            0,
-            Button::A.bit_mask() | Button::Right.bit_mask(),
-            nes_core::Player::One,
-        )
-        .expect("applying player-1 gamepad delta should succeed");
-        assert_eq!(
-            core.controller_bits(),
-            Button::A.bit_mask() | Button::Right.bit_mask()
-        );
-
-        apply_gamepad_delta_commands(
-            &mut core,
-            Button::A.bit_mask() | Button::Right.bit_mask(),
-            Button::Right.bit_mask(),
-            nes_core::Player::One,
-        )
-        .expect("releasing one player-1 button should succeed");
-        assert_eq!(core.controller_bits(), Button::Right.bit_mask());
-
-        apply_gamepad_delta_commands(
-            &mut core,
-            0,
-            Button::Start.bit_mask(),
-            nes_core::Player::Two,
-        )
-        .expect("applying player-2 gamepad delta should succeed");
-        assert_eq!(core.controller2_bits(), Button::Start.bit_mask());
     }
 
     #[test]
