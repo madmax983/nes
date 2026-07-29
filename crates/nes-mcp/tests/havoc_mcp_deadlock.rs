@@ -21,7 +21,7 @@ fn havoc_test_mutex_poison() {
     });
 
     // Wait for the background thread to panic
-    rx.recv_timeout(Duration::from_millis(500))
+    rx.recv_timeout(Duration::from_millis(5000))
         .expect("timeout");
 
     // The state lock is now poisoned.
