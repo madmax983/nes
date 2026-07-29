@@ -660,7 +660,6 @@ impl LoadedMapper {
                     false,
                     "replacement mapper deltas are handled by CoreSnapshot"
                 );
-                return;
             }
         }
 
