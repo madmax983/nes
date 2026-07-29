@@ -55,3 +55,7 @@
 **[Extract repetitive match logic to macro]**
 **Learning:** Found massive boilerplate in the `apply_delta` method of `api.rs` where a giant `match` block matched on every variant of `MapperDeltaKind` only to extract the mapped value and apply state in identical ways.
 **Action:** Created local macros `restore_copy!` and `restore_clone!` to drastically reduce the size of the match block, removing the "Pyramid of Doom" and increasing readability.
+
+**[Flatten apply_delta using match tuple]**
+**Learning:** Found that even with macros, we can improve readability by matching on `(&mut *self, &delta.kind)` together as a tuple, which completely removes the need for macros and nested `if let` chains in `apply_delta`.
+**Action:** Replaced the macro approach with a single grouped tuple pattern match to further flatten logic and improve Codecov coverage.
