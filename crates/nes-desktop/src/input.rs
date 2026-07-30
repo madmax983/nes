@@ -363,11 +363,7 @@ mod tests {
             KeyboardDecision::Noop
         );
         assert_eq!(
-            classify_keyboard_input(
-                VirtualKeyCode::F9,
-                true,
-                base_mode
-            ),
+            classify_keyboard_input(VirtualKeyCode::F9, true, base_mode),
             KeyboardDecision::Noop
         );
         assert_eq!(
