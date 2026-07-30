@@ -1,9 +1,7 @@
-# 🗣️ Echo: Getting Started example is broken
+# 🗣️ Echo: AI training example is broken
 
 **Description:**
 
-* 🤦 **The Confusion:** Tried to run `cargo run -p nes-desktop --release -- --config ./nes.toml` from the "Desktop/TUI launch commands" section. Got an error: `failed to read config './nes.toml': No such file or directory (os error 2)`.
-
-* 🕵️ **The Reality:** The workspace doesn't have a `nes.toml` by default, it has a `nes.example.toml`. The README says "Runtime and ROM paths are configured through `nes.toml` at the workspace root", but never instructs the user to create or copy the file before running the command.
-
-* 💡 **The Fix:** Add a step before the launch commands instructing users to copy the example config: `cp nes.example.toml nes.toml`.
+* 🤦 **The Confusion:** Tried to follow the "AI Control Training" steps in the README to train an SMB control profile. The `prepare_smb_control` step worked because it explicitly pointed to `./roms/homebrew/homebrew.nes`. However, running `train_smb_control` with the provided example config failed with an error: `Training failed: failed to read ROM './roms/Super Mario Bros.nes': No such file or directory (os error 2)`.
+* 🕵️ **The Reality:** The `config/ai/profiles/smb-control.example.toml` file hardcodes `rom_path = "./roms/Super Mario Bros.nes"`, which doesn't exist by default. The example commands don't explain that the config needs to be manually edited to point to the homebrew ROM to complete the tutorial.
+* 💡 **The Fix:** Either change the example config to point to `./roms/homebrew/homebrew.nes` by default, or add a step in the README explicitly telling the user to edit the copied `smb-control.toml` to fix the ROM path.
