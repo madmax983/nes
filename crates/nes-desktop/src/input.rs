@@ -94,39 +94,30 @@ pub(crate) fn classify_keyboard_input(
     pressed: bool,
     mode: KeyboardInputMode,
 ) -> KeyboardDecision {
-    if key == VirtualKeyCode::Escape && pressed {
-        return KeyboardDecision::ToggleOverlay;
-    }
-    if pressed && key == VirtualKeyCode::F5 {
-        return KeyboardDecision::ManualSaveState;
-    }
-    if pressed && key == VirtualKeyCode::F8 {
-        return KeyboardDecision::ManualLoadState;
-    }
-    if key == VirtualKeyCode::R {
-        return KeyboardDecision::SetRewindHeld(pressed);
-    }
-    if mode.rta_enabled && pressed && key == VirtualKeyCode::F9 {
-        return KeyboardDecision::RtaManualSplit;
-    }
-    if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
-        return KeyboardDecision::RtaFinish;
-    }
+    match (key, pressed) {
+        (VirtualKeyCode::Escape, true) => KeyboardDecision::ToggleOverlay,
+        (VirtualKeyCode::F5, true) => KeyboardDecision::ManualSaveState,
+        (VirtualKeyCode::F8, true) => KeyboardDecision::ManualLoadState,
+        (VirtualKeyCode::R, _) => KeyboardDecision::SetRewindHeld(pressed),
+        (VirtualKeyCode::F9, true) if mode.rta_enabled => KeyboardDecision::RtaManualSplit,
+        (VirtualKeyCode::F10, true) if mode.rta_enabled && mode.rta_calibrate => {
+            KeyboardDecision::RtaFinish
+        }
+        _ => {
+            let Some(key_code) = map_virtual_keycode(key) else {
+                return KeyboardDecision::Noop;
+            };
 
-    let Some(key_code) = map_virtual_keycode(key) else {
-        return KeyboardDecision::Noop;
-    };
-
-    if mode.rollback_enabled {
-        let Some(mask) = map_key_event_to_button_bit(key_code) else {
-            return KeyboardDecision::Noop;
-        };
-        KeyboardDecision::UpdateKeyboardBits { mask, pressed }
-    } else {
-        let Some(mapped) = map_key_event_to_command(key_code, pressed) else {
-            return KeyboardDecision::Noop;
-        };
-        KeyboardDecision::ExecuteCore(mapped.core)
+            if mode.rollback_enabled {
+                map_key_event_to_button_bit(key_code)
+                    .map(|mask| KeyboardDecision::UpdateKeyboardBits { mask, pressed })
+                    .unwrap_or(KeyboardDecision::Noop)
+            } else {
+                map_key_event_to_command(key_code, pressed)
+                    .map(|mapped| KeyboardDecision::ExecuteCore(mapped.core))
+                    .unwrap_or(KeyboardDecision::Noop)
+            }
+        }
     }
 }
 
@@ -355,6 +346,25 @@ mod tests {
             KeyboardDecision::Noop
         );
         assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F8, false, base_mode),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F9,
+                false,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F9, true, base_mode),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
             classify_keyboard_input(
                 VirtualKeyCode::F9,
                 true,
@@ -382,6 +392,22 @@ mod tests {
             KeyboardDecision::Noop
         );
         assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::F10, true, base_mode),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::F10,
+                true,
+                KeyboardInputMode {
+                    rta_enabled: true,
+                    rta_calibrate: false,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::Noop
+        );
+        assert_eq!(
             classify_keyboard_input(
                 VirtualKeyCode::F5,
                 true,
@@ -403,6 +429,31 @@ mod tests {
             ),
             KeyboardDecision::Noop
         );
+        assert_eq!(
+            classify_keyboard_input(VirtualKeyCode::Z, true, base_mode),
+            KeyboardDecision::ExecuteCore(Command::PressButton(Button::A))
+        );
+        assert_eq!(
+            classify_keyboard_input(
+                VirtualKeyCode::Escape,
+                true,
+                KeyboardInputMode {
+                    rollback_enabled: true,
+                    ..base_mode
+                }
+            ),
+            KeyboardDecision::ToggleOverlay
+        );
+        // For line 113, we need map_key_event_to_button_bit(key_code) to return None,
+        // which would require a valid key_code that is NOT a button, and rollback_enabled.
+        // F1 is mapped to None in map_key_event_to_button_bit ? Wait, F1 is not in map_virtual_keycode.
+        // Return maps to "Enter" -> Start button.
+        // We need a key that map_virtual_keycode maps, but map_key_event_to_button_bit doesn't.
+        // But map_key_event_to_button_bit handles Start (Enter), Select (ShiftRight).
+        // Let's look at map_virtual_keycode:
+        // Up, Down, Left, Right, Z, X, S, A, Return, RShift. All of these map to NES buttons.
+        // Ah, so line 113 is actually unreachable if all mapped virtual keycodes correspond to a NES button.
+
         assert_eq!(
             classify_keyboard_input(
                 VirtualKeyCode::F5,
