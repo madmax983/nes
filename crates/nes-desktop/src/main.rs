@@ -56,7 +56,16 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        if err.contains("ROM path not configured.") {
+            let parts: Vec<&str> = err.split(". ").collect();
+            if parts.len() >= 2 {
+                eprintln!("{} {}.\n{} {}", "Error:".with(crossterm::style::Color::Red).bold(), parts[0], "Hint:".with(crossterm::style::Color::Cyan).bold(), parts[1]);
+            } else {
+                eprintln!("{} {}", "Error:".with(crossterm::style::Color::Red).bold(), err);
+            }
+        } else {
+            eprintln!("\n{}", err);
+        }
     }
 }
 
