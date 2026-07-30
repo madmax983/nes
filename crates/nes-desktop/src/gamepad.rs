@@ -31,7 +31,6 @@ pub struct GamepadSnapshot {
     pub left_y: f32,
 }
 
-#[cfg(not(tarpaulin_include))]
 impl From<&Gamepad<'_>> for GamepadSnapshot {
     fn from(gamepad: &Gamepad<'_>) -> Self {
         Self {
@@ -216,11 +215,25 @@ pub fn controller_state_delta_for_player(
     })
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Note: It's hard to mock `gilrs::Gamepad` directly for unit tests because it's tightly coupled to the gilrs state machine.
-    // In this codebase, since we only extracted existing logic, it might be that `gilrs::Gamepad` is mocked elsewhere or it's just considered integration boundary.
-    // Let's check how gamepad is mocked elsewhere in this project or if there's an easier way to test this.
+
+    #[test]
+    fn test_gamepad_snapshot_to_bits() {
+        let snapshot = GamepadSnapshot {
+            connected: true,
+            south_pressed: true,
+            start_pressed: true,
+            ..Default::default()
+        };
+
+        let bits = gamepad_snapshot_to_bits(snapshot);
+        assert_ne!(bits & nes_core::Button::A.bit_mask(), 0);
+        assert_ne!(bits & nes_core::Button::Start.bit_mask(), 0);
+        assert_eq!(bits & nes_core::Button::B.bit_mask(), 0);
+    }
 }
