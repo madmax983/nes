@@ -215,12 +215,9 @@ pub fn controller_state_delta_for_player(
     })
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_gamepad_snapshot_to_bits() {
