@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract GamepadSnapshot mapping]**
+**Learning:** Found a 15-line inline struct initialization in `main.rs` that mapped primitive methods from a `gilrs::Gamepad` to a `GamepadSnapshot`. This bloated the event loop and contributed to a pyramid of doom.
+**Action:** Extract this mapping into a clean `impl From<&gilrs::Gamepad<'_>> for GamepadSnapshot` within `gamepad.rs`. This allows the caller to simply use `.into()`, adhering to Typeify and Extract principles.

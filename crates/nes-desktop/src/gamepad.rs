@@ -1,4 +1,4 @@
-use gilrs::GamepadId;
+use gilrs::{Axis, Button as GilrsButton, Gamepad, GamepadId};
 use nes_core::{Button, Command};
 
 pub const GAMEPAD_AXIS_THRESHOLD: f32 = 0.5;
@@ -29,6 +29,26 @@ pub struct GamepadSnapshot {
     pub dpad_right_pressed: bool,
     pub left_x: f32,
     pub left_y: f32,
+}
+
+impl From<&Gamepad<'_>> for GamepadSnapshot {
+    fn from(gamepad: &Gamepad<'_>) -> Self {
+        Self {
+            connected: gamepad.is_connected(),
+            south_pressed: gamepad.is_pressed(GilrsButton::South),
+            east_pressed: gamepad.is_pressed(GilrsButton::East),
+            west_pressed: gamepad.is_pressed(GilrsButton::West),
+            north_pressed: gamepad.is_pressed(GilrsButton::North),
+            select_pressed: gamepad.is_pressed(GilrsButton::Select),
+            start_pressed: gamepad.is_pressed(GilrsButton::Start),
+            dpad_up_pressed: gamepad.is_pressed(GilrsButton::DPadUp),
+            dpad_down_pressed: gamepad.is_pressed(GilrsButton::DPadDown),
+            dpad_left_pressed: gamepad.is_pressed(GilrsButton::DPadLeft),
+            dpad_right_pressed: gamepad.is_pressed(GilrsButton::DPadRight),
+            left_x: gamepad.value(Axis::LeftStickX),
+            left_y: gamepad.value(Axis::LeftStickY),
+        }
+    }
 }
 
 /// Filters a list of gamepads to return only those that are currently connected.

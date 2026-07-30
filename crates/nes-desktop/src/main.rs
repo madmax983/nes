@@ -19,7 +19,7 @@ use crate::gamepad::*;
 use crate::input::*;
 use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
-use gilrs::{Axis as GamepadAxis, Button as GamepadButton, GamepadId, Gilrs};
+use gilrs::{GamepadId, Gilrs};
 use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 use nes_desktop::actions::AppAction;
 use nes_desktop::app::map_key_event_to_button_bit;
@@ -1016,21 +1016,7 @@ fn run() -> Result<(), String> {
                     let next_gamepad_bits = active_gamepads[player]
                         .map(|gamepad_id| {
                             let gamepad = gilrs_state.gamepad(gamepad_id);
-                            gamepad_snapshot_to_bits(GamepadSnapshot {
-                                connected: gamepad.is_connected(),
-                                south_pressed: gamepad.is_pressed(GamepadButton::South),
-                                east_pressed: gamepad.is_pressed(GamepadButton::East),
-                                west_pressed: gamepad.is_pressed(GamepadButton::West),
-                                north_pressed: gamepad.is_pressed(GamepadButton::North),
-                                select_pressed: gamepad.is_pressed(GamepadButton::Select),
-                                start_pressed: gamepad.is_pressed(GamepadButton::Start),
-                                dpad_up_pressed: gamepad.is_pressed(GamepadButton::DPadUp),
-                                dpad_down_pressed: gamepad.is_pressed(GamepadButton::DPadDown),
-                                dpad_left_pressed: gamepad.is_pressed(GamepadButton::DPadLeft),
-                                dpad_right_pressed: gamepad.is_pressed(GamepadButton::DPadRight),
-                                left_x: gamepad.value(GamepadAxis::LeftStickX),
-                                left_y: gamepad.value(GamepadAxis::LeftStickY),
-                            })
+                            gamepad_snapshot_to_bits((&gamepad).into())
                         })
                         .unwrap_or_default();
                     if rollback.is_none()
