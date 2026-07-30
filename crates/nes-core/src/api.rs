@@ -877,6 +877,14 @@ impl NesCore {
     }
 
     /// Returns whether stepping is currently paused.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert!(!core.is_paused()); // Starts unpaused by default
+    /// ```
     #[must_use]
     pub fn is_paused(&self) -> bool {
         self.paused
@@ -889,12 +897,29 @@ impl NesCore {
     }
 
     /// Returns total CPU cycles observed by the scheduler.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert_eq!(core.total_cycles(), 0);
+    /// ```
     #[must_use]
     pub fn total_cycles(&self) -> u64 {
         self.scheduler.total_cycles()
     }
 
     /// Returns current controller bitfield.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::{NesCore, Command, Button, Player};
+    /// let mut core = NesCore::new();
+    /// core.execute(Command::PressButton(Button::A)).unwrap();
+    /// assert_ne!(core.controller_bits(), 0);
+    /// ```
     #[must_use]
     pub fn controller_bits(&self) -> u8 {
         self.ports.controllers[0].bits
@@ -941,18 +966,42 @@ impl NesCore {
     }
 
     /// Returns CPU program counter.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert_eq!(core.cpu_pc(), 0xC000); // Default start PC
+    /// ```
     #[must_use]
     pub fn cpu_pc(&self) -> u16 {
         self.cpu.pc()
     }
 
     /// Returns CPU accumulator.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert_eq!(core.cpu_a(), 0);
+    /// ```
     #[must_use]
     pub fn cpu_a(&self) -> u8 {
         self.cpu.a()
     }
 
     /// Returns CPU X register.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// assert_eq!(core.cpu_x(), 0);
+    /// ```
     #[must_use]
     pub fn cpu_x(&self) -> u8 {
         self.cpu.x()
@@ -963,17 +1012,42 @@ impl NesCore {
     /// Defaults to `true` in debug builds and `false` in release builds.
     /// Override to `true` in release if you need the disassembly view (debugger,
     /// step-cpu UI), or to `false` in debug for throughput profiling.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let mut core = NesCore::new();
+    /// core.set_trace_enabled(true);
+    /// ```
     pub fn set_trace_enabled(&mut self, enabled: bool) {
         self.cpu.set_trace_enabled(enabled);
     }
 
     /// Returns last executed instruction trace string, if any.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let mut core = NesCore::new();
+    /// core.set_trace_enabled(true);
+    /// assert_eq!(core.last_cpu_trace(), None);
+    /// ```
     #[must_use]
     pub fn last_cpu_trace(&self) -> Option<&str> {
         self.last_cpu_trace.as_deref()
     }
 
     /// Returns CPU register snapshot.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// let snap = core.cpu_snapshot();
+    /// ```
     #[must_use]
     pub fn cpu_snapshot(&self) -> CpuSnapshot {
         self.cpu.snapshot()
@@ -986,6 +1060,15 @@ impl NesCore {
     }
 
     /// Reads CPU-visible memory with MMIO-aware behavior.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::NesCore;
+    /// let core = NesCore::new();
+    /// let val = core.read_memory(0x0000);
+    /// assert_eq!(val, 0);
+    /// ```
     #[must_use]
     pub fn read_memory(&self, addr: u16) -> u8 {
         match addr {
