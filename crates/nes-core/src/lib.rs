@@ -13,6 +13,7 @@ pub mod constants;
 pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
 pub mod mapper;
+pub use mapper::is_mapper_supported;
 /// PPM image encoding utilities.
 pub mod ppm;
 mod ppu;
