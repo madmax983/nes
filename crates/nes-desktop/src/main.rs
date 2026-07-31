@@ -595,23 +595,11 @@ fn apply_gamepad_delta_commands(
     Ok(())
 }
 
-fn run() -> Result<(), String> {
-    let runtime = resolve_runtime_config()?;
-
-    #[cfg(not(feature = "mcp-host"))]
-    if runtime.mcp_enabled {
-        return Err(format!(
-            "MCP host requested for {} but this build does not include the `mcp-host` feature.",
-            runtime.mcp_bind_addr
-        ));
-    }
-
-    let mut core = NesCore::new();
-    let mut session_cheats = SessionCheats::from_raw_codes(&runtime.cheat_codes)
-        .map_err(|err| format!("Invalid cheat code in runtime config: {err}"))?;
-    let mut session = load_rom_session(&mut core, Path::new(&runtime.rom_path), &session_cheats)?;
-    let step_mode = runtime.step_mode;
-    let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
+fn setup_rta_manager(
+    runtime: &RuntimeConfig,
+    session: &LoadedRomSession,
+) -> Result<Option<RtaManager>, String> {
+    if let Some(rta_config) = runtime.rta.as_ref() {
         let profiles = load_profiles(&rta_config.profiles_dir)?;
         let profile = if rta_config.calibrate {
             match select_profile(
@@ -662,15 +650,34 @@ fn run() -> Result<(), String> {
         } else {
             None
         };
-        Some(RtaManager::new(
+        Ok(Some(RtaManager::new(
             profile,
             session.rom_hash.clone(),
             rta_config.runs_dir.clone(),
             calibration,
-        ))
+        )))
     } else {
-        None
-    };
+        Ok(None)
+    }
+}
+
+fn run() -> Result<(), String> {
+    let runtime = resolve_runtime_config()?;
+
+    #[cfg(not(feature = "mcp-host"))]
+    if runtime.mcp_enabled {
+        return Err(format!(
+            "MCP host requested for {} but this build does not include the `mcp-host` feature.",
+            runtime.mcp_bind_addr
+        ));
+    }
+
+    let mut core = NesCore::new();
+    let mut session_cheats = SessionCheats::from_raw_codes(&runtime.cheat_codes)
+        .map_err(|err| format!("Invalid cheat code in runtime config: {err}"))?;
+    let mut session = load_rom_session(&mut core, Path::new(&runtime.rom_path), &session_cheats)?;
+    let step_mode = runtime.step_mode;
+    let mut rta_manager = setup_rta_manager(&runtime, &session)?;
 
     let table = build_startup_table(&runtime, &session, &step_mode, rta_manager.as_ref());
 
