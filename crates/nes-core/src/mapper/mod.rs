@@ -85,10 +85,7 @@ mod tests {
     #[test]
     fn is_mapper_supported_matches_expected_ids() {
         for id in [0, 1, 2, 3, 4, 5, 7, 9, 10, 11, 66, 69, 71, 206] {
-            assert!(
-                is_mapper_supported(id),
-                "mapper {id} should be supported"
-            );
+            assert!(is_mapper_supported(id), "mapper {id} should be supported");
         }
         assert!(!is_mapper_supported(163));
         assert!(!is_mapper_supported(42));
