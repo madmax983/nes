@@ -68,3 +68,12 @@ pub trait Mapper {
     /// Handles mapper register writes in PRG space.
     fn write_prg(&mut self, addr: u16, value: u8);
 }
+
+/// Checks if the given mapper ID is supported by the emulator core.
+#[must_use]
+pub fn is_mapper_supported(mapper_id: u16) -> bool {
+    matches!(
+        mapper_id,
+        0 | 1 | 2 | 3 | 4 | 5 | 7 | 9 | 10 | 11 | 66 | 69 | 71 | 206
+    )
+}
