@@ -8,9 +8,6 @@
 
 /// Converts NES framebuffers into ASCII art.
 #[cfg(feature = "nova")]
-
-/// Converts NES framebuffers into ASCII art.
-#[cfg(feature = "nova")]
 pub mod ascii_renderer;
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
