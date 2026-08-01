@@ -357,7 +357,11 @@ mod tests {
 
     #[test]
     fn parse_runtime_args_ignores_flags_with_matching_prefix_but_no_equals() {
-        let args = vec!["--mcp-bind-invalid".to_owned(), "value".to_owned(), "game.nes".to_owned()];
+        let args = vec![
+            "--mcp-bind-invalid".to_owned(),
+            "value".to_owned(),
+            "game.nes".to_owned(),
+        ];
         let err = parse_runtime_args_with_timeout(args).expect_err("unknown flag should fail");
         assert!(err.contains("unknown flag"));
     }
