@@ -305,10 +305,16 @@ where
         apply(parse(val, flag)?);
         *idx += 2;
         Ok(true)
-    } else if let Some(val) = arg.strip_prefix(&format!("{flag}=")) {
-        apply(parse(val, flag)?);
-        *idx += 1;
-        Ok(true)
+    } else if let Some(rest) = arg.strip_prefix(flag) {
+        // Performance optimization: Avoids a hidden heap allocation by using
+        // sequential strip_prefix calls on string slices instead of format!("{flag}=").
+        if let Some(val) = rest.strip_prefix('=') {
+            apply(parse(val, flag)?);
+            *idx += 1;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     } else {
         Ok(false)
     }
@@ -347,6 +353,17 @@ mod tests {
         });
         rx.recv_timeout(Duration::from_millis(100))
             .expect("parse_runtime_args blocked or panicked")
+    }
+
+    #[test]
+    fn parse_runtime_args_ignores_flags_with_matching_prefix_but_no_equals() {
+        let args = vec![
+            "--mcp-bind-invalid".to_owned(),
+            "value".to_owned(),
+            "game.nes".to_owned(),
+        ];
+        let err = parse_runtime_args_with_timeout(args).expect_err("unknown flag should fail");
+        assert!(err.contains("unknown flag"));
     }
 
     #[test]
