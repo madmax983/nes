@@ -26,6 +26,8 @@ pub mod memory_visualizer;
 pub mod nametable_viewer;
 /// Performs spatial queries against Object Attribute Memory (OAM).
 pub mod oam_spatial_query;
+/// Experimental pixel art upscaling.
+pub mod pixel_upscaler;
 /// Maps zone events to controller commands to create an auto-playing bot.
 pub mod spatial_bot;
 /// Extracts sprite graphical data from memory for inspection.
