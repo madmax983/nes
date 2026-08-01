@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+## 2024-05-18 - Refactoring string parsing allocations and closure coverage
+**Learning:** Using `format!` inside repetitive `strip_prefix` checks causes unnecessary heap allocations. Using `.and_then` or `.or_else` in conditionals introduces closure branches that cause Codecov failures if untested. Cascading `else if let Some(...)` blocks for prefixes lead to a "Pyramid of Doom".
+**Action:** Replace `format!` with sequential `if let` blocks on the unallocated parts. Extract cascading `else if let` prefix checks into a helper function returning `Option` and use guard clauses to flatten the logic. Expand closures like `.and_then` into explicit `if let` blocks to maintain branch coverage effortlessly.
