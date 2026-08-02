@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Replacing strip_prefix format allocations]**
+**Learning:** Using `arg.strip_prefix(&format!("{flag}="))` inside a loop or hot path allocates a new `String` on the heap for every check.
+**Action:** Use sequential strip prefixes instead: `arg.strip_prefix(flag).and_then(|rest| rest.strip_prefix('='))` to check flags without heap allocation.
