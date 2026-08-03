@@ -1091,16 +1091,14 @@ fn fit_u16(value: i64, line: usize) -> Result<u16, DslError> {
 }
 
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by using an iterator,
-/// eliminating an O(N) heap allocation per line of DSL code parsed.
-fn strip_comments(line: &str) -> String {
+/// and uses `&str` instead of returning a `String` to eliminate O(N) heap
+/// allocations per line of DSL code parsed, taking slices directly from the input.
+fn strip_comments(line: &str) -> &str {
     let mut in_string = false;
     let mut escaped = false;
-    let mut out = String::with_capacity(line.len());
-    let mut chars = line.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for (idx, ch) in line.char_indices() {
         if in_string {
-            out.push(ch);
             if escaped {
                 escaped = false;
             } else if ch == '\\' {
@@ -1112,18 +1110,16 @@ fn strip_comments(line: &str) -> String {
         }
         if ch == '"' {
             in_string = true;
-            out.push(ch);
             continue;
         }
         if ch == ';' {
-            break;
+            return &line[..idx];
         }
-        if ch == '/' && chars.peek() == Some(&'/') {
-            break;
+        if ch == '/' && line[idx..].starts_with("//") {
+            return &line[..idx];
         }
-        out.push(ch);
     }
-    out
+    line
 }
 
 fn split_leading_label(line: &str) -> Option<(&str, &str)> {
