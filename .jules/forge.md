@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring sequential if statements into tuple pattern match in classify_keyboard_input]**
+**Learning:** Found sequential if statements in classify_keyboard_input evaluating both a configuration value (key) and boolean state (pressed). This caused repetitive checks and increased cognitive load.
+**Action:** Extracted the sequential if statements into a grouped tuple pattern match (match (key, pressed)) to flatten the logic, reduce cognitive load, and improve idiomatic readability.
