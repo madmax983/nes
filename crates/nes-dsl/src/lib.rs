@@ -1115,10 +1115,8 @@ fn strip_comments(line: &str) -> &str {
         if ch == ';' {
             return &line[..idx];
         }
-        if ch == '/' {
-            if line[idx..].starts_with("//") {
-                return &line[..idx];
-            }
+        if ch == '/' && line[idx..].starts_with("//") {
+            return &line[..idx];
         }
     }
     line
