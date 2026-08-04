@@ -1484,7 +1484,7 @@ mod tests {
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
-        use std::path::PathBuf;
+                use std::path::PathBuf;
 
         let runtime = RuntimeConfig {
             rom_path: "test.nes".to_string(),
@@ -2153,5 +2153,48 @@ mod tests {
 
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
+    }
+
+    #[test]
+    fn initialize_rta_manager_returns_none_when_disabled() {
+        use crate::config::RuntimeConfig;
+        use crate::config::StepMode;
+        use crate::session::LoadedRomSession;
+        use nes_core::RomLoadInfo;
+        use std::path::PathBuf;
+
+        let runtime = RuntimeConfig {
+            rta: None,
+            rom_path: "".to_owned(),
+            cheat_codes: vec![],
+            window_scale: 1,
+            step_mode: StepMode::Frame,
+            audio_enabled: false,
+            trace_every_frames: 0,
+            metrics_enabled: false,
+            metrics_every_frames: 0,
+            capture: None,
+            loaded_config_path: None,
+            mcp_enabled: false,
+            mcp_bind_addr: "".to_owned(),
+            netplay: None,
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
+        };
+        let session = LoadedRomSession {
+            rom_hash: "123".to_owned(),
+            rom_path: PathBuf::new(),
+            info: RomLoadInfo {
+                mapper_id: 0,
+                prg_rom_bytes: 0,
+                reset_pc: 0,
+            },
+            slot_metadata: vec![],
+        };
+        assert!(
+            super::initialize_rta_manager(&runtime, &session)
+                .unwrap()
+                .is_none()
+        );
     }
 }

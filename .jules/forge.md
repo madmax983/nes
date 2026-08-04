@@ -54,3 +54,7 @@
 **Extract God Function**
 **Learning:** `run()` method contains complicated subcomponent setups causing unnecessary scroll load.
 **Action:** Extract parts into separate setup functions with proper names.
+
+**Test Coverage Gap**
+**Learning:** Extracting code to a separate function caused codecov check failures due to insufficient branch coverage.
+**Action:** Wrote tests to ensure `initialize_rta_manager` behaves correctly and codecov checks pass.
