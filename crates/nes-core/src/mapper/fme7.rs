@@ -231,6 +231,18 @@ impl Fme7 {
     /// per CPU cycle, we accumulate dots and clock the counter once every third
     /// call. `scanline`/`dot`/`rendering_enabled`/`ppu_ctrl` are irrelevant to
     /// this counter (it is unrelated to rendering) and are ignored.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut fme7 = Fme7::from_prg_chr(vec![0; 16384], vec![]);
+    ///
+    /// // Pump 3 PPU dots to advance one CPU cycle for the internal IRQ counter.
+    /// fme7.on_ppu_dot(0, 0, false, 0);
+    /// fme7.on_ppu_dot(0, 1, false, 0);
+    /// fme7.on_ppu_dot(0, 2, false, 0);
+    /// ```
     pub fn on_ppu_dot(
         &mut self,
         _scanline: u16,
