@@ -1,12 +1,8 @@
-1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
-   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
-   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
-   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
-
-2. **Update imports in `main.rs`**
-   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
-
-3. **Complete pre commit steps**
-   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-
-4. **Submit the PR**
+1. **Identify God Function:** The `run` function in `crates/nes-desktop/src/main.rs` is almost 700 lines long, filled with complex initialization logic, massive `match` blocks for event handling, and a bloated `AppContext`. This is a classic "God Function".
+2. **Refactoring Strategy:** We will extract the RTA setup logic into a separate helper function `initialize_rta_manager`. We can also extract the `netplay` initialization block into `initialize_netplay` or a similar function. The core event loop inside `event_loop.run` contains a massive nested `match` statement for window events that we can extract into a handler function.
+3. **Execution Steps:**
+    - I'll create a `setup_rta_manager` function that takes `runtime`, `session` as arguments.
+    - I'll replace the inline RTA setup with a call to `setup_rta_manager`.
+    - I'll verify the changes with `cargo fmt`, `cargo clippy`, and `cargo test`.
+    - Note down in the journal.
+4. **Pre-commit Checks:** Follow `pre_commit_instructions` to verify and test.
