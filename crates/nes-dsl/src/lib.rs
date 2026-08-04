@@ -2026,3 +2026,15 @@ mod tests {
         assert_eq!(decoded, vec![0xFF]);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::strip_comments;
+
+    #[test]
+    fn test_strip_comments_branches() {
+        assert_eq!(strip_comments("\"string\" // comment"), "\"string\" ");
+        assert_eq!(strip_comments("\"str\\\"ing\""), "\"str\\\"ing\"");
+        assert_eq!(strip_comments("\"\\\\\""), "\"\\\\\"");
+    }
+}

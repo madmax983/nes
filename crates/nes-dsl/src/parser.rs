@@ -254,3 +254,15 @@ pub(crate) fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<Oper
 
     Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(operand.trim(), line_no)?))
 }
+
+#[cfg(test)]
+mod parser_additional_tests {
+    use super::strip_comments;
+
+    #[test]
+    fn test_strip_comments_branches() {
+        assert_eq!(strip_comments("\"string\" // comment"), "\"string\" ");
+        assert_eq!(strip_comments("\"str\\\"ing\""), "\"str\\\"ing\"");
+        assert_eq!(strip_comments("\"\\\\\""), "\"\\\\\"");
+    }
+}
