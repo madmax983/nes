@@ -3,15 +3,13 @@ use crate::DslError;
 
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by using an iterator,
 /// eliminating an O(N) heap allocation per line of DSL code parsed.
-pub(crate) fn strip_comments(line: &str) -> String {
+pub(crate) fn strip_comments(line: &str) -> &str {
     let mut in_string = false;
     let mut escaped = false;
-    let mut out = String::with_capacity(line.len());
-    let mut chars = line.chars().peekable();
+    let mut chars = line.char_indices().peekable();
 
-    while let Some(ch) = chars.next() {
+    while let Some((idx, ch)) = chars.next() {
         if in_string {
-            out.push(ch);
             if escaped {
                 escaped = false;
             } else if ch == '\\' {
@@ -23,18 +21,16 @@ pub(crate) fn strip_comments(line: &str) -> String {
         }
         if ch == '"' {
             in_string = true;
-            out.push(ch);
             continue;
         }
         if ch == ';' {
-            break;
+            return &line[..idx];
         }
-        if ch == '/' && chars.peek() == Some(&'/') {
-            break;
+        if ch == '/' && matches!(chars.peek(), Some(&(_, '/'))) {
+            return &line[..idx];
         }
-        out.push(ch);
     }
-    out
+    line
 }
 
 pub(crate) fn split_leading_label(line: &str) -> Option<(&str, &str)> {
@@ -257,4 +253,16 @@ pub(crate) fn parse_operand_syntax(operand: &str, line_no: usize) -> Result<Oper
     }
 
     Ok(OperandSyntax::AbsoluteOrZeroPage(parse_expr(operand.trim(), line_no)?))
+}
+
+#[cfg(test)]
+mod parser_additional_tests {
+    use super::strip_comments;
+
+    #[test]
+    fn test_strip_comments_branches() {
+        assert_eq!(strip_comments("\"string\" // comment"), "\"string\" ");
+        assert_eq!(strip_comments("\"str\\\"ing\""), "\"str\\\"ing\"");
+        assert_eq!(strip_comments("\"\\\\\""), "\"\\\\\"");
+    }
 }
