@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Extract Input Types from api.rs**
+**Tangle:** The `api.rs` file in `nes-core` was bloated and contained input event logic (`Button`, `Player`, `ControllerState`, `ControllerPorts`) mixed alongside the core emulator API surface. This violated domain boundaries and high cohesion.
+**Blueprint:** Extracted the input types into a dedicated `crates/nes-core/src/input.rs` internal module. Updated `api.rs` to use the new module, and exposed the necessary `Button` and `Player` primitives from `input.rs` via `lib.rs`, significantly reducing `api.rs` file size and separating concerns.
