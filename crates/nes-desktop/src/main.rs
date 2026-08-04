@@ -611,66 +611,7 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("Invalid cheat code in runtime config: {err}"))?;
     let mut session = load_rom_session(&mut core, Path::new(&runtime.rom_path), &session_cheats)?;
     let step_mode = runtime.step_mode;
-    let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
-        let profiles = load_profiles(&rta_config.profiles_dir)?;
-        let profile = if rta_config.calibrate {
-            match select_profile(
-                &profiles,
-                &session.rom_hash,
-                rta_config.profile_id_override.as_deref(),
-                true,
-            ) {
-                Ok(selection) => selection.selected.profile,
-                Err(err) => {
-                    if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
-                        eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
-                            profile_id
-                        );
-                        RtaProfile {
-                            id: profile_id.clone(),
-                            rom_hashes: vec![session.rom_hash.clone()],
-                            status: ProfileStatus::Published,
-                            ..RtaProfile::default()
-                        }
-                    } else {
-                        return Err(format!(
-                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
-                            session.rom_hash
-                        ));
-                    }
-                }
-            }
-        } else {
-            select_profile(
-                &profiles,
-                &session.rom_hash,
-                rta_config.profile_id_override.as_deref(),
-                false,
-            )
-            .map_err(|err| {
-                format!(
-                    "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
-                    session.rom_hash
-                )
-            })?
-            .selected
-            .profile
-        };
-        let calibration = if rta_config.calibrate {
-            Some(CalibrationRecorder::new(profile.id.clone()))
-        } else {
-            None
-        };
-        Some(RtaManager::new(
-            profile,
-            session.rom_hash.clone(),
-            rta_config.runs_dir.clone(),
-            calibration,
-        ))
-    } else {
-        None
-    };
+    let mut rta_manager = initialize_rta_manager(&runtime, &session)?;
 
     let table = build_startup_table(&runtime, &session, &step_mode, rta_manager.as_ref());
 
@@ -1472,12 +1413,78 @@ fn build_startup_table(
     table
 }
 
+fn initialize_rta_manager(
+    runtime: &RuntimeConfig,
+    session: &LoadedRomSession,
+) -> Result<Option<RtaManager>, String> {
+    if let Some(rta_config) = runtime.rta.as_ref() {
+        let profiles = load_profiles(&rta_config.profiles_dir)?;
+        let profile = if rta_config.calibrate {
+            match select_profile(
+                &profiles,
+                &session.rom_hash,
+                rta_config.profile_id_override.as_deref(),
+                true,
+            ) {
+                Ok(selection) => selection.selected.profile,
+                Err(err) => {
+                    if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
+                        eprintln!(
+                            "[rta] calibration creating profile template '{}' ({err})",
+                            profile_id
+                        );
+                        RtaProfile {
+                            id: profile_id.clone(),
+                            rom_hashes: vec![session.rom_hash.clone()],
+                            status: ProfileStatus::Published,
+                            ..RtaProfile::default()
+                        }
+                    } else {
+                        return Err(format!(
+                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
+                            session.rom_hash
+                        ));
+                    }
+                }
+            }
+        } else {
+            select_profile(
+                &profiles,
+                &session.rom_hash,
+                rta_config.profile_id_override.as_deref(),
+                false,
+            )
+            .map_err(|err| {
+                format!(
+                    "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
+                    session.rom_hash
+                )
+            })?
+            .selected
+            .profile
+        };
+        let calibration = if rta_config.calibrate {
+            Some(CalibrationRecorder::new(profile.id.clone()))
+        } else {
+            None
+        };
+        Ok(Some(RtaManager::new(
+            profile,
+            session.rom_hash.clone(),
+            rta_config.runs_dir.clone(),
+            calibration,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
-        use std::path::PathBuf;
+                use std::path::PathBuf;
 
         let runtime = RuntimeConfig {
             rom_path: "test.nes".to_string(),
@@ -2146,5 +2153,48 @@ mod tests {
 
         let _ = fs::remove_file(ppm_path);
         let _ = fs::remove_file(bmp_path);
+    }
+
+    #[test]
+    fn initialize_rta_manager_returns_none_when_disabled() {
+        use crate::config::RuntimeConfig;
+        use crate::config::StepMode;
+        use crate::session::LoadedRomSession;
+        use nes_core::RomLoadInfo;
+        use std::path::PathBuf;
+
+        let runtime = RuntimeConfig {
+            rta: None,
+            rom_path: "".to_owned(),
+            cheat_codes: vec![],
+            window_scale: 1,
+            step_mode: StepMode::Frame,
+            audio_enabled: false,
+            trace_every_frames: 0,
+            metrics_enabled: false,
+            metrics_every_frames: 0,
+            capture: None,
+            loaded_config_path: None,
+            mcp_enabled: false,
+            mcp_bind_addr: "".to_owned(),
+            netplay: None,
+            #[cfg(feature = "nova")]
+            auto_player_enabled: false,
+        };
+        let session = LoadedRomSession {
+            rom_hash: "123".to_owned(),
+            rom_path: PathBuf::new(),
+            info: RomLoadInfo {
+                mapper_id: 0,
+                prg_rom_bytes: 0,
+                reset_pc: 0,
+            },
+            slot_metadata: vec![],
+        };
+        assert!(
+            super::initialize_rta_manager(&runtime, &session)
+                .unwrap()
+                .is_none()
+        );
     }
 }
