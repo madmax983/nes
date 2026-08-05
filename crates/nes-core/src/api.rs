@@ -205,6 +205,15 @@ pub enum CoreQuery {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Lightweight machine status query response.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::api::{NesCore, EmulatorState};
+/// let mut core = NesCore::new();
+/// let state: EmulatorState = core.state();
+/// assert!(!state.paused); // By default, it's unpaused
+/// ```
 pub struct EmulatorState {
     /// Pause state.
     pub paused: bool,
@@ -233,6 +242,17 @@ pub enum QueryResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Complete serializable machine snapshot for save-state support.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::api::{NesCore, CoreSnapshot};
+/// let mut core = NesCore::new();
+/// // Capture the state
+/// let snapshot: CoreSnapshot = core.snapshot();
+/// // Restore the state later
+/// core.restore(snapshot);
+/// ```
 pub struct CoreSnapshot {
     /// Pause state.
     pub paused: bool,
@@ -288,6 +308,18 @@ enum MapperDeltaKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Metadata returned after successfully loading a ROM.
+///
+/// ## Examples
+///
+/// ```
+/// use nes_core::api::RomLoadInfo;
+/// let info = RomLoadInfo {
+///     mapper_id: 4,
+///     prg_rom_bytes: 262144,
+///     reset_pc: 0x8000,
+/// };
+/// assert_eq!(info.mapper_id, 4);
+/// ```
 pub struct RomLoadInfo {
     /// Mapper ID from iNES header.
     pub mapper_id: u8,
