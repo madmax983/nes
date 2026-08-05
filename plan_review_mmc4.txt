@@ -1,0 +1,20 @@
+Okay, MMC4:
+```rust
+    #[test]
+    fn mmc4_pads_unaligned_prg_rom() {
+        // Create an unaligned PRG ROM (e.g. 16KB + 1 byte)
+        let prg = vec![0_u8; 16 * 1024 + 1];
+        let m = Mmc4::from_prg_chr(prg, vec![0_u8; 8 * 1024]);
+        // The read logic should map to a valid length, no panics
+        assert_eq!(m.read_prg(0x8000), 0);
+    }
+
+    #[test]
+    fn mmc4_state_restore_with_mismatched_prg_ram_len_resizes() {
+        let mut m = Mmc4::from_prg_chr(vec![0_u8; 16 * 1024], vec![0_u8; 8 * 1024]);
+        let mut state = m.state();
+        state.prg_ram = vec![0_u8; 4096]; // wrong length
+        m.restore_state(state);
+        assert_eq!(m.read_prg(0x6000), 0);
+    }
+```

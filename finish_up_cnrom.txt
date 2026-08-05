@@ -1,0 +1,1 @@
+Ah, line 113 in `cnrom.rs` is `return 0;` inside `prg_offset_for` if `self.prg_rom.is_empty()`. Wait, didn't I see `cnrom_prg_offset_for_empty_prg_rom_returns_zero`? Yes! Let me check `cnrom.rs`.

@@ -1,0 +1,27 @@
+I will act as Sentry to improve code coverage. Let's look at what the `cargo llvm-cov report` revealed:
+
+There are a few files missing coverage:
+1. `crates/nes-core/src/mapper/cnrom.rs`: 1 line uncovered (line 113)
+2. `crates/nes-core/src/mapper/colordreams.rs`: 1 line uncovered (line 39)
+3. `crates/nes-core/src/mapper/fme7.rs`: 6 lines uncovered (100, 110, 166, 167, 168, 349)
+4. `crates/nes-core/src/mapper/namco108.rs`: 1 line uncovered (line 48)
+5. `crates/nes-core/src/mapper/mmc4.rs`: 4 lines uncovered (100, 163, 164, 165)
+
+I'll target `crates/nes-core/src/mapper/cnrom.rs` first because it only has one uncovered line. The uncovered line is `113` which corresponds to `fn read_prg(&self, addr: u16) -> u8` calling `<Self as Mapper>::read_prg(self, addr)` or similar. Let's check `cnrom.rs` again.
+
+Ah, `read_prg` and `write_prg` are methods on `Cnrom` that just forward to the `Mapper` trait implementation. `write_prg` on `Cnrom` isn't covered because we only call `mapper.write_prg` in tests via the trait. Actually, let's look at `cnrom.rs` around line 113.
+
+Wait, line 113 is `pub fn read_prg(&self, addr: u16) -> u8 { <Self as Mapper>::read_prg(self, addr) }`.
+Line 118 is `pub fn write_prg(&mut self, addr: u16, value: u8) { <Self as Mapper>::write_prg(self, addr, value); }`.
+Wait, in `tests::cnrom_state_can_be_restored`, `mapper.write_prg(0x8000, 1);` is called. That covers `Cnrom::write_prg`. But `Cnrom::read_prg` is never called!
+
+Let's write a test in `cnrom.rs` for `read_prg`:
+```rust
+    #[test]
+    fn cnrom_read_prg_returns_mapped_value() {
+        let mut prg = vec![0_u8; 32 * 1024];
+        prg[0] = 0x42;
+        let mapper = Cnrom::from_prg_chr(prg, vec![]);
+        assert_eq!(mapper.read_prg(0x8000), 0x42);
+    }
+```

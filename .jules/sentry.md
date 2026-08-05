@@ -37,3 +37,6 @@
 ## 2026-05-27 - Serde Array and PPM encoder panic/OOM vulnerabilities
 **Learning:** Utilities that allocate buffers based on untrusted size parameters or handle length-restricted fixed arrays can easily fail without proper test coverage for those error boundaries.
 **Action:** When working on serialization or image rendering primitives, explicitly write tests targeting oversize bounds, buffer length mismatches, and `unwrap_err` states to ensure panics or unexpected conditions are cleanly handled by the type system.
+## 2024-08-05 - Shielding Mapper Initialization and State Restoration
+**Learning:** Mapper initialization and state restoration logic can have edge cases (such as unaligned or undersized ROMs, or mismatched RAM sizes during state restore) that must be padded or resized correctly. Uncovered lines in these fallback paths pose a risk of panic or logic bugs.
+**Action:** Explicitly write tests for these initialization padding branches and `restore_state` branch conditions across all mappers to ensure they handle invalid input sizes safely.

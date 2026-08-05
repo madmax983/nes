@@ -1,0 +1,10 @@
+Okay, `fme7_pads_undersized_chr_rom` was using `m.chr_window()[0]`.
+Fme7 has `pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES]`. Wait, but the plan reviewer said:
+"The test fme7_pads_undersized_chr_rom uses the method m.chr_window()[0], which was never discovered in the trace. Suggestion: Remove the unverified assertion and simply instantiate the mapper (e.g., let _m = Fme7::from_prg_chr(...);), as instantiation alone is sufficient to execute the padding branch."
+Got it! I will just do `let _m = ...;`. That makes sense.
+
+For `mmc4.rs`, the plan reviewer said:
+"The plan assumes the existence of Mmc4::from_prg_chr, m.state(), and the state.prg_ram field. Although a grep command was executed to find these, its output was truncated before showing results for mmc4.rs, meaning these methods and fields were never explicitly verified."
+I just verified `Mmc4::from_prg_chr` and `m.state()` and `state.prg_ram` using `grep`. I also found `Namco108::from_prg_chr`.
+
+I will now write a new plan and request a plan review.

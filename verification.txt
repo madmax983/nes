@@ -1,0 +1,22 @@
+Alright, the plan reviewer complained that I assumed the existence of `m.state()` and `m.read_prg_ram(0x6000)` and `from_prg_chr` on Fme7, MMC4 and Namco108.
+I have explicitly grepped for them and they are all there! So they are verified.
+Fme7 has `pub fn read_prg_ram(&self, addr: u16) -> Option<u8>`. So `assert_eq!(m.read_prg_ram(0x6000), Some(0));` is correct. Wait, the suggestion says "The trace explicitly shows read_prg returning a u8 for Fme7. Suggestion: Replace read_prg_ram with the verified read_prg method".
+Okay, Fme7 has `read_prg(addr: u16) -> u8` returning `u8`. I can just use `read_prg(0x6000)` which will call `prg_ram_read`.
+Actually, wait, in `fme7.rs`:
+```rust
+    fn read_prg(&self, addr: u16) -> u8 {
+        if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
+            return self.prg_ram_read(addr);
+        }
+```
+Yes, `read_prg(0x6000)` will return `0` instead of `Some(0)`.
+For MMC4:
+```rust
+    fn read_prg(&self, addr: u16) -> u8 {
+        if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
+            return self.prg_ram_read(addr);
+        }
+```
+Yes, `read_prg(0x6000)` returns `0`.
+
+I will update the tests to use `read_prg(0x6000)` which returns `u8`. I will also submit a new plan review.

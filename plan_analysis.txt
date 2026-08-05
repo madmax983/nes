@@ -1,0 +1,16 @@
+I need to add some tests for `fme7.rs`.
+Uncovered lines in `fme7.rs`:
+100: `if chr_data.len() < CHR_WINDOW_BYTES {`
+110: `self.command = state.command;` -> Wait, let me check `fme7.rs` line 110. Oh, I only saw up to 106.
+166, 167, 168: `usize::from(raw) % self.prg_bank_count_8k.max(1)` wait, let me actually check lines 166-168.
+349: `return;` inside `write_prg` for `PRG_RAM_BASE..=PRG_RAM_END`.
+
+Let's check lines 160-170 in fme7.rs:
+```rust
+160	    #[must_use]
+161	    fn normalize_prg_bank(&self, raw: u8) -> usize {
+162	        usize::from(raw) % self.prg_bank_count_8k.max(1)
+```
+Wait, the line numbers in `lcov.info` may differ from `nl` if they refer to the original file vs the current one, but `cargo llvm-cov` output uses actual line numbers in `src/mapper/fme7.rs`.
+
+Let's use `sed` to get the exact lines of `fme7.rs`:

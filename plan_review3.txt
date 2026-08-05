@@ -1,0 +1,30 @@
+Ah, wait. Let's check the test names!
+CNROM:
+```rust
+    #[test]
+    fn cnrom_prg_offset_for_empty_prg_rom_returns_zero() {
+```
+Yes, this is verified because I read `cnrom.rs` earlier!
+ColorDreams:
+```rust
+    #[test]
+    fn color_dreams_chr_rom_is_not_writable() {
+```
+Yes, this is verified because I read `colordreams.rs` earlier!
+
+FME7:
+Wait, I haven't read `fme7.rs` test module entirely! Let me do that.
+MMC4:
+```rust
+    #[test]
+    fn mmc4_prg_ram_round_trip() {
+```
+Yes, this is verified because I read `mmc4.rs` entirely!
+Namco108:
+```rust
+    #[test]
+    fn namco108_2k_chr_banks_ignore_bit0() {
+```
+Yes, this is verified because I read `namco108.rs` entirely!
+
+The plan reviewer might just be strict if the test module isn't currently in its small context window, or if it demands me to check them via grep again. Let me just grep all of them to be safe and satisfy the reviewer.

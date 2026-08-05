@@ -1,0 +1,10 @@
+Ah, `namco108.rs` line 48 is `prg_rom.resize(prg_rom.len() + (PRG_BANK_8K - prg_remainder), 0);`
+So `namco108_pads_unaligned_prg_rom`.
+
+Let's check `crates/nes-core/src/mapper/mmc5.rs` as well. It has a lot of uncovered lines. But since Sentry selects "the BEST opportunity that ... Can be implemented in a self-contained test module ... Increases confidence significantly", addressing all these mapping initialization edge cases (padding and state restoration resizing) is a very nice and cohesive PR theme.
+
+Theme: "Shielding Mapper Initialization and State Restoration"
+💣 Risk: Mappers could panic or behave unpredictably if given unusually sized ROMs (unaligned or too small), or if state restoration provides corrupted/old state with incorrect RAM sizes.
+🧪 Strategy: Added tests for CNROM PRG reading, and explicitly tested unaligned/undersized PRG/CHR padding and state restoration mismatch resizing for ColorDreams, FME-7, MMC4, and Namco 108.
+
+I will request a plan review for this.
