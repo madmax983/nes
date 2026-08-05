@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract inline closures taking dynamic trait objects]**
+**Learning:** Found an inline closure `add_row` originally written with a `val: String` parameter, causing unnecessary string allocation for literal strings like `"frame".to_string()`. Because inline closures in Rust cannot use `impl Trait` syntax for polymorphism (e.g. `val: impl std::fmt::Display`), one might instinctively reach for `String`.
+**Action:** Instead of taking `String`, use a trait object like `val: &dyn std::fmt::Display` to achieve zero-allocation polymorphism inside the closure. Ensure that the internal implementation explicitly formats or `.to_string()`s the trait object if the destination (like `Cell::new`) requires an owned `String`.
