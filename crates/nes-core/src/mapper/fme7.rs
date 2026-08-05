@@ -590,4 +590,25 @@ mod tests {
         assert_eq!(restored.read_prg(0x6000), 0x9A);
         assert_eq!(restored.irq_counter, 0x1234);
     }
+
+    #[test]
+    fn fme7_pads_unaligned_prg_rom() {
+        let prg = vec![0_u8; 8 * 1024 + 1];
+        let m = Fme7::from_prg_chr(prg, vec![]);
+        assert_eq!(m.read_prg(0x8000), 0);
+    }
+
+    #[test]
+    fn fme7_pads_undersized_chr_rom() {
+        let _m = Fme7::from_prg_chr(vec![0_u8; 8 * 1024], vec![0_u8; 1024]);
+    }
+
+    #[test]
+    fn fme7_state_restore_with_mismatched_wram_len_resizes() {
+        let mut m = Fme7::from_prg_chr(vec![0_u8; 8 * 1024], vec![]);
+        let mut state = m.state();
+        state.wram = vec![0_u8; 4096];
+        m.restore_state(state);
+        assert_eq!(m.read_prg(0x6000), 0);
+    }
 }

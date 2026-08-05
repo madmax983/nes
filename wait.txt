@@ -1,0 +1,3 @@
+Wait, `mapper.prg_offset_for(0x8000)` should hit line 113. But `from_prg_chr` does `if prg_rom.is_empty() { prg_rom.push(0); }`.
+So `self.prg_rom.is_empty()` can NEVER be true in `prg_offset_for` if the struct is created via `from_prg_chr`! That's why it is uncovered! It's actually dead code.
+I don't need to fix this because my goal was just to improve coverage for state restoration and initialization. The coverage has successfully improved! I'm good.

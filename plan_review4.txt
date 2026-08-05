@@ -1,0 +1,26 @@
+Okay, I see `fme7_chr_ram_when_chr_absent_is_writable` is actually `fme7_chr_ram_when_chr_absent_is_writable`. Oh, wait, the grep output is `fn fme7_chr_ram_when_chr_absent_is_writable() {`. Wait, `fn fme7_chr_ram_when_absent_is_writable() {` doesn't match the grep output exactly, let me see.
+Grep output: `fn fme7_chr_ram_when_chr_absent_is_writable() {`
+So I had the wrong string! I wrote `fn fme7_chr_ram_when_absent_is_writable`. The `_chr` was missing. That is a Groundedness violation!
+
+And for `cnrom.rs`: `fn cnrom_prg_offset_for_empty_prg_rom_returns_zero() {` is present.
+For `colordreams.rs`: `fn color_dreams_chr_rom_is_not_writable() {` is present.
+For `mmc4.rs`: `fn mmc4_prg_ram_round_trip() {` is present.
+For `namco108.rs`: `fn namco108_2k_chr_banks_ignore_bit0() {` is present.
+
+Let's do Python instead of `sed` to make it robust, or just use Python to append to the end of the file right before the final `}`!
+Appending to the end of the `tests` module is much more robust than relying on `sed` and a specific test name. We can just use Python:
+```python
+import re
+
+def append_to_tests(filepath, code_to_append):
+    with open(filepath, 'r') as f:
+        content = f.read()
+
+    # Find the last closing brace of the file
+    last_brace_index = content.rfind('}')
+    if last_brace_index != -1:
+        new_content = content[:last_brace_index] + code_to_append + content[last_brace_index:]
+        with open(filepath, 'w') as f:
+            f.write(new_content)
+
+```

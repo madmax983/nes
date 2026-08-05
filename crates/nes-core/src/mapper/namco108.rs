@@ -309,4 +309,11 @@ mod tests {
         assert_eq!(restored.read_prg(0x8000), 3);
         assert_eq!(restored.chr_window()[0x1000], 5);
     }
+
+    #[test]
+    fn namco108_pads_unaligned_prg_rom() {
+        let prg = vec![0_u8; 8 * 1024 + 1];
+        let m = Namco108::from_prg_chr(prg, vec![0_u8; 8 * 1024]);
+        assert_eq!(m.read_prg(0x8000), 0);
+    }
 }

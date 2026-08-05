@@ -1,0 +1,25 @@
+Okay, lines 166-168:
+```rust
+   166	            self.wram = state.wram;
+   167	            self.wram.resize(WRAM_BYTES, 0);
+   168	        }
+```
+This is inside `pub(crate) fn restore_state(&mut self, state: Fme7State)`. The `if state.wram.len() == self.wram.len()` is true for normal use, but if `state.wram` is smaller (maybe due to some old format or testing?), it hits the else block. We can write a test for this else branch.
+
+Line 100:
+```rust
+   100	        if chr_data.len() < CHR_WINDOW_BYTES {
+   101	            chr_data.resize(CHR_WINDOW_BYTES, 0);
+   102	        }
+```
+This is in `from_prg_chr`. This is hit if `chr_rom` is provided (not empty) but has length < `CHR_WINDOW_BYTES` (8KB). So if we provide a 1KB CHR ROM to `from_prg_chr`, this branch will be hit.
+
+Line 110:
+```rust
+   108	        Self {
+   109	            command: 0,
+   110	            chr_banks: [0; 8],
+```
+Wait, the `lcov` output for `fme7.rs` says:
+100, 110, 166, 167, 168, 349.
+Let's check lines 95-115 with `nl -b a crates/nes-core/src/mapper/fme7.rs`.

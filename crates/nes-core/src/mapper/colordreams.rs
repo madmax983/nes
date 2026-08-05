@@ -241,4 +241,11 @@ mod tests {
         assert_eq!(restored.selected_prg_bank(), 2);
         assert_eq!(restored.selected_chr_bank(), 3);
     }
+
+    #[test]
+    fn colordreams_pads_undersized_prg_rom() {
+        let prg = vec![0_u8; 1024];
+        let m = ColorDreams::from_prg_chr(prg, vec![]);
+        assert_eq!(m.read_prg(0x8000), 0);
+    }
 }

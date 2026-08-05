@@ -1,0 +1,11 @@
+Ah, for `colordreams.rs`, line 39 is `prg_rom.resize(PRG_BANK_32K, 0);`
+This happens if `prg_rom.len() < PRG_BANK_32K`.
+
+So the plan is:
+1. Sentry's journal: I will create `.jules/sentry.md` and add learning about testing state restoration mismatch lengths, and testing initialization with edge cases (shorter than expected rom sizes, non-aligned sizes) for mappers.
+2. In `crates/nes-core/src/mapper/cnrom.rs`, add test `cnrom_read_prg_returns_mapped_value`
+3. In `crates/nes-core/src/mapper/colordreams.rs`, add test `colordreams_pads_undersized_prg_rom`
+4. In `crates/nes-core/src/mapper/fme7.rs`, add test `fme7_pads_unaligned_prg_rom`, `fme7_pads_undersized_chr_rom`, `fme7_state_restore_with_mismatched_wram_len_resizes`
+5. In `crates/nes-core/src/mapper/mmc4.rs`, add test `mmc4_pads_unaligned_prg_rom`, `mmc4_state_restore_with_mismatched_prg_ram_len_resizes`
+
+Let's do this! First, I'll write a Python script to append these tests to the respective files. Then I'll run `cargo test -p nes-core` and `cargo llvm-cov report -p nes-core` to verify coverage improved. Wait, there's `namco108.rs` line 48. Let's see what that is.

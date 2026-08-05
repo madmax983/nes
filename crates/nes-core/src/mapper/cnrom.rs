@@ -189,4 +189,12 @@ mod tests {
         assert_eq!(mapper.chr_bank_count, 2);
         assert_eq!(mapper.chr_data.len(), 16 * 1024);
     }
+
+    #[test]
+    fn cnrom_read_prg_returns_mapped_value() {
+        let mut prg = vec![0_u8; 32 * 1024];
+        prg[0] = 0x42;
+        let mapper = Cnrom::from_prg_chr(prg, vec![]);
+        assert_eq!(mapper.read_prg(0x8000), 0x42);
+    }
 }

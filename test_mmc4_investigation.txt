@@ -1,0 +1,16 @@
+`mmc4.rs`:
+- line 100: `prg_rom.resize(prg_rom.len() + (PRG_BANK_16K - prg_remainder), 0);`
+  This happens when `prg_rom.len() % PRG_BANK_16K != 0` in `from_prg_chr`.
+- line 163-165:
+  ```rust
+  self.prg_ram = state.prg_ram;
+  self.prg_ram.resize(PRG_RAM_BYTES, 0);
+  }
+  ```
+  This happens in `restore_state` if `state.prg_ram.len() != self.prg_ram.len()`.
+
+These are all edge cases of padding or restoring from an incomplete state!
+We can easily write tests for all of these.
+
+What about `mapper/colordreams.rs`?
+Line 39: let's check `nl -b a crates/nes-core/src/mapper/colordreams.rs | grep -E '\b39\b'`
