@@ -29,3 +29,6 @@
 ## 2026-08-05 - The `nes-core` API and FME-7 mapper
 **Confusion:** The documentation for `EmulatorState`, `CoreSnapshot`, and `RomLoadInfo` lacked concrete examples of how to obtain or use them, which confused users trying to integrate `nes-core`. Also, `DOTS_PER_CPU_CYCLE` in `mapper/fme7.rs` had a broken intra-doc link because it was private.
 **Clarification:** Added executable doctests to `EmulatorState`, `CoreSnapshot`, and `RomLoadInfo` in `api.rs` that explicitly demonstrate their creation using `NesCore::new()`. Fixed the broken link by removing the brackets and using standard inline code backticks since the constant is private.
+## 2026-08-05 - The `nes-core` API and FME-7 mapper
+**Confusion:** The documentation for `EmulatorState`, `CoreSnapshot`, and `RomLoadInfo` lacked concrete examples of how to obtain or use them, which confused users trying to integrate `nes-core`. Also, `DOTS_PER_CPU_CYCLE` in `mapper/fme7.rs` had a broken intra-doc link because it was private.
+**Clarification:** Added executable doctests to `EmulatorState`, `CoreSnapshot`, and `RomLoadInfo` in `api.rs` that explicitly demonstrate their creation using `NesCore::new()`. Fixed the broken link by removing the brackets and using standard inline code backticks since the constant is private.

@@ -209,9 +209,12 @@ pub enum CoreQuery {
 /// ## Examples
 ///
 /// ```
-/// use nes_core::api::{NesCore, EmulatorState};
+/// use nes_core::{NesCore, EmulatorState, CoreQuery};
 /// let mut core = NesCore::new();
-/// let state: EmulatorState = core.state();
+/// let state: EmulatorState = match core.query(CoreQuery::EmulatorState) {
+///     nes_core::QueryResult::EmulatorState(s) => s,
+///     _ => unreachable!(),
+/// };
 /// assert!(!state.paused); // By default, it's unpaused
 /// ```
 pub struct EmulatorState {
@@ -246,12 +249,12 @@ pub enum QueryResult {
 /// ## Examples
 ///
 /// ```
-/// use nes_core::api::{NesCore, CoreSnapshot};
+/// use nes_core::{NesCore, CoreSnapshot};
 /// let mut core = NesCore::new();
 /// // Capture the state
-/// let snapshot: CoreSnapshot = core.snapshot();
+/// let snapshot: CoreSnapshot = core.save_state();
 /// // Restore the state later
-/// core.restore(snapshot);
+/// core.load_state(&snapshot);
 /// ```
 pub struct CoreSnapshot {
     /// Pause state.
@@ -312,7 +315,7 @@ enum MapperDeltaKind {
 /// ## Examples
 ///
 /// ```
-/// use nes_core::api::RomLoadInfo;
+/// use nes_core::RomLoadInfo;
 /// let info = RomLoadInfo {
 ///     mapper_id: 4,
 ///     prg_rom_bytes: 262144,
