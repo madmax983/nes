@@ -756,7 +756,10 @@ fn run() -> Result<(), String> {
             Some(state)
         }
         Err(err) => {
-            eprintln!("Gamepad support unavailable: {err}");
+            eprintln!(
+                "{} Gamepad support unavailable: {err}",
+                "Warning:".with(Color::Yellow).bold()
+            );
             None
         }
     };
@@ -787,13 +790,19 @@ fn run() -> Result<(), String> {
         match AudioOutput::try_new() {
             Ok(output) => Some(output),
             Err(err) => {
-                eprintln!("{err}");
-                eprintln!("Continuing without audio output.");
+                eprintln!(
+                    "{} {err}\n{} Continuing without audio output.",
+                    "Warning:".with(Color::Yellow).bold(),
+                    "Hint:".with(Color::Cyan).bold()
+                );
                 None
             }
         }
     } else {
-        eprintln!("Audio disabled by config.");
+        eprintln!(
+            "{} Audio disabled by config.",
+            "Info:".with(Color::Blue).bold()
+        );
         None
     };
 
