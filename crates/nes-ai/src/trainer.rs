@@ -1098,3 +1098,62 @@ impl<B: AutodiffBackend> ModuleMapper<B> for SgdStep<'_, B> {
         Param::from_mapped_value(id, updated, mapper)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_gae_handles_empty_transitions() {
+        let results = compute_gae(&[], 0.0, 0.99, 0.95);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn compute_gae_calculates_correct_advantages_and_returns() {
+        use crate::env::ObservationSnapshot;
+
+        let transitions = vec![
+            RolloutTransition {
+                observation: ObservationSnapshot {
+                    frames: vec![],
+                    features: vec![],
+                    frame_stack: 0,
+                    width: 0,
+                    height: 0,
+                },
+                action_index: 0,
+                reward: 1.0,
+                done: false,
+                value: 0.5,
+                log_prob: 0.0,
+            },
+            RolloutTransition {
+                observation: ObservationSnapshot {
+                    frames: vec![],
+                    features: vec![],
+                    frame_stack: 0,
+                    width: 0,
+                    height: 0,
+                },
+                action_index: 0,
+                reward: 2.0,
+                done: true,
+                value: 0.8,
+                log_prob: 0.0,
+            },
+        ];
+
+        let gamma = 0.9;
+        let lambda = 0.8;
+        let results = compute_gae(&transitions, 1.0, gamma, lambda);
+
+        assert_eq!(results.len(), 2);
+
+        assert!((results[1].0 - 1.2).abs() < 1e-5);
+        assert!((results[1].1 - 2.0).abs() < 1e-5);
+
+        assert!((results[0].0 - 2.084).abs() < 1e-5);
+        assert!((results[0].1 - 2.584).abs() < 1e-5);
+    }
+}
