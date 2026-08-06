@@ -648,17 +648,17 @@ fn collect_rollout<E: TrainerEnv>(
         }
     });
 
-    let (advantages, returns) = compute_gae(
+    let gae_results = compute_gae(
         &transitions,
         bootstrap_value,
         cfg.discount_gamma,
         cfg.gae_lambda,
     );
+    // **⚡ Bolt Optimization:** Avoid chained `.zip()` calls and multiple intermediate vectors by directly mapping the fused results.
     let mut samples = transitions
         .into_iter()
-        .zip(advantages)
-        .zip(returns)
-        .map(|((transition, advantage), return_estimate)| PpoSample {
+        .zip(gae_results)
+        .map(|(transition, (advantage, return_estimate))| PpoSample {
             observation: transition.observation,
             action_index: transition.action_index,
             old_log_prob: transition.log_prob,
@@ -671,14 +671,15 @@ fn collect_rollout<E: TrainerEnv>(
     Ok(samples)
 }
 
+// **⚡ Bolt Optimization:** Fused the computation of advantages and returns into a single `Vec<(f32, f32)>`
+// to eliminate an unnecessary allocation and prevent chaining multiple `.zip()` iterators downstream.
 fn compute_gae(
     transitions: &[RolloutTransition],
     bootstrap_value: f32,
     gamma: f32,
     lambda: f32,
-) -> (Vec<f32>, Vec<f32>) {
-    let mut advantages = vec![0.0; transitions.len()];
-    let mut returns = vec![0.0; transitions.len()];
+) -> Vec<(f32, f32)> {
+    let mut results = vec![(0.0, 0.0); transitions.len()];
     let mut gae = 0.0;
 
     for index in (0..transitions.len()).rev() {
@@ -691,11 +692,10 @@ fn compute_gae(
         let delta = transitions[index].reward + gamma * next_value * non_terminal
             - transitions[index].value;
         gae = delta + gamma * lambda * non_terminal * gae;
-        advantages[index] = gae;
-        returns[index] = gae + transitions[index].value;
+        results[index] = (gae, gae + transitions[index].value);
     }
 
-    (advantages, returns)
+    results
 }
 
 fn normalize_advantages(samples: &mut [PpoSample]) {
@@ -1096,5 +1096,64 @@ impl<B: AutodiffBackend> ModuleMapper<B> for SgdStep<'_, B> {
                 .set_require_grad(requires_grad);
 
         Param::from_mapped_value(id, updated, mapper)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_gae_handles_empty_transitions() {
+        let results = compute_gae(&[], 0.0, 0.99, 0.95);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn compute_gae_calculates_correct_advantages_and_returns() {
+        use crate::env::ObservationSnapshot;
+
+        let transitions = vec![
+            RolloutTransition {
+                observation: ObservationSnapshot {
+                    frames: vec![],
+                    features: vec![],
+                    frame_stack: 0,
+                    width: 0,
+                    height: 0,
+                },
+                action_index: 0,
+                reward: 1.0,
+                done: false,
+                value: 0.5,
+                log_prob: 0.0,
+            },
+            RolloutTransition {
+                observation: ObservationSnapshot {
+                    frames: vec![],
+                    features: vec![],
+                    frame_stack: 0,
+                    width: 0,
+                    height: 0,
+                },
+                action_index: 0,
+                reward: 2.0,
+                done: true,
+                value: 0.8,
+                log_prob: 0.0,
+            },
+        ];
+
+        let gamma = 0.9;
+        let lambda = 0.8;
+        let results = compute_gae(&transitions, 1.0, gamma, lambda);
+
+        assert_eq!(results.len(), 2);
+
+        assert!((results[1].0 - 1.2).abs() < 1e-5);
+        assert!((results[1].1 - 2.0).abs() < 1e-5);
+
+        assert!((results[0].0 - 2.084).abs() < 1e-5);
+        assert!((results[0].1 - 2.584).abs() < 1e-5);
     }
 }
