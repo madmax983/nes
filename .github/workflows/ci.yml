@@ -7,7 +7,7 @@ on:
 
 jobs:
   checks:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
@@ -68,5 +68,5 @@ jobs:
           files: lcov.info
           flags: unittests
           name: nes-workspace
-          use_oidc: true
+          use_oidc: false
           fail_ci_if_error: false
