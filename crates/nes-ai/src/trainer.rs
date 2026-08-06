@@ -648,17 +648,17 @@ fn collect_rollout<E: TrainerEnv>(
         }
     });
 
-    let (advantages, returns) = compute_gae(
+    let gae_results = compute_gae(
         &transitions,
         bootstrap_value,
         cfg.discount_gamma,
         cfg.gae_lambda,
     );
+    // **⚡ Bolt Optimization:** Avoid chained `.zip()` calls and multiple intermediate vectors by directly mapping the fused results.
     let mut samples = transitions
         .into_iter()
-        .zip(advantages)
-        .zip(returns)
-        .map(|((transition, advantage), return_estimate)| PpoSample {
+        .zip(gae_results)
+        .map(|(transition, (advantage, return_estimate))| PpoSample {
             observation: transition.observation,
             action_index: transition.action_index,
             old_log_prob: transition.log_prob,
@@ -671,14 +671,15 @@ fn collect_rollout<E: TrainerEnv>(
     Ok(samples)
 }
 
+// **⚡ Bolt Optimization:** Fused the computation of advantages and returns into a single `Vec<(f32, f32)>`
+// to eliminate an unnecessary allocation and prevent chaining multiple `.zip()` iterators downstream.
 fn compute_gae(
     transitions: &[RolloutTransition],
     bootstrap_value: f32,
     gamma: f32,
     lambda: f32,
-) -> (Vec<f32>, Vec<f32>) {
-    let mut advantages = vec![0.0; transitions.len()];
-    let mut returns = vec![0.0; transitions.len()];
+) -> Vec<(f32, f32)> {
+    let mut results = vec![(0.0, 0.0); transitions.len()];
     let mut gae = 0.0;
 
     for index in (0..transitions.len()).rev() {
@@ -691,11 +692,10 @@ fn compute_gae(
         let delta = transitions[index].reward + gamma * next_value * non_terminal
             - transitions[index].value;
         gae = delta + gamma * lambda * non_terminal * gae;
-        advantages[index] = gae;
-        returns[index] = gae + transitions[index].value;
+        results[index] = (gae, gae + transitions[index].value);
     }
 
-    (advantages, returns)
+    results
 }
 
 fn normalize_advantages(samples: &mut [PpoSample]) {
