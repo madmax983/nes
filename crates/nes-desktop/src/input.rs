@@ -94,23 +94,18 @@ pub(crate) fn classify_keyboard_input(
     pressed: bool,
     mode: KeyboardInputMode,
 ) -> KeyboardDecision {
-    if key == VirtualKeyCode::Escape && pressed {
-        return KeyboardDecision::ToggleOverlay;
-    }
-    if pressed && key == VirtualKeyCode::F5 {
-        return KeyboardDecision::ManualSaveState;
-    }
-    if pressed && key == VirtualKeyCode::F8 {
-        return KeyboardDecision::ManualLoadState;
-    }
-    if key == VirtualKeyCode::R {
-        return KeyboardDecision::SetRewindHeld(pressed);
-    }
-    if mode.rta_enabled && pressed && key == VirtualKeyCode::F9 {
-        return KeyboardDecision::RtaManualSplit;
-    }
-    if mode.rta_enabled && mode.rta_calibrate && pressed && key == VirtualKeyCode::F10 {
-        return KeyboardDecision::RtaFinish;
+    match key {
+        VirtualKeyCode::Escape if pressed => return KeyboardDecision::ToggleOverlay,
+        VirtualKeyCode::F5 if pressed => return KeyboardDecision::ManualSaveState,
+        VirtualKeyCode::F8 if pressed => return KeyboardDecision::ManualLoadState,
+        VirtualKeyCode::R => return KeyboardDecision::SetRewindHeld(pressed),
+        VirtualKeyCode::F9 if mode.rta_enabled && pressed => {
+            return KeyboardDecision::RtaManualSplit;
+        }
+        VirtualKeyCode::F10 if mode.rta_enabled && mode.rta_calibrate && pressed => {
+            return KeyboardDecision::RtaFinish;
+        }
+        _ => {}
     }
 
     let Some(key_code) = map_virtual_keycode(key) else {
