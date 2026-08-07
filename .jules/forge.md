@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Extract resolve_rta_manager to flatten main run function]
+**Learning:** The `run` function in `nes-desktop/src/main.rs` is a "God Function" (>700 lines long). It had a large inline block for RTA manager resolution involving nested match/if branches.
+**Action:** Extracted the RTA initialization block into a dedicated `resolve_rta_manager` helper, using an early-return guard clause `let Some(rta_config) = rta_config else { return Ok(None); };` to flatten the logic flow.
