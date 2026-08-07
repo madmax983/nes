@@ -4,7 +4,7 @@
 //! Can be used to build bounding boxes around moving entities without reading OAM,
 //! or as a trigger for automated gameplay recording.
 
-use crate::{FRAME_WIDTH, FRAME_HEIGHT};
+use crate::{FRAME_HEIGHT, FRAME_WIDTH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoundingBox {
@@ -85,7 +85,10 @@ mod tests {
     fn test_motion_detector_default() {
         let detector = MotionDetector::default();
         assert_eq!(detector.threshold, 30);
-        assert_eq!(detector.previous_frame.len(), FRAME_WIDTH * FRAME_HEIGHT * 4);
+        assert_eq!(
+            detector.previous_frame.len(),
+            FRAME_WIDTH * FRAME_HEIGHT * 4
+        );
     }
 
     #[test]
