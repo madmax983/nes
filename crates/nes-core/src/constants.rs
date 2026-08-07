@@ -19,3 +19,6 @@ pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
 
 /// The number of audio samples generated per frame (assuming 60 FPS).
 pub const AUDIO_CHUNK_SAMPLES: usize = (AUDIO_SAMPLE_RATE as usize) / 60;
+
+/// Open bus mask for controller reads
+pub(crate) const CONTROLLER_OPEN_BUS_MASK: u8 = 0x40;
