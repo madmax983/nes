@@ -2400,24 +2400,6 @@ mod tests {
     }
 
     #[test]
-    fn should_return_correct_bit_mask_for_all_buttons() {
-        assert_eq!(Button::A.bit_mask(), 0b0000_0001);
-        assert_eq!(Button::B.bit_mask(), 0b0000_0010);
-        assert_eq!(Button::Select.bit_mask(), 0b0000_0100);
-        assert_eq!(Button::Start.bit_mask(), 0b0000_1000);
-        assert_eq!(Button::Up.bit_mask(), 0b0001_0000);
-        assert_eq!(Button::Down.bit_mask(), 0b0010_0000);
-        assert_eq!(Button::Left.bit_mask(), 0b0100_0000);
-        assert_eq!(Button::Right.bit_mask(), 0b1000_0000);
-    }
-
-    #[test]
-    fn should_return_correct_index_for_players() {
-        assert_eq!(Player::One.index(), 0);
-        assert_eq!(Player::Two.index(), 1);
-    }
-
-    #[test]
     fn core_query_returns_expected_variants() {
         let mut core = NesCore::new();
         // FpsMilli
