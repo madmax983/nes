@@ -4,9 +4,9 @@
 //! Can be used to build bounding boxes around moving entities without reading OAM,
 //! or as a trigger for automated gameplay recording.
 
-use crate::{FRAME_HEIGHT, FRAME_WIDTH};
+use crate::{FRAME_WIDTH, FRAME_HEIGHT};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoundingBox {
     pub x: u32,
     pub y: u32,
@@ -82,9 +82,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_motion_detector() {
+    fn test_motion_detector_default() {
+        let detector = MotionDetector::default();
+        assert_eq!(detector.threshold, 30);
+        assert_eq!(detector.previous_frame.len(), FRAME_WIDTH * FRAME_HEIGHT * 4);
+    }
+
+    #[test]
+    fn test_motion_detector_invalid_len() {
+        let mut detector = MotionDetector::new(50);
+        let frame1 = vec![0; 10]; // wrong length
+        assert!(detector.detect_motion(&frame1).is_none());
+    }
+
+    #[test]
+    fn test_motion_detector_no_motion() {
         let mut detector = MotionDetector::new(50);
         let frame1 = vec![0; FRAME_WIDTH * FRAME_HEIGHT * 4];
+        assert!(detector.detect_motion(&frame1).is_none());
+    }
+
+    #[test]
+    fn test_motion_detector_motion() {
+        let mut detector = MotionDetector::new(50);
         let mut frame2 = vec![0; FRAME_WIDTH * FRAME_HEIGHT * 4];
 
         // Draw a white pixel at (10, 10) in frame 2
@@ -94,9 +114,9 @@ mod tests {
         frame2[idx + 2] = 255;
         frame2[idx + 3] = 255;
 
-        let motion1 = detector.detect_motion(&frame1);
-        assert!(motion1.is_none());
-
+        // First pass sets the baseline (frame is all 0 initially, so this finds motion since current is white at 10,10)
+        // Wait, detector starts with previous_frame all 0s.
+        // So passing frame2 with a white pixel should detect motion immediately.
         let motion2 = detector.detect_motion(&frame2);
         assert!(motion2.is_some());
         let bb = motion2.unwrap();
