@@ -695,3 +695,31 @@ mod tests {
         assert_eq!(restored.irq_counter, 0x1234);
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn fme7_from_prg_chr_resizes_unaligned_prg() {
+        let prg = vec![0_u8; 16384 + 10]; // Unaligned to 8K
+        let mapper = Fme7::from_prg_chr(prg, vec![0; 8192]);
+        assert_eq!(mapper.read_prg(0x8000), 0);
+    }
+
+    #[test]
+    fn fme7_from_prg_chr_resizes_unaligned_chr() {
+        let chr = vec![0_u8; 8192 + 10]; // Unaligned to 1K
+        let mapper = Fme7::from_prg_chr(vec![0; 16384], chr);
+        let window = mapper.chr_window();
+        assert_eq!(window.len(), 8192);
+    }
+
+    #[test]
+    fn fme7_restore_state_resizes_wram() {
+        let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+        let mut state = mapper.state();
+        state.wram = vec![0_u8; 10]; // Smaller WRAM
+        mapper.restore_state(state);
+    }
+}
