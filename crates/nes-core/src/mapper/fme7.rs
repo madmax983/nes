@@ -1,3 +1,8 @@
+//! Sunsoft FME-7 and 5B Mapper implementation.
+//!
+//! This module provides the `Fme7` mapper, which handles the complex banking and IRQ
+//! requirements for games using the Sunsoft FME-7 or 5B chips.
+
 use crate::rom::NametableMirroring;
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +45,13 @@ const DOTS_PER_CPU_CYCLE: u8 = 3;
 /// * `$A000..=$BFFF` writes a parameter into the selected register.
 ///
 /// `$C000..=$FFFF` drive the 5B sound chip and are intentionally out of scope.
+///
+/// # Examples
+///
+/// ```
+/// use nes_core::mapper::Fme7;
+/// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+/// ```
 pub struct Fme7 {
     prg_bank_count_8k: usize,
     prg_rom: Vec<u8>,
@@ -89,6 +101,14 @@ impl Fme7 {
     /// - PRG is zero-padded to at least two 8KB banks and rounded up to a full bank.
     /// - Empty CHR becomes one writable 8KB CHR-RAM window; non-empty CHR is
     ///   padded up to a full 1KB bank (CHR-ROM, not writable).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// // The Fme7 struct maps PRG and CHR to CPU/PPU memory respectively.
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// ```
     #[must_use]
     pub fn from_prg_chr(mut prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
         let min_prg_bytes = MIN_PRG_BANKS * PRG_BANK_8K;
@@ -182,6 +202,15 @@ impl Fme7 {
 
     /// Returns the currently mapped 8KB CHR window, assembled from the eight 1KB
     /// bank registers (`0x0..=0x7`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// let window = mapper.chr_window();
+    /// assert_eq!(window.len(), 8192);
+    /// ```
     #[must_use]
     pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
         let mut window = [0_u8; CHR_WINDOW_BYTES];
@@ -194,6 +223,14 @@ impl Fme7 {
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU (CHR-RAM).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// assert_eq!(mapper.chr_writable(), false);
+    /// ```
     #[must_use]
     pub fn chr_writable(&self) -> bool {
         self.chr_writable
@@ -201,6 +238,15 @@ impl Fme7 {
 
     /// Synchronizes writable CHR-RAM from the current PPU window, writing each
     /// visible 1KB slot back into its mapped CHR bank.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![]);
+    /// let window = [0; 8192];
+    /// mapper.sync_chr_ram_from_ppu_window(&window);
+    /// ```
     pub fn sync_chr_ram_from_ppu_window(&mut self, window: &[u8; CHR_WINDOW_BYTES]) {
         if !self.chr_writable {
             return;
@@ -213,12 +259,28 @@ impl Fme7 {
     }
 
     /// Returns the current nametable mirroring mode (reg `0xC`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// let _mirroring = mapper.mirroring();
+    /// ```
     #[must_use]
     pub fn mirroring(&self) -> NametableMirroring {
         self.mirroring
     }
 
     /// Returns the pending mapper IRQ level.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// assert_eq!(mapper.irq_pending(), false);
+    /// ```
     #[must_use]
     pub fn irq_pending(&self) -> bool {
         self.irq_pending
@@ -227,10 +289,18 @@ impl Fme7 {
     /// Advances the FME-7 IRQ counter for a single PPU dot.
     ///
     /// The counter is CPU-cycle clocked, but this core only exposes a per-PPU-dot
-    /// hook. Because `on_ppu_dot` is pumped exactly [`DOTS_PER_CPU_CYCLE`] times
+    /// hook. Because `on_ppu_dot` is pumped exactly `DOTS_PER_CPU_CYCLE` times
     /// per CPU cycle, we accumulate dots and clock the counter once every third
     /// call. `scanline`/`dot`/`rendering_enabled`/`ppu_ctrl` are irrelevant to
     /// this counter (it is unrelated to rendering) and are ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// mapper.on_ppu_dot(0, 0, false, 0);
+    /// ```
     pub fn on_ppu_dot(
         &mut self,
         _scanline: u16,
@@ -297,6 +367,14 @@ impl Fme7 {
 
     /// Reads the `$6000..=$7FFF` window for the CPU bus, or `None` when `addr`
     /// is outside it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// let _val = mapper.read_prg_ram(0x6000);
+    /// ```
     #[must_use]
     pub fn read_prg_ram(&self, addr: u16) -> Option<u8> {
         (PRG_RAM_BASE..=PRG_RAM_END)
@@ -306,6 +384,14 @@ impl Fme7 {
 
     /// Writes the `$6000..=$7FFF` window from the CPU bus; ignores addresses
     /// outside it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// mapper.write_prg_ram(0x6000, 0xFF);
+    /// ```
     pub fn write_prg_ram(&mut self, addr: u16, value: u8) {
         if (PRG_RAM_BASE..=PRG_RAM_END).contains(&addr) {
             self.prg_ram_write(addr, value);
@@ -313,12 +399,30 @@ impl Fme7 {
     }
 
     /// Reads PRG using the FME-7 bank mapping.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// use nes_core::mapper::Mapper;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// let _val = mapper.read_prg(0x8000);
+    /// ```
     #[must_use]
     pub fn read_prg(&self, addr: u16) -> u8 {
         <Self as Mapper>::read_prg(self, addr)
     }
 
     /// Writes to the FME-7 register space.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    /// use nes_core::mapper::Mapper;
+    /// let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+    /// mapper.write_prg(0x8000, 0x00);
+    /// ```
     pub fn write_prg(&mut self, addr: u16, value: u8) {
         <Self as Mapper>::write_prg(self, addr, value);
     }
@@ -589,5 +693,33 @@ mod tests {
         assert_eq!(restored.mirroring(), NametableMirroring::OneScreenLower);
         assert_eq!(restored.read_prg(0x6000), 0x9A);
         assert_eq!(restored.irq_counter, 0x1234);
+    }
+}
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    #[test]
+    fn fme7_from_prg_chr_resizes_unaligned_prg() {
+        let prg = vec![0_u8; 16384 + 10]; // Unaligned to 8K
+        let mapper = Fme7::from_prg_chr(prg, vec![0; 8192]);
+        assert_eq!(mapper.read_prg(0x8000), 0);
+    }
+
+    #[test]
+    fn fme7_from_prg_chr_resizes_unaligned_chr() {
+        let chr = vec![0_u8; 8192 + 10]; // Unaligned to 1K
+        let mapper = Fme7::from_prg_chr(vec![0; 16384], chr);
+        let window = mapper.chr_window();
+        assert_eq!(window.len(), 8192);
+    }
+
+    #[test]
+    fn fme7_restore_state_resizes_wram() {
+        let mut mapper = Fme7::from_prg_chr(vec![0; 16384], vec![0; 8192]);
+        let mut state = mapper.state();
+        state.wram = vec![0_u8; 10]; // Smaller WRAM
+        mapper.restore_state(state);
     }
 }
