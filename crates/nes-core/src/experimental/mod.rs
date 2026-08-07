@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Analyzes framebuffers sequentially to detect and bound areas of visual motion.
+#[cfg(feature = "nova")]
+pub mod motion_detector;
