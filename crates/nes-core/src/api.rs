@@ -1216,7 +1216,10 @@ impl NesCore {
         self.reset_pc = reset_pc;
 
         self.paused = false;
-        self.ports.controllers = [ControllerState { bits: 0, shift: 0 }, ControllerState { bits: 0, shift: 0 }];
+        self.ports.controllers = [
+            ControllerState { bits: 0, shift: 0 },
+            ControllerState { bits: 0, shift: 0 },
+        ];
         self.ports.controller_strobe = false;
         self.scheduler.reset();
         self.ppu.reset();
@@ -1400,7 +1403,10 @@ impl NesCore {
 
     fn reset_runtime(&mut self) {
         self.paused = false;
-        self.ports.controllers = [ControllerState { bits: 0, shift: 0 }, ControllerState { bits: 0, shift: 0 }];
+        self.ports.controllers = [
+            ControllerState { bits: 0, shift: 0 },
+            ControllerState { bits: 0, shift: 0 },
+        ];
         self.ports.controller_strobe = false;
         self.scheduler.reset();
         self.ppu.reset();
@@ -2369,8 +2375,6 @@ mod tests {
         assert_eq!(result, Err(CoreError::InvalidSpeed(0)));
     }
 
-
-
     #[test]
     fn command_power_cycle_resets_speed_to_default() {
         let mut core = NesCore::new();
@@ -2379,8 +2383,6 @@ mod tests {
         core.execute(Command::PowerCycle).unwrap();
         assert_eq!(core.speed_permille(), DEFAULT_SPEED_PERMILLE);
     }
-
-
 
     #[test]
     fn core_query_returns_expected_variants() {

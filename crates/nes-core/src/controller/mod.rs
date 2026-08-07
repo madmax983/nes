@@ -122,7 +122,7 @@ impl ControllerPorts {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{NesCore, Command};
+    use crate::{Command, NesCore};
 
     #[test]
     fn command_release_button_clears_controller_bit() {
@@ -143,9 +143,22 @@ mod tests {
         let mut ports = ControllerPorts::default();
         ports.set_controller_bits(0b1010_1010, Player::One);
         ports.set_controller_bits(0b0101_0101, Player::Two);
+
+        // Write strobe on, modifying while strobe is on.
         ports.write_controller_strobe(1);
+        ports.set_controller_bits(0b1111_1111, Player::One);
+        assert_eq!(ports.controllers[Player::One.index()].shift, 0b1111_1111);
+
+        // Write strobe on again.
+        ports.write_controller_strobe(1);
+
+        // Write strobe off.
         ports.write_controller_strobe(0);
-        assert_eq!(ports.controller_port_sample(Player::One) & 1, 0);
+
+        // Write strobe off again.
+        ports.write_controller_strobe(0);
+
+        assert_eq!(ports.controller_port_sample(Player::One) & 1, 1);
         ports.consume_controller_read(Player::One);
         assert_eq!(ports.controller_port_sample(Player::One) & 1, 1);
         ports.consume_controller_read(Player::One);

@@ -9,11 +9,11 @@ pub mod bus;
 /// NES cheat code decoding and patch metadata.
 pub mod cheat_codes;
 pub mod constants;
+pub mod controller;
 /// 6502 CPU engine and status register helpers.
 pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
 pub mod mapper;
-pub mod controller;
 /// PPM image encoding utilities.
 pub mod ppm;
 mod ppu;
