@@ -122,6 +122,35 @@ impl ControllerPorts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{NesCore, Command};
+
+    #[test]
+    fn command_release_button_clears_controller_bit() {
+        let mut core = NesCore::new();
+        core.execute(Command::PressButton(Button::A)).unwrap();
+        assert_ne!(core.controller_bits() & Button::A.bit_mask(), 0);
+        core.execute(Command::ReleaseButton(Button::A)).unwrap();
+        assert_eq!(core.controller_bits() & Button::A.bit_mask(), 0);
+
+        core.execute(Command::PressButton2(Button::B)).unwrap();
+        assert_ne!(core.controller2_bits() & Button::B.bit_mask(), 0);
+        core.execute(Command::ReleaseButton2(Button::B)).unwrap();
+        assert_eq!(core.controller2_bits() & Button::B.bit_mask(), 0);
+    }
+
+    #[test]
+    fn should_return_correct_strobe_and_consume_controller_read() {
+        let mut ports = ControllerPorts::default();
+        ports.set_controller_bits(0b1010_1010, Player::One);
+        ports.set_controller_bits(0b0101_0101, Player::Two);
+        ports.write_controller_strobe(1);
+        ports.write_controller_strobe(0);
+        assert_eq!(ports.controller_port_sample(Player::One) & 1, 0);
+        ports.consume_controller_read(Player::One);
+        assert_eq!(ports.controller_port_sample(Player::One) & 1, 1);
+        ports.consume_controller_read(Player::One);
+        ports.consume_controller_read(Player::Two);
+    }
 
     #[test]
     fn should_return_correct_bit_mask_for_all_buttons() {

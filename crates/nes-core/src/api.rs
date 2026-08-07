@@ -30,7 +30,6 @@ const PRG_8K_BYTES: usize = 8 * 1024;
 const PRG_BANK_BYTES: usize = 16 * 1024;
 const CHR_8K_BYTES: usize = 8 * 1024;
 const CHR_4K_BYTES: usize = 4 * 1024;
-
 pub use crate::controller::{Button, Player};
 pub(crate) use crate::controller::{ControllerPorts, ControllerState};
 
@@ -1217,10 +1216,7 @@ impl NesCore {
         self.reset_pc = reset_pc;
 
         self.paused = false;
-        self.ports.controllers = [
-            ControllerState { bits: 0, shift: 0 },
-            ControllerState { bits: 0, shift: 0 },
-        ];
+        self.ports.controllers = [ControllerState { bits: 0, shift: 0 }, ControllerState { bits: 0, shift: 0 }];
         self.ports.controller_strobe = false;
         self.scheduler.reset();
         self.ppu.reset();
@@ -1404,10 +1400,7 @@ impl NesCore {
 
     fn reset_runtime(&mut self) {
         self.paused = false;
-        self.ports.controllers = [
-            ControllerState { bits: 0, shift: 0 },
-            ControllerState { bits: 0, shift: 0 },
-        ];
+        self.ports.controllers = [ControllerState { bits: 0, shift: 0 }, ControllerState { bits: 0, shift: 0 }];
         self.ports.controller_strobe = false;
         self.scheduler.reset();
         self.ppu.reset();
@@ -2376,19 +2369,7 @@ mod tests {
         assert_eq!(result, Err(CoreError::InvalidSpeed(0)));
     }
 
-    #[test]
-    fn command_release_button_clears_controller_bit() {
-        let mut core = NesCore::new();
-        core.execute(Command::PressButton(Button::A)).unwrap();
-        assert_ne!(core.controller_bits() & Button::A.bit_mask(), 0);
-        core.execute(Command::ReleaseButton(Button::A)).unwrap();
-        assert_eq!(core.controller_bits() & Button::A.bit_mask(), 0);
 
-        core.execute(Command::PressButton2(Button::B)).unwrap();
-        assert_ne!(core.controller2_bits() & Button::B.bit_mask(), 0);
-        core.execute(Command::ReleaseButton2(Button::B)).unwrap();
-        assert_eq!(core.controller2_bits() & Button::B.bit_mask(), 0);
-    }
 
     #[test]
     fn command_power_cycle_resets_speed_to_default() {
@@ -2398,6 +2379,8 @@ mod tests {
         core.execute(Command::PowerCycle).unwrap();
         assert_eq!(core.speed_permille(), DEFAULT_SPEED_PERMILLE);
     }
+
+
 
     #[test]
     fn core_query_returns_expected_variants() {
