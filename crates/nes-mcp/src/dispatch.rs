@@ -659,12 +659,12 @@ fn handle_load_state(
     params: &ToolParams,
 ) -> Result<DispatchOutput, DispatchError> {
     let slot = parse_slot(params);
-    let snapshot = {
-        let slots = saved_states()
-            .lock()
-            .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?;
-        slots.get(&slot).cloned()
-    };
+    let snapshot = saved_states()
+        .lock()
+        .map_err(|_| DispatchError::Internal("saved-state lock poisoned".to_owned()))?
+        .get(&slot)
+        .cloned();
+
     let Some(snapshot) = snapshot else {
         return Err(DispatchError::StateSlotNotFound(slot));
     };
