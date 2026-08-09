@@ -42,8 +42,11 @@ fn run() -> Result<(), String> {
         std::process::exit(0);
     }
     if args.len() != 4 {
-        eprintln!("Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>");
-        std::process::exit(1);
+        return Err(format!(
+            "{} missing or invalid number of arguments.\n{} Usage: prepare_smb_control <rom_path> <bootstrap_tas_json> <output_snapshot>",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
+        ));
     }
 
     let rom_path = PathBuf::from(&args[1]);
