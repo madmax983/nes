@@ -16,7 +16,7 @@ pub mod mapper;
 /// PPM image encoding utilities.
 pub mod ppm;
 mod ppu;
-mod rom;
+pub mod rom;
 mod scheduler;
 /// Workarounds for Serde's limitations with large arrays. Because sometimes you just need to serialize a 64KB block of RAM.
 pub mod serde_array;
