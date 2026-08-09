@@ -3,15 +3,13 @@ use crate::DslError;
 
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by using an iterator,
 /// eliminating an O(N) heap allocation per line of DSL code parsed.
-pub(crate) fn strip_comments(line: &str) -> String {
+pub(crate) fn strip_comments(line: &str) -> &str {
     let mut in_string = false;
     let mut escaped = false;
-    let mut out = String::with_capacity(line.len());
-    let mut chars = line.chars().peekable();
+    let mut chars = line.char_indices().peekable();
 
-    while let Some(ch) = chars.next() {
+    while let Some((i, ch)) = chars.next() {
         if in_string {
-            out.push(ch);
             if escaped {
                 escaped = false;
             } else if ch == '\\' {
@@ -23,18 +21,16 @@ pub(crate) fn strip_comments(line: &str) -> String {
         }
         if ch == '"' {
             in_string = true;
-            out.push(ch);
             continue;
         }
         if ch == ';' {
-            break;
+            return &line[..i];
         }
-        if ch == '/' && chars.peek() == Some(&'/') {
-            break;
+        if ch == '/' && chars.peek().map(|&(_, c)| c) == Some('/') {
+            return &line[..i];
         }
-        out.push(ch);
     }
-    out
+    line
 }
 
 pub(crate) fn split_leading_label(line: &str) -> Option<(&str, &str)> {
