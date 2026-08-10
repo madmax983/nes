@@ -559,3 +559,12 @@ fn export_6502_dsl_rom_base64_returns_ines_payload() {
         other => panic!("unexpected export_6502_dsl_rom_base64 output: {other:?}"),
     }
 }
+
+#[test]
+fn load_state_missing_slot_returns_error() {
+    let mut core = nes_core::NesCore::new();
+    let mut params = nes_mcp::ToolParams::new();
+    params.insert("slot".to_string(), "does_not_exist".to_string());
+    let err = nes_mcp::dispatch_tool(&mut core, "load_state", &params).unwrap_err();
+    assert!(matches!(err, nes_mcp::DispatchError::StateSlotNotFound(slot) if slot == "does_not_exist"));
+}
