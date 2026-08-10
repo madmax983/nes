@@ -89,6 +89,18 @@ impl Fme7 {
     /// - PRG is zero-padded to at least two 8KB banks and rounded up to a full bank.
     /// - Empty CHR becomes one writable 8KB CHR-RAM window; non-empty CHR is
     ///   padded up to a full 1KB bank (CHR-ROM, not writable).
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::Fme7;
+    ///
+    /// // Provide an empty PRG and CHR to see the normalization.
+    /// let fme7 = Fme7::from_prg_chr(vec![], vec![]);
+    ///
+    /// // CHR is missing, so the mapper will provide a writable CHR-RAM window.
+    /// assert!(fme7.chr_writable());
+    /// ```
     #[must_use]
     pub fn from_prg_chr(mut prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
         let min_prg_bytes = MIN_PRG_BANKS * PRG_BANK_8K;
@@ -227,7 +239,7 @@ impl Fme7 {
     /// Advances the FME-7 IRQ counter for a single PPU dot.
     ///
     /// The counter is CPU-cycle clocked, but this core only exposes a per-PPU-dot
-    /// hook. Because `on_ppu_dot` is pumped exactly [`DOTS_PER_CPU_CYCLE`] times
+    /// hook. Because `on_ppu_dot` is pumped exactly `DOTS_PER_CPU_CYCLE` times
     /// per CPU cycle, we accumulate dots and clock the counter once every third
     /// call. `scanline`/`dot`/`rendering_enabled`/`ppu_ctrl` are irrelevant to
     /// this counter (it is unrelated to rendering) and are ignored.
