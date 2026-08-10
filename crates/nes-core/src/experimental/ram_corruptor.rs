@@ -14,16 +14,23 @@ pub struct RamCorruptor {
 #[cfg(feature = "nova")]
 impl RamCorruptor {
     pub fn new(seed: u32) -> Self {
-        Self { state: if seed == 0 { 0xDEAD_BEEF } else { seed } }
+        Self {
+            state: if seed == 0 { 0xDEAD_BEEF } else { seed },
+        }
     }
 
     fn next_u32(&mut self) -> u32 {
-        self.state = self.state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        self.state = self
+            .state
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
         self.state
     }
 
     pub fn corrupt(&mut self, core: &mut NesCore, intensity_permille: u16) {
-        if intensity_permille == 0 { return; }
+        if intensity_permille == 0 {
+            return;
+        }
         let intensity = u32::from(intensity_permille).min(1000);
         for addr in 0x0000..=0x07FF {
             if (self.next_u32() % 1000) < intensity {
