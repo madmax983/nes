@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Borrow String slices from lookup tables to avoid unnecessary clones]**
+**Learning:** When parsing optional fields (like a save slot ID) from a map like `ToolParams` (`BTreeMap<String, String>`), returning a new `String` or `.clone()`ing forces unnecessary heap allocations, especially when the default is statically known. Returning `&str` allows zero-copy lookups and eliminates heap allocations in hot paths like querying states.
+**Action:** Return `&str` from map lookup wrappers instead of `String`. Borrow the returned string slice during lookups, and only allocate via `to_owned()` if mutation or ownership (e.g., storing in the map) is strictly required.
