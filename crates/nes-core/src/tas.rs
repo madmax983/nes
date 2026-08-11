@@ -317,6 +317,98 @@ mod tests_mutants {
     }
 
     #[test]
+
+    fn test_tas_error_display() {
+        assert_eq!(
+            TasError::Player2MacroScriptUnsupported.to_string(),
+            "legacy macro scripts do not support player 2 input"
+        );
+    }
+
+    #[test]
+    fn test_tas_movie_total_frames() {
+        let movie =
+            TasMovie::from_runs(vec![TasFrameRun::new(1, 0, 5), TasFrameRun::new(2, 0, 10)]);
+        assert_eq!(movie.total_frames(), 15);
+        let runs = movie.runs();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0], TasFrameRun::new(1, 0, 5));
+        assert_eq!(runs[1], TasFrameRun::new(2, 0, 10));
+    }
+
+    #[test]
+    fn test_tas_movie_to_macro_script_success() {
+        let mut movie = TasMovie::default();
+        movie.push_run(TasFrameRun::new(crate::Button::A.bit_mask(), 0, 2));
+        movie.push_run(TasFrameRun::new(0, 0, 1)); // Release
+
+        let script = movie.to_macro_script().unwrap();
+        assert_eq!(
+            script,
+            "PRESS A
+WAIT 2
+RELEASE A
+WAIT 1
+"
+        );
+    }
+
+    #[test]
+    fn test_tas_recorder_macro_script() {
+        let mut recorder = TasRecorder::new();
+        recorder.start();
+        recorder.record_frame(crate::Button::Start.bit_mask());
+        recorder.record_frame(crate::Button::Start.bit_mask());
+        recorder.record_frame(0);
+        let script = recorder.macro_script().unwrap();
+        assert_eq!(
+            script,
+            "PRESS Start
+WAIT 2
+RELEASE Start
+WAIT 1
+"
+        );
+    }
+
+    #[test]
+    fn test_tas_recorder_state_transitions() {
+        let mut recorder = TasRecorder::new();
+        assert!(!recorder.is_recording());
+
+        recorder.start();
+        assert!(recorder.is_recording());
+        recorder.record_frame_bits(1, 0); // Recorded
+
+        recorder.stop();
+        assert!(!recorder.is_recording());
+        recorder.record_frame_bits(2, 0); // Ignored
+
+        let movie = recorder.movie();
+        assert_eq!(movie.total_frames(), 1);
+
+        recorder.clear();
+        assert!(!recorder.is_recording()); // Preserve state
+        assert_eq!(recorder.movie().total_frames(), 0);
+
+        let mut core = NesCore::new();
+        recorder.start();
+        core.execute(crate::Command::SetControllerState(4)).unwrap();
+        recorder.record_core_frame(&core);
+        assert_eq!(recorder.finish().runs()[0], TasFrameRun::new(4, 0, 1));
+    }
+
+    #[test]
+    fn test_tas_movie_replay_frames_elapsed() {
+        let movie = TasMovie::from_runs(vec![TasFrameRun::new(1, 2, 5)]);
+        let mut core = looping_core();
+        let frames = movie.replay(&mut core).unwrap();
+        assert_eq!(frames, 5);
+        assert_eq!(core.controller_bits(), 1);
+        assert_eq!(core.controller2_bits(), 2);
+    }
+
+    #[test]
     fn test_tas_frame_run_new() {
         let run = TasFrameRun::new(1, 2, 3);
         assert_eq!(run.controller1_bits, 1);
