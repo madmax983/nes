@@ -60,11 +60,30 @@ mod tests {
     #[test]
     fn test_draw_gamepad_modifies_framebuffer() {
         let mut frame = vec![0_u8; FRAME_WIDTH * FRAME_HEIGHT * 4];
-        InputVisualizer::draw_gamepad(crate::Button::A.bit_mask(), &mut frame);
+        let all_buttons = crate::Button::Up.bit_mask()
+            | crate::Button::Down.bit_mask()
+            | crate::Button::Left.bit_mask()
+            | crate::Button::Right.bit_mask()
+            | crate::Button::Select.bit_mask()
+            | crate::Button::Start.bit_mask()
+            | crate::Button::B.bit_mask()
+            | crate::Button::A.bit_mask();
+        InputVisualizer::draw_gamepad(all_buttons, &mut frame);
         let has_color = frame.iter().any(|&byte| byte > 0);
         assert!(
             has_color,
             "Framebuffer should be modified when a button is pressed"
+        );
+    }
+
+    #[test]
+    fn test_draw_gamepad_invalid_framebuffer() {
+        let mut frame = vec![0_u8; 10];
+        InputVisualizer::draw_gamepad(crate::Button::A.bit_mask(), &mut frame);
+        let has_color = frame.iter().any(|&byte| byte > 0);
+        assert!(
+            !has_color,
+            "Framebuffer should not be modified if it is the wrong size"
         );
     }
 }
