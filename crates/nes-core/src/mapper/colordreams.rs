@@ -33,6 +33,17 @@ impl ColorDreams {
     /// Inputs are normalized to avoid panics in mapper operations:
     /// - PRG is zero-padded to at least one 32KB bank and rounded up to a full bank.
     /// - Non-empty CHR is rounded up to a full 8KB window.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nes_core::mapper::ColorDreams;
+    ///
+    /// let prg = vec![0; 32768];
+    /// let chr = vec![0; 8192];
+    /// let mapper = ColorDreams::from_prg_chr(prg, chr);
+    /// assert_eq!(mapper.selected_prg_bank(), 0);
+    /// ```
     #[must_use]
     pub fn from_prg_chr(mut prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
         if prg_rom.len() < PRG_BANK_32K {
