@@ -151,6 +151,30 @@ pub(crate) fn element_state_pressed(state: ElementState) -> bool {
     state == ElementState::Pressed
 }
 
+pub(crate) fn track_keyboard_bits_for_key(
+    key: VirtualKeyCode,
+    pressed: bool,
+    keyboard_bits: &mut u8,
+) {
+    if let Some(key_code) = map_virtual_keycode(key)
+        && let Some(mask) = map_key_event_to_button_bit(key_code)
+    {
+        *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
+    }
+}
+
+pub(crate) fn update_button_bits(current: u8, mask: u8, pressed: bool) -> u8 {
+    if pressed {
+        current | mask
+    } else {
+        current & !mask
+    }
+}
+
+pub(crate) fn merge_local_input_bits(keyboard_bits: u8, local_gamepad_bits: u8) -> u8 {
+    keyboard_bits | local_gamepad_bits
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -448,5 +472,38 @@ mod tests {
             }
             FrameDecision::WaitUntil(_) => panic!("expected step branch"),
         }
+    }
+
+    #[test]
+    fn track_keyboard_bits_for_key_updates_controller_bits_and_ignores_hotkeys() {
+        let mut keyboard_bits = 0_u8;
+
+        track_keyboard_bits_for_key(VirtualKeyCode::Z, true, &mut keyboard_bits);
+        assert_eq!(keyboard_bits, Button::A.bit_mask());
+
+        track_keyboard_bits_for_key(VirtualKeyCode::F5, true, &mut keyboard_bits);
+        assert_eq!(
+            keyboard_bits,
+            Button::A.bit_mask(),
+            "manual save hotkey must not alter controller state"
+        );
+
+        track_keyboard_bits_for_key(VirtualKeyCode::Z, false, &mut keyboard_bits);
+        assert_eq!(keyboard_bits, 0);
+    }
+
+    #[test]
+    fn update_button_bits_sets_and_clears_masks() {
+        let with_a = update_button_bits(0, Button::A.bit_mask(), true);
+        assert_eq!(with_a, Button::A.bit_mask());
+        // Pressing an already-set bit should be idempotent.
+        assert_eq!(
+            update_button_bits(with_a, Button::A.bit_mask(), true),
+            Button::A.bit_mask()
+        );
+        let with_ab = update_button_bits(with_a, Button::B.bit_mask(), true);
+        assert_eq!(with_ab, Button::A.bit_mask() | Button::B.bit_mask());
+        let cleared_a = update_button_bits(with_ab, Button::A.bit_mask(), false);
+        assert_eq!(cleared_a, Button::B.bit_mask());
     }
 }
