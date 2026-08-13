@@ -217,7 +217,6 @@ impl TasRecorder {
 /// Backward-compatible name for recorder users who still think in "macro recorder" terms.
 pub type MacroRecorder = TasRecorder;
 
-
 fn append_button_transitions(script: &mut String, previous_bits: u8, current_bits: u8) {
     let pressed = current_bits & !previous_bits;
     let released = !current_bits & previous_bits;
@@ -254,16 +253,15 @@ mod tests {
         assert_eq!(result, Err(TasError::Player2MacroScriptUnsupported));
     }
 
-
     #[test]
     fn test_tas_movie_to_macro_script_success() {
         let mut movie = TasMovie::default();
         movie.push_run(TasFrameRun::new(0x01, 0, 10)); // Right
         movie.push_run(TasFrameRun::new(0x00, 0, 5)); // None
         let script = movie.to_macro_script().unwrap();
-        assert!(script.contains("PRESS RIGHT"));
+        assert!(script.contains("PRESS Right"));
         assert!(script.contains("WAIT 10"));
-        assert!(script.contains("RELEASE RIGHT"));
+        assert!(script.contains("RELEASE Right"));
         assert!(script.contains("WAIT 5"));
     }
 
