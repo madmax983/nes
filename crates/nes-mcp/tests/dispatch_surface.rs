@@ -1,5 +1,6 @@
 use nes_core::{AUDIO_CHUNK_SAMPLES, Button, Command, CoreSnapshot, NesCore};
 use nes_mcp::{DispatchError, DispatchOutput, ToolParams, dispatch_tool, tool_catalog};
+use std::fmt::Write;
 
 fn params(pairs: &[(&str, &str)]) -> ToolParams {
     let mut map = ToolParams::new();
@@ -52,8 +53,6 @@ fn sample_uxrom3_ines() -> Vec<u8> {
 
     rom
 }
-
-use std::fmt::Write;
 
 fn hex_encode(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
