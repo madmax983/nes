@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**Eliminate `String` Allocations by Replacing `.push_str(&format!(...))`**
+**Learning:** Found uses of `.push_str(&format!(...))` in `hex_encode` which perform unnecessary intermediate string allocations on the hot path for every byte processed. Also identified places where strings were cloned just to pass ownership that wasn't strictly necessary.
+**Action:** Replaced `.push_str(&format!(...))` with `write!(...)` utilizing `std::fmt::Write`. This writes formatted text directly into the pre-allocated capacity of the outer `String`, eliminating per-loop iteration allocations.

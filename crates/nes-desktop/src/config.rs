@@ -153,17 +153,15 @@ pub(crate) fn resolve_runtime_config() -> Result<RuntimeConfig, String> {
         || runtime_args.rta_calibrate;
     let rta = if rta_enabled {
         Some(RtaRuntimeConfig {
-            profile_id_override: runtime_args.rta_profile_id.clone(),
+            profile_id_override: runtime_args.rta_profile_id,
             profiles_dir: PathBuf::from(
                 runtime_args
                     .rta_profiles_dir
-                    .clone()
                     .unwrap_or_else(|| DEFAULT_RTA_PROFILES_DIR.to_owned()),
             ),
             runs_dir: PathBuf::from(
                 runtime_args
                     .rta_runs_dir
-                    .clone()
                     .unwrap_or_else(|| DEFAULT_RTA_RUNS_DIR.to_owned()),
             ),
             calibrate: runtime_args.rta_calibrate,
