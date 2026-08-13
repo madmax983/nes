@@ -1930,61 +1930,53 @@ impl NesCore {
     }
 
     fn apply_cpu_write_side_effect(&mut self, addr: u16, value: u8) {
-        let remap_needed = if addr >= 0x8000 {
-            if let Some(mapper) = self.mapper.as_mut() {
-                // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
-                mapper.write_prg(addr, value);
-                true
-            } else {
-                false
+        let mut remap_needed = false;
+        let mut prg_ram_write_needed = false;
+        let mut expansion_write_needed = false;
+        let mut ppu_changed = false;
+
+        match addr {
+            0x8000..=0xFFFF => {
+                if let Some(mapper) = self.mapper.as_mut() {
+                    // Persist CHR-RAM writes made through PPUDATA before bank remapping.
+                    let chr_window = self.ppu.chr_window_snapshot();
+                    mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                    mapper.write_prg(addr, value);
+                    remap_needed = true;
+                }
             }
-        } else {
-            false
-        };
-
-        // Route $6000-$7FFF writes to cartridge PRG-RAM. Mappers without work
-        // RAM ignore the write and re-materialize nothing, so the flat image
-        // keeps the written byte exactly as before.
-        let prg_ram_write_needed = if (0x6000..=0x7FFF).contains(&addr) {
-            if let Some(mapper) = self.mapper.as_mut() {
-                mapper.write_prg_ram(addr, value);
-                true
-            } else {
-                false
+            0x6000..=0x7FFF => {
+                // Route $6000-$7FFF writes to cartridge PRG-RAM. Mappers without work
+                // RAM ignore the write and re-materialize nothing, so the flat image
+                // keeps the written byte exactly as before.
+                if let Some(mapper) = self.mapper.as_mut() {
+                    mapper.write_prg_ram(addr, value);
+                    prg_ram_write_needed = true;
+                }
             }
-        } else {
-            false
-        };
-
-        // Route $5000-$5FFF writes to the MMC5 expansion registers / ExRAM.
-        // Mappers without expansion registers return `false` and the flat image
-        // keeps the written byte.
-        let expansion_write_needed = if (0x5000..=0x5FFF).contains(&addr) {
-            self.mapper
-                .as_mut()
-                .is_some_and(|mapper| mapper.write_expansion(addr, value))
-        } else {
-            false
-        };
-
-        let ppu_changed = if (0x2000..=0x3FFF).contains(&addr) {
-            self.ppu
-                .write_register(normalize_ppu_register_addr(addr), value);
-            true
-        } else {
-            false
-        };
-
-        if (0x4000..=0x4017).contains(&addr) {
-            if addr == 0x4014 {
-                self.pending_oam_dma_page = Some(value);
-            } else if addr == 0x4016 {
-                self.ports.write_controller_strobe(value);
-            } else {
-                self.apu.write_register(addr, value);
+            0x5000..=0x5FFF => {
+                // Route $5000-$5FFF writes to the MMC5 expansion registers / ExRAM.
+                // Mappers without expansion registers return `false` and the flat image
+                // keeps the written byte.
+                if let Some(mapper) = self.mapper.as_mut() {
+                    expansion_write_needed = mapper.write_expansion(addr, value);
+                }
             }
+            0x4000..=0x4017 => {
+                if addr == 0x4014 {
+                    self.pending_oam_dma_page = Some(value);
+                } else if addr == 0x4016 {
+                    self.ports.write_controller_strobe(value);
+                } else {
+                    self.apu.write_register(addr, value);
+                }
+            }
+            0x2000..=0x3FFF => {
+                self.ppu
+                    .write_register(normalize_ppu_register_addr(addr), value);
+                ppu_changed = true;
+            }
+            _ => {}
         }
 
         if remap_needed {
@@ -2135,6 +2127,24 @@ impl NesCore {
         self.mapper.as_ref().is_some_and(LoadedMapper::irq_pending)
     }
 
+    fn tick_ppu_and_mapper(&mut self) {
+        self.ppu.step_dot();
+        if let Some(mapper) = self.mapper.as_mut() {
+            mapper.on_ppu_dot(
+                self.ppu.scanline(),
+                self.ppu.dot(),
+                self.ppu.rendering_enabled_for_mapper_irq(),
+                self.ppu.ctrl(),
+            );
+            if mapper.take_chr_bg_dirty() {
+                // The MMC5 8x16-sprite latch flipped: re-push the background
+                // ("B" bank) CHR window so backgrounds render from it.
+                self.sync_mapper_chr_window();
+            }
+        }
+        self.pump_mapper_chr_fetches();
+    }
+
     fn advance_hardware_cycles(&mut self, cycles: u64) {
         // Batch-advance scheduler accounting counters once for the whole burst.
         // The counters are not observed mid-loop, so this is equivalent to N
@@ -2145,23 +2155,7 @@ impl NesCore {
         for _ in 0..cycles {
             let dmc_request = self.apu.step_cpu_cycle(self.paused);
             for _ in 0..3 {
-                self.ppu.step_dot();
-                let mut bg_resync = false;
-                if let Some(mapper) = self.mapper.as_mut() {
-                    mapper.on_ppu_dot(
-                        self.ppu.scanline(),
-                        self.ppu.dot(),
-                        self.ppu.rendering_enabled_for_mapper_irq(),
-                        self.ppu.ctrl(),
-                    );
-                    bg_resync = mapper.take_chr_bg_dirty();
-                }
-                if bg_resync {
-                    // The MMC5 8x16-sprite latch flipped: re-push the background
-                    // ("B" bank) CHR window so backgrounds render from it.
-                    self.sync_mapper_chr_window();
-                }
-                self.pump_mapper_chr_fetches();
+                self.tick_ppu_and_mapper();
             }
             if let Some(request) = dmc_request {
                 self.apply_dmc_dma_request(request);
@@ -2181,12 +2175,13 @@ impl NesCore {
         if count == 0 {
             return;
         }
+        let Some(mapper) = self.mapper.as_mut() else {
+            return;
+        };
         let mut changed = false;
-        if let Some(mapper) = self.mapper.as_mut() {
-            for &addr in &buf[..count] {
-                if mapper.notify_ppu_chr_fetch(addr) {
-                    changed = true;
-                }
+        for &addr in &buf[..count] {
+            if mapper.notify_ppu_chr_fetch(addr) {
+                changed = true;
             }
         }
         if changed {
@@ -2203,23 +2198,7 @@ impl NesCore {
             let dmc_request = self.apu.step_cpu_cycle(self.paused);
             for _ in 0..3 {
                 self.scheduler.step_ppu_cycle();
-                self.ppu.step_dot();
-                let mut bg_resync = false;
-                if let Some(mapper) = self.mapper.as_mut() {
-                    mapper.on_ppu_dot(
-                        self.ppu.scanline(),
-                        self.ppu.dot(),
-                        self.ppu.rendering_enabled_for_mapper_irq(),
-                        self.ppu.ctrl(),
-                    );
-                    bg_resync = mapper.take_chr_bg_dirty();
-                }
-                if bg_resync {
-                    // The MMC5 8x16-sprite latch flipped: re-push the background
-                    // ("B" bank) CHR window so backgrounds render from it.
-                    self.sync_mapper_chr_window();
-                }
-                self.pump_mapper_chr_fetches();
+                self.tick_ppu_and_mapper();
             }
             if let Some(chained) = dmc_request {
                 let byte = self.cpu.read_byte(chained.addr);
