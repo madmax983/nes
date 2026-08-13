@@ -72,7 +72,7 @@ mod tests {
     fn oscilloscope_draws_wave_on_framebuffer() {
         let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
         // Flatline wave
-        let samples = vec![0; FRAME_WIDTH as usize];
+        let samples = vec![0; FRAME_WIDTH];
 
         OscilloscopeOverlay::draw(&mut frame, &samples);
 
