@@ -253,6 +253,20 @@ mod tests {
         assert_eq!(result, Err(TasError::Player2MacroScriptUnsupported));
     }
 
+
+
+    #[test]
+    fn test_tas_movie_to_macro_script_success() {
+        let mut movie = TasMovie::default();
+        movie.push_run(TasFrameRun::new(0x01, 0, 10)); // Right
+        movie.push_run(TasFrameRun::new(0x00, 0, 5));  // None
+        let script = movie.to_macro_script().unwrap();
+        assert!(script.contains("PRESS Right"));
+        assert!(script.contains("WAIT 10"));
+        assert!(script.contains("RELEASE Right"));
+        assert!(script.contains("WAIT 5"));
+    }
+
     #[test]
     fn test_tas_movie_push_run_coalescing() {
         let mut movie = TasMovie::default();
