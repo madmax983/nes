@@ -691,35 +691,48 @@ fn run() -> Result<(), String> {
         None
     };
 
-    let netplay_client = if let Some(netplay) = runtime.netplay.as_ref() {
-        Some(NetplayClient::connect(netplay)?)
-    } else {
-        None
+    struct NetplayContext {
+        client: Option<NetplayClient>,
+        rollback: Option<RollbackEngine>,
+        hash_check_every: u64,
+        local_player: u8,
+        stats: Option<NetplayRuntimeStats>,
+        next_ping_at: Instant,
+        ping_nonce: u64,
+        pending_pings: BTreeMap<u64, Instant>,
+    }
+
+    let mut netplay = NetplayContext {
+        client: if let Some(n) = runtime.netplay.as_ref() {
+            Some(NetplayClient::connect(n)?)
+        } else {
+            None
+        },
+        rollback: if let Some(n) = runtime.netplay.as_ref() {
+            Some(
+                RollbackEngine::new(RollbackConfig {
+                    local_player: n.player,
+                    input_delay_frames: n.input_delay_frames,
+                    max_rollback_frames: n.max_rollback_frames,
+                })
+                .map_err(|err| format!("failed to initialize rollback engine: {err}"))?,
+            )
+        } else {
+            None
+        },
+        hash_check_every: runtime
+            .netplay
+            .as_ref()
+            .map_or(0, |n| n.hash_check_every_frames),
+        local_player: runtime.netplay.as_ref().map_or(1, |n| n.player),
+        stats: runtime
+            .netplay
+            .as_ref()
+            .map(|n| NetplayRuntimeStats::new(n.input_delay_frames)),
+        next_ping_at: Instant::now(),
+        ping_nonce: 1,
+        pending_pings: BTreeMap::new(),
     };
-    let mut rollback = if let Some(netplay) = runtime.netplay.as_ref() {
-        Some(
-            RollbackEngine::new(RollbackConfig {
-                local_player: netplay.player,
-                input_delay_frames: netplay.input_delay_frames,
-                max_rollback_frames: netplay.max_rollback_frames,
-            })
-            .map_err(|err| format!("failed to initialize rollback engine: {err}"))?,
-        )
-    } else {
-        None
-    };
-    let netplay_hash_check_every = runtime
-        .netplay
-        .as_ref()
-        .map_or(0, |netplay| netplay.hash_check_every_frames);
-    let netplay_local_player = runtime.netplay.as_ref().map_or(1, |netplay| netplay.player);
-    let mut netplay_stats = runtime
-        .netplay
-        .as_ref()
-        .map(|netplay| NetplayRuntimeStats::new(netplay.input_delay_frames));
-    let mut netplay_next_ping_at = Instant::now();
-    let mut netplay_ping_nonce = 1_u64;
-    let mut netplay_pending_pings = BTreeMap::<u64, Instant>::new();
 
     let mut event_loop_builder = EventLoopBuilder::new();
     #[cfg(target_os = "macos")]
@@ -803,7 +816,7 @@ fn run() -> Result<(), String> {
     sync_native_menu_state(
         &desktop_menu,
         overlay.is_open(),
-        rollback.is_some(),
+        netplay.rollback.is_some(),
         rta_manager.is_some(),
     );
 
@@ -821,7 +834,7 @@ fn run() -> Result<(), String> {
                 session: &mut session,
                 session_cheats: &mut session_cheats,
                 overlay: &mut overlay,
-                rollback_enabled: rollback.is_some(),
+                rollback_enabled: netplay.rollback.is_some(),
                 runtime: &runtime,
                 audio_output: audio_output.as_ref(),
                 time_machine: &mut time_machine,
@@ -872,7 +885,7 @@ fn run() -> Result<(), String> {
                 }
                 track_keyboard_bits_for_key(key, pressed, &mut keyboard_bits);
                 let mode = KeyboardInputMode {
-                    rollback_enabled: rollback.is_some(),
+                    rollback_enabled: netplay.rollback.is_some(),
                     rta_enabled: rta_manager.is_some(),
                     rta_calibrate: rta_manager.as_ref().is_some_and(|manager| manager.is_calibrating()),
                 };
@@ -977,7 +990,7 @@ fn run() -> Result<(), String> {
             sync_native_menu_state(
                 &desktop_menu,
                 overlay.is_open(),
-                rollback.is_some(),
+                netplay.rollback.is_some(),
                 rta_manager.is_some(),
             );
             while let Some(action) = desktop_menu.poll_action() {
@@ -1033,7 +1046,7 @@ fn run() -> Result<(), String> {
                             })
                         })
                         .unwrap_or_default();
-                    if rollback.is_none()
+                    if netplay.rollback.is_none()
                         && !overlay.is_open()
                         && let Err(err) = apply_gamepad_delta_commands(
                             &mut core,
@@ -1080,24 +1093,24 @@ fn run() -> Result<(), String> {
                 player.step(&mut core);
             }
 
-            if let Some(rollback_engine) = rollback.as_mut() {
+            if let Some(rollback_engine) = netplay.rollback.as_mut() {
                 let local_gamepad_bits =
-                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay_local_player);
+                    crate::netplay::compute_local_netplay_bits(gamepad_bits, netplay.local_player);
                 let scheduled = rollback_engine
                     .schedule_local_input(merge_local_input_bits(keyboard_bits, local_gamepad_bits));
-                if let Some(client) = netplay_client.as_ref()
+                if let Some(client) = netplay.client.as_ref()
                     && let Err(err) = client.send_input(scheduled.frame, scheduled.bits)
                 {
                     eprintln!("Netplay send input failed: {err}");
                     *control_flow = ControlFlow::Exit;
                     return;
                 }
-                if let Some(client) = netplay_client.as_ref() {
+                if let Some(client) = netplay.client.as_ref() {
                     if let Some(nonce) = crate::netplay::schedule_netplay_ping(
                         now,
-                        &mut netplay_next_ping_at,
-                        &mut netplay_ping_nonce,
-                        &mut netplay_pending_pings,
+                        &mut netplay.next_ping_at,
+                        &mut netplay.ping_nonce,
+                        &mut netplay.pending_pings,
                         NETPLAY_PING_INTERVAL,
                         128,
                     ) && let Err(err) = client.send_ping(nonce)
@@ -1122,9 +1135,9 @@ fn run() -> Result<(), String> {
                         if let Err(err) = crate::netplay::handle_netplay_server_message(
                             message,
                             rollback_engine,
-                            netplay_local_player,
-                            &mut netplay_stats,
-                            &mut netplay_pending_pings,
+                            netplay.local_player,
+                            &mut netplay.stats,
+                            &mut netplay.pending_pings,
                         ) {
                             eprintln!("{err}");
                             *control_flow = ControlFlow::Exit;
@@ -1140,7 +1153,7 @@ fn run() -> Result<(), String> {
                                 "[netplay] rollback={} frame={} local={:02X} remote={:02X}",
                                 step.rollback_distance, step.frame, step.local_bits, step.remote_bits
                             );
-                            if let Some(stats) = netplay_stats.as_mut() {
+                            if let Some(stats) = netplay.stats.as_mut() {
                                 stats.observe_rollback(step.rollback_distance);
                             }
                         }
@@ -1150,7 +1163,7 @@ fn run() -> Result<(), String> {
                             NETPLAY_AUTO_DELAY_MIN_FRAMES,
                             NETPLAY_AUTO_DELAY_MAX_FRAMES,
                         );
-                        let target_delay = if let Some(stats) = netplay_stats.as_ref() {
+                        let target_delay = if let Some(stats) = netplay.stats.as_ref() {
                             recommended_input_delay_frames(
                                 stats.latest_rtt_ms,
                                 stats.jitter_ms,
@@ -1167,7 +1180,7 @@ fn run() -> Result<(), String> {
                                 *control_flow = ControlFlow::Exit;
                                 return;
                             }
-                            if let Some(stats) = netplay_stats.as_mut() {
+                            if let Some(stats) = netplay.stats.as_mut() {
                                 stats.input_delay_frames = target_delay;
                                 eprintln!(
                                     "[netplay] adaptive delay {} -> {} (rtt={:.1}ms jitter={:.1}ms)",
@@ -1177,12 +1190,12 @@ fn run() -> Result<(), String> {
                                     stats.jitter_ms
                                 );
                             }
-                        } else if let Some(stats) = netplay_stats.as_mut() {
+                        } else if let Some(stats) = netplay.stats.as_mut() {
                             stats.input_delay_frames = current_delay;
                         }
 
-                        if crate::netplay::should_send_netplay_hash(netplay_hash_check_every, step.frame)
-                            && let Some(client) = netplay_client.as_ref()
+                        if crate::netplay::should_send_netplay_hash(netplay.hash_check_every, step.frame)
+                            && let Some(client) = netplay.client.as_ref()
                             && let Err(err) = client.send_hash(step.frame, step.state_hash)
                         {
                             eprintln!("Netplay send hash failed: {err}");
@@ -1232,7 +1245,7 @@ fn run() -> Result<(), String> {
                 }
             }
             metrics.on_step(&core, step_elapsed, missed_deadline);
-            if let Some(stats) = netplay_stats.as_ref() {
+            if let Some(stats) = netplay.stats.as_ref() {
                 metrics.on_netplay_stats(stats);
             }
             if should_trace_frame(trace_every_frames, frame_index) {

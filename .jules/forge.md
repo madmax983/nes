@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Extracting Netplay initialization into Context struct]**
+**Learning:** Found scattered boilerplate variable initialization for netplay logic inside `run()` in `crates/nes-desktop/src/main.rs`. Variables were loosely grouped but lacking struct boundaries, causing visual clutter in a massive function.
+**Action:** Grouped all these standalone variables (like `NetplayClient`, `RollbackEngine`, `NetplayRuntimeStats`, etc.) into a cohesive `NetplayContext` struct. This reduces visual clutter in the function scope and strictly enforces the grouping without altering any underlying runtime logic.
