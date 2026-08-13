@@ -35,6 +35,8 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Overlays an audio oscilloscope on the framebuffer.
+pub mod oscilloscope_overlay;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
