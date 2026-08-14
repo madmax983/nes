@@ -806,8 +806,16 @@ fn usage_line() -> &'static str {
 
 fn usage_message() -> String {
     format!(
-        "{usage}\nDefault config path: {DEFAULT_CONFIG_PATH}",
-        usage = usage_line()
+        "{}\n\n  {}\n    {}\n  {}\n    {}\n  {}\n    {}\n\n{} {}",
+        usage_line().with(crossterm::style::Color::Cyan).bold(),
+        "--config <path>".with(crossterm::style::Color::Green),
+        "Path to configuration file",
+        "--hud | --high-res".with(crossterm::style::Color::Green),
+        "Toggle Heads-Up Display or High-Resolution mode",
+        "[rom_path]".with(crossterm::style::Color::Green),
+        "Path to the .nes ROM file",
+        "Default config path:".bold(),
+        DEFAULT_CONFIG_PATH.with(crossterm::style::Color::Cyan)
     )
 }
 
