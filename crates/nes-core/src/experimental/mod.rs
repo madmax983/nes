@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Computes Shannon entropy of RAM addresses over time to find dynamic variables.
+#[cfg(feature = "nova")]
+pub mod entropy_profiler;
