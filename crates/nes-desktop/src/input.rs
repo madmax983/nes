@@ -346,6 +346,7 @@ mod tests {
                 pressed: true
             }
         );
+
         assert_eq!(
             classify_keyboard_input(VirtualKeyCode::X, false, base_mode),
             KeyboardDecision::ExecuteCore(Command::ReleaseButton(Button::B))
