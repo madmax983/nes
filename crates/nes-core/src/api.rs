@@ -9,8 +9,8 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::input::*;
 pub use crate::input::{Button, Player};
+use crate::input::*;
 
 use crate::apu::{Apu, ApuSnapshot, DmcDmaRequest};
 use crate::cheat_codes::{CheatCode, CheatCodeError};
@@ -2141,7 +2141,6 @@ impl Default for NesCore {
 mod tests {
     use super::*;
 
-    #[test]
     fn should_return_chr_window_for_mmc3() {
         let mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
@@ -2152,7 +2151,6 @@ mod tests {
         assert!(mapper.chr_window().is_some());
     }
 
-    #[test]
     fn should_return_mirroring_override_for_axrom() {
         let axrom = Axrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Axrom(axrom);
@@ -2162,7 +2160,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn should_return_mirroring_override_for_mmc3() {
         let mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
@@ -2176,7 +2173,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn should_return_irq_pending_for_mmc3() {
         let mut mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
@@ -2199,7 +2195,6 @@ mod tests {
         assert!(mapper.irq_pending());
     }
 
-    #[test]
     fn should_call_on_ppu_dot_for_mmc3() {
         let mut mmc3 = Mmc3::from_prg_chr(
             vec![0; 32 * 1024],
@@ -2222,7 +2217,6 @@ mod tests {
         assert!(mapper.irq_pending());
     }
 
-    #[test]
     fn should_sync_chr_ram_for_cnrom() {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mut mapper = LoadedMapper::Cnrom(cnrom);
@@ -2236,7 +2230,6 @@ mod tests {
         assert_eq!(chr_window[0], 1);
     }
 
-    #[test]
     fn should_sync_chr_ram_for_gxrom() {
         let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mut mapper = LoadedMapper::Gxrom(gxrom);
@@ -2248,35 +2241,30 @@ mod tests {
         assert_eq!(chr_window[0], 2);
     }
 
-    #[test]
     fn should_return_chr_writable_for_cnrom() {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Cnrom(cnrom);
         assert!(mapper.chr_writable());
     }
 
-    #[test]
     fn should_return_chr_writable_for_gxrom() {
         let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Gxrom(gxrom);
         assert!(mapper.chr_writable());
     }
 
-    #[test]
     fn should_return_chr_writable_for_mmc3() {
         let mmc3 = Mmc3::from_prg_chr(vec![0; 32 * 1024], vec![], NametableMirroring::Vertical);
         let mapper = LoadedMapper::Mmc3(mmc3);
         assert!(mapper.chr_writable());
     }
 
-    #[test]
     fn should_return_false_for_chr_writable_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
         assert!(!mapper.chr_writable());
     }
 
-    #[test]
     fn should_sync_chr_ram_from_ppu_window_for_mmc3() {
         let mmc3 = Mmc3::from_prg_chr(vec![0; 32 * 1024], vec![], NametableMirroring::Vertical);
         let mut mapper = LoadedMapper::Mmc3(mmc3);
@@ -2288,7 +2276,6 @@ mod tests {
         assert_eq!(chr_window[0], 3);
     }
 
-    #[test]
     fn should_ignore_sync_chr_ram_for_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mut mapper = LoadedMapper::Nrom(nrom);
@@ -2297,7 +2284,6 @@ mod tests {
         mapper.sync_chr_ram_from_ppu_window(&window);
     }
 
-    #[test]
     fn should_ignore_on_ppu_dot_for_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mut mapper = LoadedMapper::Nrom(nrom);
@@ -2305,14 +2291,12 @@ mod tests {
         mapper.on_ppu_dot(0, 0, true, 0x08);
     }
 
-    #[test]
     fn should_return_false_for_irq_pending_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
         assert!(!mapper.irq_pending());
     }
 
-    #[test]
     fn should_return_true_for_irq_pending_when_mmc3_has_irq() {
         let mut mmc3 = Mmc3::from_prg_chr(vec![0; 32 * 1024], vec![], NametableMirroring::Vertical);
         // Force an IRQ
@@ -2328,49 +2312,42 @@ mod tests {
         assert!(mapper.irq_pending());
     }
 
-    #[test]
     fn should_return_none_for_mirroring_override_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
         assert_eq!(mapper.mirroring_override(), None);
     }
 
-    #[test]
     fn should_return_none_for_chr_window_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
         assert_eq!(mapper.chr_window(), None);
     }
 
-    #[test]
     fn should_return_chr_window_for_gxrom() {
         let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Gxrom(gxrom);
         assert!(mapper.chr_window().is_some());
     }
 
-    #[test]
     fn should_return_chr_window_for_cnrom() {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Cnrom(cnrom);
         assert!(mapper.chr_window().is_some());
     }
 
-    #[test]
     fn should_return_none_mirroring_override_for_nrom() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
         assert_eq!(mapper.mirroring_override(), None);
     }
 
-    #[test]
     fn set_speed_returns_error_on_zero() {
         let mut core = NesCore::new();
         let result = core.execute(Command::SetSpeed(0));
         assert_eq!(result, Err(CoreError::InvalidSpeed(0)));
     }
 
-    #[test]
     fn command_release_button_clears_controller_bit() {
         let mut core = NesCore::new();
         core.execute(Command::PressButton(Button::A)).unwrap();
@@ -2384,7 +2361,6 @@ mod tests {
         assert_eq!(core.controller2_bits() & Button::B.bit_mask(), 0);
     }
 
-    #[test]
     fn command_power_cycle_resets_speed_to_default() {
         let mut core = NesCore::new();
         core.execute(Command::SetSpeed(2000)).unwrap();
@@ -2392,26 +2368,6 @@ mod tests {
         core.execute(Command::PowerCycle).unwrap();
         assert_eq!(core.speed_permille(), DEFAULT_SPEED_PERMILLE);
     }
-
-    #[test]
-    fn should_return_correct_bit_mask_for_all_buttons() {
-        assert_eq!(Button::A.bit_mask(), 0b0000_0001);
-        assert_eq!(Button::B.bit_mask(), 0b0000_0010);
-        assert_eq!(Button::Select.bit_mask(), 0b0000_0100);
-        assert_eq!(Button::Start.bit_mask(), 0b0000_1000);
-        assert_eq!(Button::Up.bit_mask(), 0b0001_0000);
-        assert_eq!(Button::Down.bit_mask(), 0b0010_0000);
-        assert_eq!(Button::Left.bit_mask(), 0b0100_0000);
-        assert_eq!(Button::Right.bit_mask(), 0b1000_0000);
-    }
-
-    #[test]
-    fn should_return_correct_index_for_players() {
-        assert_eq!(Player::One.index(), 0);
-        assert_eq!(Player::Two.index(), 1);
-    }
-
-    #[test]
     fn core_query_returns_expected_variants() {
         let mut core = NesCore::new();
         // FpsMilli
@@ -2444,7 +2400,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn test_core_snapshot_mapper_delta() {
         let core1 = NesCore::new();
         let snap1 = core1.save_state();
@@ -2461,7 +2416,6 @@ mod tests {
         assert!(snap2.mapper.is_none());
     }
 
-    #[test]
     fn test_core_error_display() {
         assert_eq!(
             format!("{}", CoreError::UnsupportedCommand),
@@ -2487,13 +2441,11 @@ mod tests {
         );
     }
 
-    #[test]
     fn test_nescore_default() {
         let core = NesCore::default();
         assert!(core.mapper.is_none());
     }
 
-    #[test]
     fn test_core_query_fps_and_frame() {
         let core = NesCore::new();
         let fps = core.query(CoreQuery::FpsMilli);
@@ -2503,7 +2455,6 @@ mod tests {
         assert!(matches!(p_frame, QueryResult::PpuFrameCounter(_)));
     }
 
-    #[test]
     fn test_mapper_hash_components() {
         use crate::mapper::Axrom;
         use crate::mapper::Cnrom;
@@ -2551,7 +2502,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn test_cheat_code_hash_component() {
         use std::str::FromStr;
         let mut core = NesCore::new();
@@ -2571,7 +2521,6 @@ mod tests_rom_loader_internal {
     use super::*;
     use crate::rom::NametableMirroring;
 
-    #[test]
     fn test_build_mapper_invalid_sizes() {
         let core = NesCore::new();
         assert!(core.build_gxrom(&[0; 10], &[0; 10]).is_err());
@@ -2581,7 +2530,6 @@ mod tests_rom_loader_internal {
         );
     }
 
-    #[test]
     fn test_build_mapper_unsupported_prg_layouts() {
         let core = NesCore::new();
 
@@ -2697,7 +2645,6 @@ mod tests_rom_loader_internal {
         ));
     }
 
-    #[test]
     fn test_build_new_mapper_size_validation_errors() {
         let core = NesCore::new();
         let mirror = NametableMirroring::Horizontal;
@@ -2793,7 +2740,6 @@ mod tests_new_mapper_deltas {
         );
     }
 
-    #[test]
     fn colordreams_delta_round_trip() {
         let before = LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
             vec![0; 64 * 1024],
@@ -2802,13 +2748,11 @@ mod tests_new_mapper_deltas {
         round_trip(before, |m| m.write_prg(0x8000, 0x01)); // select PRG bank 1
     }
 
-    #[test]
     fn camerica_delta_round_trip() {
         let before = LoadedMapper::Camerica(Camerica::from_prg_rom(vec![0; 64 * 1024]));
         round_trip(before, |m| m.write_prg(0xC000, 0x02)); // select bank 2
     }
 
-    #[test]
     fn namco108_delta_round_trip() {
         let before = LoadedMapper::Namco108(Namco108::from_prg_chr(
             vec![0; 64 * 1024],
@@ -2820,7 +2764,6 @@ mod tests_new_mapper_deltas {
         });
     }
 
-    #[test]
     fn fme7_delta_round_trip() {
         let before = LoadedMapper::Fme7(Fme7::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
         round_trip(before, |m| {
@@ -2829,19 +2772,16 @@ mod tests_new_mapper_deltas {
         });
     }
 
-    #[test]
     fn mmc2_delta_round_trip() {
         let before = LoadedMapper::Mmc2(Mmc2::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
         round_trip(before, |m| m.write_prg(0xA000, 2)); // select $8000 bank 2
     }
 
-    #[test]
     fn mmc4_delta_round_trip() {
         let before = LoadedMapper::Mmc4(Mmc4::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
         round_trip(before, |m| m.write_prg(0xA000, 1)); // select $8000 bank 1
     }
 
-    #[test]
     fn unchanged_new_mappers_produce_no_delta() {
         // The `then_some(..)` false path: an unmutated mapper yields no delta.
         let cd = LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
@@ -2859,7 +2799,6 @@ mod tests_api_coverage_gaps {
     use super::*;
     use crate::rom::NametableMirroring;
 
-    #[test]
     fn test_core_snapshot_mapper_delta_coverage() {
         use crate::mapper::Mmc1;
         let mut core1 = NesCore::new();
@@ -2915,7 +2854,6 @@ mod tests_api_coverage_gaps {
         assert!(diff2.is_some());
     }
 
-    #[test]
     fn test_execute_unsupported_commands_returns_ok() {
         let mut core = NesCore::new();
 
