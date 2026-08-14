@@ -29,3 +29,6 @@
 **Extract Input Logic from api.rs**
 **Tangle:** The `api.rs` file in `nes-core` was bloated and contained input event classification logic (`Button`, `Player`, `ControllerState`, `ControllerPorts`) mixed alongside the core UI event loop. This violated domain boundaries and high cohesion.
 **Blueprint:** Extracted the input types and classification functions into a dedicated `crates/nes-core/src/input.rs` internal module. Updated `api.rs` to register the new module via `pub mod input;` and import its contents, significantly reducing `api.rs` file size and separating concerns.
+**Extract Input Logic from api.rs**
+**Tangle:** The `api.rs` file in `nes-core` was bloated and contained input event classification logic (`Button`, `Player`, `ControllerState`, `ControllerPorts`) mixed alongside the core UI event loop. This violated domain boundaries and high cohesion.
+**Blueprint:** Extracted the input types and classification functions into a dedicated `crates/nes-core/src/input.rs` internal module. Updated `api.rs` to register the new module via `pub mod input;` and import its contents, significantly reducing `api.rs` file size and separating concerns.
