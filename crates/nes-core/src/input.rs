@@ -124,6 +124,7 @@ impl ControllerPorts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn should_return_correct_bit_mask_for_all_buttons() {
         assert_eq!(Button::A.bit_mask(), 0b0000_0001);
@@ -135,6 +136,7 @@ mod tests {
         assert_eq!(Button::Left.bit_mask(), 0b0100_0000);
         assert_eq!(Button::Right.bit_mask(), 0b1000_0000);
     }
+
     #[test]
     fn should_return_correct_index_for_players() {
         assert_eq!(Player::One.index(), 0);
