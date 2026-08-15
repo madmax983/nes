@@ -58,11 +58,9 @@ fn main() {
     if let Err(err) = run() {
         if err.contains("ROM path not configured") {
             eprintln!(
-                "\n{} {}\n{} {}",
+                "\n{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in nes.toml.",
                 "Error:".with(crossterm::style::Color::Red).bold(),
-                "ROM path not configured.",
-                "Hint:".with(crossterm::style::Color::Cyan).bold(),
-                "Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in nes.toml."
+                "Hint:".with(crossterm::style::Color::Cyan).bold()
             );
         } else {
             eprintln!("\n{}", err);
