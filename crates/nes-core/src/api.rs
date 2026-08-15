@@ -2418,8 +2418,6 @@ mod tests_rom_loader_internal {
 }
 
 #[cfg(test)]
-
-#[cfg(test)]
 mod tests_api_coverage_gaps {
     use super::*;
     use crate::rom::NametableMirroring;

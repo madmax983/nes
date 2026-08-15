@@ -25,7 +25,6 @@ impl MapperDelta {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MapperDeltaKind {
     Replace(Option<LoadedMapper>),
@@ -485,7 +484,6 @@ mod tests_new_mapper_deltas {
     //! a mapper, captures the delta, and asserts that applying it reconciles a
     //! fresh copy back to the mutated state.
     use super::*;
-    use crate::rom::NametableMirroring;
 
     fn round_trip(before: LoadedMapper, mutate: impl FnOnce(&mut LoadedMapper)) {
         let mut after = before.clone();
