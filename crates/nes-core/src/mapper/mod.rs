@@ -4,6 +4,7 @@ mod axrom;
 mod camerica;
 mod cnrom;
 mod colordreams;
+mod dispatch;
 mod fme7;
 mod gxrom;
 mod mmc1;
@@ -42,6 +43,9 @@ pub(crate) use namco108::Namco108State;
 pub use nrom::Nrom;
 pub use uxrom::Uxrom;
 pub(crate) use uxrom::UxromState;
+
+pub use dispatch::MapperDelta;
+pub(crate) use dispatch::{LoadedMapper, MapperDeltaKind};
 
 /// Common PRG read/write contract for cartridge mappers.
 ///

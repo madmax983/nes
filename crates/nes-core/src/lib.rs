@@ -25,13 +25,14 @@ pub mod serde_array;
 pub mod tas;
 
 pub use api::{
-    Button, Command, CoreError, CoreQuery, CoreSnapshot, EmulatorState, MapperDelta, NesCore,
-    Player, QueryResult, RomLoadInfo,
+    Button, Command, CoreError, CoreQuery, CoreSnapshot, EmulatorState, NesCore, Player,
+    QueryResult, RomLoadInfo,
 };
 pub use cheat_codes::{CheatCode, CheatCodeError};
 pub use constants::{
     AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH,
 };
+pub use mapper::MapperDelta;
 
 #[cfg(feature = "nova")]
 pub mod experimental;

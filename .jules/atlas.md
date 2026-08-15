@@ -25,3 +25,6 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+**Extract Mapper Dispatch from api.rs**
+**Tangle:** The `crates/nes-core/src/api.rs` file was a massive blob containing the entire core facade as well as internal mapper dispatch logic (e.g., `LoadedMapper`, `MapperDelta`, `MapperDeltaKind` enums). This forced the public API module to depend on every internal mapper struct (like `Mmc3State`), breaking single responsibility and making the file over 3000 lines long.
+**Blueprint:** Extracted the mapper dispatch enums and implementations into `crates/nes-core/src/mapper/dispatch.rs`. Re-exported them via `crates/nes-core/src/mapper/mod.rs` (`pub use dispatch::MapperDelta`). This significantly reduced `api.rs` size and isolated the mapper routing logic inside the `mapper` module boundary.
