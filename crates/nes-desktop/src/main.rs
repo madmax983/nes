@@ -56,7 +56,15 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        if err.contains("ROM path not configured") {
+            eprintln!(
+                "\n{} ROM path not configured.\n{} Provide a positional ROM argument or set `desktop.rom_path`/`roms.smb` in nes.toml.",
+                "Error:".with(crossterm::style::Color::Red).bold(),
+                "Hint:".with(crossterm::style::Color::Cyan).bold()
+            );
+        } else {
+            eprintln!("\n{}", err);
+        }
     }
 }
 
