@@ -17,6 +17,15 @@ pub struct MapperDelta {
     pub(crate) kind: MapperDeltaKind,
 }
 
+impl MapperDelta {
+    pub(crate) fn replace(mapper: Option<LoadedMapper>) -> Self {
+        Self {
+            kind: MapperDeltaKind::Replace(mapper),
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MapperDeltaKind {
     Replace(Option<LoadedMapper>),
@@ -466,5 +475,103 @@ impl LoadedMapper {
         }
 
         self.sync_chr_ram_from_ppu_window(chr_window);
+    }
+}
+
+#[cfg(test)]
+mod tests_new_mapper_deltas {
+    //! Covers the per-mapper `delta_to` / `snapshot_delta` / `apply_delta`
+    //! fan-out arms added for mappers 11/71/206/69/9/10. Each round trip mutates
+    //! a mapper, captures the delta, and asserts that applying it reconciles a
+    //! fresh copy back to the mutated state.
+    use super::*;
+    use crate::rom::NametableMirroring;
+
+    fn round_trip(before: LoadedMapper, mutate: impl FnOnce(&mut LoadedMapper)) {
+        let mut after = before.clone();
+        mutate(&mut after);
+
+        // Exercise the per-variant `chr_writable` fan-out arm.
+        let _ = before.chr_writable();
+
+        // The mutated mapper must produce a full-state snapshot delta for its
+        // variant (exercises the `snapshot_delta` arm).
+        assert!(
+            after.snapshot_delta().is_some(),
+            "mutated mapper should yield a snapshot delta"
+        );
+
+        // `delta_to` captures the mutation as a variant-specific delta...
+        let delta = before
+            .delta_to(&after)
+            .expect("a mutated mapper must produce a delta");
+
+        // ...and applying it reconciles a fresh copy of `before` into `after`.
+        let mut target = before.clone();
+        target.apply_delta(&delta, &[0_u8; CHR_8K_BYTES]);
+        assert!(
+            target.delta_to(&after).is_none(),
+            "apply_delta should reconcile the mapper runtime state"
+        );
+    }
+
+    #[test]
+    fn colordreams_delta_round_trip() {
+        let before = LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+        ));
+        round_trip(before, |m| m.write_prg(0x8000, 0x01)); // select PRG bank 1
+    }
+
+    #[test]
+    fn camerica_delta_round_trip() {
+        let before = LoadedMapper::Camerica(Camerica::from_prg_rom(vec![0; 64 * 1024]));
+        round_trip(before, |m| m.write_prg(0xC000, 0x02)); // select bank 2
+    }
+
+    #[test]
+    fn namco108_delta_round_trip() {
+        let before = LoadedMapper::Namco108(Namco108::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+        ));
+        round_trip(before, |m| {
+            m.write_prg(0x8000, 6); // select register 6 (R6 -> $8000 slot)
+            m.write_prg(0x8001, 3); // bank 3
+        });
+    }
+
+    #[test]
+    fn fme7_delta_round_trip() {
+        let before = LoadedMapper::Fme7(Fme7::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        round_trip(before, |m| {
+            m.write_prg(0x8000, 0x09); // command: PRG reg for $8000 slot
+            m.write_prg(0xA000, 3); // bank 3
+        });
+    }
+
+    #[test]
+    fn mmc2_delta_round_trip() {
+        let before = LoadedMapper::Mmc2(Mmc2::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        round_trip(before, |m| m.write_prg(0xA000, 2)); // select $8000 bank 2
+    }
+
+    #[test]
+    fn mmc4_delta_round_trip() {
+        let before = LoadedMapper::Mmc4(Mmc4::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        round_trip(before, |m| m.write_prg(0xA000, 1)); // select $8000 bank 1
+    }
+
+    #[test]
+    fn unchanged_new_mappers_produce_no_delta() {
+        // The `then_some(..)` false path: an unmutated mapper yields no delta.
+        let cd = LoadedMapper::ColorDreams(ColorDreams::from_prg_chr(
+            vec![0; 64 * 1024],
+            vec![0; 8 * 1024],
+        ));
+        assert!(cd.delta_to(&cd.clone()).is_none());
+        let fme7 = LoadedMapper::Fme7(Fme7::from_prg_chr(vec![0; 32 * 1024], vec![0; 8 * 1024]));
+        assert!(fme7.delta_to(&fme7.clone()).is_none());
     }
 }
