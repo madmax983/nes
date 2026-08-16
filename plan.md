@@ -1,9 +1,12 @@
-1. **Fix Codecov drop in `crates/nes-ai/src/env.rs`**
-   - The addition of `if frame_stack_count > 0 { ... }` introduced an uncovered branch, because `frame_stack` is guaranteed to be strictly greater than `0` (validated during config loading and inside `FrameStack::new`).
-   - We will remove the `if` check and just perform the final `self.frame_stack.push(frame);` unconditionally, alongside `saturating_sub(1)` for the loop.
-2. **Run tests**
-   - Run `cargo test -p nes-ai` to ensure tests still pass.
-3. **Complete pre-commit steps.**
-   - Run pre-commit instructions.
-4. **Submit changes**
-   - Submit the PR with the same branch name to update the existing PR.
+1. **Extract Input/Gamepad functions from `main.rs` to `input.rs` and `gamepad.rs`**
+   - Move `update_button_bits`, `track_keyboard_bits_for_key`, and `merge_local_input_bits` from `main.rs` to `input.rs` (and make them `pub(crate)`).
+   - Move `release_all_buttons`, `resync_restored_inputs`, `is_player_two_slot`, and `apply_gamepad_delta_commands` from `main.rs` to `gamepad.rs` (and make them `pub(crate)`).
+   - Move the corresponding unit tests from `main.rs`'s test block to `input.rs` and `gamepad.rs`.
+
+2. **Update imports in `main.rs`**
+   - Update `main.rs` to import the moved functions from `crate::input` and `crate::gamepad`.
+
+3. **Complete pre commit steps**
+   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+
+4. **Submit the PR**
