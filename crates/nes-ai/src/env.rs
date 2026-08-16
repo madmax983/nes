@@ -180,9 +180,7 @@ where
         for _ in 0..frame_stack_count.saturating_sub(1) {
             self.frame_stack.push(frame.clone());
         }
-        if frame_stack_count > 0 {
-            self.frame_stack.push(frame);
-        }
+        self.frame_stack.push(frame);
 
         Ok(features)
     }
