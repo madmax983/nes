@@ -29,7 +29,7 @@ const IRQ_ENABLE: u8 = 0x80;
 /// The core pumps `on_ppu_dot` exactly three times per CPU (M2) cycle (see
 /// `advance_hardware_cycles` / `apply_dmc_dma_request` in `api.rs`). The FME-7
 /// IRQ counter is CPU-cycle clocked, so we divide the dot stream by three.
-const DOTS_PER_CPU_CYCLE: u8 = 3;
+pub(crate) const DOTS_PER_CPU_CYCLE: u8 = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Mapper 69 (Sunsoft FME-7 / 5B): banked PRG/CHR with a 16-bit CPU-cycle IRQ
@@ -227,7 +227,7 @@ impl Fme7 {
     /// Advances the FME-7 IRQ counter for a single PPU dot.
     ///
     /// The counter is CPU-cycle clocked, but this core only exposes a per-PPU-dot
-    /// hook. Because `on_ppu_dot` is pumped exactly [`DOTS_PER_CPU_CYCLE`] times
+    /// hook. Because `on_ppu_dot` is pumped exactly `DOTS_PER_CPU_CYCLE` times
     /// per CPU cycle, we accumulate dots and clock the counter once every third
     /// call. `scanline`/`dot`/`rendering_enabled`/`ppu_ctrl` are irrelevant to
     /// this counter (it is unrelated to rendering) and are ignored.
