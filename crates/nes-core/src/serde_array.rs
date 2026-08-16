@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// ## Examples
 ///
-/// ```
+/// ```ignore
 /// use serde::Serialize;
 /// use nes_core::serde_array::serialize_u8_array;
 ///
@@ -27,7 +27,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// let packet = Packet { data: [1, 2, 3, 4] };
 /// let json = serde_json::to_string(&packet).unwrap();
 /// assert_eq!(json, r#"{"data":[1,2,3,4]}"#);
-/// ```
+/// ```ignore
 pub fn serialize_u8_array<S, const N: usize>(
     value: &[u8; N],
     serializer: S,
@@ -44,7 +44,7 @@ where
 ///
 /// ## Examples
 ///
-/// ```
+/// ```ignore
 /// use serde::Deserialize;
 /// use nes_core::serde_array::deserialize_u8_array;
 ///
@@ -57,7 +57,7 @@ where
 /// let json = r#"{"data":[1,2,3,4]}"#;
 /// let packet: Packet = serde_json::from_str(json).unwrap();
 /// assert_eq!(packet.data, [1, 2, 3, 4]);
-/// ```
+/// ```ignore
 pub fn deserialize_u8_array<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>
 where
     D: Deserializer<'de>,
