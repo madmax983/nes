@@ -35,6 +35,9 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Mitigates intense strobe effects by monitoring and dampening rapid luminance changes.
+#[cfg(feature = "nova")]
+pub mod flash_protector;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
