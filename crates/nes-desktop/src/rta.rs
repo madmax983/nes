@@ -674,6 +674,39 @@ struct RunArtifact<'a, I: Iterator<Item = &'a str> + Clone> {
     splits: &'a [SplitEvent],
 }
 
+/// Helper module bridging lazy `Iterator` instances to `serde` sequence serialization.
+///
+/// Under normal circumstances, `serde` natively understands how to serialize concrete sequences like `Vec` or slices.
+/// However, if a struct field holds an `Iterator` (e.g., yielding strings borrowed from other fields), `serde` does not
+/// provide an automatic `#[serde(serialize_with)]` attribute to handle the exhaustion of the iterator into a JSON array.
+///
+/// This module provides the `serialize` function to fill that gap. By combining it with the `#[serde(with = "serde_iter")]`
+/// field attribute, you instruct `serde` to consume the iterator (via `Serializer::collect_seq`) rather than attempting
+/// to serialize the abstract iterator struct itself.
+///
+/// Note that the iterator must implement `Clone`, as `serde` sequence serialization consumes the iterator but may be called
+/// by serializers that require taking ownership of a clone rather than a mutable reference to the original.
+///
+/// ## Examples
+///
+/// ```rust
+/// use serde::Serialize;
+/// # use nes_desktop::rta::serde_iter;
+///
+/// #[derive(Serialize)]
+/// struct ValidationReport<'a> {
+///     // We want to serialize a sequence of string slices, but only hold an iterator.
+///     // `serde_iter` allows us to serialize the items it yields as a JSON array.
+///     #[serde(with = "serde_iter")]
+///     errors: std::slice::Iter<'a, &'a str>,
+/// }
+///
+/// let error_list = vec!["No rewinds allowed", "Invalid profile hash"];
+/// let report = ValidationReport { errors: error_list.iter() };
+///
+/// let json = serde_json::to_string(&report).unwrap();
+/// assert_eq!(json, r#"{"errors":["No rewinds allowed","Invalid profile hash"]}"#);
+/// ```
 pub mod serde_iter {
     use serde::{Serialize, Serializer};
 
