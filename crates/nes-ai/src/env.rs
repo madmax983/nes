@@ -176,9 +176,11 @@ where
             self.profile.config().observation.width,
             self.profile.config().observation.height,
         );
-        for _ in 0..self.profile.config().frame_stack {
+        let frame_stack_count = self.profile.config().frame_stack;
+        for _ in 0..frame_stack_count.saturating_sub(1) {
             self.frame_stack.push(frame.clone());
         }
+        self.frame_stack.push(frame);
 
         Ok(features)
     }
