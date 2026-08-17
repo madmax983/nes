@@ -57,7 +57,7 @@ fn hex_encode(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 2);
     use std::fmt::Write;
     for byte in bytes {
-        write!(&mut output, "{byte:02X}").unwrap();
+        let _ = write!(&mut output, "{byte:02X}");
     }
     output
 }
