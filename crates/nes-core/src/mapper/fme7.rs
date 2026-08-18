@@ -1,3 +1,26 @@
+//! Sunsoft FME-7 (iNES Mapper 69)
+//!
+//! The FME-7 is a powerful mapper developed by Sunsoft, supporting up to 512KB of PRG-ROM
+//! and 256KB of CHR-ROM. It features fine-grained 1KB CHR banking and a CPU-cycle-based
+//! IRQ timer.
+//!
+//! **Why it exists:** Sunsoft needed a mapper that could handle large, complex games
+//! like *Batman: Return of the Joker* and *Gimmick!*. The FME-7 provided the necessary
+//! flexibility with its numerous banking registers and precise IRQ timing, allowing for
+//! advanced visual effects and parallax scrolling.
+//!
+//! ## Examples
+//!
+//! ```
+//! use nes_core::mapper::Fme7;
+//!
+//! // Example PRG and CHR ROM data (minimum required sizes)
+//! let prg_rom = vec![0; 16 * 1024]; // 16KB PRG
+//! let chr_rom = vec![0; 8 * 1024];  // 8KB CHR
+//!
+//! let mapper = Fme7::from_prg_chr(prg_rom, chr_rom);
+//! ```
+
 use crate::rom::NametableMirroring;
 use serde::{Deserialize, Serialize};
 
@@ -227,7 +250,7 @@ impl Fme7 {
     /// Advances the FME-7 IRQ counter for a single PPU dot.
     ///
     /// The counter is CPU-cycle clocked, but this core only exposes a per-PPU-dot
-    /// hook. Because `on_ppu_dot` is pumped exactly [`DOTS_PER_CPU_CYCLE`] times
+    /// hook. Because `on_ppu_dot` is pumped exactly `DOTS_PER_CPU_CYCLE` times
     /// per CPU cycle, we accumulate dots and clock the counter once every third
     /// call. `scanline`/`dot`/`rendering_enabled`/`ppu_ctrl` are irrelevant to
     /// this counter (it is unrelated to rendering) and are ignored.
