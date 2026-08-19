@@ -574,11 +574,19 @@ impl TriggerRuntime {
 
 /// **Performance optimization:** Avoids `.collect::<Vec<_>>()` by pre-allocating
 /// a String and joining manually.
-fn format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile>) -> String {
-    profiles
-        .map(|p| p.profile.id.as_str())
-        .collect::<Vec<_>>()
-        .join(", ")
+fn format_profile_names<'a>(profiles: impl Iterator<Item = &'a LoadedProfile> + Clone) -> String {
+    let len = profiles
+        .clone()
+        .map(|p| p.profile.id.len() + 2)
+        .sum::<usize>();
+    let mut names = String::with_capacity(len);
+    for (i, profile) in profiles.enumerate() {
+        if i > 0 {
+            names.push_str(", ");
+        }
+        names.push_str(profile.profile.id.as_str());
+    }
+    names
 }
 
 fn evaluate_trigger_rule(op: TriggerOp, current: u32, value: u32, previous: Option<u32>) -> bool {
