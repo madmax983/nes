@@ -93,6 +93,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_default() {
+        let shaker = ScreenShake::default();
+        assert_eq!(shaker.state, 1337);
+    }
+
+    #[test]
+    fn test_new_zero_seed() {
+        let shaker = ScreenShake::new(0);
+        assert_eq!(shaker.state, 0xDEAD_BEEF);
+    }
+
+    #[test]
+    fn test_early_returns() {
+        let mut shaker = ScreenShake::new(42);
+        let audio = vec![5000; 10];
+        let mut frame = vec![0; FRAME_RGBA_BYTES];
+        frame[0] = 255;
+
+        // Zero intensity
+        shaker.process(&audio, &mut frame, 1000, 0);
+        assert_eq!(frame[0], 255);
+
+        // Empty audio
+        shaker.process(&[], &mut frame, 1000, 5);
+        assert_eq!(frame[0], 255);
+    }
+
+    #[test]
     fn test_no_shake_when_quiet() {
         let mut shaker = ScreenShake::new(42);
         let audio = vec![100; 1000]; // Quiet
