@@ -35,26 +35,73 @@ pub use rom_paths::*;
 use nes_core::{Command, CoreError, NesCore, cpu::CpuBusAccessKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A recorded write to an APU hardware register, used for cycle-accurate audio testing.
+///
+/// Enables verifying that sound events occur exactly when expected relative to the CPU clock.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::ApuWriteEvent;
+/// let event = ApuWriteEvent { cpu_cycle: 15234, addr: 0x4000, value: 0x0F };
+/// ```
 pub struct ApuWriteEvent {
+    /// The absolute CPU cycle (relative to power-on) when the write occurred.
     pub cpu_cycle: u64,
+    /// The target APU register address (e.g., `$4000` for Square 1).
     pub addr: u16,
+    /// The byte value written to the register.
     pub value: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Statistical metrics computed for a window of PCM audio samples.
+///
+/// Use `audio_stats` to generate this from a slice of `i16` samples.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::audio_stats;
+/// let samples = [10_i16, -10, 10, -10];
+/// let stats = audio_stats(&samples);
+/// assert_eq!(stats.peak, 10);
+/// ```
 pub struct AudioStats {
+    /// The total number of samples analyzed in the window.
     pub sample_count: usize,
+    /// The Root Mean Square of the signal, representing its continuous power.
     pub rms: f64,
+    /// The maximum absolute amplitude found in the sample window.
     pub peak: i16,
+    /// The average amplitude of the signal, used to detect unwanted DC bias.
     pub dc_offset: f64,
+    /// The ratio of samples that hit the maximum representable amplitude bounds.
     pub clipping_ratio: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Result of comparing two distinct audio waveforms.
+///
+/// Provides metrics on their similarity in the time domain (correlation) and frequency domain (FFT diff).
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::compare_waveforms;
+/// let a = [0, 100, 200, 100];
+/// let b = [0, 100, 200, 100];
+/// let diff = compare_waveforms(&a, &b, 4);
+/// assert!(diff.correlation > 0.99);
+/// ```
 pub struct WaveformComparison {
+    /// Number of overlapping samples successfully compared.
     pub samples_compared: usize,
+    /// Pearson correlation coefficient in the time domain (1.0 = identical).
     pub correlation: f64,
+    /// Ratio of RMS power between the two signals (Left / Right).
     pub rms_ratio: f64,
+    /// Mean absolute difference in magnitude (dB) across all computed FFT frequency bins.
     pub fft_mean_abs_db_diff: f64,
 }
 
@@ -98,6 +145,14 @@ pub fn collect_apu_register_writes(
 }
 
 #[must_use]
+/// Computes a stable hash for a sequence of APU write events.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::{ApuWriteEvent, apu_write_hash};
+/// let hash = apu_write_hash(&[ApuWriteEvent { cpu_cycle: 0, addr: 0, value: 0 }]);
+/// ```
 pub fn apu_write_hash(writes: &[ApuWriteEvent]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for event in writes {
@@ -178,6 +233,14 @@ pub fn capture_audio_window(
 }
 
 #[must_use]
+/// Computes a stable hash for an entire raw waveform stream.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::waveform_hash;
+/// let hash = waveform_hash(&[0, 100, -100]);
+/// ```
 pub fn waveform_hash(samples: &[i16]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
     for sample in samples {
@@ -188,6 +251,15 @@ pub fn waveform_hash(samples: &[i16]) -> u64 {
 }
 
 #[must_use]
+/// Computes basic statistical metrics (RMS, peak, DC offset) for an audio sample block.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::audio_stats;
+/// let stats = audio_stats(&[10, -10]);
+/// assert_eq!(stats.peak, 10);
+/// ```
 pub fn audio_stats(samples: &[i16]) -> AudioStats {
     if samples.is_empty() {
         return AudioStats {
@@ -226,6 +298,15 @@ pub fn audio_stats(samples: &[i16]) -> AudioStats {
 }
 
 #[must_use]
+/// Computes a moving window RMS envelope over the sample array.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::rms_envelope;
+/// let envelope = rms_envelope(&[100, -100, 100, -100], 2);
+/// assert_eq!(envelope.len(), 2);
+/// ```
 pub fn rms_envelope(samples: &[i16], window_samples: usize) -> Vec<f64> {
     if samples.is_empty() || window_samples == 0 {
         return Vec::new();
@@ -328,6 +409,15 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
 }
 
 #[must_use]
+/// Compares two waveforms and computes time-domain correlation and frequency-domain diffs.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::compare_waveforms;
+/// let cmp = compare_waveforms(&[0, 1], &[0, 1], 8);
+/// assert!(cmp.correlation > 0.99);
+/// ```
 pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformComparison {
     let n = lhs.len().min(rhs.len());
     if n == 0 {
@@ -373,6 +463,14 @@ pub fn compare_waveforms(lhs: &[i16], rhs: &[i16], fft_size: usize) -> WaveformC
 }
 
 #[must_use]
+/// Computes the magnitude of the Discrete Fourier Transform for the sample window, expressed in decibels.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::fft_log_mag_db;
+/// let bins = fft_log_mag_db(&[0, 100, 0, -100], 4);
+/// ```
 pub fn fft_log_mag_db(samples: &[i16], fft_size: usize) -> Vec<f64> {
     if samples.is_empty() || fft_size < 2 {
         return Vec::new();
@@ -415,6 +513,18 @@ fn hann_window(idx: usize, len: usize) -> f64 {
 }
 
 #[must_use]
+/// Extracts the iNES/NES2.0 mapper ID from raw ROM file bytes.
+///
+/// Returns `None` if the header is missing or malformed.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::detect_mapper_id;
+/// let mut rom = [0; 16];
+/// rom[0..4].copy_from_slice(b"NES\x1A");
+/// assert_eq!(detect_mapper_id(&rom), Some(0));
+/// ```
 pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     if rom_bytes.len() < INES_HEADER_LEN || rom_bytes[0..4] != INES_MAGIC {
         return None;
@@ -432,6 +542,14 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
 }
 
 #[must_use]
+/// Returns `true` if `NesCore` has an implementation for the requested mapper ID.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::mapper_supported_by_core;
+/// assert!(mapper_supported_by_core(0)); // NROM is supported
+/// ```
 pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
     matches!(
         mapper_id,

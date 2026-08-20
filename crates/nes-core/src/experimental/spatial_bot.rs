@@ -11,14 +11,34 @@ use crate::experimental::zone_tracker::ZoneTracker;
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Clone)]
+/// Defines a spatial condition and corresponding controller input mapping.
+///
+/// ### Examples
+///
+/// ```rust
+/// use nes_core::Button;
+/// use nes_core::experimental::spatial_bot::BotRule;
+/// let rule = BotRule { zone_id: 1, button: Button::A, duration_frames: 10 };
+/// ```
 pub struct BotRule {
+    /// The ID of the zone to monitor.
     pub zone_id: usize,
+    /// The button to press when the zone is triggered.
     pub button: Button,
+    /// The duration (in frames) to hold the button down.
     pub duration_frames: u32,
 }
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]
+/// A bot that issues controller commands based on events from a `ZoneTracker`.
+///
+/// ### Examples
+///
+/// ```
+/// # use nes_core::experimental::spatial_bot::SpatialBot;
+/// let bot = SpatialBot::new();
+/// ```
 pub struct SpatialBot {
     rules: Vec<BotRule>,
     active_presses: std::collections::HashMap<Button, u32>,
@@ -27,6 +47,14 @@ pub struct SpatialBot {
 #[cfg(feature = "nova")]
 impl SpatialBot {
     #[must_use]
+    /// Creates a new, empty spatial bot with no rules.
+    ///
+    /// ## Examples
+    ///
+    /// ```
+    /// # use nes_core::experimental::spatial_bot::SpatialBot;
+    /// let bot = SpatialBot::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             rules: Vec::new(),
@@ -40,7 +68,7 @@ impl SpatialBot {
     /// and hold it for `duration_frames`. If the event triggers while the button is already being
     /// held, the duration is refreshed.
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// ```
     /// # use nes_core::experimental::spatial_bot::SpatialBot;
@@ -63,7 +91,7 @@ impl SpatialBot {
     /// matches a configured rule, the corresponding button is pressed, and its hold
     /// duration is updated. Buttons whose hold duration has expired are released.
     ///
-    /// # Examples
+    /// ## Examples
     ///
     /// ```
     /// # use nes_core::experimental::spatial_bot::SpatialBot;
