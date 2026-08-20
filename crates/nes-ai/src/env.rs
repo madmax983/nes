@@ -176,8 +176,15 @@ where
             self.profile.config().observation.width,
             self.profile.config().observation.height,
         );
-        for _ in 0..self.profile.config().frame_stack {
-            self.frame_stack.push(frame.clone());
+        let n = self.profile.config().frame_stack;
+        if n > 0 {
+            // **⚡ Bolt Optimization:** Avoid redundant heap allocations by cloning the frame `n-1` times
+            // and moving the original frame on the final iteration, rather than cloning unconditionally.
+            // This eliminates one 84x84 buffer allocation and copy per environment reset.
+            for _ in 0..(n - 1) {
+                self.frame_stack.push(frame.clone());
+            }
+            self.frame_stack.push(frame);
         }
 
         Ok(features)
