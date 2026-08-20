@@ -1,3 +1,7 @@
+//! Module for visualizing PPU state as BMP images.
+//!
+//! Provides utilities to extract pattern tables and nametables into image buffers.
+
 #![cfg(feature = "nova")]
 
 use crate::NesCore;
@@ -71,6 +75,16 @@ const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (0, 0, 0),
 ];
 
+/// Utility for extracting graphical PPU memory state into BMP image buffers.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_core::NesCore;
+/// use nes_core::experimental::ppu_visualizer::PpuVisualizer;
+/// let core = NesCore::new();
+/// let bmp = PpuVisualizer::extract_pattern_table_bmp(&core, 0, 0).unwrap();
+/// ```
 pub struct PpuVisualizer;
 
 impl PpuVisualizer {
