@@ -4,15 +4,24 @@
 //! IRQ behavior, and mixed PCM sample generation for host playback.
 
 use std::collections::VecDeque;
-use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::AUDIO_SAMPLE_RATE;
+use crate::constants::{AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE};
 
 const CPU_CLOCK_HZ: u64 = 1_789_773;
 const MAX_SAMPLE_AMPLITUDE: f32 = 11_500.0;
-const MAX_QUEUED_SAMPLES: usize = AUDIO_SAMPLE_RATE as usize;
+/// Backlog cap for undrained samples, in whole host frames.
+///
+/// Hosts drain exactly one [`AUDIO_CHUNK_SAMPLES`] chunk per rendered frame, so
+/// this is a jitter cushion rather than a working buffer. It was previously one
+/// full second (44,100 samples, ~176KB once the deque doubled), which is far
+/// more latency than any host wants and the second-largest allocation in the
+/// core.
+const MAX_QUEUED_FRAMES: usize = 8;
+
+/// Maximum samples retained before the oldest are dropped (~133ms).
+const MAX_QUEUED_SAMPLES: usize = AUDIO_CHUNK_SAMPLES * MAX_QUEUED_FRAMES;
 const HPF_90_R_Q16: i64 = 64_701;
 const HPF_440_R_Q16: i64 = 61_554;
 const LPF_14K_A_Q16: i64 = 56_619;
@@ -742,7 +751,8 @@ impl Apu {
             hp440_prev_out_q16: 0,
             hp440_prev_in_q16: 0,
             lp14k_prev_out_q16: 0,
-            samples: VecDeque::with_capacity(MAX_QUEUED_SAMPLES),
+            // One extra slot: a sample is pushed before the cap is enforced.
+            samples: VecDeque::with_capacity(MAX_QUEUED_SAMPLES + 1),
         }
     }
 
@@ -1052,13 +1062,10 @@ impl Apu {
         let noi = usize::from(self.noise.output());
         let dmc = usize::from(self.dmc.output());
 
-        let (pulse_table, tnd_table) = get_mixer_tables();
-
-        let pulse_sum = p1 + p2;
-        let pulse_out = pulse_table[pulse_sum];
+        let pulse_out = PULSE_TABLE[p1 + p2];
 
         let tnd_idx = (tri * 16 * 128) + (noi * 128) + dmc;
-        let tnd_out = tnd_table[tnd_idx];
+        let tnd_out = TND_TABLE[tnd_idx];
 
         let mut mixed = pulse_out + tnd_out;
         mixed = mixed.clamp(0.0, 1.0);
@@ -1127,38 +1134,54 @@ impl Default for Apu {
 /// (~1.78M times per second), eliminating f32 math and branches on the hot path
 /// and replacing them with array lookups reduces a massive overhead and significantly
 /// improves emulator performance.
-static MIXER_TABLES: OnceLock<(Vec<f32>, Vec<f32>)> = OnceLock::new();
+const PULSE_TABLE_LEN: usize = 31;
+const TND_TABLE_LEN: usize = 32_768;
 
-fn get_mixer_tables() -> &'static (Vec<f32>, Vec<f32>) {
-    MIXER_TABLES.get_or_init(|| {
-        let mut pulse = vec![0.0; 31];
-        for (i, slot) in pulse.iter_mut().enumerate() {
-            let pulse_sum = i as f32;
-            *slot = if pulse_sum == 0.0 {
-                0.0
-            } else {
-                95.88 / ((8128.0 / pulse_sum) + 100.0)
-            };
-        }
+/// Pulse mixer lookup, indexed by `pulse1 + pulse2`.
+///
+/// Evaluated at compile time so it lives in read-only data rather than being
+/// built lazily on the heap. On a hosted target that just removes an allocation
+/// and the per-sample `OnceLock` check; on an embedded target it moves ~131KB
+/// out of RAM and into flash.
+static PULSE_TABLE: [f32; PULSE_TABLE_LEN] = build_pulse_table();
 
-        let mut tnd = vec![0.0; 32768];
-        for tri in 0..16 {
-            for noi in 0..16 {
-                for dmc in 0..128 {
-                    let tnd_sum =
-                        (tri as f32 / 8227.0) + (noi as f32 / 12241.0) + (dmc as f32 / 22638.0);
-                    let tnd_out = if tnd_sum == 0.0 {
-                        0.0
-                    } else {
-                        159.79 / ((1.0 / tnd_sum) + 100.0)
-                    };
-                    let idx = (tri * 16 * 128) + (noi * 128) + dmc;
-                    tnd[idx] = tnd_out;
-                }
+/// Triangle/noise/DMC mixer lookup, indexed by
+/// `(triangle * 16 * 128) + (noise * 128) + dmc`.
+static TND_TABLE: [f32; TND_TABLE_LEN] = build_tnd_table();
+
+const fn build_pulse_table() -> [f32; PULSE_TABLE_LEN] {
+    let mut table = [0.0_f32; PULSE_TABLE_LEN];
+    let mut i = 1;
+    while i < PULSE_TABLE_LEN {
+        table[i] = 95.88 / ((8128.0 / i as f32) + 100.0);
+        i += 1;
+    }
+    table
+}
+
+const fn build_tnd_table() -> [f32; TND_TABLE_LEN] {
+    let mut table = [0.0_f32; TND_TABLE_LEN];
+    let mut tri = 0;
+    while tri < 16 {
+        let mut noi = 0;
+        while noi < 16 {
+            let mut dmc = 0;
+            while dmc < 128 {
+                let tnd_sum =
+                    (tri as f32 / 8227.0) + (noi as f32 / 12241.0) + (dmc as f32 / 22638.0);
+                let idx = (tri * 16 * 128) + (noi * 128) + dmc;
+                table[idx] = if tnd_sum == 0.0 {
+                    0.0
+                } else {
+                    159.79 / ((1.0 / tnd_sum) + 100.0)
+                };
+                dmc += 1;
             }
+            noi += 1;
         }
-        (pulse, tnd)
-    })
+        tri += 1;
+    }
+    table
 }
 
 #[cfg(test)]
