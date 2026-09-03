@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::rom::NametableMirroring;
 use serde::{Deserialize, Serialize};
 

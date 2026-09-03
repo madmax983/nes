@@ -5,6 +5,8 @@
 //! `APZLGITYEOXUKSVN` alphabet, then address/data/compare bits are
 //! reassembled from those nybbles.
 
+use alloc::string::String;
+
 use core::{fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
@@ -20,7 +22,7 @@ const CHEAT_CODE_ALPHABET: &str = "APZLGITYEOXUKSVN";
 /// # Examples
 ///
 /// ```
-/// use std::str::FromStr;
+/// use core::str::FromStr;
 /// use nes_core::CheatCode;
 ///
 /// // Parse a 6-character code (Super Mario Bros: Infinite Lives)
@@ -137,7 +139,7 @@ impl FromStr for CheatCode {
 /// # Examples
 ///
 /// ```
-/// use std::str::FromStr;
+/// use core::str::FromStr;
 /// use nes_core::{CheatCode, CheatCodeError};
 ///
 /// // Attempt to parse a code with invalid characters
@@ -182,7 +184,7 @@ impl fmt::Display for CheatCodeError {
     }
 }
 
-impl std::error::Error for CheatCodeError {}
+impl core::error::Error for CheatCodeError {}
 
 fn alphabet_digit(ch: char) -> Option<u8> {
     CHEAT_CODE_ALPHABET

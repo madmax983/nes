@@ -5,6 +5,8 @@
 //! against them. This is useful for AI, TAS tools, or cheat finders that need to
 //! reason about physical entity placement on screen without analyzing the framebuffer.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 

@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use super::Mapper;
 use serde::{Deserialize, Serialize};
 

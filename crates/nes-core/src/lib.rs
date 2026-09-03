@@ -1,4 +1,9 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
+
+// `alloc` is used unconditionally: under `std` these are the same types, so a
+// single set of imports serves both configurations.
+extern crate alloc;
 
 mod api;
 mod apu;
@@ -14,6 +19,9 @@ pub mod cpu;
 /// Cartridge PRG mapper implementations and contracts.
 pub mod mapper;
 /// PPM image encoding utilities.
+///
+/// Requires `std` for `std::io::Write`.
+#[cfg(feature = "std")]
 pub mod ppm;
 mod ppu;
 mod rom;

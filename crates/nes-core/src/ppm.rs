@@ -3,6 +3,8 @@
 //! This module provides an allocation-efficient encoder for transforming
 //! raw RGBA framebuffer slices into standard P6 format PPM byte vectors.
 
+use alloc::vec::Vec;
+
 use std::io::{self, Write};
 
 /// Encodes RGB(A) pixel data into a PPM image byte vector.

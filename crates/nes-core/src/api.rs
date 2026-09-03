@@ -4,6 +4,8 @@
 //! injecting inputs, and querying its state. The [`NesCore`] struct is the
 //! main entry point for host applications.
 
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
+
 use crate::constants::*;
 use core::fmt;
 
@@ -843,7 +845,7 @@ impl fmt::Display for CoreError {
     }
 }
 
-impl std::error::Error for CoreError {}
+impl core::error::Error for CoreError {}
 
 impl NesCore {
     /// Creates a new core with power-on defaults and no loaded mapper.
@@ -2672,7 +2674,7 @@ mod tests {
 
     #[test]
     fn test_cheat_code_hash_component() {
-        use std::str::FromStr;
+        use core::str::FromStr;
         let mut core = NesCore::new();
         let code = crate::cheat_codes::CheatCode::from_str("SXTPOU").unwrap();
         core.cheat_codes.push(code.clone());

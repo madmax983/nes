@@ -4,13 +4,20 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-nova = []
+default = ["std"]
+
+# Hosted build. Disable for bare-metal targets (`--no-default-features`), which
+# builds the core as `no_std` + `alloc`.
+std = ["serde/std"]
+
+# Experimental tooling ("nova"). Uses `std` collections and image encoders.
+nova = ["std"]
+
 tas = []
 
 [dependencies]
-arbitrary = { version = "1.4.2", features = ["derive"] }
 itoa = "1.0.17"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 
 [dev-dependencies]
 proptest = "1.0.0"

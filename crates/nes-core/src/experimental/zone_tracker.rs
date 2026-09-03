@@ -4,6 +4,8 @@
 //! when sprites enter those zones. It builds upon `OamSpatialQuery` to monitor
 //! sprite movement over time, generating events when a sprite triggers a zone.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]

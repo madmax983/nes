@@ -3,6 +3,8 @@
 //! This module allows users to define custom triggers (e.g., when a memory address changes or reaches a certain value)
 //! and records the events.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 

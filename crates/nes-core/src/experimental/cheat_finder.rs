@@ -12,6 +12,8 @@
 //! 4. **Repeat:** Steps 2 and 3 are repeated until only a handful of candidate addresses remain.
 //!    These final addresses are highly likely to be the memory locations controlling the desired state.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 

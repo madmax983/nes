@@ -3,7 +3,7 @@
 //! Implements pulse/triangle/noise/DMC channels, frame sequencer timing,
 //! IRQ behavior, and mixed PCM sample generation for host playback.
 
-use std::collections::VecDeque;
+use alloc::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 
@@ -701,7 +701,7 @@ pub struct ApuSnapshot {
     hp440_prev_out_q16: i64,
     hp440_prev_in_q16: i64,
     lp14k_prev_out_q16: i64,
-    samples: std::collections::VecDeque<i16>,
+    samples: alloc::collections::VecDeque<i16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

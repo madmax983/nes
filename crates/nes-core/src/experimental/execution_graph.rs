@@ -4,12 +4,14 @@
 //! CPU execution flow. It can export this flow to Graphviz DOT format, making it
 //! incredibly useful for reverse engineering NES game loops or debugging AI agents.
 
+use alloc::{string::String, vec::Vec};
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]
-use std::collections::{HashMap, HashSet};
+use core::fmt::Write;
 #[cfg(feature = "nova")]
-use std::fmt::Write;
+use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "nova")]
 #[derive(Debug, Default, Clone)]

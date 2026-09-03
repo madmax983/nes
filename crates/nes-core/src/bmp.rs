@@ -4,6 +4,8 @@
 //! raw RGBA framebuffer slices into standard 24-bit uncompressed Windows BMP
 //! byte vectors. It is primarily used for generating emulator screenshots.
 
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
+
 /// Encodes RGB(A) pixel data into a BMP image byte vector.
 ///
 /// The BMP format stores pixels "bottom-up" in `BGR` order. This function
@@ -93,7 +95,7 @@ pub fn encode_bmp(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, S
             bmp.push(rgba[idx + 1]);
             bmp.push(rgba[idx]);
         }
-        bmp.extend(std::iter::repeat_n(0, row_padding));
+        bmp.extend(core::iter::repeat_n(0, row_padding));
     }
 
     Ok(bmp)

@@ -5,6 +5,8 @@
 //! automated sprite sheet generation, or external visualization tools that need to inspect
 //! graphics state without manually reading individual bytes.
 
+use alloc::{string::String, vec, vec::Vec};
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]

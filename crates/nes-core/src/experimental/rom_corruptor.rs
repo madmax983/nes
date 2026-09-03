@@ -5,6 +5,8 @@
 //! Generator (LCG) to ensure reproducible corruptions without pulling in external `rand`
 //! dependencies.
 
+use alloc::vec;
+
 #[cfg(feature = "nova")]
 /// A deterministic glitch generator for NES ROM data.
 ///

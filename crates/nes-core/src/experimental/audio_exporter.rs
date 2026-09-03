@@ -5,6 +5,8 @@
 //! This is particularly useful for extracting chiptunes, sound effects, or recording
 //! the audio of a complete TAS run.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "nova")]
 use crate::constants::AUDIO_SAMPLE_RATE;
 

@@ -4,10 +4,12 @@
 //! semantics, sprite evaluation, and the palette-indexed framebuffer that is
 //! expanded to RGBA for hosts.
 
+use alloc::{boxed::Box, vec, vec::Vec};
+
 use crate::constants::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use crate::rom::NametableMirroring;
+use alloc::collections::VecDeque;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 
 const CTRL_NMI_ENABLE: u8 = 0x80;
 const CTRL_VRAM_INC_32: u8 = 0x04;
