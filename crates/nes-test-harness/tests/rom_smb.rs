@@ -390,22 +390,24 @@ fn collect_controller_reads(core: &mut NesCore, steps: u32) -> Vec<u8> {
 
 fn rgb_unique_count(frame: &[u8]) -> usize {
     let mut colors = HashSet::new();
-    for px in frame.chunks_exact(4) {
+    for px in frame.as_chunks::<4>().0 {
         colors.insert((px[0], px[1], px[2]));
     }
     colors.len()
 }
 
 fn changed_pixel_count(a: &[u8], b: &[u8]) -> usize {
-    a.chunks_exact(4)
-        .zip(b.chunks_exact(4))
+    a.as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<4>().0)
         .filter(|(lhs, rhs)| lhs[0] != rhs[0] || lhs[1] != rhs[1] || lhs[2] != rhs[2])
         .count()
 }
 
 fn frame_signature(frame: &[u8]) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for chunk in frame.chunks_exact(64) {
+    for chunk in frame.as_chunks::<64>().0 {
         hash ^= u64::from(chunk[0]);
         hash = hash.wrapping_mul(0x0000_0001_0000_01b3);
     }

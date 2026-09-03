@@ -76,14 +76,11 @@ fn rendered_framebuffer_is_byte_stable() {
 
     assert_eq!(frame.len(), FRAME_RGBA_BYTES);
     assert!(
-        frame.chunks_exact(4).all(|px| px[3] == 0xFF),
+        frame.as_chunks::<4>().0.iter().all(|px| px[3] == 0xFF),
         "every emitted pixel must be fully opaque"
     );
     let distinct = {
-        let mut colors: Vec<[u8; 4]> = frame
-            .chunks_exact(4)
-            .map(|px| [px[0], px[1], px[2], px[3]])
-            .collect();
+        let mut colors: Vec<[u8; 4]> = frame.as_chunks::<4>().0.to_vec();
         colors.sort_unstable();
         colors.dedup();
         colors.len()

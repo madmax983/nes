@@ -931,7 +931,7 @@ impl Ppu {
         if frame.len() != FRAME_RGBA_BYTES {
             return;
         }
-        for (pixel, out) in self.framebuffer.iter().zip(frame.chunks_exact_mut(4)) {
+        for (pixel, out) in self.framebuffer.iter().zip(frame.as_chunks_mut::<4>().0) {
             out.copy_from_slice(&FRAMEBUFFER_RGBA_LUT[*pixel as usize]);
         }
     }
@@ -1926,11 +1926,6 @@ impl Default for Ppu {
 
 /// Creates a blank framebuffer: every pixel is the blank sentinel, which
 /// expands to opaque black.
-///
-/// **Performance optimization:** Uses `chunks_exact_mut(4)` instead of `iter_mut().step_by(4)`.
-/// This allows the Rust compiler (LLVM) to elide bounds checks completely and improves the
-/// potential for loop unrolling and auto-vectorization, as the slice is always guaranteed
-/// to be a multiple of 4 (RGBA format).
 fn blank_framebuffer() -> Vec<u8> {
     vec![FRAMEBUFFER_BLANK; FRAME_PIXELS]
 }
