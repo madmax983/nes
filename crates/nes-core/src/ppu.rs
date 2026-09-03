@@ -1933,11 +1933,43 @@ fn blank_framebuffer() -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CHR_BYTES, DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW,
-        STATUS_VBLANK, VBLANK_EDGE_DOT, VBLANK_SCANLINE,
+        CHR_BYTES, DOTS_PER_SCANLINE, FRAMEBUFFER_BLANK, FRAMEBUFFER_RGBA_LUT, NES_PALETTE_RGB,
+        PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK, VBLANK_EDGE_DOT,
+        VBLANK_SCANLINE, build_framebuffer_rgba_lut,
     };
     use crate::constants::{FRAME_RGBA_BYTES, FRAME_WIDTH};
     use crate::rom::NametableMirroring;
+
+    /// The framebuffer stores palette indices and is expanded through this
+    /// table on read, so the table *is* the rendered output. The entries above
+    /// `0x3F` are what let the blank sentinel expand without a branch in the
+    /// per-pixel loop, so they are load-bearing, not padding.
+    #[test]
+    fn framebuffer_rgba_lut_expands_palette_and_blanks_out_of_range() {
+        let runtime = build_framebuffer_rgba_lut();
+
+        for (index, (r, g, b)) in NES_PALETTE_RGB.iter().enumerate() {
+            let expected = [*r, *g, *b, 0xFF];
+            assert_eq!(runtime[index], expected, "runtime lut[{index}]");
+            assert_eq!(FRAMEBUFFER_RGBA_LUT[index], expected, "const lut[{index}]");
+        }
+
+        for index in NES_PALETTE_RGB.len()..256 {
+            let expected = [0, 0, 0, 0xFF];
+            assert_eq!(runtime[index], expected, "runtime lut[{index}]");
+            assert_eq!(FRAMEBUFFER_RGBA_LUT[index], expected, "const lut[{index}]");
+        }
+
+        assert_eq!(
+            FRAMEBUFFER_RGBA_LUT[FRAMEBUFFER_BLANK as usize],
+            [0, 0, 0, 0xFF],
+            "the blank sentinel must expand to opaque black"
+        );
+        assert!(
+            FRAMEBUFFER_BLANK as usize >= NES_PALETTE_RGB.len(),
+            "the blank sentinel must not collide with a real palette index"
+        );
+    }
 
     #[test]
     fn vblank_edges_are_dot_exact() {

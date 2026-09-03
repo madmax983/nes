@@ -1188,6 +1188,84 @@ const fn build_tnd_table() -> [f32; TND_TABLE_LEN] {
 mod tests {
     use super::*;
 
+    /// The mixer tables moved from a runtime `OnceLock` build to `const fn`
+    /// evaluation. Const-evaluated float arithmetic is required to match
+    /// runtime IEEE-754 results, but "required to" is not "verified to" — and
+    /// if it ever diverged, every mixed sample would shift silently. Calling
+    /// the builders here evaluates them at runtime and compares bit patterns
+    /// against the same formulas computed independently.
+    #[test]
+    fn const_pulse_table_matches_runtime_evaluation() {
+        let runtime = build_pulse_table();
+        for i in 0..PULSE_TABLE_LEN {
+            let expected: f32 = if i == 0 {
+                0.0
+            } else {
+                95.88 / ((8128.0 / i as f32) + 100.0)
+            };
+            assert_eq!(
+                runtime[i].to_bits(),
+                expected.to_bits(),
+                "runtime pulse[{i}]"
+            );
+            assert_eq!(
+                PULSE_TABLE[i].to_bits(),
+                expected.to_bits(),
+                "const pulse[{i}]"
+            );
+        }
+    }
+
+    #[test]
+    fn const_tnd_table_matches_runtime_evaluation() {
+        let runtime = build_tnd_table();
+        for tri in 0..16 {
+            for noi in 0..16 {
+                for dmc in 0..128 {
+                    let tnd_sum =
+                        (tri as f32 / 8227.0) + (noi as f32 / 12241.0) + (dmc as f32 / 22638.0);
+                    let expected: f32 = if tnd_sum == 0.0 {
+                        0.0
+                    } else {
+                        159.79 / ((1.0 / tnd_sum) + 100.0)
+                    };
+                    let idx = (tri * 16 * 128) + (noi * 128) + dmc;
+                    assert_eq!(
+                        runtime[idx].to_bits(),
+                        expected.to_bits(),
+                        "runtime tnd[{idx}]"
+                    );
+                    assert_eq!(
+                        TND_TABLE[idx].to_bits(),
+                        expected.to_bits(),
+                        "const tnd[{idx}]"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Hardware invariants the tables must satisfy regardless of how they are
+    /// built: silence maps to silence, both are monotonically non-decreasing,
+    /// and the summed mix cannot saturate the output stage on its own.
+    #[test]
+    fn mixer_tables_satisfy_hardware_invariants() {
+        assert_eq!(PULSE_TABLE[0], 0.0);
+        assert_eq!(TND_TABLE[0], 0.0);
+
+        for window in PULSE_TABLE.windows(2) {
+            assert!(window[1] >= window[0], "pulse table must be non-decreasing");
+        }
+
+        let max_pulse = PULSE_TABLE[PULSE_TABLE_LEN - 1];
+        let max_tnd = TND_TABLE[TND_TABLE_LEN - 1];
+        assert!(
+            max_pulse + max_tnd < 1.0,
+            "full-scale mix ({}) must stay below the clamp ceiling",
+            max_pulse + max_tnd
+        );
+    }
+
     #[test]
     fn pulse_control_write_does_not_restart_envelope() {
         let mut pulse = PulseChannel::new(true);
