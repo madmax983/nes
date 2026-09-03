@@ -4,8 +4,10 @@
 //! records bus activity, and tracks write side-effects for MMIO application in
 //! the outer core.
 
+use alloc::{string::String, vec::Vec};
+
+use core::cell::{Cell, RefCell};
 use core::fmt;
-use std::cell::{Cell, RefCell};
 
 use crate::cpu::status::Status;
 
@@ -48,7 +50,7 @@ impl fmt::Display for CpuError {
     }
 }
 
-impl std::error::Error for CpuError {}
+impl core::error::Error for CpuError {}
 
 use serde::{Deserialize, Serialize};
 
@@ -2742,7 +2744,7 @@ impl Cpu {
     /// assert!(buffer.is_empty());
     /// ```
     pub fn swap_writes(&mut self, dest: &mut Vec<CpuWrite>) {
-        std::mem::swap(&mut self.writes, dest);
+        core::mem::swap(&mut self.writes, dest);
     }
 
     /// Swaps MMIO read addresses recorded during the last instruction step.
@@ -2751,7 +2753,7 @@ impl Cpu {
     /// this to apply MMIO read side-effects ($2002 VBlank clear, $4016 controller
     /// shift, etc.). Swap-reuse eliminates per-step heap allocations.
     pub fn swap_mmio_reads(&mut self, dest: &mut Vec<CpuMmioRead>) {
-        std::mem::swap(&mut *self.mmio_reads.borrow_mut(), dest);
+        core::mem::swap(&mut *self.mmio_reads.borrow_mut(), dest);
     }
 
     /// Swaps the collected PRG-space writes into the provided vector.
@@ -2769,7 +2771,7 @@ impl Cpu {
     /// assert!(buffer.is_empty());
     /// ```
     pub fn swap_prg_writes(&mut self, dest: &mut Vec<CpuPrgWrite>) {
-        std::mem::swap(&mut self.prg_writes, dest);
+        core::mem::swap(&mut self.prg_writes, dest);
     }
 
     /// Swaps the bus trace records into the provided vector.
@@ -2787,7 +2789,7 @@ impl Cpu {
     /// assert!(buffer.is_empty());
     /// ```
     pub fn swap_bus_trace(&self, dest: &mut Vec<CpuBusAccess>) {
-        std::mem::swap(&mut *self.bus_trace.borrow_mut(), dest);
+        core::mem::swap(&mut *self.bus_trace.borrow_mut(), dest);
     }
 
     fn push(&mut self, value: u8) {
@@ -2813,7 +2815,7 @@ impl Cpu {
         &self,
         snapshot: TraceSnapshot,
         bytes: &[u8],
-        mnemonic: std::fmt::Arguments,
+        mnemonic: core::fmt::Arguments,
     ) -> String {
         if self.trace_enabled {
             format_trace(snapshot, bytes, mnemonic)
@@ -2878,10 +2880,10 @@ const fn normalize_cpu_addr(addr: u16) -> u16 {
 /// **Optimization:** Accepts `fmt::Arguments` directly (via `format_args!()`)
 /// instead of a pre-formatted string or `&str`. This eliminates intermediate
 /// string heap allocations per frame by pre-allocating the required capacity
-/// and writing directly into it using `std::fmt::Write`. Manual padding is
+/// and writing directly into it using `core::fmt::Write`. Manual padding is
 /// used to avoid triggering Clippy's `unused_format_specs` lint.
-fn format_trace(snapshot: TraceSnapshot, bytes: &[u8], mnemonic: std::fmt::Arguments) -> String {
-    use std::fmt::Write;
+fn format_trace(snapshot: TraceSnapshot, bytes: &[u8], mnemonic: core::fmt::Arguments) -> String {
+    use core::fmt::Write;
     let mut result = String::with_capacity(75);
     let _ = write!(&mut result, "{:04X}  ", snapshot.pc);
 

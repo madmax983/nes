@@ -697,7 +697,7 @@ fn draw_frame_border(
 }
 
 fn dim_frame(frame: &mut [u8]) {
-    for pixel in frame.chunks_exact_mut(4) {
+    for pixel in frame.as_chunks_mut::<4>().0 {
         pixel[0] = pixel[0] / 3 + COLOR_BACKDROP[0] / 4;
         pixel[1] = pixel[1] / 3 + COLOR_BACKDROP[1] / 4;
         pixel[2] = pixel[2] / 3 + COLOR_BACKDROP[2] / 4;

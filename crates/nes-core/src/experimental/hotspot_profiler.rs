@@ -5,6 +5,8 @@
 //! games, understanding busy-wait loops, or generating code execution coverage maps
 //! during test runs.
 
+use alloc::{boxed::Box, vec, vec::Vec};
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 
@@ -89,7 +91,7 @@ impl CpuHotspotProfiler {
                 hotspots.push((addr as u16, count));
             }
         }
-        hotspots.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
+        hotspots.sort_unstable_by_key(|b| core::cmp::Reverse(b.1));
         hotspots.truncate(n);
         hotspots
     }

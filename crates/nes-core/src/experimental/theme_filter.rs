@@ -46,7 +46,7 @@ impl ThemeFilter {
 
         match theme {
             Theme::Grayscale => {
-                for pixel in framebuffer.chunks_exact_mut(4) {
+                for pixel in framebuffer.as_chunks_mut::<4>().0 {
                     let r = u32::from(pixel[0]);
                     let g = u32::from(pixel[1]);
                     let b = u32::from(pixel[2]);
@@ -67,7 +67,7 @@ impl ThemeFilter {
                 // Dark:     (48, 98, 48)
                 // Light:    (139, 172, 15)
                 // Lightest: (155, 188, 15)
-                for pixel in framebuffer.chunks_exact_mut(4) {
+                for pixel in framebuffer.as_chunks_mut::<4>().0 {
                     let r = u32::from(pixel[0]);
                     let g = u32::from(pixel[1]);
                     let b = u32::from(pixel[2]);
@@ -90,7 +90,7 @@ impl ThemeFilter {
                 }
             }
             Theme::Sepia => {
-                for pixel in framebuffer.chunks_exact_mut(4) {
+                for pixel in framebuffer.as_chunks_mut::<4>().0 {
                     let r = f32::from(pixel[0]);
                     let g = f32::from(pixel[1]);
                     let b = f32::from(pixel[2]);
@@ -105,7 +105,7 @@ impl ThemeFilter {
                 }
             }
             Theme::VirtualBoy => {
-                for pixel in framebuffer.chunks_exact_mut(4) {
+                for pixel in framebuffer.as_chunks_mut::<4>().0 {
                     let r = u32::from(pixel[0]);
                     let g = u32::from(pixel[1]);
                     let b = u32::from(pixel[2]);

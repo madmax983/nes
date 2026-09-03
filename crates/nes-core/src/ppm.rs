@@ -3,6 +3,8 @@
 //! This module provides an allocation-efficient encoder for transforming
 //! raw RGBA framebuffer slices into standard P6 format PPM byte vectors.
 
+use alloc::vec::Vec;
+
 use std::io::{self, Write};
 
 /// Encodes RGB(A) pixel data into a PPM image byte vector.
@@ -51,7 +53,7 @@ pub fn encode_ppm(width: usize, height: usize, rgba: &[u8]) -> io::Result<Vec<u8
 
     let mut ppm = Vec::with_capacity(32 + width * height * 3);
     write!(&mut ppm, "P6\n{width} {height}\n255\n")?;
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         ppm.extend_from_slice(&px[..3]);
     }
     Ok(ppm)

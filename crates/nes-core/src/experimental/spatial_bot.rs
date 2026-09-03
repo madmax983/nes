@@ -2,6 +2,8 @@
 //!
 //! The spatial bot uses `ZoneTracker` events to trigger automated inputs.
 
+use alloc::vec::Vec;
+
 #[cfg(feature = "nova")]
 use crate::Button;
 #[cfg(feature = "nova")]

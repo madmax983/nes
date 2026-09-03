@@ -1,12 +1,15 @@
 //! Picture Processing Unit (PPU) timing and rendering model.
 //!
 //! The PPU owns CHR/nametable/palette memory, dot/scanline counters, register
-//! semantics, sprite evaluation, and the RGBA framebuffer consumed by hosts.
+//! semantics, sprite evaluation, and the palette-indexed framebuffer that is
+//! expanded to RGBA for hosts.
+
+use alloc::{boxed::Box, vec, vec::Vec};
 
 use crate::constants::{FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH};
 use crate::rom::NametableMirroring;
+use alloc::collections::VecDeque;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
 
 const CTRL_NMI_ENABLE: u8 = 0x80;
 const CTRL_VRAM_INC_32: u8 = 0x04;
@@ -40,6 +43,34 @@ const PALETTE_RAM_BYTES: usize = 32;
 /// (low + high plane = 2 addresses) plus one sprite pattern-slot prefetch
 /// (2 addresses); 8 gives comfortable headroom.
 pub(crate) const CHR_FETCH_BUF_LEN: usize = 8;
+
+/// Number of pixels in one frame. The framebuffer stores one palette index per
+/// pixel rather than four RGBA bytes, which is a 4x reduction (246KB -> 61KB)
+/// and keeps the per-dot render path down to a single byte store.
+const FRAME_PIXELS: usize = FRAME_WIDTH * FRAME_HEIGHT;
+
+/// Framebuffer value for "no pixel rendered here yet", expanded to opaque black.
+/// Real palette indices are masked to `0x3F`, so any value above `0x3F` is free
+/// to use as a sentinel.
+const FRAMEBUFFER_BLANK: u8 = 0xFF;
+
+/// Expansion table from stored framebuffer byte to RGBA.
+///
+/// Entries `0x00..=0x3F` are the NES palette; everything above is opaque black
+/// so that [`FRAMEBUFFER_BLANK`] — and any other out-of-range byte — expands
+/// without a branch in the per-pixel loop.
+const FRAMEBUFFER_RGBA_LUT: [[u8; 4]; 256] = build_framebuffer_rgba_lut();
+
+const fn build_framebuffer_rgba_lut() -> [[u8; 4]; 256] {
+    let mut lut = [[0, 0, 0, 0xFF]; 256];
+    let mut index = 0;
+    while index < 64 {
+        let (r, g, b) = NES_PALETTE_RGB[index];
+        lut[index] = [r, g, b, 0xFF];
+        index += 1;
+    }
+    lut
+}
 
 const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (84, 84, 84),
@@ -893,14 +924,16 @@ impl Ppu {
         value
     }
 
-    /// Copies the current framebuffer into an RGBA destination buffer.
+    /// Expands the palette-indexed framebuffer into an RGBA destination buffer.
     ///
     /// If `frame` has an unexpected length, the function is a no-op.
     pub fn render_rgba(&self, frame: &mut [u8]) {
         if frame.len() != FRAME_RGBA_BYTES {
             return;
         }
-        frame.copy_from_slice(&self.framebuffer);
+        for (pixel, out) in self.framebuffer.iter().zip(frame.as_chunks_mut::<4>().0) {
+            out.copy_from_slice(&FRAMEBUFFER_RGBA_LUT[*pixel as usize]);
+        }
     }
 
     /// Returns `PPUCTRL`.
@@ -1049,7 +1082,8 @@ impl Ppu {
         self.chr
     }
 
-    fn render_pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
+    /// Resolves one pixel to its 6-bit NES palette index.
+    fn render_pixel(&self, x: usize, y: usize) -> u8 {
         let (bg_palette_color, bg_opaque) = self.background_palette_index(x, y);
         let sprite = self.sprite_palette_index(x, y, bg_opaque);
 
@@ -1061,7 +1095,7 @@ impl Ppu {
             self.read_palette(0x3F00)
         };
 
-        NES_PALETTE_RGB[(palette_index & 0x3F) as usize]
+        palette_index & 0x3F
     }
 
     fn background_palette_index_impl(
@@ -1251,7 +1285,8 @@ impl Ppu {
         None
     }
 
-    fn render_pixel_cached(&mut self, x: usize, y: usize) -> (u8, u8, u8) {
+    /// Cached counterpart of [`Self::render_pixel`], returning a palette index.
+    fn render_pixel_cached(&mut self, x: usize, y: usize) -> u8 {
         let universal = self.read_palette(0x3F00);
         let (bg_palette_color, bg_opaque) = self.background_palette_index_cached(x, y);
         let sprite = self.sprite_palette_index_cached(x, y, bg_opaque);
@@ -1264,7 +1299,7 @@ impl Ppu {
             universal
         };
 
-        NES_PALETTE_RGB[(palette_index & 0x3F) as usize]
+        palette_index & 0x3F
     }
 
     fn background_palette_index_cached(&mut self, x: usize, y: usize) -> (u8, bool) {
@@ -1657,12 +1692,7 @@ impl Ppu {
         }
         let x = usize::from(self.dot - 1);
         let y = usize::from(self.scanline);
-        let (r, g, b) = self.render_pixel_cached(x, y);
-        let idx = (y * FRAME_WIDTH + x) * 4;
-        self.framebuffer[idx] = r;
-        self.framebuffer[idx + 1] = g;
-        self.framebuffer[idx + 2] = b;
-        self.framebuffer[idx + 3] = 0xFF;
+        self.framebuffer[y * FRAME_WIDTH + x] = self.render_pixel_cached(x, y);
     }
 
     fn reload_horizontal_scroll_from_temp(&mut self) {
@@ -1727,12 +1757,7 @@ impl Ppu {
         }
         for y in 0..FRAME_HEIGHT {
             for x in 0..FRAME_WIDTH {
-                let (r, g, b) = self.render_pixel(x, y);
-                let idx = (y * FRAME_WIDTH + x) * 4;
-                self.framebuffer[idx] = r;
-                self.framebuffer[idx + 1] = g;
-                self.framebuffer[idx + 2] = b;
-                self.framebuffer[idx + 3] = 0xFF;
+                self.framebuffer[y * FRAME_WIDTH + x] = self.render_pixel(x, y);
             }
         }
         self.scroll_x = saved_scroll_x;
@@ -1899,28 +1924,52 @@ impl Default for Ppu {
     }
 }
 
-/// Creates a blank framebuffer initialized to fully transparent black.
-///
-/// **Performance optimization:** Uses `chunks_exact_mut(4)` instead of `iter_mut().step_by(4)`.
-/// This allows the Rust compiler (LLVM) to elide bounds checks completely and improves the
-/// potential for loop unrolling and auto-vectorization, as the slice is always guaranteed
-/// to be a multiple of 4 (RGBA format).
+/// Creates a blank framebuffer: every pixel is the blank sentinel, which
+/// expands to opaque black.
 fn blank_framebuffer() -> Vec<u8> {
-    let mut frame = vec![0_u8; FRAME_RGBA_BYTES];
-    for chunk in frame.chunks_exact_mut(4) {
-        chunk[3] = 0xFF;
-    }
-    frame
+    vec![FRAMEBUFFER_BLANK; FRAME_PIXELS]
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        CHR_BYTES, DOTS_PER_SCANLINE, PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW,
-        STATUS_VBLANK, VBLANK_EDGE_DOT, VBLANK_SCANLINE,
+        CHR_BYTES, DOTS_PER_SCANLINE, FRAMEBUFFER_BLANK, FRAMEBUFFER_RGBA_LUT, NES_PALETTE_RGB,
+        PRE_RENDER_SCANLINE, Ppu, STATUS_SPRITE_OVERFLOW, STATUS_VBLANK, VBLANK_EDGE_DOT,
+        VBLANK_SCANLINE, build_framebuffer_rgba_lut,
     };
     use crate::constants::{FRAME_RGBA_BYTES, FRAME_WIDTH};
     use crate::rom::NametableMirroring;
+
+    /// The framebuffer stores palette indices and is expanded through this
+    /// table on read, so the table *is* the rendered output. The entries above
+    /// `0x3F` are what let the blank sentinel expand without a branch in the
+    /// per-pixel loop, so they are load-bearing, not padding.
+    #[test]
+    fn framebuffer_rgba_lut_expands_palette_and_blanks_out_of_range() {
+        let runtime = build_framebuffer_rgba_lut();
+
+        for (index, (r, g, b)) in NES_PALETTE_RGB.iter().enumerate() {
+            let expected = [*r, *g, *b, 0xFF];
+            assert_eq!(runtime[index], expected, "runtime lut[{index}]");
+            assert_eq!(FRAMEBUFFER_RGBA_LUT[index], expected, "const lut[{index}]");
+        }
+
+        for index in NES_PALETTE_RGB.len()..256 {
+            let expected = [0, 0, 0, 0xFF];
+            assert_eq!(runtime[index], expected, "runtime lut[{index}]");
+            assert_eq!(FRAMEBUFFER_RGBA_LUT[index], expected, "const lut[{index}]");
+        }
+
+        assert_eq!(
+            FRAMEBUFFER_RGBA_LUT[FRAMEBUFFER_BLANK as usize],
+            [0, 0, 0, 0xFF],
+            "the blank sentinel must expand to opaque black"
+        );
+        assert!(
+            FRAMEBUFFER_BLANK as usize >= NES_PALETTE_RGB.len(),
+            "the blank sentinel must not collide with a real palette index"
+        );
+    }
 
     #[test]
     fn vblank_edges_are_dot_exact() {

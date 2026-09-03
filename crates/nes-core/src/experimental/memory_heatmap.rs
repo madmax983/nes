@@ -3,6 +3,8 @@
 //! This module tracks memory accesses over time and renders a thermal heatmap
 //! image of the 64KB memory space, useful for profiling and debugging.
 
+use alloc::{string::String, vec};
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]
@@ -13,7 +15,7 @@ use crate::cpu::CpuBusAccessKind;
 #[cfg(feature = "nova")]
 /// Tracks CPU memory accesses to generate a visual heatmap.
 pub struct MemoryHeatmap {
-    heat: std::vec::Vec<f32>,
+    heat: alloc::vec::Vec<f32>,
     decay_rate: f32,
     intensity: f32,
 }
@@ -65,7 +67,7 @@ impl MemoryHeatmap {
 
     /// Renders the current heatmap as a 256x256 BMP image.
     /// Hot addresses are red, warm are yellow, cool are blue.
-    pub fn render_bmp(&self) -> Result<std::vec::Vec<u8>, String> {
+    pub fn render_bmp(&self) -> Result<alloc::vec::Vec<u8>, String> {
         let width = 256;
         let height = 256;
         let mut rgba = vec![0u8; width * height * 4];

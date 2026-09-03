@@ -5,6 +5,8 @@
 //! By using `#[serde(with = "serde_array")]`, users can consistently serialize byte buffers
 //! across JSON, CBOR, and other formats.
 
+use alloc::vec::Vec;
+
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -71,7 +73,7 @@ where
 struct ExpectedLength(usize);
 
 impl serde::de::Expected for ExpectedLength {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(formatter, "a byte array of length {}", self.0)
     }
 }

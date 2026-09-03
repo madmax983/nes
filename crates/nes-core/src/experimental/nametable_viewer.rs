@@ -1,5 +1,7 @@
 //! Experimental tools for extracting and visualizing PPU nametables.
 
+use alloc::{string::String, vec, vec::Vec};
+
 #[cfg(feature = "nova")]
 use crate::NesCore;
 #[cfg(feature = "nova")]

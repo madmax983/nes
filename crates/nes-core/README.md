@@ -5,10 +5,41 @@
 ## Scope
 
 - 6502-compatible CPU execution, including common unofficial opcodes used by commercial games.
-- Dot-stepped PPU with framebuffer output (`256x240 RGBA`).
+- Dot-stepped PPU with framebuffer output (`256x240`, stored as palette indices, expanded to RGBA on read).
 - APU channel simulation (pulse/triangle/noise/DMC) with mixed PCM output.
 - Mapper-backed PRG/CHR banking (currently NROM, MMC1, UxROM, CNROM, MMC3, AxROM, GxROM).
 - Save/load state snapshots, command replay, and stable TAS movie/recorder primitives.
+
+## Build Configurations
+
+`nes-core` builds either hosted or bare-metal:
+
+| Feature | Default | Effect |
+|---|---|---|
+| `std` | yes | Hosted build. Enables `serde/std` and the `ppm` encoder. |
+| `nova` | no | Experimental tooling. Implies `std`. |
+| `tas` | no | TAS movie/recorder primitives. Works in both configurations. |
+
+With `--no-default-features` the crate is `no_std` + `alloc`, which is what an
+embedded host (an ESP32-class target) needs. CI builds this configuration for
+`riscv32imc-unknown-none-elf` on every push. Only an allocator is required —
+there is no threading, filesystem, or I/O dependency in the core.
+
+```powershell
+cargo build -p nes-core --no-default-features --lib --target riscv32imc-unknown-none-elf
+```
+
+## Memory Budget
+
+The core's working set is a budgeted resource, enforced by
+`tests/memory_footprint.rs`:
+
+- `size_of::<NesCore>()` — ~76KB, dominated by the CPU's flat 64KB address-space array.
+- Live heap for a 16KB NROM — ~98KB, and flat over a long run.
+
+The largest remaining reductions are the CPU's flat address space (65KB) and
+mappers owning copies of PRG/CHR rather than borrowing them from memory-mapped
+flash. See `docs/adr/0004-embedded-target-memory-architecture.md`.
 
 ## Host Model
 
@@ -17,7 +48,10 @@ Hosts control emulation through `NesCore`:
 1. Load ROM bytes with `load_ines_rom`.
 2. Drive progression with `execute(Command::StepCpu|StepScanline|StepFrame)`.
 3. Push controller state with `SetControllerState` or button press/release commands.
-4. Pull video/audio (`fill_framebuffer_rgba`, `audio_chunk_i16`).
+4. Pull video/audio (`fill_framebuffer_rgba`, `fill_audio_chunk_i16`).
+
+Prefer the `fill_*` accessors on constrained hosts: `framebuffer_rgba` and
+`audio_chunk_i16` allocate a fresh buffer per call.
 
 Higher-level automation can stay in-process through `nes_core::tas` when the `tas` feature is enabled:
 - `TasRecorder` captures per-frame controller state into a deterministic movie.

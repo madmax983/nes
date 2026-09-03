@@ -1,5 +1,7 @@
 //! Stable TAS primitives for recording and replaying deterministic input movies.
 
+use alloc::{string::String, vec::Vec};
+
 use core::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -34,7 +36,7 @@ impl fmt::Display for TasError {
     }
 }
 
-impl std::error::Error for TasError {}
+impl core::error::Error for TasError {}
 
 /// Run-length encoded controller state for consecutive emulator frames.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

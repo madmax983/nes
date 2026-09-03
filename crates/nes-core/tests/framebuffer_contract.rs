@@ -9,7 +9,7 @@ fn framebuffer_geometry_matches_nes_resolution() {
     assert_eq!(FRAME_HEIGHT, 240);
     assert_eq!(FRAME_RGBA_BYTES, FRAME_WIDTH * FRAME_HEIGHT * 4);
     assert_eq!(frame.len(), FRAME_RGBA_BYTES);
-    assert!(frame.chunks_exact(4).all(|px| px[3] == 0xFF));
+    assert!(frame.as_chunks::<4>().0.iter().all(|px| px[3] == 0xFF));
 }
 
 #[test]

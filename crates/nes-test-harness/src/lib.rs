@@ -321,7 +321,7 @@ pub fn read_pcm_i16le(path: &Path) -> Result<Vec<i16>, String> {
         ));
     }
     let mut samples = Vec::with_capacity(bytes.len() / 2);
-    for chunk in bytes.chunks_exact(2) {
+    for chunk in bytes.as_chunks::<2>().0 {
         samples.push(i16::from_le_bytes([chunk[0], chunk[1]]));
     }
     Ok(samples)

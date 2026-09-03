@@ -99,7 +99,7 @@ impl fmt::Display for RomError {
     }
 }
 
-impl std::error::Error for RomError {}
+impl core::error::Error for RomError {}
 
 /// Parses an iNES/NES2 ROM image and returns a borrowed [`InesRom`] view.
 ///

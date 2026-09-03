@@ -1,5 +1,7 @@
 #![cfg(feature = "nova")]
 
+use alloc::{string::String, vec, vec::Vec};
+
 use crate::NesCore;
 
 use crate::bmp::encode_bmp;
