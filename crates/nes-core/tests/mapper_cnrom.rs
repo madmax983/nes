@@ -1,5 +1,7 @@
 use nes_core::mapper::Cnrom;
 
+const CHR_8K: usize = 8 * 1024;
+
 #[test]
 fn cnrom_prg_mapping_is_fixed_across_chr_bank_switches() {
     let mut prg = vec![0_u8; 32 * 1024];
@@ -25,12 +27,26 @@ fn cnrom_write_selects_chr_bank_window() {
 
     let mut mapper = Cnrom::from_prg_chr(prg, chr);
     assert_eq!(mapper.selected_chr_bank(), 0);
-    assert_eq!(mapper.chr_window()[0], 0xAA);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xAA
+    );
 
     mapper.write_prg(0x8000, 1);
 
     assert_eq!(mapper.selected_chr_bank(), 1);
-    assert_eq!(mapper.chr_window()[0], 0xBB);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xBB
+    );
 }
 
 #[test]
@@ -45,7 +61,8 @@ fn cnrom_short_chr_input_is_zero_padded() {
     let prg = vec![0_u8; 16 * 1024];
     let chr = vec![0x5A_u8; (8 * 1024) - 3];
     let mapper = Cnrom::from_prg_chr(prg, chr);
-    let window = mapper.chr_window();
+    let mut window = [0_u8; CHR_8K];
+    mapper.fill_chr_window(&mut window);
     assert_eq!(window[(8 * 1024) - 4], 0x5A);
     assert_eq!(window[(8 * 1024) - 3], 0x00);
     assert_eq!(window[(8 * 1024) - 1], 0x00);
@@ -59,12 +76,26 @@ fn cnrom_chr_bank_count_does_not_wrap_at_256_banks() {
     chr[8 * 1024] = 0xB0;
 
     let mut mapper = Cnrom::from_prg_chr(prg, chr);
-    assert_eq!(mapper.chr_window()[0], 0xA0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xA0
+    );
 
     mapper.write_prg(0x8000, 1);
 
     assert_eq!(mapper.selected_chr_bank(), 1);
-    assert_eq!(mapper.chr_window()[0], 0xB0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xB0
+    );
 }
 
 #[test]
@@ -82,10 +113,12 @@ fn cnrom_from_prg_chr_pads_chr_rom() {
 
     // Test that the CHR ROM was padded to 16k (2 banks of 8k)
     m.write_prg(0x8000, 0); // Select Bank 0
-    let window0 = m.chr_window();
+    let mut window0 = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut window0);
     assert_eq!(window0[0], 0xAA);
 
     m.write_prg(0x8000, 1); // Select Bank 1
-    let window1 = m.chr_window();
+    let mut window1 = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut window1);
     assert_eq!(window1[0], 0xBB);
 }

@@ -54,7 +54,14 @@ fn camerica_exposes_writable_chr_ram() {
     let mut window = [0_u8; CHR_8K];
     window[7] = 0x99;
     mapper.sync_chr_ram_from_ppu_window(&window);
-    assert_eq!(mapper.chr_window()[7], 0x99);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[7],
+        0x99
+    );
 }
 
 #[test]
@@ -66,5 +73,13 @@ fn camerica_normalizes_empty_and_odd_prg() {
     // Reads never panic and CHR-RAM is always present.
     let _ = odd.read_prg(0x8000);
     assert!(odd.chr_writable());
-    assert_eq!(odd.chr_window().len(), CHR_8K);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            odd.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        CHR_8K
+    );
 }

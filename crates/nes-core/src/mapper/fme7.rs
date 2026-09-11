@@ -182,17 +182,14 @@ impl Fme7 {
         usize::from(raw) % self.chr_bank_count_1k.max(1)
     }
 
-    /// Returns the currently mapped 8KB CHR window, assembled from the eight 1KB
+    /// Fills `out` with the currently mapped 8KB CHR window, assembled from the eight 1KB
     /// bank registers (`0x0..=0x7`).
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
         for (slot, &bank) in self.chr_banks.iter().enumerate() {
             let src = self.normalize_chr_bank(bank) * CHR_BANK_1K;
             let dst = slot * CHR_BANK_1K;
-            window[dst..dst + CHR_BANK_1K].copy_from_slice(&self.chr_data[src..src + CHR_BANK_1K]);
+            out[dst..dst + CHR_BANK_1K].copy_from_slice(&self.chr_data[src..src + CHR_BANK_1K]);
         }
-        window
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU (CHR-RAM).
@@ -465,7 +462,8 @@ mod tests {
         let mut m = Fme7::from_prg_chr(prg_with_bank_markers(4), chr_with_bank_markers(16));
         select(&mut m, 0x0, 10); // $0000 -> 1KB bank 10
         select(&mut m, 0x7, 15); // $1C00 -> 1KB bank 15
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0x0000], 10);
         assert_eq!(window[0x1C00], 15);
     }
@@ -559,7 +557,11 @@ mod tests {
         let mut window = [0_u8; CHR_WINDOW_BYTES];
         window[0] = 0x42;
         m.sync_chr_ram_from_ppu_window(&window);
-        assert_eq!(m.chr_window()[0], 0x42);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0x42);
+        }
     }
 
     #[test]
@@ -587,7 +589,11 @@ mod tests {
         let mut restored = Fme7::from_prg_chr(prg_with_bank_markers(8), chr_with_bank_markers(16));
         restored.restore_state(state);
         assert_eq!(restored.read_prg(0x8000), 3);
-        assert_eq!(restored.chr_window()[0x0800], 11);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            restored.fill_chr_window(&mut window);
+            assert_eq!(window[0x0800], 11);
+        }
         assert_eq!(restored.mirroring(), NametableMirroring::OneScreenLower);
         assert_eq!(restored.read_prg(0x6000), 0x9A);
         assert_eq!(restored.irq_counter, 0x1234);

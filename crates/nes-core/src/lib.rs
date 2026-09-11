@@ -38,7 +38,8 @@ pub use api::{
 };
 pub use cheat_codes::{CheatCode, CheatCodeError};
 pub use constants::{
-    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH,
+    AUDIO_CHUNK_SAMPLES, AUDIO_SAMPLE_RATE, FRAME_HEIGHT, FRAME_RGB565_BYTES, FRAME_RGBA_BYTES,
+    FRAME_WIDTH,
 };
 
 #[cfg(feature = "nova")]

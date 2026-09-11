@@ -1,0 +1,11 @@
+[build]
+target = "xtensa-esp32s3-none-elf"
+
+# The Espressif Xtensa toolchain ships no prebuilt core/alloc for this
+# target, so rebuild them from the rust-src component it installs.
+[unstable]
+build-std = ["core", "alloc"]
+
+# Uncomment once espflash is installed:
+# [target.xtensa-esp32s3-none-elf]
+# runner = "espflash flash --monitor"

@@ -66,12 +66,9 @@ impl Camerica {
         self.selected_bank = usize::from(state.selected_bank) % self.bank_count;
     }
 
-    /// Returns the currently mapped 8KB CHR window (always CHR-RAM).
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
-        window.copy_from_slice(&self.chr_ram);
-        window
+    /// Fills `out` with the currently mapped 8KB CHR window (always CHR-RAM).
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
+        out.copy_from_slice(&self.chr_ram);
     }
 
     /// Returns `true`: Camerica boards always expose 8KB CHR-RAM.
@@ -184,7 +181,8 @@ mod tests {
         window[0] = 0x9A;
         window[CHR_WINDOW_BYTES - 1] = 0xBC;
         mapper.sync_chr_ram_from_ppu_window(&window);
-        let read = mapper.chr_window();
+        let mut read = [0_u8; CHR_WINDOW_BYTES];
+        mapper.fill_chr_window(&mut read);
         assert_eq!(read[0], 0x9A);
         assert_eq!(read[CHR_WINDOW_BYTES - 1], 0xBC);
     }

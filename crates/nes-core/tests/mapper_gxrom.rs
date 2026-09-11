@@ -1,5 +1,7 @@
 use nes_core::mapper::Gxrom;
 
+const CHR_8K: usize = 8 * 1024;
+
 #[test]
 fn gxrom_write_selects_prg_and_chr_banks() {
     let mut prg = vec![0_u8; 4 * 32 * 1024];
@@ -18,14 +20,28 @@ fn gxrom_write_selects_prg_and_chr_banks() {
     assert_eq!(mapper.selected_prg_bank(), 0);
     assert_eq!(mapper.selected_chr_bank(), 0);
     assert_eq!(mapper.read_prg(0x8000), 0x10);
-    assert_eq!(mapper.chr_window()[0], 0xA0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xA0
+    );
 
     mapper.write_prg(0x8000, 0x21);
 
     assert_eq!(mapper.selected_prg_bank(), 2);
     assert_eq!(mapper.selected_chr_bank(), 1);
     assert_eq!(mapper.read_prg(0x8000), 0x30);
-    assert_eq!(mapper.chr_window()[0], 0xB0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xB0
+    );
 }
 
 #[test]
@@ -59,7 +75,8 @@ fn gxrom_short_inputs_are_zero_padded() {
     assert_eq!(mapper.read_prg(0x8002), 0x00);
     assert_eq!(mapper.read_prg(0xFFFF), 0x00);
 
-    let window = mapper.chr_window();
+    let mut window = [0_u8; CHR_8K];
+    mapper.fill_chr_window(&mut window);
     assert_eq!(window[(8 * 1024) - 3], 0x5A);
     assert_eq!(window[(8 * 1024) - 2], 0x00);
     assert_eq!(window[(8 * 1024) - 1], 0x00);
@@ -87,14 +104,28 @@ fn gxrom_bank_counts_do_not_wrap_at_256_banks() {
 
     let mut mapper = Gxrom::from_prg_chr(prg, chr);
     assert_eq!(mapper.read_prg(0x8000), 0xA0);
-    assert_eq!(mapper.chr_window()[0], 0xC0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xC0
+    );
 
     mapper.write_prg(0x8000, 0x11);
 
     assert_eq!(mapper.selected_prg_bank(), 1);
     assert_eq!(mapper.selected_chr_bank(), 1);
     assert_eq!(mapper.read_prg(0x8000), 0xB0);
-    assert_eq!(mapper.chr_window()[0], 0xD0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xD0
+    );
 }
 
 #[test]

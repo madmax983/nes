@@ -94,16 +94,13 @@ impl ColorDreams {
         self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
     }
 
-    /// Returns the currently mapped 8KB CHR window.
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
+    /// Fills `out` with the currently mapped 8KB CHR window.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
         let start = usize::from(self.selected_chr_bank) * CHR_WINDOW_BYTES;
         let end = start + CHR_WINDOW_BYTES;
         if let Some(mapped_window) = self.chr_data.get(start..end) {
-            window.copy_from_slice(mapped_window);
+            out.copy_from_slice(mapped_window);
         }
-        window
     }
 
     /// Returns `true` when CHR should be writable by the PPU (CHR-RAM present).
@@ -178,11 +175,23 @@ mod tests {
         }
         let mut mapper = ColorDreams::from_prg_chr(vec![0_u8; PRG_BANK_32K], chr);
 
-        assert_eq!(mapper.chr_window()[0], 0xA0);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xA0);
+        }
         mapper.write_prg(0x8000, 0x10); // bits 4-7 = CHR bank 1
-        assert_eq!(mapper.chr_window()[0], 0xA1);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xA1);
+        }
         mapper.write_prg(0x8000, 0x30); // CHR bank 3
-        assert_eq!(mapper.chr_window()[0], 0xA3);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xA3);
+        }
     }
 
     #[test]
@@ -199,12 +208,20 @@ mod tests {
         // Bits 2-3 must not affect PRG select; bits 0-1 only.
         mapper.write_prg(0x8000, 0b0000_1100); // PRG bits 0-1 = 0, CHR bits 4-7 = 0
         assert_eq!(mapper.read_prg(0x8000), 0x00);
-        assert_eq!(mapper.chr_window()[0], 0xB0);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xB0);
+        }
 
         // CHR select uses bits 4-7 only.
         mapper.write_prg(0x8000, 0b0001_0001); // PRG = 1, CHR = 1
         assert_eq!(mapper.read_prg(0x8000), 0x01);
-        assert_eq!(mapper.chr_window()[0], 0xB1);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xB1);
+        }
     }
 
     #[test]
@@ -214,7 +231,11 @@ mod tests {
         let mut window = [0_u8; CHR_WINDOW_BYTES];
         window[0] = 0x77;
         mapper.sync_chr_ram_from_ppu_window(&window);
-        assert_eq!(mapper.chr_window()[0], 0x77);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0x77);
+        }
     }
 
     #[test]

@@ -291,26 +291,23 @@ impl Mmc3 {
         );
     }
 
-    /// Returns the currently mapped 8KB CHR window.
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut mapped = [0_u8; CHR_WINDOW_BYTES];
+    /// Fills `out` with the currently mapped 8KB CHR window.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
         if self.chr_inversion() {
-            self.copy_chr_1k_bank(self.bank_registers[2], 0x0000, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[3], 0x0400, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[4], 0x0800, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[5], 0x0C00, &mut mapped);
-            self.copy_chr_2k_bank(self.bank_registers[0], 0x1000, &mut mapped);
-            self.copy_chr_2k_bank(self.bank_registers[1], 0x1800, &mut mapped);
+            self.copy_chr_1k_bank(self.bank_registers[2], 0x0000, out);
+            self.copy_chr_1k_bank(self.bank_registers[3], 0x0400, out);
+            self.copy_chr_1k_bank(self.bank_registers[4], 0x0800, out);
+            self.copy_chr_1k_bank(self.bank_registers[5], 0x0C00, out);
+            self.copy_chr_2k_bank(self.bank_registers[0], 0x1000, out);
+            self.copy_chr_2k_bank(self.bank_registers[1], 0x1800, out);
         } else {
-            self.copy_chr_2k_bank(self.bank_registers[0], 0x0000, &mut mapped);
-            self.copy_chr_2k_bank(self.bank_registers[1], 0x0800, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[2], 0x1000, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[3], 0x1400, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[4], 0x1800, &mut mapped);
-            self.copy_chr_1k_bank(self.bank_registers[5], 0x1C00, &mut mapped);
+            self.copy_chr_2k_bank(self.bank_registers[0], 0x0000, out);
+            self.copy_chr_2k_bank(self.bank_registers[1], 0x0800, out);
+            self.copy_chr_1k_bank(self.bank_registers[2], 0x1000, out);
+            self.copy_chr_1k_bank(self.bank_registers[3], 0x1400, out);
+            self.copy_chr_1k_bank(self.bank_registers[4], 0x1800, out);
+            self.copy_chr_1k_bank(self.bank_registers[5], 0x1C00, out);
         }
-        mapped
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU.
@@ -682,7 +679,8 @@ mod tests {
 
         let _ = m.read_prg(0x8000);
         let _ = m.read_prg(0xE000);
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window.len(), CHR_WINDOW_BYTES);
     }
 

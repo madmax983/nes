@@ -4,6 +4,8 @@ use nes_core::{Command, NesCore};
 const PRG_8K: usize = 8 * 1024;
 const CHR_4K: usize = 4 * 1024;
 
+const CHR_8K: usize = 8 * 1024;
+
 fn prg_with_bank_markers(banks_8k: usize) -> Vec<u8> {
     let mut prg = vec![0_u8; banks_8k * PRG_8K];
     for bank in 0..banks_8k {
@@ -54,21 +56,49 @@ fn mmc2_low_half_chr_latch_switches_on_fd_fe_fetches() {
     // Latches power up at FE, so the low half shows the $C000 bank (6). A
     // non-trigger low-table fetch does not change the latch.
     assert!(!m.notify_ppu_chr_fetch(0x0000));
-    assert_eq!(m.chr_window()[0x0000], 6);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        6
+    );
 
     // Fetching tile $FD ($0FD8) flips latch0 -> FD; the change is reported.
     assert!(m.notify_ppu_chr_fetch(0x0FD8));
-    assert_eq!(m.chr_window()[0x0000], 3);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        3
+    );
     // Re-triggering the same latch value reports no change.
     assert!(!m.notify_ppu_chr_fetch(0x0FD8));
 
     // Fetching tile $FE ($0FE8) flips latch0 back -> FE.
     assert!(m.notify_ppu_chr_fetch(0x0FE8));
-    assert_eq!(m.chr_window()[0x0000], 6);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        6
+    );
 
     // Any fine-Y offset within the trigger tile still latches (matched on & 0x1FF8).
     assert!(m.notify_ppu_chr_fetch(0x0FDF));
-    assert_eq!(m.chr_window()[0x0000], 3);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        3
+    );
 }
 
 #[test]
@@ -78,17 +108,45 @@ fn mmc2_high_half_chr_latch_is_independent() {
     m.write_prg(0xE000, 7); // high-half bank when latch1 == FE
 
     // Default latch1 == FE -> high half is the $E000 bank (7).
-    assert_eq!(m.chr_window()[0x1000], 7);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        7
+    );
 
     // Low-table triggers must not disturb the high-half latch.
     assert!(m.notify_ppu_chr_fetch(0x0FD8));
-    assert_eq!(m.chr_window()[0x1000], 7);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        7
+    );
 
     // High-table triggers flip latch1 only.
     assert!(m.notify_ppu_chr_fetch(0x1FD8));
-    assert_eq!(m.chr_window()[0x1000], 2);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        2
+    );
     assert!(m.notify_ppu_chr_fetch(0x1FE8));
-    assert_eq!(m.chr_window()[0x1000], 7);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        7
+    );
 }
 
 #[test]
@@ -118,7 +176,15 @@ fn mmc2_short_inputs_do_not_panic() {
     let _ = m.read_prg(0x8000);
     let _ = m.read_prg(0xE000);
     let _ = m.notify_ppu_chr_fetch(0x0FD8);
-    assert_eq!(m.chr_window().len(), 8 * 1024);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        8 * 1024
+    );
 }
 
 // --- NesCore-level end-to-end CHR-latch integration -------------------------
@@ -253,7 +319,8 @@ fn mmc2_chr_ram_when_chr_absent_syncs_both_halves() {
     window[0x1000] = 0xBB; // high 4KB half
     m.sync_chr_ram_from_ppu_window(&window);
 
-    let mapped = m.chr_window();
+    let mut mapped = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut mapped);
     assert_eq!(mapped[0x0000], 0xAA);
     assert_eq!(mapped[0x1000], 0xBB);
 }
@@ -272,5 +339,13 @@ fn mmc2_non_multiple_chr_rom_is_padded() {
     // Non-empty CHR that is not a 4KB multiple is rounded up and stays CHR-ROM.
     let m = Mmc2::from_prg_chr(prg_with_bank_markers(4), vec![0x22; 2 * CHR_4K + 3]);
     assert!(!m.chr_writable());
-    assert_eq!(m.chr_window().len(), 8 * 1024);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        8 * 1024
+    );
 }

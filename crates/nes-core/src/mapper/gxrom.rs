@@ -91,16 +91,13 @@ impl Gxrom {
         self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
     }
 
-    /// Returns the currently mapped 8KB CHR window.
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
+    /// Fills `out` with the currently mapped 8KB CHR window.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
         let start = usize::from(self.selected_chr_bank) * CHR_WINDOW_BYTES;
         let end = start + CHR_WINDOW_BYTES;
         if let Some(mapped_window) = self.chr_data.get(start..end) {
-            window.copy_from_slice(mapped_window);
+            out.copy_from_slice(mapped_window);
         }
-        window
     }
 
     /// Returns `true` when CHR should be writable by the PPU.
@@ -250,14 +247,22 @@ mod tests {
 
         // Initially Bank 0
         assert_eq!(mapper.read_prg(0x8000), 0xAA);
-        assert_eq!(mapper.chr_window()[0], 0xCC);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xCC);
+        }
 
         // Write to switch to PRG Bank 1 and CHR Bank 1
         // value format is prg_select << 4 | chr_select
         mapper.write_prg(0x8000, 0x11);
 
         assert_eq!(mapper.read_prg(0x8000), 0xBB);
-        assert_eq!(mapper.chr_window()[0], 0xDD);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            mapper.fill_chr_window(&mut window);
+            assert_eq!(window[0], 0xDD);
+        }
     }
 
     #[test]
@@ -274,7 +279,8 @@ mod tests {
         mapper.sync_chr_ram_from_ppu_window(&window);
 
         // Verify the mapper's internal CHR RAM was updated
-        let updated_window = mapper.chr_window();
+        let mut updated_window = [0_u8; CHR_WINDOW_BYTES];
+        mapper.fill_chr_window(&mut updated_window);
         assert_eq!(updated_window[0], 42);
         assert_eq!(updated_window[CHR_WINDOW_BYTES - 1], 84);
     }
@@ -293,7 +299,8 @@ mod tests {
         mapper.sync_chr_ram_from_ppu_window(&window);
 
         // Verify the mapper's internal CHR ROM was NOT updated
-        let unchanged_window = mapper.chr_window();
+        let mut unchanged_window = [0_u8; CHR_WINDOW_BYTES];
+        mapper.fill_chr_window(&mut unchanged_window);
         assert_eq!(unchanged_window[0], 0);
     }
 

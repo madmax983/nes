@@ -33,10 +33,24 @@ fn color_dreams_switches_32k_prg_banks() {
 #[test]
 fn color_dreams_switches_8k_chr_banks() {
     let mut mapper = ColorDreams::from_prg_chr(prg_with_bank_markers(1), chr_with_bank_markers(4));
-    assert_eq!(mapper.chr_window()[0], 0xA0);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xA0
+    );
 
     mapper.write_prg(0x8000, 0x20); // bits 4-7 = CHR bank 2
-    assert_eq!(mapper.chr_window()[0], 0xA2);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xA2
+    );
 }
 
 #[test]
@@ -46,7 +60,14 @@ fn color_dreams_masks_prg_and_chr_select_bits() {
     // 0x1D = 0b0001_1101: PRG bits 0-1 = 01 (bank 1), CHR bits 4-7 = 0001 (bank 1).
     mapper.write_prg(0x8000, 0x1D);
     assert_eq!(mapper.read_prg(0x8000), 0x11);
-    assert_eq!(mapper.chr_window()[0], 0xA1);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xA1
+    );
 }
 
 #[test]
@@ -57,7 +78,14 @@ fn color_dreams_uses_chr_ram_when_chr_absent() {
     let mut window = [0_u8; CHR_8K];
     window[0] = 0x42;
     mapper.sync_chr_ram_from_ppu_window(&window);
-    assert_eq!(mapper.chr_window()[0], 0x42);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0x42
+    );
 }
 
 #[test]
@@ -66,7 +94,14 @@ fn color_dreams_wraps_bank_selects_modulo_available_banks() {
     let mut mapper = ColorDreams::from_prg_chr(prg_with_bank_markers(2), chr_with_bank_markers(2));
     mapper.write_prg(0x8000, 0x33); // PRG select 3 -> 1, CHR select 3 -> 1
     assert_eq!(mapper.read_prg(0x8000), 0x11);
-    assert_eq!(mapper.chr_window()[0], 0xA1);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            mapper.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0xA1
+    );
 }
 
 #[test]
@@ -81,5 +116,12 @@ fn color_dreams_normalizes_undersized_and_odd_inputs() {
     let mut window = [0_u8; CHR_8K];
     window[0] = 0x7E;
     m.sync_chr_ram_from_ppu_window(&window); // ignored (CHR-ROM)
-    assert_ne!(m.chr_window()[0], 0x7E);
+    assert_ne!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0x7E
+    );
 }

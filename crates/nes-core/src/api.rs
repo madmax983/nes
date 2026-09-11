@@ -381,28 +381,68 @@ impl LoadedMapper {
         }
     }
 
-    fn chr_window(&self) -> Option<([u8; CHR_8K_BYTES], bool)> {
-        match self {
-            Self::Mmc3(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Cnrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Gxrom(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::ColorDreams(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Camerica(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Namco108(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Fme7(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Mmc2(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Mmc4(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            Self::Mmc5(mapper) => Some((mapper.chr_window(), mapper.chr_writable())),
-            _ => None,
-        }
+    /// Fills `out` with the currently mapped 8KB CHR window.
+    ///
+    /// Returns `None` for mappers with no banked CHR window to push (e.g.
+    /// NROM, whose CHR is loaded straight into the PPU); otherwise returns
+    /// whether the mapped CHR is writable (CHR-RAM). The caller provides the
+    /// buffer so no 8KB array is ever returned by value.
+    fn fill_chr_window(&self, out: &mut [u8; CHR_8K_BYTES]) -> Option<bool> {
+        let writable = match self {
+            Self::Mmc3(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Cnrom(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Gxrom(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::ColorDreams(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Camerica(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Namco108(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Fme7(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Mmc2(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Mmc4(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            Self::Mmc5(mapper) => {
+                mapper.fill_chr_window(out);
+                mapper.chr_writable()
+            }
+            _ => return None,
+        };
+        Some(writable)
     }
 
-    /// Separate background CHR window (MMC5 8x16-sprite mode). `None` for every
-    /// mapper without an A/B CHR split, in which case backgrounds share the
-    /// single [`LoadedMapper::chr_window`].
-    fn chr_bg_window(&self) -> Option<[u8; CHR_8K_BYTES]> {
+    /// Fills `out` with the separate background CHR window (MMC5 8x16-sprite
+    /// mode). Returns `None` for every mapper without an A/B CHR split, in
+    /// which case backgrounds share the single window from
+    /// [`LoadedMapper::fill_chr_window`]; returns `Some(active)` for MMC5,
+    /// where `active` reports whether 8x16-sprite mode (and thus the "B"
+    /// window) is currently in effect.
+    fn fill_chr_bg_window(&self, out: &mut [u8; CHR_8K_BYTES]) -> Option<bool> {
         match self {
-            Self::Mmc5(mapper) => mapper.chr_bg_window(),
+            Self::Mmc5(mapper) => Some(mapper.fill_chr_bg_window(out)),
             _ => None,
         }
     }
@@ -819,6 +859,10 @@ pub struct NesCore {
     last_cpu_bus_trace: Vec<CpuBusAccess>,
     scratch_writes: Vec<CpuWrite>,
     scratch_mmio_reads: Vec<CpuMmioRead>,
+    /// Reusable 8KB buffer for materializing banked CHR windows. Filled by
+    /// [`LoadedMapper::fill_chr_window`] and immediately consumed by the PPU,
+    /// so no 8KB array is ever held on the task stack or returned by value.
+    chr_scratch: Box<[u8; CHR_8K_BYTES]>,
 }
 
 /// Errors that can occur when interacting with the [`NesCore`].
@@ -875,6 +919,7 @@ impl NesCore {
             last_cpu_bus_trace: Vec::new(),
             scratch_writes: Vec::new(),
             scratch_mmio_reads: Vec::new(),
+            chr_scratch: Box::new([0; CHR_8K_BYTES]),
         }
     }
 
@@ -1142,6 +1187,18 @@ impl NesCore {
     /// Writes current RGBA framebuffer into caller-provided buffer.
     pub fn fill_framebuffer_rgba(&self, frame: &mut [u8]) {
         self.ppu.render_rgba(frame);
+    }
+
+    /// Writes the current framebuffer into a caller-provided RGB565 buffer
+    /// (`FRAME_WIDTH * FRAME_HEIGHT` pixels, 5-6-5 bits each).
+    ///
+    /// This is the tiny-display counterpart to
+    /// [`NesCore::fill_framebuffer_rgba`]: the same palette indices expanded
+    /// through the same palette, so the two outputs always agree, but the
+    /// buffer is half the size (120 KiB) and already in the pixel format most
+    /// SPI TFT controllers consume.
+    pub fn fill_framebuffer_rgb565(&self, frame: &mut [u16]) {
+        self.ppu.render_rgb565(frame);
     }
 
     /// Drains one host-frame-sized audio chunk (`AUDIO_CHUNK_SAMPLES`).
@@ -1869,16 +1926,22 @@ impl NesCore {
             self.ppu.set_bg_chr_window(None);
             return;
         };
-        let bg_window = mapper.chr_bg_window();
-        let Some((chr_window, writable)) = mapper.chr_window() else {
+        // Fill the reusable scratch buffer instead of materializing an 8KB
+        // array by value: `set_chr_window` copies it into the PPU immediately,
+        // so the same buffer is reused for the MMC5 background window below.
+        let Some(writable) = mapper.fill_chr_window(&mut self.chr_scratch) else {
             self.ppu.set_bg_chr_window(None);
             return;
         };
-        self.ppu.set_chr_window(&chr_window, writable);
-        // MMC5 8x16-sprite mode supplies a separate background ("B" bank) window;
-        // every other mapper returns `None` and backgrounds share `chr_window`.
+        self.ppu.set_chr_window(&self.chr_scratch[..], writable);
+        // MMC5 8x16-sprite mode supplies a separate background ("B" bank)
+        // window; every other mapper reports no split and backgrounds share
+        // the main window.
+        let bg_active = mapper
+            .fill_chr_bg_window(&mut self.chr_scratch)
+            .unwrap_or(false);
         self.ppu
-            .set_bg_chr_window(bg_window.as_ref().map(|w| &w[..]));
+            .set_bg_chr_window(bg_active.then(|| &self.chr_scratch[..]));
     }
 
     fn sync_mapper_mirroring(&mut self) {
@@ -1935,8 +1998,10 @@ impl NesCore {
         let remap_needed = if addr >= 0x8000 {
             if let Some(mapper) = self.mapper.as_mut() {
                 // Persist CHR-RAM writes made through PPUDATA before bank remapping.
-                let chr_window = self.ppu.chr_window_snapshot();
-                mapper.sync_chr_ram_from_ppu_window(&chr_window);
+                // Borrows the PPU's live CHR window directly instead of taking an
+                // 8KB snapshot copy.
+                let chr_window = self.ppu.chr_window_ref();
+                mapper.sync_chr_ram_from_ppu_window(chr_window);
                 mapper.write_prg(addr, value);
                 true
             } else {
@@ -2057,18 +2122,18 @@ impl NesCore {
             }
             Some(LoadedMapper::Mmc2(mapper)) => {
                 0x54 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
-                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+                    ^ (u64::from(mapper.chr_window_byte(0x0000)) << 16)
+                    ^ (u64::from(mapper.chr_window_byte(0x1000)) << 24)
             }
             Some(LoadedMapper::Mmc4(mapper)) => {
                 0x55 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
-                    ^ (u64::from(mapper.chr_window()[0x0000]) << 16)
-                    ^ (u64::from(mapper.chr_window()[0x1000]) << 24)
+                    ^ (u64::from(mapper.chr_window_byte(0x0000)) << 16)
+                    ^ (u64::from(mapper.chr_window_byte(0x1000)) << 24)
             }
             Some(LoadedMapper::Mmc5(mapper)) => {
                 0x56 ^ (u64::from(mapper.read_prg(0x8000)) << 8)
                     ^ (u64::from(mapper.read_prg(0xE000)) << 16)
-                    ^ (u64::from(mapper.chr_window()[0x0000]) << 24)
+                    ^ (u64::from(mapper.chr_window_first_byte()) << 24)
                     ^ (u64::from(mapper.irq_pending()) << 32)
                     ^ (u64::from(mapper.expansion_read(0x5205).unwrap_or(0)) << 40)
             }
@@ -2270,7 +2335,7 @@ mod tests {
             NametableMirroring::Vertical,
         );
         let mapper = LoadedMapper::Mmc3(mmc3);
-        assert!(mapper.chr_window().is_some());
+        assert!(mapper.fill_chr_window(&mut [0_u8; CHR_8K_BYTES]).is_some());
     }
 
     #[test]
@@ -2351,10 +2416,12 @@ mod tests {
         mapper.sync_chr_ram_from_ppu_window(&window);
 
         // Since Cnrom has writable CHR-RAM here, the window should have synced to its RAM.
-        // There is no easy getter for CHR-RAM, but we can call chr_window.
-        let (chr_window, writable) = mapper.chr_window().unwrap();
-        assert!(writable);
-        assert_eq!(chr_window[0], 1);
+        // There is no easy getter for CHR-RAM, but we can fill the CHR window.
+        let writable = mapper.fill_chr_window(&mut [0_u8; CHR_8K_BYTES]);
+        assert_eq!(writable, Some(true));
+        let mut window = [0_u8; CHR_8K_BYTES];
+        mapper.fill_chr_window(&mut window);
+        assert_eq!(window[0], 1);
     }
 
     #[test]
@@ -2364,9 +2431,11 @@ mod tests {
         let window = [2; 8192];
         mapper.sync_chr_ram_from_ppu_window(&window);
 
-        let (chr_window, writable) = mapper.chr_window().unwrap();
-        assert!(writable);
-        assert_eq!(chr_window[0], 2);
+        let writable = mapper.fill_chr_window(&mut [0_u8; CHR_8K_BYTES]);
+        assert_eq!(writable, Some(true));
+        let mut window = [0_u8; CHR_8K_BYTES];
+        mapper.fill_chr_window(&mut window);
+        assert_eq!(window[0], 2);
     }
 
     #[test]
@@ -2404,9 +2473,10 @@ mod tests {
         let window = [3; 8192];
         mapper.sync_chr_ram_from_ppu_window(&window);
 
-        let (chr_window, writable) = mapper.chr_window().unwrap();
+        let mut window = [0_u8; CHR_8K_BYTES];
+        let writable = mapper.fill_chr_window(&mut window).unwrap();
         assert!(writable);
-        assert_eq!(chr_window[0], 3);
+        assert_eq!(window[0], 3);
     }
 
     #[test]
@@ -2460,21 +2530,21 @@ mod tests {
     fn should_return_none_for_chr_window_unsupported_mappers() {
         let nrom = Nrom::from_prg_rom(vec![0; 32 * 1024]);
         let mapper = LoadedMapper::Nrom(nrom);
-        assert_eq!(mapper.chr_window(), None);
+        assert_eq!(mapper.fill_chr_window(&mut [0_u8; CHR_8K_BYTES]), None);
     }
 
     #[test]
     fn should_return_chr_window_for_gxrom() {
         let gxrom = Gxrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Gxrom(gxrom);
-        assert!(mapper.chr_window().is_some());
+        assert!(mapper.fill_chr_window(&mut [0_u8; CHR_8K_BYTES]).is_some());
     }
 
     #[test]
     fn should_return_chr_window_for_cnrom() {
         let cnrom = Cnrom::from_prg_chr(vec![0; 32 * 1024], vec![]);
         let mapper = LoadedMapper::Cnrom(cnrom);
-        assert!(mapper.chr_window().is_some());
+        assert!(mapper.fill_chr_window(&mut [0_u8; CHR_8K_BYTES]).is_some());
     }
 
     #[test]

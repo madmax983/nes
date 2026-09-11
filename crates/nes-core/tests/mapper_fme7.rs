@@ -83,7 +83,8 @@ fn fme7_chr_window_assembles_from_1k_banks() {
     let mut m = Fme7::from_prg_chr(prg_with_bank_markers(4), chr_with_bank_markers(16));
     select(&mut m, 0x0, 10);
     select(&mut m, 0x7, 15);
-    let window = m.chr_window();
+    let mut window = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut window);
     assert_eq!(window[0x0000], 10);
     assert_eq!(window[0x1C00], 15);
 }
@@ -160,7 +161,14 @@ fn fme7_chr_ram_when_absent_is_writable() {
     let mut window = [0_u8; CHR_8K];
     window[0] = 0x77;
     m.sync_chr_ram_from_ppu_window(&window);
-    assert_eq!(m.chr_window()[0], 0x77);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0x77
+    );
 }
 
 #[test]
@@ -169,13 +177,28 @@ fn fme7_normalizes_inputs_and_guards_out_of_range_access() {
     // padded up to a whole window and left non-writable.
     let mut m = Fme7::from_prg_chr(vec![0x11; PRG_8K + 3], vec![0x22; CHR_8K + 5]);
     assert!(!m.chr_writable());
-    assert_eq!(m.chr_window().len(), CHR_8K);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        CHR_8K
+    );
 
     // A sync request on CHR-ROM is a no-op early return.
     let mut window = [0_u8; CHR_8K];
     window[0] = 0x7E;
     m.sync_chr_ram_from_ppu_window(&window);
-    assert_ne!(m.chr_window()[0], 0x7E);
+    assert_ne!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0],
+        0x7E
+    );
 
     // Reads below $6000 return open bus; $C000-$FFFF writes (5B audio) are no-ops.
     assert_eq!(m.read_prg(0x5000), 0xFF);

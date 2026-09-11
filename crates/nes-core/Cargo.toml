@@ -15,6 +15,12 @@ nova = ["std"]
 
 tas = []
 
+# For targets where flash-mapped rodata (DROM) is unavailable or broken,
+# such as the ESP32-S3 QEMU emulation. Computes the APU mixer outputs
+# directly instead of using the 131 KiB precomputed tables, eliminating
+# the large `.rodata` DROM segment. Slower per-sample, but saves flash.
+no-apu-tables = []
+
 [dependencies]
 itoa = "1.0.17"
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }

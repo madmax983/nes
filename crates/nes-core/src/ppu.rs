@@ -72,6 +72,26 @@ const fn build_framebuffer_rgba_lut() -> [[u8; 4]; 256] {
     lut
 }
 
+/// Expansion table from stored framebuffer byte to RGB565.
+///
+/// Built from the same [`NES_PALETTE_RGB`] source as
+/// [`FRAMEBUFFER_RGBA_LUT`], so the two expansions always agree: each entry is
+/// the RGB565 quantization (`r >> 3`, `g >> 2`, `b >> 3`) of the palette
+/// color. Entries above `0x3F` are black, matching the RGBA table's treatment
+/// of [`FRAMEBUFFER_BLANK`].
+const FRAMEBUFFER_RGB565_LUT: [u16; 256] = build_framebuffer_rgb565_lut();
+
+const fn build_framebuffer_rgb565_lut() -> [u16; 256] {
+    let mut lut = [0x0000; 256];
+    let mut index = 0;
+    while index < 64 {
+        let (r, g, b) = NES_PALETTE_RGB[index];
+        lut[index] = ((r as u16 >> 3) << 11) | ((g as u16 >> 2) << 5) | (b as u16 >> 3);
+        index += 1;
+    }
+    lut
+}
+
 const NES_PALETTE_RGB: [(u8, u8, u8); 64] = [
     (84, 84, 84),
     (0, 30, 116),
@@ -936,6 +956,22 @@ impl Ppu {
         }
     }
 
+    /// Expands the palette-indexed framebuffer into an RGB565 destination
+    /// buffer (two bytes per pixel, 5-6-5 bits).
+    ///
+    /// This is the compact counterpart to [`Ppu::render_rgba`] for tiny
+    /// displays: a full frame is 120 KiB instead of 240 KiB, and the pixels
+    /// land directly in the format SPI TFT controllers consume. If `frame`
+    /// has an unexpected length, the function is a no-op.
+    pub fn render_rgb565(&self, frame: &mut [u16]) {
+        if frame.len() != FRAME_PIXELS {
+            return;
+        }
+        for (pixel, out) in self.framebuffer.iter().zip(frame.iter_mut()) {
+            *out = FRAMEBUFFER_RGB565_LUT[*pixel as usize];
+        }
+    }
+
     /// Returns `PPUCTRL`.
     #[must_use]
     pub fn ctrl(&self) -> u8 {
@@ -1076,10 +1112,13 @@ impl Ppu {
         self.rendering_enabled()
     }
 
-    /// Returns a copy of the active 8KB CHR window.
+    /// Borrows the active 8KB CHR window.
+    ///
+    /// Lets callers (e.g. CHR-RAM synchronization) read the live window
+    /// without copying it by value.
     #[must_use]
-    pub fn chr_window_snapshot(&self) -> [u8; CHR_BYTES] {
-        self.chr
+    pub fn chr_window_ref(&self) -> &[u8; CHR_BYTES] {
+        &self.chr
     }
 
     /// Resolves one pixel to its 6-bit NES palette index.

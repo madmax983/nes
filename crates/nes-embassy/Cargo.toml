@@ -1,0 +1,25 @@
+[package]
+name = "nes-embassy"
+version = "0.1.0"
+edition = "2021"
+description = "Hardware-neutral no_std adapter: runs nes-core on tiny Embassy targets"
+license = "MIT"
+
+[workspace]
+
+[dependencies]
+nes-core = { path = "../nes-core", default-features = false }
+
+[features]
+default = []
+# `std` is for host-side testing only; firmware builds use no_std + alloc.
+std = ["nes-core/std"]
+# For QEMU, where the DROM (flash-mapped rodata) is broken. Eliminates the
+# 131 KiB APU lookup tables; the mixer is computed per-sample instead.
+no-apu-tables = ["nes-core/no-apu-tables"]
+
+[package.metadata.nes-embassy]
+# Reference firmware lives in `firmware/esp32-s3` (own detached workspace,
+# Xtensa-only). It is not a workspace member so host `cargo test` never tries
+# to build it.
+firmware = "firmware/esp32-s3"

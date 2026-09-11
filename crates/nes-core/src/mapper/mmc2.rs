@@ -186,14 +186,25 @@ impl Mmc2 {
             .copy_from_slice(&self.chr_data[src..src + CHR_BANK_4K]);
     }
 
-    /// Returns the currently mapped 8KB CHR window: two 4KB halves, each chosen
+    /// Fills `out` with the currently mapped 8KB CHR window: two 4KB halves, each chosen
     /// by its own latch.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
+        self.copy_chr_4k_bank(self.low_half_bank(), 0x0000, out);
+        self.copy_chr_4k_bank(self.high_half_bank(), 0x1000, out);
+    }
+
+    /// Returns a single byte of the currently mapped 8KB CHR window without
+    /// materializing it. Used by state hashing to sample the mapped CHR
+    /// identity; offsets below `$1000` read the low half's bank.
     #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
-        self.copy_chr_4k_bank(self.low_half_bank(), 0x0000, &mut window);
-        self.copy_chr_4k_bank(self.high_half_bank(), 0x1000, &mut window);
-        window
+    pub fn chr_window_byte(&self, offset: usize) -> u8 {
+        let bank = if offset < 0x1000 {
+            self.low_half_bank()
+        } else {
+            self.high_half_bank()
+        };
+        let src = self.normalize_chr_bank(bank) * CHR_BANK_4K + (offset & 0x0FFF);
+        self.chr_data[src]
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU (CHR-RAM).
@@ -340,21 +351,37 @@ mod tests {
         m.write_prg(0xC000, 6); // FE bank for $0000
 
         // Default latch0 == FE -> low half uses the $C000 bank (6).
-        assert_eq!(m.chr_window()[0x0000], 6);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 6);
+        }
 
         // A non-trigger low-table fetch does not change the latch.
         assert!(!m.notify_ppu_chr_fetch(0x0000));
-        assert_eq!(m.chr_window()[0x0000], 6);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 6);
+        }
 
         // Fetching tile $FD ($0FD8) flips latch0 -> FD (change => true).
         assert!(m.notify_ppu_chr_fetch(0x0FD8));
-        assert_eq!(m.chr_window()[0x0000], 3);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 3);
+        }
         // Re-fetching the same trigger is idempotent (no change => false).
         assert!(!m.notify_ppu_chr_fetch(0x0FD8));
 
         // Fetching tile $FE ($0FE8) flips latch0 back -> FE.
         assert!(m.notify_ppu_chr_fetch(0x0FE8));
-        assert_eq!(m.chr_window()[0x0000], 6);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 6);
+        }
     }
 
     #[test]
@@ -364,18 +391,34 @@ mod tests {
         m.write_prg(0xE000, 7); // FE bank for $1000
 
         // Default latch1 == FE -> high half uses the $E000 bank (7).
-        assert_eq!(m.chr_window()[0x1000], 7);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 7);
+        }
 
         // Low-table triggers must not touch latch1.
         assert!(m.notify_ppu_chr_fetch(0x0FD8));
-        assert_eq!(m.chr_window()[0x1000], 7);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 7);
+        }
 
         // High-table trigger $1FD8 flips latch1 -> FD.
         assert!(m.notify_ppu_chr_fetch(0x1FD8));
-        assert_eq!(m.chr_window()[0x1000], 2);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 2);
+        }
         // High-table trigger $1FE8 flips latch1 -> FE.
         assert!(m.notify_ppu_chr_fetch(0x1FE8));
-        assert_eq!(m.chr_window()[0x1000], 7);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 7);
+        }
     }
 
     #[test]
@@ -404,7 +447,15 @@ mod tests {
         restored.restore_state(state);
         assert_eq!(restored.read_prg(0x8000), 4);
         assert_eq!(restored.mirroring(), NametableMirroring::Horizontal);
-        assert_eq!(restored.chr_window()[0x0000], 1); // FD low bank
-        assert_eq!(restored.chr_window()[0x1000], 3); // FD high bank
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            restored.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 1);
+        } // FD low bank
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            restored.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 3);
+        } // FD high bank
     }
 }

@@ -3,6 +3,8 @@ use nes_core::mapper::Namco108;
 const PRG_8K: usize = 8 * 1024;
 const CHR_1K: usize = 1024;
 
+const CHR_8K: usize = 8 * 1024;
+
 fn prg_with_bank_markers(banks: usize) -> Vec<u8> {
     let mut prg = vec![0_u8; banks * PRG_8K];
     for bank in 0..banks {
@@ -42,7 +44,8 @@ fn namco108_2k_chr_banks_via_r0_r1_ignore_bit0() {
     select_register(&mut mapper, 0, 3); // 3 -> 2 (bit 0 ignored) => banks 2,3
     select_register(&mut mapper, 1, 5); // 5 -> 4 => banks 4,5
 
-    let window = mapper.chr_window();
+    let mut window = [0_u8; CHR_8K];
+    mapper.fill_chr_window(&mut window);
     assert_eq!(window[0x0000], 2);
     assert_eq!(window[0x0400], 3);
     assert_eq!(window[0x0800], 4);
@@ -57,7 +60,8 @@ fn namco108_1k_chr_banks_via_r2_r5() {
     select_register(&mut mapper, 4, 5);
     select_register(&mut mapper, 5, 4);
 
-    let window = mapper.chr_window();
+    let mut window = [0_u8; CHR_8K];
+    mapper.fill_chr_window(&mut window);
     assert_eq!(window[0x1000], 7);
     assert_eq!(window[0x1400], 6);
     assert_eq!(window[0x1800], 5);
@@ -97,7 +101,8 @@ fn namco108_chr_ram_when_chr_absent_syncs_and_reads_back() {
     window[0x1C00] = 0xDD; // R5 1KB slot at $1C00
     m.sync_chr_ram_from_ppu_window(&window);
 
-    let mapped = m.chr_window();
+    let mut mapped = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut mapped);
     assert_eq!(mapped[0x0000], 0xAA);
     assert_eq!(mapped[0x0800], 0xBB);
     assert_eq!(mapped[0x1000], 0xCC);
@@ -121,5 +126,13 @@ fn namco108_non_multiple_chr_rom_is_padded_and_not_writable() {
     assert!(!short.chr_writable());
     let odd = Namco108::from_prg_chr(prg_with_bank_markers(4), vec![0x22; CHR_WINDOW + 3]);
     assert!(!odd.chr_writable());
-    assert_eq!(odd.chr_window().len(), CHR_WINDOW);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            odd.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        CHR_WINDOW
+    );
 }

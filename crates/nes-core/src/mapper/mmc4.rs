@@ -201,14 +201,25 @@ impl Mmc4 {
             .copy_from_slice(&self.chr_data[src..src + CHR_BANK_4K]);
     }
 
-    /// Returns the currently mapped 8KB CHR window: two 4KB halves, each chosen
+    /// Fills `out` with the currently mapped 8KB CHR window: two 4KB halves, each chosen
     /// by its own latch.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
+        self.copy_chr_4k_bank(self.low_half_bank(), 0x0000, out);
+        self.copy_chr_4k_bank(self.high_half_bank(), 0x1000, out);
+    }
+
+    /// Returns a single byte of the currently mapped 8KB CHR window without
+    /// materializing it. Used by state hashing to sample the mapped CHR
+    /// identity; offsets below `$1000` read the low half's bank.
     #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
-        self.copy_chr_4k_bank(self.low_half_bank(), 0x0000, &mut window);
-        self.copy_chr_4k_bank(self.high_half_bank(), 0x1000, &mut window);
-        window
+    pub fn chr_window_byte(&self, offset: usize) -> u8 {
+        let bank = if offset < 0x1000 {
+            self.low_half_bank()
+        } else {
+            self.high_half_bank()
+        };
+        let src = self.normalize_chr_bank(bank) * CHR_BANK_4K + (offset & 0x0FFF);
+        self.chr_data[src]
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU (CHR-RAM).
@@ -388,19 +399,43 @@ mod tests {
         m.write_prg(0xE000, 7); // FE high
 
         // Default latches == FE.
-        assert_eq!(m.chr_window()[0x0000], 4);
-        assert_eq!(m.chr_window()[0x1000], 7);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 4);
+        }
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 7);
+        }
 
         assert!(!m.notify_ppu_chr_fetch(0x0000)); // non-trigger
         assert!(m.notify_ppu_chr_fetch(0x0FD8)); // latch0 -> FD
-        assert_eq!(m.chr_window()[0x0000], 1);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 1);
+        }
         assert!(m.notify_ppu_chr_fetch(0x0FE8)); // latch0 -> FE
-        assert_eq!(m.chr_window()[0x0000], 4);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 4);
+        }
 
         assert!(m.notify_ppu_chr_fetch(0x1FD8)); // latch1 -> FD
-        assert_eq!(m.chr_window()[0x1000], 2);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 2);
+        }
         assert!(m.notify_ppu_chr_fetch(0x1FE8)); // latch1 -> FE
-        assert_eq!(m.chr_window()[0x1000], 7);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 7);
+        }
         assert!(!m.notify_ppu_chr_fetch(0x1FE8)); // idempotent
     }
 
@@ -431,6 +466,10 @@ mod tests {
         assert_eq!(restored.read_prg(0x8000), 2);
         assert_eq!(restored.mirroring(), NametableMirroring::Horizontal);
         assert_eq!(restored.read_prg(0x6000), 0x9A);
-        assert_eq!(restored.chr_window()[0x0000], 1); // FD low bank after latch
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            restored.fill_chr_window(&mut window);
+            assert_eq!(window[0x0000], 1);
+        } // FD low bank after latch
     }
 }

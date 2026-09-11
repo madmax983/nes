@@ -3,6 +3,8 @@ use nes_core::mapper::Mmc4;
 const PRG_16K: usize = 16 * 1024;
 const CHR_4K: usize = 4 * 1024;
 
+const CHR_8K: usize = 8 * 1024;
+
 fn prg_with_bank_markers(banks_16k: usize) -> Vec<u8> {
     let mut prg = vec![0_u8; banks_16k * PRG_16K];
     for bank in 0..banks_16k {
@@ -65,21 +67,63 @@ fn mmc4_chr_latch_matches_mmc2_low_and_high_halves() {
     m.write_prg(0xE000, 7); // FE high
 
     // Default latches are FE.
-    assert_eq!(m.chr_window()[0x0000], 4);
-    assert_eq!(m.chr_window()[0x1000], 7);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        4
+    );
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        7
+    );
 
     // Low half: non-trigger no-op, then FD/FE flips.
     assert!(!m.notify_ppu_chr_fetch(0x0100));
     assert!(m.notify_ppu_chr_fetch(0x0FD8));
-    assert_eq!(m.chr_window()[0x0000], 1);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        1
+    );
     assert!(m.notify_ppu_chr_fetch(0x0FE8));
-    assert_eq!(m.chr_window()[0x0000], 4);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x0000],
+        4
+    );
 
     // High half is independent.
     assert!(m.notify_ppu_chr_fetch(0x1FD8));
-    assert_eq!(m.chr_window()[0x1000], 2);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        2
+    );
     assert!(m.notify_ppu_chr_fetch(0x1FE8));
-    assert_eq!(m.chr_window()[0x1000], 7);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }[0x1000],
+        7
+    );
     assert!(!m.notify_ppu_chr_fetch(0x1FE8)); // idempotent
 }
 
@@ -108,7 +152,15 @@ fn mmc4_short_inputs_do_not_panic() {
     let _ = m.read_prg(0xC000);
     let _ = m.read_prg(0x6000);
     let _ = m.notify_ppu_chr_fetch(0x1FD8);
-    assert_eq!(m.chr_window().len(), 8 * 1024);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        8 * 1024
+    );
 }
 
 #[test]
@@ -126,7 +178,8 @@ fn mmc4_chr_ram_when_chr_absent_syncs_both_halves() {
     window[0x1000] = 0xBB; // high 4KB half (latch1 == FE -> chr_bank_fe1)
     m.sync_chr_ram_from_ppu_window(&window);
 
-    let mapped = m.chr_window();
+    let mut mapped = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut mapped);
     assert_eq!(mapped[0x0000], 0xAA);
     assert_eq!(mapped[0x1000], 0xBB);
 }
@@ -147,5 +200,13 @@ fn mmc4_non_multiple_chr_rom_is_padded() {
     // Non-empty CHR that is not a 4KB multiple is rounded up and stays CHR-ROM.
     let m = Mmc4::from_prg_chr(prg_with_bank_markers(2), vec![0x22; 2 * CHR_4K + 5]);
     assert!(!m.chr_writable());
-    assert_eq!(m.chr_window().len(), 8 * 1024);
+    assert_eq!(
+        {
+            let mut buf = [0_u8; CHR_8K];
+            m.fill_chr_window(&mut buf);
+            buf
+        }
+        .len(),
+        8 * 1024
+    );
 }

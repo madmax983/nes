@@ -1,0 +1,161 @@
+name: ESP32-S3 QEMU boot
+
+# Boots the reference firmware in Espressif's QEMU fork (`esp32s3` machine)
+# and asserts it gets from reset through ROM load and into the frame loop.
+#
+# This is a boot smoke test, not a performance or peripheral-fidelity test:
+# the `qemu` cargo feature skips the ST7789 SPI transfer and the I2S DMA
+# transfer (the QEMU machine models neither peripheral's other end), while
+# peripheral *init*, ROM loading, and the real emulation loop all run and
+# the frame/audio data is still produced. Real display/audio behavior is
+# validated on hardware.
+#
+# Toolchain: the Espressif Rust fork via esp-rs/xtensa-toolchain (the same
+# route espup itself recommends for CI). Image: esptool elf2image plus a
+# 4 MiB flash assembly at offset 0x0, the same recipe the tallow kernel
+# (madmax983/tallow) uses to boot on this QEMU machine. Emulator: the
+# prebuilt qemu-system-xtensa from Espressif's QEMU fork releases.
+
+on:
+  push:
+    paths:
+      - "crates/nes-core/**"
+      - "crates/nes-embassy/**"
+      - ".github/workflows/esp32s3-qemu.yml"
+  pull_request:
+    paths:
+      - "crates/nes-core/**"
+      - "crates/nes-embassy/**"
+      - ".github/workflows/esp32s3-qemu.yml"
+  workflow_dispatch:
+
+env:
+  # espup queries the GitHub API during install; the token raises the rate limit.
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  QEMU_TAG: esp-develop-9.2.2-20260417
+  QEMU_PKG: qemu-xtensa-softmmu-esp_develop_9.2.2_20260417-x86_64-linux-gnu.tar.xz
+  FIRMWARE_DIR: crates/nes-embassy/firmware/esp32-s3
+
+jobs:
+  host-gates:
+    name: Host gates (fmt, nes-core, nes-embassy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: fmt (host workspace)
+        run: cargo fmt --all -- --check
+
+      - name: fmt (nes-embassy workspace)
+        working-directory: crates/nes-embassy
+        run: cargo fmt --all -- --check
+
+      - name: fmt (firmware)
+        working-directory: ${{ env.FIRMWARE_DIR }}
+        run: cargo fmt --all -- --check
+
+      - name: nes-core tests
+        run: cargo test -p nes-core
+
+      - name: nes-embassy host tests
+        working-directory: crates/nes-embassy
+        run: cargo test
+
+  firmware-qemu:
+    name: Firmware boot (ESP32-S3 QEMU)
+    runs-on: ubuntu-latest
+    needs: host-gates
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Espressif Rust toolchain
+        uses: esp-rs/xtensa-toolchain@v1.7.0
+        with:
+          buildtargets: esp32s3
+
+      - name: Install esptool
+        run: pip install esptool
+
+      - name: Download Espressif QEMU fork
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libslirp0
+          mkdir -p "$HOME/.esp-qemu"
+          curl -L --fail --retry 3 -o /tmp/qemu.tar.xz \
+            "https://github.com/espressif/qemu/releases/download/${QEMU_TAG}/${QEMU_PKG}"
+          tar -xf /tmp/qemu.tar.xz -C "$HOME/.esp-qemu"
+          QEMU_BIN="$(find "$HOME/.esp-qemu" -name qemu-system-xtensa -type f | head -1)"
+          test -n "$QEMU_BIN"
+          echo "QEMU_BIN=$QEMU_BIN" >> "$GITHUB_ENV"
+          "$QEMU_BIN" --version
+
+      - name: Build firmware for xtensa-esp32s3-none-elf
+        working-directory: ${{ env.FIRMWARE_DIR }}
+        # The action sets the `esp` toolchain as the override; build-std is
+        # configured in the firmware's .cargo/config.toml.
+        run: cargo +esp build --release --features qemu
+
+      - name: Assemble QEMU flash image
+        # Same recipe as the tallow kernel (madmax983/tallow): esptool
+        # elf2image produces the ESP boot image the S3 ROM understands, and
+        # the ROM loads it from flash offset 0x0 on S2/S3/C3 — no IDF
+        # bootloader or partition table needed.
+        working-directory: ${{ env.FIRMWARE_DIR }}
+        run: |
+          python3 -m esptool --chip esp32s3 elf2image \
+            --flash-mode dio --flash-freq 80m --flash-size 4MB \
+            -o /tmp/nes-app.bin \
+            target/xtensa-esp32s3-none-elf/release/nes-esp32-s3
+          python3 - <<'EOF'
+          app = open('/tmp/nes-app.bin','rb').read()
+          flash = bytearray(b'\xff' * (4*1024*1024))
+          flash[0:len(app)] = app
+          open('/tmp/qemu_flash.bin','wb').write(flash)
+          print(f"app {len(app)} bytes -> /tmp/qemu_flash.bin")
+          EOF
+          ls -l /tmp/qemu_flash.bin
+
+      - name: Boot in QEMU, wait for the frame loop
+        run: |
+          "$QEMU_BIN" -nographic -machine esp32s3 \
+            -drive file=/tmp/qemu_flash.bin,if=mtd,format=raw \
+            -monitor none -serial file:/tmp/qemu_serial.log \
+            -no-reboot &
+          QEMU_PID=$!
+          # Up to ~2.5 minutes for the guest to reach frame 60; fail fast if
+          # QEMU itself dies (usually a CPU fault at boot).
+          for _ in $(seq 1 150); do
+            sleep 1
+            grep -q "nes: frame 60" /tmp/qemu_serial.log 2>/dev/null && break
+            if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+              echo "::error::QEMU exited before the firmware reached frame 60"
+              break
+            fi
+          done
+          kill -INT "$QEMU_PID" 2>/dev/null || true
+          wait "$QEMU_PID" 2>/dev/null || true
+          echo '--- serial log ---'
+          cat /tmp/qemu_serial.log
+          echo '--- assertions ---'
+          grep -q "nes: boot" /tmp/qemu_serial.log
+          grep -q "nes: rom loaded" /tmp/qemu_serial.log
+          grep -q "nes: entering frame loop" /tmp/qemu_serial.log
+          grep -q "NES_ESP32S3_BOOT_OK" /tmp/qemu_serial.log
+          grep -q "nes: frame 60" /tmp/qemu_serial.log
+          if grep -qiE "panicked|panic:|exception|guru meditation" /tmp/qemu_serial.log; then
+            echo "::error::fault signature in serial log"
+            exit 1
+          fi
+          echo "S3 boot smoke test passed"
+
+      - name: Upload serial log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-serial-log
+          path: /tmp/qemu_serial.log

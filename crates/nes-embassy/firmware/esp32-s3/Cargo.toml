@@ -1,0 +1,83 @@
+[package]
+name = "nes-esp32-s3"
+version = "0.1.0"
+edition = "2021"
+description = "ESP32-S3 reference firmware: NES on Embassy via nes-embassy"
+
+# Detached workspace: this crate targets xtensa-esp32s3-none-elf and must not
+# inherit the host workspace's resolver or target settings.
+[workspace]
+# Resolver v2 keeps build-dependency features (e.g. esp-config's `build`
+# feature, which pulls serde/std for the host build script) from unifying
+# into the target build, where std does not exist.
+resolver = "2"
+
+[profile.dev]
+# Bare-metal Xtensa has no unwinding: abort on panic (also lets `-Z build-std`
+# rebuild core/alloc with a consistent panic strategy).
+panic = "abort"
+
+[profile.release]
+# Emulation is CPU-bound; optimize for speed, not size. The S3 has flash
+# to spare (typical modules ship 8 MiB+).
+opt-level = 2
+# LTO disabled: it interferes with the esp-hal runtime's link-time symbols
+# (interrupt vectors, stack definitions).
+lto = false
+panic = "abort"
+
+[dependencies]
+# Bare-metal: disable nes-core's default `std` feature (which would pull in
+# serde/std, unavailable on xtensa). The core is no_std + alloc.
+nes-core = { path = "../../../nes-core", default-features = false }
+# nes-embassy's default features are already empty (std is opt-in), but be
+# explicit for bare-metal builds.
+nes-embassy = { path = "../..", default-features = false }
+
+esp-hal = { version = "1.2", features = ["esp32s3", "unstable", "rt"] }
+esp-rtos = { version = "0.4", features = ["esp32s3", "embassy"] }
+esp-alloc = { version = "0.11", features = ["esp32s3"] }
+esp-backtrace = { version = "0.15", features = ["esp32s3", "panic-handler", "println"] }
+# Serial logging for bring-up and the QEMU CI boot test. `uart` (not the
+# default USB-serial/JTAG) so the output lands on UART0, which QEMU captures
+# with `-serial`. Must stay on the 0.13 line: esp-backtrace 0.15 requires
+# esp-println ^0.13.0, and only one transport feature may be enabled.
+esp-println = { version = "0.13", default-features = false, features = ["esp32s3", "uart", "critical-section"] }
+embassy-executor = "0.10"
+embassy-time = "0.5"
+mipidsi = "0.10"
+embedded-graphics = "0.8"
+embedded-hal-bus = "0.3"
+
+[features]
+# Register octal PSRAM as a second heap region (needed for large mappers).
+psram = []
+# CI/QEMU builds: the S3 machine in Espressif's QEMU fork models no ST7789
+# panel and no audio codec, so the panel SPI transfer and the I2S DMA
+# transfer are skipped. Peripheral *init*, ROM loading, and the real
+# emulation loop all still run, and the frame/audio data is still produced
+# (just not clocked out). Never enable on real hardware.
+#
+# Also enables `nes-embassy/no-apu-tables`: QEMU's flash MMU emulation
+# cannot handle the 131 KiB DROM (flash-mapped rodata) segment containing
+# the APU lookup tables, so the mixer is computed per-sample instead.
+qemu = ["nes-embassy/no-apu-tables"]
+
+# The crates.io index metadata for nb 1.1.0 incorrectly lists a serde
+# dependency (the published .crate has none); patch with the vendored copy
+# so the Xtensa target does not try to build std-dependent serde.
+#
+# esp-config's `build` feature (used by esp-hal's build script on the host)
+# pulls in serde_yaml, which depends on serde with default features (std).
+# Cargo unifies this with the target build, where std does not exist.
+# The vendored serde_yaml uses serde with no-default-features + alloc,
+# which works for both host and target.
+[patch.crates-io]
+nb = { path = "vendor/nb-1.1.0" }
+serde_yaml = { path = "vendor/serde_yaml-0.9.34-patched" }
+# Vendored serde with default features changed from ["std"] to ["alloc"].
+# Cargo unifies the `std` feature from esp-config's build-dependencies into
+# the xtensa target build where std does not exist. With default=["alloc"],
+# the unified build gets alloc (which works on both host and target) instead
+# of std. The `std` feature can still be explicitly enabled where needed.
+serde = { path = "vendor/serde-1.0.229-patched" }

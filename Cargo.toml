@@ -15,6 +15,10 @@ members = [
     "crates/nes-rewind",
     "crates/nes-ai",
 ]
+# `crates/nes-embassy` is intentionally detached: it targets `no_std`
+# microcontrollers (and the Xtensa ESP32-S3 firmware under it), so it lives in
+# its own workspace rather than inheriting the host workspace's members.
+exclude = ["crates/nes-embassy"]
 
 [profile.dev.package.nes-core]
 opt-level = 2

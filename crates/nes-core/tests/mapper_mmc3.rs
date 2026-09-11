@@ -1,5 +1,7 @@
 use nes_core::mapper::Mmc3;
 
+const CHR_8K: usize = 8 * 1024;
+
 #[test]
 fn mmc3_prg_mode_swaps_fixed_and_switchable_windows() {
     let mut m = Mmc3::new(8, 8);
@@ -39,7 +41,8 @@ fn mmc3_chr_inversion_reorders_1k_and_2k_windows() {
     m.write_prg(0x8000, 0x05);
     m.write_prg(0x8001, 0x03); // reg5
 
-    let chr = m.chr_window();
+    let mut chr = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut chr);
     assert_eq!(chr[0x0000], 2);
     assert_eq!(chr[0x0400], 3);
     assert_eq!(chr[0x0800], 4);
@@ -51,7 +54,8 @@ fn mmc3_chr_inversion_reorders_1k_and_2k_windows() {
 
     // Inverted mode swaps the 2KB and 1KB groups.
     m.write_prg(0x8000, 0x80);
-    let inverted = m.chr_window();
+    let mut inverted = [0_u8; CHR_8K];
+    m.fill_chr_window(&mut inverted);
     assert_eq!(inverted[0x0000], 6);
     assert_eq!(inverted[0x0400], 7);
     assert_eq!(inverted[0x0800], 1);

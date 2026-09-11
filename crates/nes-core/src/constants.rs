@@ -14,6 +14,11 @@ pub const FRAME_HEIGHT: usize = 240;
 /// The number of bytes required to hold a single frame of RGBA pixels.
 pub const FRAME_RGBA_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 4;
 
+/// The number of bytes required to hold a single frame of RGB565 pixels
+/// (two bytes per pixel). This is the compact form tiny displays consume;
+/// see [`NesCore::fill_framebuffer_rgb565`](crate::NesCore::fill_framebuffer_rgb565).
+pub const FRAME_RGB565_BYTES: usize = FRAME_WIDTH * FRAME_HEIGHT * 2;
+
 /// The standard audio sample rate used by the NES core (44.1 kHz).
 pub const AUDIO_SAMPLE_RATE: u32 = 44_100;
 

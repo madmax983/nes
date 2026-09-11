@@ -120,17 +120,14 @@ impl Namco108 {
         self.copy_chr_1k_bank(even.wrapping_add(1), dst_offset + CHR_BANK_1K, dst);
     }
 
-    /// Returns the currently mapped 8KB CHR window.
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut mapped = [0_u8; CHR_WINDOW_BYTES];
-        self.copy_chr_2k_bank(self.bank_registers[0], 0x0000, &mut mapped);
-        self.copy_chr_2k_bank(self.bank_registers[1], 0x0800, &mut mapped);
-        self.copy_chr_1k_bank(self.bank_registers[2], 0x1000, &mut mapped);
-        self.copy_chr_1k_bank(self.bank_registers[3], 0x1400, &mut mapped);
-        self.copy_chr_1k_bank(self.bank_registers[4], 0x1800, &mut mapped);
-        self.copy_chr_1k_bank(self.bank_registers[5], 0x1C00, &mut mapped);
-        mapped
+    /// Fills `out` with the currently mapped 8KB CHR window.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
+        self.copy_chr_2k_bank(self.bank_registers[0], 0x0000, out);
+        self.copy_chr_2k_bank(self.bank_registers[1], 0x0800, out);
+        self.copy_chr_1k_bank(self.bank_registers[2], 0x1000, out);
+        self.copy_chr_1k_bank(self.bank_registers[3], 0x1400, out);
+        self.copy_chr_1k_bank(self.bank_registers[4], 0x1800, out);
+        self.copy_chr_1k_bank(self.bank_registers[5], 0x1C00, out);
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU (CHR-RAM).
@@ -253,12 +250,14 @@ mod tests {
         let mut m = Namco108::from_prg_chr(prg_with_bank_markers(4), chr_with_bank_markers(8));
         // R0 covers $0000-$07FF (2KB). Writing an odd value must drop bit 0.
         select_register(&mut m, 0, 3); // 3 & 0x3E = 2
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0], 2); // 1KB bank 2 at $0000
         assert_eq!(window[CHR_BANK_1K], 3); // next 1KB bank 3 at $0400
 
         select_register(&mut m, 1, 5); // 5 & 0x3E = 4 -> banks 4,5 at $0800
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0x0800], 4);
         assert_eq!(window[0x0800 + CHR_BANK_1K], 5);
     }
@@ -270,7 +269,8 @@ mod tests {
         select_register(&mut m, 3, 6);
         select_register(&mut m, 4, 5);
         select_register(&mut m, 5, 4);
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0x1000], 7);
         assert_eq!(window[0x1400], 6);
         assert_eq!(window[0x1800], 5);
@@ -309,6 +309,10 @@ mod tests {
             Namco108::from_prg_chr(prg_with_bank_markers(8), chr_with_bank_markers(8));
         restored.restore_state(state);
         assert_eq!(restored.read_prg(0x8000), 3);
-        assert_eq!(restored.chr_window()[0x1000], 5);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            restored.fill_chr_window(&mut window);
+            assert_eq!(window[0x1000], 5);
+        }
     }
 }

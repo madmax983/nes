@@ -1062,10 +1062,29 @@ impl Apu {
         let noi = usize::from(self.noise.output());
         let dmc = usize::from(self.dmc.output());
 
+        #[cfg(not(feature = "no-apu-tables"))]
         let pulse_out = PULSE_TABLE[p1 + p2];
+        #[cfg(feature = "no-apu-tables")]
+        let pulse_out = if p1 + p2 == 0 {
+            0.0
+        } else {
+            95.88 / ((8128.0 / (p1 + p2) as f32) + 100.0)
+        };
 
-        let tnd_idx = (tri * 16 * 128) + (noi * 128) + dmc;
-        let tnd_out = TND_TABLE[tnd_idx];
+        #[cfg(not(feature = "no-apu-tables"))]
+        let tnd_out = {
+            let tnd_idx = (tri * 16 * 128) + (noi * 128) + dmc;
+            TND_TABLE[tnd_idx]
+        };
+        #[cfg(feature = "no-apu-tables")]
+        let tnd_out = {
+            let tnd_sum = (tri as f32 / 8227.0) + (noi as f32 / 12241.0) + (dmc as f32 / 22638.0);
+            if tnd_sum == 0.0 {
+                0.0
+            } else {
+                159.79 / ((1.0 / tnd_sum) + 100.0)
+            }
+        };
 
         let mut mixed = pulse_out + tnd_out;
         mixed = mixed.clamp(0.0, 1.0);
@@ -1143,12 +1162,20 @@ const TND_TABLE_LEN: usize = 32_768;
 /// built lazily on the heap. On a hosted target that just removes an allocation
 /// and the per-sample `OnceLock` check; on an embedded target it moves ~131KB
 /// out of RAM and into flash.
+///
+/// Disabled by the `no-apu-tables` feature (for QEMU, where DROM is broken);
+/// the mixer is computed directly per-sample instead.
+#[cfg(not(feature = "no-apu-tables"))]
 static PULSE_TABLE: [f32; PULSE_TABLE_LEN] = build_pulse_table();
 
 /// Triangle/noise/DMC mixer lookup, indexed by
 /// `(triangle * 16 * 128) + (noise * 128) + dmc`.
+///
+/// Disabled by the `no-apu-tables` feature; see above.
+#[cfg(not(feature = "no-apu-tables"))]
 static TND_TABLE: [f32; TND_TABLE_LEN] = build_tnd_table();
 
+#[cfg(not(feature = "no-apu-tables"))]
 const fn build_pulse_table() -> [f32; PULSE_TABLE_LEN] {
     let mut table = [0.0_f32; PULSE_TABLE_LEN];
     let mut i = 1;
@@ -1159,6 +1186,7 @@ const fn build_pulse_table() -> [f32; PULSE_TABLE_LEN] {
     table
 }
 
+#[cfg(not(feature = "no-apu-tables"))]
 const fn build_tnd_table() -> [f32; TND_TABLE_LEN] {
     let mut table = [0.0_f32; TND_TABLE_LEN];
     let mut tri = 0;

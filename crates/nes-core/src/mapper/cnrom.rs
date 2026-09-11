@@ -70,16 +70,13 @@ impl Cnrom {
         self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
     }
 
-    /// Returns the currently mapped 8KB CHR window.
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
+    /// Fills `out` with the currently mapped 8KB CHR window.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
         let start = usize::from(self.selected_chr_bank) * CHR_WINDOW_BYTES;
         let end = start + CHR_WINDOW_BYTES;
         if let Some(mapped_window) = self.chr_data.get(start..end) {
-            window.copy_from_slice(mapped_window);
+            out.copy_from_slice(mapped_window);
         }
-        window
     }
 
     /// Returns `true` when CHR should be writable by the PPU.
@@ -157,7 +154,8 @@ mod tests {
         new_window[0] = 0x55;
         new_window[8191] = 0xAA;
         mapper.sync_chr_ram_from_ppu_window(&new_window);
-        let window = mapper.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        mapper.fill_chr_window(&mut window);
         assert_eq!(window[0], 0x55);
         assert_eq!(window[8191], 0xAA);
     }
@@ -171,7 +169,8 @@ mod tests {
         let mut new_window = [0_u8; CHR_WINDOW_BYTES];
         new_window[0] = 0x55;
         mapper.sync_chr_ram_from_ppu_window(&new_window);
-        let window = mapper.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        mapper.fill_chr_window(&mut window);
         assert_eq!(window[0], 0x00);
     }
 

@@ -58,7 +58,7 @@ enum PrgSource {
 /// (`$5120..=$5127`) while background fetches use the "B" register set
 /// (`$5128..=$512B`, mirrored across the 8KB window); when 8x16 mode is off both
 /// use the "A" set. The mapper exposes the background window via
-/// [`Mmc5::chr_bg_window`] and latches the 8x16 flag from the PPUCTRL byte passed
+/// [`Mmc5::fill_chr_bg_window`] and latches the 8x16 flag from the PPUCTRL byte passed
 /// to [`Mmc5::on_ppu_dot`].
 ///
 /// Deferred / stubbed (see the crate PR notes): the 5B-style audio registers
@@ -571,25 +571,46 @@ impl Mmc5 {
         dst[dst_off..dst_off + unit_size].copy_from_slice(&self.chr_data[src..src + unit_size]);
     }
 
-    /// Returns the currently mapped 8KB CHR window built from the "A" register
-    /// set (`$5120..=$5127`) per the `$5101` CHR mode. This is the sprite window
-    /// in 8x16 mode and the window for everything otherwise.
-    #[must_use]
-    pub fn chr_window(&self) -> [u8; CHR_WINDOW_BYTES] {
-        self.build_chr_window(false)
+    /// Fills `out` with the currently mapped 8KB CHR window built from the "A"
+    /// register set (`$5120..=$5127`) per the `$5101` CHR mode. This is the
+    /// sprite window in 8x16 mode and the window for everything otherwise.
+    pub fn fill_chr_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) {
+        self.build_chr_window_into(false, out);
     }
 
-    /// Returns the 8KB background CHR window built from the "B" register set
-    /// (`$5128..=$512B`), or `None` when 8x16-sprite mode is inactive (in which
-    /// case backgrounds share the "A" window from [`Mmc5::chr_window`]).
+    /// Fills `out` with the 8KB background CHR window built from the "B"
+    /// register set (`$5128..=$512B`); returns `false` (leaving `out`
+    /// untouched) when 8x16-sprite mode is inactive, in which case backgrounds
+    /// share the "A" window from [`Mmc5::fill_chr_window`].
     ///
     /// The "B" set holds only four registers; they are mirrored across the 8KB
     /// window exactly as the corresponding "A" registers would map for the active
     /// `$5101` CHR mode (register index `i` of the "A" set becomes `i & 3` of the
     /// "B" set), matching MMC5 hardware.
+    pub fn fill_chr_bg_window(&self, out: &mut [u8; CHR_WINDOW_BYTES]) -> bool {
+        if self.sprite_8x16 {
+            self.build_chr_window_into(true, out);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns the first byte of the "A" CHR window without materializing it.
+    ///
+    /// Used by state hashing to sample the mapped CHR identity; mirrors the
+    /// first-slot register selection of [`Mmc5::build_chr_window_into`].
     #[must_use]
-    pub fn chr_bg_window(&self) -> Option<[u8; CHR_WINDOW_BYTES]> {
-        self.sprite_8x16.then(|| self.build_chr_window(true))
+    pub fn chr_window_first_byte(&self) -> u8 {
+        let (reg_idx, unit_size) = match self.chr_mode {
+            0 => (7, 8 * 1024),
+            1 => (3, 4 * 1024),
+            2 => (1, 2 * 1024),
+            _ => (0, CHR_BANK_1K),
+        };
+        let bank_units = self.chr_bank_units(self.chr_a[reg_idx]);
+        let total_units = (self.chr_data.len() / unit_size).max(1);
+        self.chr_data[(bank_units % total_units) * unit_size]
     }
 
     /// Consumes the "background CHR window changed" flag (set when the 8x16-sprite
@@ -600,9 +621,9 @@ impl Mmc5 {
     }
 
     /// Builds a flat 8KB CHR window from either the "A" set (`use_b == false`) or
-    /// the "B" set (`use_b == true`, mirrored across the window) per `$5101`.
-    #[must_use]
-    fn build_chr_window(&self, use_b: bool) -> [u8; CHR_WINDOW_BYTES] {
+    /// the "B" set (`use_b == true`, mirrored across the window) per `$5101`,
+    /// writing into the caller-provided `window` buffer.
+    fn build_chr_window_into(&self, use_b: bool, window: &mut [u8; CHR_WINDOW_BYTES]) {
         // Register value for A-set index `idx`; the B-set has four registers and
         // is addressed by `idx & 3`.
         let reg = |idx: usize| -> u8 {
@@ -612,16 +633,15 @@ impl Mmc5 {
                 self.chr_a[idx]
             }
         };
-        let mut window = [0_u8; CHR_WINDOW_BYTES];
         match self.chr_mode {
             0 => {
                 // 8KB: $5127 / $512B.
-                self.copy_chr(self.chr_bank_units(reg(7)), 8 * 1024, 0, &mut window);
+                self.copy_chr(self.chr_bank_units(reg(7)), 8 * 1024, 0, window);
             }
             1 => {
                 // 4KB: $5123/$5127 (A) or $512B mirrored (B).
-                self.copy_chr(self.chr_bank_units(reg(3)), 4 * 1024, 0, &mut window);
-                self.copy_chr(self.chr_bank_units(reg(7)), 4 * 1024, 4 * 1024, &mut window);
+                self.copy_chr(self.chr_bank_units(reg(3)), 4 * 1024, 0, window);
+                self.copy_chr(self.chr_bank_units(reg(7)), 4 * 1024, 4 * 1024, window);
             }
             2 => {
                 // 2KB: $5121, $5123, $5125, $5127 (A) or $5129/$512B mirrored (B).
@@ -630,7 +650,7 @@ impl Mmc5 {
                         self.chr_bank_units(reg(reg_idx)),
                         2 * 1024,
                         i * 2 * 1024,
-                        &mut window,
+                        window,
                     );
                 }
             }
@@ -641,12 +661,11 @@ impl Mmc5 {
                         self.chr_bank_units(reg(slot)),
                         CHR_BANK_1K,
                         slot * CHR_BANK_1K,
-                        &mut window,
+                        window,
                     );
                 }
             }
         }
-        window
     }
 
     /// Returns `true` when mapped CHR should be writable by the PPU (CHR-RAM).
@@ -911,7 +930,8 @@ mod tests {
         for slot in 0..8u16 {
             m.write_expansion(0x5120 + slot, (slot + 8) as u8);
         }
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         for slot in 0..8usize {
             assert_eq!(window[slot * CHR_BANK_1K], (slot + 8) as u8);
         }
@@ -922,7 +942,8 @@ mod tests {
         let mut m = Mmc5::new(8, 16);
         m.write_expansion(0x5101, 0); // 8KB mode
         m.write_expansion(0x5127, 1); // 8KB bank 1 -> 1KB banks 8..16
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0], 8);
         assert_eq!(window[CHR_BANK_1K], 9);
     }
@@ -933,14 +954,16 @@ mod tests {
         m.write_expansion(0x5101, 1); // 4KB mode
         m.write_expansion(0x5123, 1); // low 4KB -> banks 4..8
         m.write_expansion(0x5127, 2); // high 4KB -> banks 8..12
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0], 4);
         assert_eq!(window[4 * 1024], 8);
 
         m.write_expansion(0x5101, 2); // 2KB mode
         m.write_expansion(0x5121, 3); // $0000 2KB -> banks 6..8
         m.write_expansion(0x5127, 5); // $1800 2KB -> banks 10..12
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0], 6);
         assert_eq!(window[6 * 1024], 10);
     }
@@ -952,7 +975,8 @@ mod tests {
         m.write_expansion(0x5101, 3); // 1KB mode
         m.write_expansion(0x5130, 1); // upper bits = 1 -> +256
         m.write_expansion(0x5120, 4); // slot0 bank = 256 + 4 = 260
-        let window = m.chr_window();
+        let mut window = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut window);
         assert_eq!(window[0], 260u16 as u8);
     }
 
@@ -965,19 +989,24 @@ mod tests {
 
         // 8x8 mode (PPUCTRL bit 5 clear): no separate background window.
         m.on_ppu_dot(0, 0, true, 0x00);
-        assert!(m.chr_bg_window().is_none());
-        assert_eq!(m.chr_window()[0], 0); // A-set bank 0
+        let mut bg = [0_u8; CHR_WINDOW_BYTES];
+        assert!(!m.fill_chr_bg_window(&mut bg));
+        let mut fg = [0_u8; CHR_WINDOW_BYTES];
+        m.fill_chr_window(&mut fg);
+        assert_eq!(fg[0], 0); // A-set bank 0
 
         // 8x16 mode (PPUCTRL bit 5 set): background window comes from the B-set.
         m.on_ppu_dot(0, 0, true, 0x20);
         assert!(m.take_chr_bg_dirty(), "flag latches on 8x16 transition");
-        let bg = m
-            .chr_bg_window()
-            .expect("8x16 mode exposes a background window");
+        assert!(
+            m.fill_chr_bg_window(&mut bg),
+            "8x16 mode exposes a background window"
+        );
         // 8KB bank 1 begins at 1KB-bank index 8; `Mmc5::new` fills each 1KB bank
         // with its own index, so the first byte reads 8.
         assert_eq!(bg[0], 8); // B-set 8KB bank 1
-        assert_eq!(m.chr_window()[0], 0); // sprite window still A-set 8KB bank 0
+        m.fill_chr_window(&mut fg);
+        assert_eq!(fg[0], 0); // sprite window still A-set 8KB bank 0
     }
 
     #[test]
@@ -988,7 +1017,8 @@ mod tests {
         for reg in 0..4u16 {
             m.write_expansion(0x5128 + reg, (reg + 8) as u8); // B-set banks 8..12
         }
-        let bg = m.chr_bg_window().unwrap();
+        let mut bg = [0_u8; CHR_WINDOW_BYTES];
+        assert!(m.fill_chr_bg_window(&mut bg));
         // Four B registers mirror across the eight 1KB slots.
         for slot in 0..8usize {
             assert_eq!(bg[slot * CHR_BANK_1K], (8 + (slot & 3)) as u8);
@@ -1135,7 +1165,11 @@ mod tests {
         restored.restore_state(state);
 
         assert_eq!(restored.read_prg(0x8000), 2);
-        assert_eq!(restored.chr_window()[0], 9);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            restored.fill_chr_window(&mut window);
+            assert_eq!(window[0], 9);
+        }
         assert_eq!(restored.expansion_read(0x5C00), Some(0x7E));
         assert_eq!(restored.read_prg_ram(0x6000), Some(0x5A));
         assert_eq!(restored.expansion_read(0x5205), Some(144));
@@ -1156,8 +1190,16 @@ mod tests {
             *byte = (i / CHR_BANK_1K) as u8 + 1;
         }
         m.sync_chr_ram_from_ppu_window(&window);
-        assert_eq!(m.chr_window()[0], 1);
-        assert_eq!(m.chr_window()[CHR_BANK_1K], 2);
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[0], 1);
+        }
+        {
+            let mut window = [0_u8; CHR_WINDOW_BYTES];
+            m.fill_chr_window(&mut window);
+            assert_eq!(window[CHR_BANK_1K], 2);
+        }
     }
 
     #[test]

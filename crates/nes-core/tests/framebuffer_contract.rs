@@ -1,4 +1,4 @@
-use nes_core::{Command, FRAME_HEIGHT, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
+use nes_core::{Command, FRAME_HEIGHT, FRAME_RGB565_BYTES, FRAME_RGBA_BYTES, FRAME_WIDTH, NesCore};
 
 #[test]
 fn framebuffer_geometry_matches_nes_resolution() {
@@ -163,4 +163,47 @@ fn write_ppu_data(core: &mut NesCore, addr: u16, data: &[u8]) {
 fn pixel_rgb(frame: &[u8], x: usize, y: usize) -> [u8; 3] {
     let idx = (y * FRAME_WIDTH + x) * 4;
     [frame[idx], frame[idx + 1], frame[idx + 2]]
+}
+
+/// The RGB565 fill path must expand the exact same palette indices as the RGBA
+/// path: every 16-bit pixel equals the RGB565 quantization of the
+/// corresponding RGBA pixel. This is the accessor tiny displays use instead of
+/// the 240 KiB RGBA staging buffer.
+#[test]
+fn fill_framebuffer_rgb565_matches_rgba_expansion() {
+    assert_eq!(FRAME_RGB565_BYTES, FRAME_WIDTH * FRAME_HEIGHT * 2);
+
+    let mut core = NesCore::new();
+    core.load_cpu_bytes(0xC000, &[0xEA, 0x4C, 0x00, 0xC0]); // NOP ; JMP $C000
+    core.write_cpu_bus(0x2001, 0x0A); // enable background rendering + leftmost 8px
+
+    // Two distinct palette entries so the frame is not uniform.
+    write_ppu_data(&mut core, 0x3F00, &[0x0F, 0x16, 0x2A, 0x00]);
+    // Tile 1 -> color index 1 for all pixels; tile 2 -> color index 2.
+    write_ppu_data(&mut core, 0x0010, &[0xFF; 8]);
+    write_ppu_data(&mut core, 0x0018, &[0x00; 8]);
+    write_ppu_data(&mut core, 0x0020, &[0x00; 8]);
+    write_ppu_data(&mut core, 0x0028, &[0xFF; 8]);
+    write_ppu_data(&mut core, 0x2000, &[0x01]);
+    write_ppu_data(&mut core, 0x2020, &[0x02]);
+    core.write_cpu_bus(0x2005, 0x00);
+    core.write_cpu_bus(0x2005, 0x00);
+
+    core.execute(Command::StepFrame).unwrap();
+
+    let mut rgba = vec![0_u8; FRAME_RGBA_BYTES];
+    core.fill_framebuffer_rgba(&mut rgba);
+    let mut rgb565 = vec![0_u16; FRAME_WIDTH * FRAME_HEIGHT];
+    core.fill_framebuffer_rgb565(&mut rgb565);
+
+    assert!(
+        rgb565.iter().any(|&px| px != 0),
+        "frame should contain non-black pixels"
+    );
+    for (px565, px_rgba) in rgb565.iter().zip(rgba.as_chunks::<4>().0) {
+        let [r, g, b, a] = *px_rgba;
+        assert_eq!(a, 0xFF);
+        let expected = (u16::from(r >> 3) << 11) | (u16::from(g >> 2) << 5) | u16::from(b >> 3);
+        assert_eq!(*px565, expected);
+    }
 }
