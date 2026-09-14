@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**Extract Context for set_overlay_open**
+**Learning:** Found that `set_overlay_open` was taking 6 arguments (`overlay`, `open`, `core`, `audio_output`, `window`, `session`) which were all available within the `AppContext`. This led to repetitive calls across the dispatch logic passing those exact same references over and over again. Also learned that when passing a mutable context, left-to-right evaluation means you cannot pass a boolean derived from the context directly in the same function call.
+**Action:** Changed `set_overlay_open` to accept `ctx: &mut AppContext<'_>` instead of individual fields, heavily simplifying the function signature and flattening call sites, ensuring to extract borrows to local variables first.
