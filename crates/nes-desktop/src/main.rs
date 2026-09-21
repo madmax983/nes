@@ -601,7 +601,8 @@ fn run() -> Result<(), String> {
     #[cfg(not(feature = "mcp-host"))]
     if runtime.mcp_enabled {
         return Err(format!(
-            "MCP host requested for {} but this build does not include the `mcp-host` feature.",
+            "{} MCP host requested for {} but this build does not include the `mcp-host` feature.",
+            "Error:".with(Color::Red).bold(),
             runtime.mcp_bind_addr
         ));
     }
