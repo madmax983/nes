@@ -1,0 +1,813 @@
+[2m2026-07-25T12:53:59.993391Z[0m [32m INFO[0m [2mcargo_tarpaulin::config[0m[2m:[0m Creating config
+[2m2026-07-25T12:54:00.633599Z[0m [32m INFO[0m [2mcargo_tarpaulin[0m[2m:[0m Running Tarpaulin
+[2m2026-07-25T12:54:00.633638Z[0m [32m INFO[0m [2mcargo_tarpaulin[0m[2m:[0m Building project
+[2m2026-07-25T12:54:00.711265Z[0m [32m INFO[0m [2mcargo_tarpaulin::cargo[0m[2m:[0m Cleaning project
+   Compiling libc v0.2.182
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.44
+   Compiling unicode-ident v1.0.24
+   Compiling getrandom v0.3.4
+   Compiling rustix v1.1.4
+   Compiling cfg-if v1.0.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.11.0
+   Compiling syn v2.0.117
+   Compiling zerocopy v0.8.39
+   Compiling serde_core v1.0.228
+   Compiling rand_core v0.9.5
+   Compiling autocfg v1.5.0
+   Compiling num-traits v0.2.19
+   Compiling terminal_size v0.4.3
+   Compiling serde v1.0.228
+   Compiling anstyle v1.0.14
+   Compiling clap_lex v1.1.0
+   Compiling zmij v1.0.21
+   Compiling fastrand v2.3.0
+   Compiling once_cell v1.21.3
+   Compiling tempfile v3.26.0
+   Compiling clap_builder v4.6.0
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.8.0
+   Compiling serde_json v1.0.149
+   Compiling ppv-lite86 v0.2.21
+   Compiling fnv v1.0.7
+   Compiling quick-error v1.2.3
+   Compiling itoa v1.0.17
+   Compiling rusty-fork v0.3.1
+   Compiling derive_arbitrary v1.4.2
+   Compiling serde_derive v1.0.228
+   Compiling arbitrary v1.4.2
+   Compiling divan-macros v0.1.21
+   Compiling clap v4.6.0
+   Compiling rand_chacha v0.9.0
+   Compiling bit-set v0.8.0
+   Compiling rand v0.9.2
+   Compiling rand_xorshift v0.4.0
+   Compiling unarray v0.1.4
+   Compiling regex-lite v0.1.9
+   Compiling regex-syntax v0.8.10
+   Compiling memchr v2.8.0
+   Compiling condtype v1.3.0
+   Compiling divan v0.1.21
+   Compiling proptest v1.11.0
+   Compiling nes-core v0.1.0 (/app/crates/nes-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 48.21s
+[2m2026-07-25T12:54:50.606898Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:50.606962Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/cycle_accuracy-4ba3b5c6a04ebffa
+
+running 3 tests
+test branch_taken_and_page_cross_add_cycles ... ok
+test absolute_x_page_cross_adds_cycle_for_reads ... ok
+test step_frame_advances_to_next_ppu_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+[2m2026-07-25T12:54:51.346884Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:51.346946Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/framebuffer_contract-a441c425832ce341
+
+running 4 tests
+test framebuffer_geometry_matches_nes_resolution ... ok
+test mid_frame_scroll_write_changes_later_scanline_pixels_only ... ok
+test timed_sta_to_ppuscroll_does_not_retroactively_rewrite_earlier_pixels ... ok
+test framebuffer_reflects_ppu_background_pattern_data ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+[2m2026-07-25T12:54:52.346839Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:52.346901Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/bus_map-01735ad052352c10
+
+running 1 test
+test address_regions_are_unambiguous ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[2m2026-07-25T12:54:52.682876Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:52.682937Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_fanout-ab3a9db922d2c6da
+
+running 8 tests
+test fme7_irq_counter_underflow_vectors_cpu_through_nescore ... ok
+test mmc2_prg_bank_switch_and_save_state_through_nescore ... ok
+test colordreams_prg_bank_switch_through_nescore ... ok
+test fme7_prg_and_wram_and_bank_switch_through_nescore ... ok
+test camerica_prg_bank_switch_through_nescore ... ok
+test mmc4_prg_and_wram_and_save_state_through_nescore ... ok
+test namco108_prg_bank_switch_through_nescore ... ok
+test mmc4_chr_latch_rebanks_background_through_ppu_render_path ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+[2m2026-07-25T12:54:54.050839Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:54.050902Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_fme7-d12d8d3bf316a170
+
+running 9 tests
+test fme7_6000_rom_mapped_returns_selected_bank_and_ignores_writes ... ok
+test fme7_6000_ram_round_trips_and_open_bus_when_disabled ... ok
+test fme7_chr_window_assembles_from_1k_banks ... ok
+test fme7_chr_ram_when_absent_is_writable ... ok
+test fme7_irq_fires_at_underflow_and_acks_on_reg_d_write ... ok
+test fme7_normalizes_inputs_and_guards_out_of_range_access ... ok
+test fme7_counter_disable_freezes_and_irq_disable_suppresses ... ok
+test fme7_mirroring_register_produces_four_distinct_modes ... ok
+test fme7_prg_banks_switch_with_fixed_last_at_e000 ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+[2m2026-07-25T12:54:54.450894Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:54.450953Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_namco108-633926a2642b301f
+
+running 8 tests
+test namco108_bank_select_uses_only_index_bits ... ok
+test namco108_non_multiple_chr_rom_is_padded_and_not_writable ... ok
+test namco108_chr_ram_when_chr_absent_syncs_and_reads_back ... ok
+test namco108_2k_chr_banks_via_r0_r1_ignore_bit0 ... ok
+test namco108_1k_chr_banks_via_r2_r5 ... ok
+test namco108_reads_and_writes_below_8000_are_guarded ... ok
+test namco108_register_values_masked_to_six_bits ... ok
+test namco108_prg_switches_r6_r7_with_fixed_high_windows ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+[2m2026-07-25T12:54:54.834859Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:54.834917Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/scheduler_determinism-46b15eb7922d1f13
+
+running 3 tests
+test identical_command_sequences_yield_identical_state_hash ... ok
+test step_frame_advances_monotonic_cycle_counter ... ok
+test step_scanline_advances_cycles_less_than_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+[2m2026-07-25T12:54:55.902858Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:55.902921Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/step_cpu_core_integration-1015fdd5ff8d22eb
+
+running 2 tests
+test step_cpu_surfaces_unknown_opcode_errors ... ok
+test step_cpu_executes_instruction_and_tracks_trace ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+[2m2026-07-25T12:54:56.998872Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:56.998937Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/ppu_nmi-50eb08316e568979
+
+running 2 tests
+test ppu_status_register_reflects_vblank_progression ... ok
+test nmi_triggers_when_ppuctrl_nmi_enabled ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+[2m2026-07-25T12:54:58.302868Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:58.302938Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_nrom_uxrom-fa85f7637fe2f61a
+
+running 10 tests
+test nrom_from_prg_rom_truncates_large_rom ... ok
+test nrom_ignores_bank_switch_writes ... ok
+test nrom_reads_from_prg_rom ... ok
+test uxrom_from_prg_rom_counts_banks ... ok
+test uxrom_boundary_read ... ok
+test uxrom_from_prg_rom_empty_is_readable ... ok
+test uxrom_from_prg_rom_partial_bank_is_padded ... ok
+test uxrom_switches_lower_bank_only ... ok
+test uxrom_from_prg_rom_preserves_large_bank_count_without_u8_wrap ... ok
+test uxrom_reads_lower_bank_from_selected_and_upper_from_last ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[2m2026-07-25T12:54:58.666872Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:54:58.666930Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/step_cpu_coverage-17127b79c7d74f52
+
+running 1 test
+test cpu_opcode_coverage ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+[2m2026-07-25T12:55:00.014842Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:00.014903Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_axrom-3c9e7e98a841de7c
+
+running 4 tests
+test axrom_read_prg_masks_address_into_32k_window ... ok
+test axrom_short_prg_is_zero_padded_to_full_32k_window ... ok
+test axrom_write_selects_bank_and_one_screen_mirroring ... ok
+test axrom_selected_bank_maps_entire_32k_prg_window ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[2m2026-07-25T12:55:00.366861Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:00.366918Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/status_flags-ba8d58dd7c02483d
+
+running 1 test
+test zero_and_negative_flags_follow_value_written ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[2m2026-07-25T12:55:00.706869Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:00.706927Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_mmc4-3b3cbe6e6fb59620
+
+running 10 tests
+test mmc4_chr_rom_is_not_writable ... ok
+test mmc4_mirroring_register_yields_two_distinct_modes ... ok
+test mmc4_non_multiple_chr_rom_is_padded ... ok
+test mmc4_chr_ram_when_chr_absent_syncs_both_halves ... ok
+test mmc4_prg_bank_select_masks_to_four_bits ... ok
+test mmc4_reads_and_writes_below_8000_and_unmapped_region_are_guarded ... ok
+test mmc4_chr_latch_matches_mmc2_low_and_high_halves ... ok
+test mmc4_short_inputs_do_not_panic ... ok
+test mmc4_switchable_16k_bank_and_fixed_last ... ok
+test mmc4_prg_ram_round_trip ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+[2m2026-07-25T12:55:01.090885Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:01.090974Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/audio_contract-7a3fd08ac341dcb8
+
+running 4 tests
+test audio_chunk_has_expected_sample_geometry ... ok
+test audio_chunk_is_input_invariant_without_channel_state_changes ... ok
+test audio_chunk_is_reset_deterministic ... ok
+test audio_chunk_stays_well_formed_under_long_run ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.48s
+
+[2m2026-07-25T12:55:49.918852Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:49.918921Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/command_query_contract-4722d9434581dcbb
+
+running 4 tests
+test boot_state_is_queryable_without_frontend ... ok
+test pause_and_resume_are_core_commands ... ok
+test controller_state_and_speed_are_queryable ... ok
+test ppu_frame_counter_is_queryable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+[2m2026-07-25T12:55:51.514843Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:51.514908Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/bus_map_prop-f58ccae451ee85c1
+
+running 1 test
+test every_address_maps_to_legal_region ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[2m2026-07-25T12:55:51.862864Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:51.862924Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/irq_line-3d5062df7fadb219
+
+running 2 tests
+test apu_frame_irq_vectors_cpu_when_interrupts_enabled ... ok
+test apu_frame_irq_is_masked_while_interrupt_disable_set ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+[2m2026-07-25T12:55:53.670848Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:53.670912Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_gxrom-9c4c9ccf7c3e6c0b
+
+running 6 tests
+test gxrom_read_prg_masks_address_into_32k_window ... ok
+test gxrom_selected_prg_bank_maps_entire_32k_window ... ok
+test gxrom_from_prg_chr_pads_unaligned_prg_rom ... ok
+test gxrom_short_inputs_are_zero_padded ... ok
+test gxrom_bank_counts_do_not_wrap_at_256_banks ... ok
+test gxrom_write_selects_prg_and_chr_banks ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[2m2026-07-25T12:55:54.046880Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:54.046940Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_mmc3-cc7d1d0df3cf89b8
+
+running 14 tests
+test mmc3_irq_common_config_clocks_exactly_once_per_scanline ... ok
+test mmc3_irq_8x16_sprites_clock_once_per_scanline ... ok
+test mmc3_irq_c001_forces_reload_mid_count ... ok
+test mmc3_irq_disabled_and_acknowledged_on_write_to_e000 ... ok
+test mmc3_irq_common_config_fires_after_exactly_n_scanlines ... ok
+test mmc3_irq_not_triggered_if_rendering_disabled ... ok
+test mmc3_irq_not_triggered_on_vblank_scanlines ... ok
+test mmc3_irq_shared_high_table_is_effectively_suppressed ... ok
+test mmc3_irq_retimes_correctly_across_frames ... ok
+test mmc3_prg_ram_does_not_alias_prg_rom ... ok
+test mmc3_prg_ram_round_trips ... ok
+test mmc3_prg_mode_swaps_fixed_and_switchable_windows ... ok
+test mmc3_prg_ram_respects_write_protect_and_enable ... ok
+test mmc3_chr_inversion_reorders_1k_and_2k_windows ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+[2m2026-07-25T12:55:54.474923Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:54.474992Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/proptest_math-b27fdf538f5c2bb5
+
+running 2 tests
+test test_core_read_memory_fuzz ... ok
+test test_cpu_cycles_dont_overflow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+[2m2026-07-25T12:55:58.154897Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:55:58.154962Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/apu_hardware_fidelity-cc3cc6f3bd21f138
+
+running 5 tests
+test mode5_write_clocks_quarter_and_half_immediately ... ok
+test pulse_sweep_updates_timer_reload_on_half_frame_tick ... ok
+test pulse1_negate_sweep_uses_extra_subtract_step ... ok
+test frame_irq_clears_on_status_read ... ok
+test pulse2_triangle_noise_writes_change_mixed_output ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+[2m2026-07-25T12:56:00.130863Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:00.130930Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/havoc-e784d261fe00af9c
+
+running 1 test
+test havoc_fuzz_cheat_code_parsing ... ignored, havoc target
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[2m2026-07-25T12:56:03.478862Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:03.478928Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_mmc2-132f10b0ca093e60
+
+running 11 tests
+test mmc2_chr_rom_is_not_writable ... ok
+test mmc2_chr_ram_when_chr_absent_syncs_both_halves ... ok
+test mmc2_low_half_chr_latch_switches_on_fd_fe_fetches ... ok
+test mmc2_high_half_chr_latch_is_independent ... ok
+test mmc2_non_multiple_chr_rom_is_padded ... ok
+test mmc2_mirroring_register_yields_two_distinct_modes ... ok
+test mmc2_reads_and_writes_below_8000_and_unmapped_region_are_guarded ... ok
+test mmc2_prg_bank_select_masks_to_four_bits ... ok
+test mmc2_short_inputs_do_not_panic ... ok
+test mmc2_switchable_low_bank_and_fixed_last_three ... ok
+test mmc2_chr_latch_rebanks_background_through_ppu_render_path ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+[2m2026-07-25T12:56:05.786871Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:05.786944Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_mmc1-439a1017afcf6c6d
+
+running 1 test
+test mmc1_resets_shift_register_on_bit7_write ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[2m2026-07-25T12:56:06.138881Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:06.138946Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_cnrom-13f5222065e298e1
+
+running 6 tests
+test cnrom_empty_prg_defaults_to_zero_byte ... ok
+test cnrom_prg_mapping_is_fixed_across_chr_bank_switches ... ok
+test cnrom_from_prg_chr_pads_chr_rom ... ok
+test cnrom_chr_bank_count_does_not_wrap_at_256_banks ... ok
+test cnrom_short_chr_input_is_zero_padded ... ok
+test cnrom_write_selects_chr_bank_window ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[2m2026-07-25T12:56:06.502845Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:06.502909Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_camerica-c5e30a8b82248d64
+
+running 6 tests
+test camerica_masks_bank_select_to_low_nibble ... ok
+test camerica_ignores_writes_to_8000_bfff ... ok
+test camerica_high_window_is_fixed_to_last_bank ... ok
+test camerica_exposes_writable_chr_ram ... ok
+test camerica_switches_16k_bank_at_8000 ... ok
+test camerica_normalizes_empty_and_odd_prg ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[2m2026-07-25T12:56:06.866860Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:06.866919Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/step_cpu_unofficial-311d2ccdd9154bdb
+
+running 1 test
+test test_unofficial_instruction_trace_no_alloc ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+[2m2026-07-25T12:56:09.026864Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:09.026926Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mmio_register_reads-2d0ad90fa0df3cea
+
+running 12 tests
+test oamdata_read_returns_byte_at_oamaddr ... ok
+test controller_port_reads_shift_bits_when_strobe_low ... ok
+test controller2_port_reads_shift_bits_from_4017 ... ok
+test ppustatus_write_is_ignored ... ok
+test ppu_status_read_clears_vblank_bit ... ok
+test mirrored_ppu_status_read_clears_vblank_bit ... ok
+test ppudata_reads_are_buffered ... ok
+test sprite_zero_hit_requires_background_rendering_enabled ... ok
+test unofficial_nop_abs_still_performs_read_side_effects ... ok
+test sprite_zero_hit_requires_non_transparent_background_pixel ... ok
+test sprite_zero_hit_sets_ppustatus_bit ... ok
+test sprite_overflow_sets_ppustatus_bit ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+[2m2026-07-25T12:56:11.634896Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:11.634963Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/tas-f74443aea79c4e6c
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[2m2026-07-25T12:56:11.974880Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:11.974941Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/rom_loader-4f7ee35f9ca35488
+
+running 19 tests
+test invalid_ines_magic_is_rejected ... ok
+test axrom_bank_switch_via_cpu_prg_write_changes_entire_prg_window ... ok
+test load_axrom_maps_initial_32k_bank_for_boot ... ok
+test load_gxrom_maps_initial_32k_bank_for_boot ... ok
+test load_mmc1_maps_first_and_last_bank_for_boot ... ok
+test load_nes2_nrom32_maps_prg_and_respects_reset_vector ... ok
+test load_nrom16_maps_prg_and_respects_reset_vector ... ok
+test load_uxrom_maps_first_and_last_bank_for_boot ... ok
+test load_mmc3_maps_switchable_and_fixed_prg_windows_for_boot ... ok
+test mmc1_bank_switch_via_prg_writes_changes_lower_window ... ok
+test gxrom_bank_switch_via_cpu_prg_write_updates_prg_and_chr_windows ... ok
+test cnrom_chr_bank_switch_via_prg_write_changes_background_pixels ... ok
+test mmc3_chr_ram_writes_survive_mapper_register_writes ... ok
+test mmc3_prg_ram_is_readable_and_writable_through_cpu_bus ... ok
+test mmc3_bank_switch_via_prg_writes_changes_lower_8k_window ... ok
+test mmc3_prg_ram_write_protect_and_chip_disable_behave ... ok
+test non_wram_mapper_leaves_6000_7fff_as_flat_ram ... ok
+test unsupported_mapper_is_rejected ... ok
+test uxrom_bank_switch_via_cpu_prg_write_changes_lower_window ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+[2m2026-07-25T12:56:14.814834Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:14.814898Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_colordreams-59ce4341d34792d9
+
+running 6 tests
+test color_dreams_switches_8k_chr_banks ... ok
+test color_dreams_switches_32k_prg_banks ... ok
+test color_dreams_masks_prg_and_chr_select_bits ... ok
+test color_dreams_normalizes_undersized_and_odd_inputs ... ok
+test color_dreams_wraps_bank_selects_modulo_available_banks ... ok
+test color_dreams_uses_chr_ram_when_chr_absent ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[2m2026-07-25T12:56:15.190837Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:15.190900Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/mapper_mmc5-2b8a3f3ef209e814
+
+running 8 tests
+test mmc5_multiplier_and_exram_through_nescore ... ok
+test mmc5_prg_bank_switch_through_nescore ... ok
+test mmc5_prg_ram_write_protect_handshake_through_nescore ... ok
+test mmc5_prg_ram_save_state_round_trip ... ok
+test mmc5_scanline_irq_vectors_cpu_through_nescore ... ok
+test mmc5_state_hash_and_save_state_round_trip ... ok
+test mmc5_chr_bank_switch_changes_rendered_pixels ... ok
+test mmc5_8x16_sprite_chr_bank_split ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+[2m2026-07-25T12:56:18.314839Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:18.314909Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/cpu_exec_trace-a2868c0fc995f2bd
+
+running 18 tests
+test beq_not_taken_when_zero_flag_is_clear ... ok
+test beq_taken_when_zero_flag_is_set ... ok
+test bne_taken_when_zero_flag_is_clear ... ok
+test bus_microphase_for_lda_immediate_matches_cycle_reads ... ok
+test bpl_and_bmi_follow_negative_flag ... ok
+test bus_microphase_for_sta_absolute_matches_fetch_fetch_fetch_write ... ok
+test irq_service_is_masked_when_interrupt_disable_is_set ... ok
+test cpu_executes_lda_tax_inx_sequence ... ok
+test nestest_style_trace_for_lda_immediate_matches_expected_prefix ... ok
+test cpu_executes_ldx_ldy_txa_tya_sequence ... ok
+test nestest_style_trace_for_ldx_immediate_matches_expected_prefix ... ok
+test nop_advances_pc_and_preserves_registers ... ok
+test sta_absolute_writes_memory_and_emits_prg_write ... ok
+test sta_absolute_x_writes_indexed_target ... ok
+test irq_service_vectors_when_interrupts_enabled ... ok
+test jsr_and_rts_round_trip_through_stack ... ok
+test unknown_opcode_returns_error ... ok
+test txs_and_stx_absolute_update_stack_and_memory ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+[2m2026-07-25T12:56:21.158881Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:21.158948Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/dma_microcycle_timing-f1404e0e768cdc39
+
+running 4 tests
+test dmc_irq_latches_until_disabled_via_status_write ... ok
+test oam_dma_copies_page_and_stalls_cpu ... ok
+test oam_dma_timing_remains_correct_across_cpu_cycle_wrap ... ok
+test dmc_fetches_increase_cpu_cycle_count_via_dma_stalls ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+[2m2026-07-25T12:56:24.294898Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:24.295006Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/state_hash_mapper-625733b0875497ab
+
+running 2 tests
+test state_hash_differentiates_mapper_state ... ok
+test state_hash_differentiates_all_mappers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+[2m2026-07-25T12:56:27.442887Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:27.442956Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/cheat_codes-52f81c27ca54011a
+
+running 6 tests
+test cheat_code_rejects_invalid_codes ... ok
+test cheat_code_decodes_six_letter_codes ... ok
+test cheat_code_decodes_eight_letter_codes_with_compare ... ok
+test state_hash_differentiates_cheat_code_variations ... ok
+test cheat_codes_override_nrom_reads_and_can_be_cleared ... ok
+test compare_guarded_cheat_codes_track_uxrom_bank_switches ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+[2m2026-07-25T12:56:30.646861Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:30.646927Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/dot_hardware_timing-06418c8e58263d72
+
+running 3 tests
+test apu_frame_sequencer_ticks_on_hardware_cycle_boundaries ... ok
+test ppu_vblank_edges_are_dot_exact ... ok
+test step_frame_advances_one_ppu_frame_with_odd_frame_shortening ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+[2m2026-07-25T12:56:34.182844Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:34.182913Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/havoc_bmp-e1b19bf7eea54b99
+
+running 1 test
+test havoc_encode_bmp_panics_on_small_buffer ... ignored, havoc target
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[2m2026-07-25T12:56:38.998916Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling::linux[0m[2m:[0m Launching test
+[2m2026-07-25T12:56:38.998990Z[0m [32m INFO[0m [2mcargo_tarpaulin::process_handling[0m[2m:[0m running /app/target/debug/deps/nes_core-3f2526f85fdc0dc1
+
+running 271 tests
+test api::tests::set_speed_returns_error_on_zero ... ok
+test api::tests::core_query_returns_expected_variants ... ok
+test api::tests::should_ignore_on_ppu_dot_for_unsupported_mappers ... ok
+test api::tests::should_ignore_sync_chr_ram_for_unsupported_mappers ... ok
+test api::tests::should_return_chr_window_for_cnrom ... ok
+test api::tests::should_return_chr_window_for_gxrom ... ok
+test api::tests::command_release_button_clears_controller_bit ... ok
+test api::tests::should_return_chr_writable_for_cnrom ... ok
+test api::tests::should_return_chr_writable_for_gxrom ... ok
+test api::tests::command_power_cycle_resets_speed_to_default ... ok
+test api::tests::should_return_chr_writable_for_mmc3 ... ok
+test api::tests::should_call_on_ppu_dot_for_mmc3 ... ok
+test api::tests::should_return_correct_bit_mask_for_all_buttons ... ok
+test api::tests::should_return_correct_index_for_players ... ok
+test api::tests::should_return_false_for_irq_pending_unsupported_mappers ... ok
+test api::tests::should_return_false_for_chr_writable_unsupported_mappers ... ok
+test api::tests::should_return_mirroring_override_for_mmc3 ... ok
+test api::tests::should_return_mirroring_override_for_axrom ... ok
+test api::tests::should_return_none_for_chr_window_unsupported_mappers ... ok
+test api::tests::should_return_none_mirroring_override_for_nrom ... ok
+test api::tests::should_return_none_for_mirroring_override_unsupported_mappers ... ok
+test api::tests::should_sync_chr_ram_for_cnrom ... ok
+test api::tests::should_sync_chr_ram_for_gxrom ... ok
+test api::tests::should_return_irq_pending_for_mmc3 ... ok
+test api::tests::should_return_true_for_irq_pending_when_mmc3_has_irq ... ok
+test api::tests::test_core_error_display ... ok
+test api::tests::test_core_query_fps_and_frame ... ok
+test api::tests::should_return_chr_window_for_mmc3 ... ok
+test api::tests::test_cheat_code_hash_component ... ok
+test api::tests::test_nescore_default ... ok
+test api::tests::should_sync_chr_ram_from_ppu_window_for_mmc3 ... ok
+test api::tests_api_coverage_gaps::test_execute_unsupported_commands_returns_ok ... ok
+test api::tests::test_mapper_hash_components ... ok
+test api::tests_new_mapper_deltas::camerica_delta_round_trip ... ok
+test api::tests::test_core_snapshot_mapper_delta ... ok
+test api::tests_new_mapper_deltas::colordreams_delta_round_trip ... ok
+test api::tests_api_coverage_gaps::test_core_snapshot_mapper_delta_coverage ... ok
+test api::tests_new_mapper_deltas::mmc2_delta_round_trip ... ok
+test api::tests_new_mapper_deltas::unchanged_new_mappers_produce_no_delta ... ok
+test api::tests_rom_loader_internal::test_build_mapper_invalid_sizes ... ok
+test api::tests_new_mapper_deltas::fme7_delta_round_trip ... ok
+test api::tests_new_mapper_deltas::namco108_delta_round_trip ... ok
+test apu::tests::dmc_request_does_not_consume_sample_until_loaded ... ok
+test apu::tests::dmc_timer_uses_exact_period_cycles ... ok
+test apu::tests::noise_control_write_does_not_restart_envelope ... ok
+test apu::tests::pulse_control_write_does_not_restart_envelope ... ok
+test api::tests_new_mapper_deltas::mmc4_delta_round_trip ... ok
+test api::tests_rom_loader_internal::test_build_mapper_unsupported_prg_layouts ... ok
+test bmp::tests::encode_bmp_returns_error_on_buffer_length_mismatch ... ok
+test bmp::tests::encode_bmp_uses_expected_padding_for_odd_row_widths ... ok
+test bmp::tests::encode_bmp_multiplies_row_and_column_indices_for_bottom_up_bgr_layout ... ok
+test bmp::tests::encode_bmp_produces_expected_headers_and_pixel_order ... ok
+test bmp::tests::encode_bmp_uses_expected_padding_for_width_3 ... ok
+test bus::tests::map_region_returns_correct_region ... ok
+test bus::tests::map_region_boundaries ... ok
+test bus::tests::bus_region_is_legal ... ok
+test cheat_codes::mutant_hunting::cheat_code_address_is_correct ... ok
+test cheat_codes::mutant_hunting::cheat_code_raw_is_correct ... ok
+test cheat_codes::mutant_hunting::cheat_code_value_is_correct ... ok
+test cheat_codes::mutant_hunting::cheat_code_compare_is_correct ... ok
+test cheat_codes::mutant_hunting::cheat_code_applies_to_returns_correct_bool ... ok
+test cheat_codes::tests::cheat_code_applies_to_logic ... ok
+test cheat_codes::tests::cheat_code_accessors_return_correct_values ... ok
+test api::tests_rom_loader_internal::test_build_new_mapper_size_validation_errors ... ok
+test cheat_codes::tests::cheat_code_parser_fails_with_invalid_characters ... ok
+test cheat_codes::tests::cheat_code_error_formatting ... ok
+test cheat_codes::tests::invalid_cheat_codes_return_errors ... ok
+test cheat_codes::tests::cheat_code_parser_ignores_whitespace_and_hyphens ... ok
+test cheat_codes::tests::cheat_code_decodes_address_bits_correctly ... ok
+test cpu::status::tests::bits_for_php_preserves_other_flags_and_forces_unused_and_break_set ... ok
+test cheat_codes::tests::cheat_code_decodes_value_bits_correctly ... ok
+test cpu::status::tests::bits_for_stack_push_preserves_other_flags_and_forces_unused_set_and_break_clear ... ok
+test cpu::status::tests::default_status_is_empty ... ok
+test cpu::status::tests::construct_with_bits_retains_value ... ok
+test cpu::status::tests::individual_flags_can_be_set_and_cleared ... ok
+test cpu::status::tests::update_bit_test_sets_flags_correctly ... ok
+test cpu::status::tests::stack_push_pull_semantics ... ok
+test cpu::status::tests::update_zn_sets_flags_based_on_value ... ok
+test mapper::axrom::tests::axrom_mirroring_reflects_selected_nametable_bank ... ok
+test mapper::axrom::tests::axrom_state_can_be_restored ... ok
+test cpu::engine::tests::cpu_snapshot_roundtrips_work_ram ... ok
+test mapper::camerica::tests::camerica_chr_ram_is_writable ... ok
+test cpu::status::tests::update_compare_sets_flags_correctly ... ok
+test mapper::camerica::tests::camerica_masks_bank_select_to_low_nibble ... ok
+test mapper::camerica::tests::camerica_state_round_trips ... ok
+test mapper::camerica::tests::camerica_fixed_last_bank_at_c000 ... ok
+test mapper::camerica::tests::camerica_writes_to_8000_bfff_are_noops ... ok
+test mapper::cnrom::tests::cnrom_chr_ram_is_writable_and_syncs_from_ppu ... ok
+test cpu::engine::tests_format::format_trace_covers_padding_paths ... ok
+test mapper::cnrom::tests::cnrom_from_prg_chr_pads_chr_rom_with_remainder ... ok
+test mapper::camerica::tests::camerica_switchable_bank_at_8000 ... ok
+test mapper::cnrom::tests::cnrom_prg_offset_for_empty_prg_rom_returns_zero ... ok
+test mapper::colordreams::tests::color_dreams_chr_rom_is_not_writable ... ok
+test mapper::cnrom::tests::cnrom_state_can_be_restored ... ok
+test mapper::colordreams::tests::color_dreams_chr_ram_is_writable_when_chr_empty ... ok
+test mapper::cnrom::tests::cnrom_chr_rom_is_not_writable ... ok
+test mapper::colordreams::tests::color_dreams_state_round_trips ... ok
+test mapper::colordreams::tests::color_dreams_masks_bank_select_bits ... ok
+test mapper::colordreams::tests::color_dreams_switches_32k_prg_bank ... ok
+test mapper::colordreams::tests::color_dreams_switches_8k_chr_bank ... ok
+test mapper::fme7::tests::fme7_chr_rom_is_not_writable ... ok
+test mapper::fme7::tests::fme7_6000_rom_mapped_returns_selected_bank ... ok
+test mapper::fme7::tests::fme7_6000_ram_round_trip_and_disable ... ok
+test mapper::fme7::tests::fme7_counter_disable_freezes_counter ... ok
+test mapper::fme7::tests::fme7_irq_disable_suppresses_assertion_on_underflow ... ok
+test mapper::fme7::tests::fme7_chr_windows_assemble_from_1k_banks ... ok
+test mapper::fme7::tests::fme7_chr_ram_when_chr_absent_is_writable ... ok
+test mapper::fme7::tests::fme7_irq_fires_on_underflow_after_n_plus_one_cpu_cycles ... ok
+test mapper::fme7::tests::fme7_mirroring_register_maps_all_four_modes ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_exact_32k ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_more_math_operators ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_more_math_operators2 ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_more_math_operators3 ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_chr ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_empty_prg ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_partial_bank ... ok
+test mapper::gxrom::tests::gxrom_from_prg_chr_pads_short_prg ... ok
+test mapper::fme7::tests::fme7_sub_cycle_divides_dots_by_three ... ok
+test mapper::fme7::tests::fme7_prg_banks_switch_and_e000_is_fixed_last ... ok
+test mapper::gxrom::tests::should_restore_state ... ok
+test mapper::gxrom::tests::should_not_sync_chr_ram_when_not_writable ... ok
+test mapper::mmc1::tests::mmc1_commit_to_prg_bank_updates_selected_bank ... ok
+test mapper::mmc1::tests::mmc1_commit_to_unhandled_range_does_not_panic ... ok
+test mapper::gxrom::tests::should_sync_chr_ram_when_writable ... ok
+test mapper::mmc1::tests::mmc1_from_prg_rom_initializes_correctly ... ok
+test mapper::fme7::tests::fme7_state_round_trips ... ok
+test mapper::mmc1::tests::mmc1_from_prg_rom_preserves_large_bank_count_without_u8_wrap ... ok
+test mapper::mmc1::tests::mmc1_from_prg_rom_pads_partial_bank_and_reads_without_panic ... ok
+test mapper::gxrom::tests::gxrom_read_and_write_prg ... ok
+test mapper::mmc1::tests::mmc1_reset_shift_clears_count_and_sets_bit4 ... ok
+test mapper::mmc1::tests::mmc1_shift_is_reset_handles_partial_reset ... ok
+test mapper::mmc1::tests::mmc1_shift_register_accumulates_bits_and_commits_on_fifth_write ... ok
+test mapper::mmc1::tests::mmc1_write_prg_with_bit7_set_preserves_other_control_bits ... ok
+test mapper::mmc1::tests::mmc1_write_prg_with_bit7_set_resets_shift_and_updates_control ... ok
+test mapper::mmc1::tests::state_and_restore_state_round_trip ... ok
+test mapper::mmc2::tests::mmc2_chr_latch_switches_high_half_independently ... ok
+test mapper::mmc2::tests::mmc2_chr_latch_switches_low_half ... ok
+test mapper::mmc2::tests::mmc2_latches_default_to_fe_on_reset ... ok
+test mapper::mmc2::tests::mmc2_mirroring_register_toggles ... ok
+test mapper::mmc2::tests::mmc2_prg_switchable_low_and_fixed_last_three ... ok
+test mapper::mmc1::tests::mmc1_prg_mode_2_fixes_first_bank_and_switches_second ... ok
+test mapper::mmc1::tests::mmc1_prg_mode_3_switches_first_bank_and_fixes_last ... ok
+test mapper::mmc2::tests::mmc2_state_round_trips ... ok
+test mapper::mmc3::more_tests::mmc3_mirroring_toggles_between_vertical_and_horizontal ... ok
+test mapper::mmc3::tests::from_prg_chr_short_inputs_do_not_panic_on_reads ... ok
+test mapper::mmc1::tests::mmc1_prg_mode_0_and_1_switch_32kb_banks ... ok
+test mapper::mmc3::tests::mmc3_a12_filter_suppresses_spurious_edges_when_sharing_high_table ... ok
+test mapper::mmc3::tests::mmc3_from_prg_chr_pads_short_roms_to_minimum ... ok
+test mapper::mmc3::tests::mmc3_from_prg_chr_pads_unaligned_roms ... ok
+test mapper::mmc3::more_tests::mmc3_write_e000_disables_irq ... ok
+test mapper::mmc3::tests::mmc3_irq_clocks_once_per_scanline_for_8x16_sprites ... ok
+test mapper::mmc3::tests::mmc3_irq_does_not_clock_when_bg_and_sprites_share_pattern_table_0000 ... ok
+test mapper::mmc3::more_tests::mmc3_prg_ram_protect_register_updates_flags ... ok
+test mapper::mmc3::tests::mmc3_irq_not_clocked_during_vblank_scanlines ... ok
+test mapper::mmc3::tests::mmc3_irq_clocks_once_per_scanline_when_bg_uses_high_table ... ok
+test mapper::mmc3::tests::mmc3_mirroring_writes_update_nametable_mirroring ... ok
+test mapper::mmc3::tests::mmc3_prg_ram_disabled_chip_reads_open_bus_and_ignores_writes ... ok
+test mapper::mmc3::tests::mmc3_prg_ram_read_write_round_trip ... ok
+test mapper::mmc3::tests::mmc3_prg_ram_write_protect_blocks_writes ... ok
+test mapper::mmc3::tests::new_initializes_banks_and_fills_memory ... ok
+test mapper::mmc3::tests::mmc3_write_e001_enables_irq ... ok
+test mapper::mmc3::tests::prg_bank_for_slot_prg_mode_true ... ok
+test mapper::mmc3::tests::sync_chr_ram_returns_early_when_not_writable ... ok
+test mapper::mmc3::tests::state_and_restore_state_round_trip ... ok
+test mapper::mmc3::tests::mmc3_prg_ram_participates_in_state_snapshot ... ok
+test mapper::mmc4::tests::mmc4_chr_latch_matches_mmc2_semantics ... ok
+test mapper::mmc4::tests::mmc4_mirroring_register_toggles ... ok
+test mapper::mmc3::tests::mmc3_c001_clears_counter_for_mmc3c_behavior ... ok
+test mapper::mmc3::tests::write_prg_unmapped_address ... ok
+test mapper::mmc4::tests::mmc4_prg_ram_round_trip ... ok
+test mapper::mmc4::tests::mmc4_prg_switchable_16k_and_fixed_last ... ok
+test mapper::mmc4::tests::mmc4_state_round_trips ... ok
+test mapper::mmc5::tests::audio_and_split_registers_store_without_panic ... ok
+test mapper::mmc5::tests::chr_banking_8k_mode_uses_reg7 ... ok
+test mapper::mmc3::tests::sync_chr_ram_with_chr_inversion ... ok
+test mapper::mmc5::tests::chr_banking_4k_and_2k_modes ... ok
+test mapper::mmc5::tests::chr_banking_1k_mode ... ok
+test mapper::mmc5::tests::chr_bg_window_b_set_mirrors_in_1k_mode ... ok
+test mapper::mmc5::tests::chr_upper_bits_extend_bank_number ... ok
+test mapper::mmc5::tests::chr_bg_window_uses_b_set_only_in_8x16_mode ... ok
+test mapper::mmc5::tests::exram_mode3_is_read_only ... ok
+test mapper::mmc5::tests::exram_mode2_cpu_read_write ... ok
+test mapper::mmc5::tests::fill_mode_registers_store ... ok
+test mapper::mmc5::tests::exram_mode0_requires_rendering_for_writes ... ok
+test mapper::mmc5::tests::in_frame_clears_during_vblank ... ok
+test mapper::mmc5::tests::multiplier_returns_product_bytes ... ok
+test mapper::mmc5::tests::irq_disabled_suppresses_cpu_line_but_status_shows_pending ... ok
+test mapper::mmc5::tests::prg_mode0_maps_32k_from_5117 ... ok
+test mapper::mmc5::tests::prg_mode1_two_16k_banks ... ok
+test mapper::mmc5::tests::nametable_mapping_decode ... ok
+test mapper::mmc5::tests::prg_mode2_16k_plus_two_8k ... ok
+test mapper::mmc5::tests::prg_mode3_four_independent_8k_banks ... ok
+test mapper::mmc5::tests::read_prg_below_8000_outside_ram_is_open_bus ... ok
+test mapper::mmc5::tests::chr_ram_sync_round_trip ... ok
+test mapper::mmc5::tests::prg_ram_slot_at_8000_when_ram_selected ... ok
+test mapper::mmc5::tests::scanline_irq_fires_at_compare_and_read_clears ... ok
+test mapper::mmc5::tests::prg_ram_bank_select_and_protect ... ok
+test mapper::namco108::tests::namco108_bank_select_masks_to_index_bits ... ok
+test mapper::namco108::tests::namco108_1k_chr_banks_via_r2_to_r5 ... ok
+test mapper::namco108::tests::namco108_2k_chr_banks_ignore_bit0 ... ok
+test mapper::namco108::tests::namco108_register_values_masked_to_six_bits ... ok
+test mapper::nrom::tests::test_nrom_from_prg_rom_exact_16k ... ok
+test mapper::nrom::tests::test_nrom_from_prg_rom_exact_32k ... ok
+test mapper::nrom::tests::test_nrom_from_prg_rom_truncate ... ok
+test mapper::nrom::tests::test_nrom_read_prg ... ok
+test mapper::nrom::tests::test_nrom_write_prg ... ok
+test mapper::uxrom::tests::uxrom_from_prg_rom_exact_bank ... ok
+test mapper::uxrom::tests::uxrom_from_prg_rom_pads_partial_bank ... ok
+test mapper::namco108::tests::namco108_prg_banks_switch_via_r6_r7_with_fixed_high ... ok
+test mapper::uxrom::tests::uxrom_read_prg_resolves_via_mapper_trait ... ok
+test mapper::namco108::tests::namco108_state_round_trips ... ok
+test mapper::uxrom::tests::uxrom_state_can_be_restored ... ok
+test ppm::tests::encode_ppm_returns_error_on_buffer_too_large ... ok
+test ppm::tests::encode_ppm_returns_error_on_buffer_length_mismatch ... ok
+test ppm::tests::encode_ppm_returns_error_on_frame_size_overflow ... ok
+test ppm::tests::encode_ppm_emits_expected_headers_and_pixel_layout ... ok
+test mapper::mmc5::tests::state_round_trips ... ok
+test ppu::tests::dot_257_reloads_horizontal_scroll_from_temp_addr ... ok
+test ppu::tests::chr_window_change_mid_sprite_prefetch_splits_next_scanline_sprite_banks ... ok
+test ppu::tests::chr_window_change_before_sprite_prefetch_updates_next_scanline_sprite_tiles ... ok
+test ppu::tests::chr_window_change_after_sprite_prefetch_keeps_next_scanline_sprite_tiles ... ok
+test ppu::tests::hblank_chr_window_change_is_visible_on_next_scanline_start ... ok
+test ppu::tests::hblank_ppuaddr_change_is_visible_on_next_scanline_start ... ok
+test ppu::tests::late_visible_ppuaddr_change_that_matures_in_hblank_hits_next_scanline_start ... ok
+test ppu::tests::nametable_mirroring_maps_addresses ... ok
+test ppu::tests::hblank_ppuctrl_write_preserves_split_vertical_scroll ... ok
+test ppu::tests::one_screen_lower_mirroring_maps_all_tables_to_first_page ... ok
+test ppu::tests::ppuaddr_write_during_hblank_targets_next_scanline ... ok
+test ppu::tests::one_screen_upper_mirroring_maps_all_tables_to_second_page ... ok
+test ppu::tests::only_first_eight_sprites_render_on_a_scanline ... ok
+test ppu::tests::ppuaddr_write_during_vblank_does_not_update_scroll ... ok
+test ppu::tests::ppuaddr_write_during_visible_scanline_updates_scroll ... ok
+test ppu::tests::odd_frame_shortens_by_one_dot_when_rendering_enabled ... ok
+test ppu::tests::pre_render_scroll_y_ff_wraps_back_to_row_zero_on_second_visible_scanline ... ok
+test ppu::tests::restore_position_is_derived_from_cycle_in_frame ... ok
+test ppu::tests::sprite_overflow_stays_latched_until_pre_render_clear_when_sprites_disabled ... ok
+test ppu::tests::restore_rerender_uses_vblank_captured_y_scroll ... ok
+test ppu::tests::restore_rerender_falls_back_to_live_scroll_before_first_vblank_capture ... ok
+test ppu::tests::vblank_edges_are_dot_exact ... ok
+test ppu::tests::visible_scanline_chr_window_change_is_delayed_until_prefetch_boundary ... ok
+test ppu::tests::visible_scanline_ppuaddr_change_is_delayed_until_prefetch_boundary ... ok
+test ppu::tests::visible_ppuaddr_split_write_advances_vertical_vram_at_dot_256 ... ok
+test ppu::tests::visible_dot_sprite_cache_invalidates_after_oam_write ... ok
+test rom::tests::test_parse_ines_exactly_16_bytes_missing_prg ... ok
+test rom::tests::test_parse_ines_four_screen_mirroring ... ok
+test rom::tests::test_parse_ines_ines_console_type_is_rejected ... ok
+test rom::tests::test_parse_ines_invalid_magic ... ok
+test rom::tests::test_parse_ines_missing_prg ... ok
+test rom::tests::test_parse_ines_nes2_console_type_is_rejected ... ok
+test ppu::tests::visible_dot_background_cache_invalidates_after_pattern_write ... ok
+test rom::tests::test_parse_ines_nes2_extended_mapper ... ok
+test rom::tests::test_parse_ines_mirroring ... ok
+test rom::tests::test_parse_ines_nes2_mapper_id ... ok
+test rom::tests::test_parse_ines_nes2_prg_chr_msb ... ok
+test rom::tests::test_parse_ines_nes2_size_encoding ... ok
+test rom::tests::test_parse_ines_trainer ... ok
+test rom::tests::test_parse_ines_truncated_body ... ok
+test rom::tests::test_parse_ines_truncated_header ... ok
+test rom::tests::test_parse_ines_nes2_submapper_is_rejected ... ok
+test scheduler::tests::should_reset_scheduler_counters ... ok
+test scheduler::tests::restore_near_wrap_then_step_advances_and_wraps ... ok
+test scheduler::tests::should_return_correct_default_scheduler ... ok
+test scheduler::tests::should_save_and_restore_scheduler_snapshot ... ok
+test scheduler::tests::wrap_behavior_preserves_phase_instead_of_saturating ... ok
+test scheduler::tests::test_cpu_ppu_apu_getters ... ok
+test serde_array::tests::test_deserialize_too_long ... ok
+test serde_array::tests::test_deserialize_invalid_length ... ok
+test rom::tests::test_rom_error_display ... ok
+test serde_array::tests::test_expected_length_formatting ... ok
+test serde_array::tests::test_serialize_deserialize_u8_array ... ok
+test rom::havoc_fuzz_tests::havoc_fuzz_ines_parse ... ok
+
+test result: ok. 271 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.96s
