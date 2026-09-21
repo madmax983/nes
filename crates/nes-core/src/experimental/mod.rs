@@ -35,6 +35,9 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Recognizes multi-button input sequences over time.
+#[cfg(feature = "nova")]
+pub mod combo_engine;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
