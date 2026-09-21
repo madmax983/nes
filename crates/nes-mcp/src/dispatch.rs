@@ -520,7 +520,7 @@ fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, Dis
     let output_path = parse_required_string(params, "output_path")?;
     let rom = nes_dsl::build_ines_nrom_rom(source, &options)
         .map_err(|err| DispatchError::InvalidParams(format!("dsl rom build failed: {err}")))?;
-    fs::write(&output_path, &rom).map_err(|err| {
+    fs::write(output_path, &rom).map_err(|err| {
         DispatchError::InvalidParams(format!(
             "unable to write output_path '{}': {err}",
             output_path
@@ -532,7 +532,7 @@ fn handle_export_6502_dsl_rom(params: &ToolParams) -> Result<DispatchOutput, Dis
         .map(|banks| usize::from(*banks) * 16 * 1024)
         .unwrap_or(0);
     Ok(DispatchOutput::DslRomExported {
-        path: output_path,
+        path: output_path.to_owned(),
         bytes: rom.len(),
         mapper_id: 0,
         prg_rom_bytes,
@@ -629,13 +629,14 @@ fn handle_capture_frame(
     core: &mut NesCore,
     params: &ToolParams,
 ) -> Result<DispatchOutput, DispatchError> {
-    let Some(path) = params.get("path").cloned() else {
+    let Some(path) = params.get("path") else {
         return Err(DispatchError::InvalidParams(
             "path must be provided".to_owned(),
         ));
     };
     let rgba = core.framebuffer_rgba();
-    write_frame_image(&path, FRAME_WIDTH, FRAME_HEIGHT, &rgba)?;
+    write_frame_image(path, FRAME_WIDTH, FRAME_HEIGHT, &rgba)?;
+    let path = path.to_owned();
     Ok(DispatchOutput::FrameCaptured {
         path,
         bytes: rgba.len(),
@@ -889,8 +890,8 @@ fn parse_dsl_rom_options(params: &ToolParams) -> Result<RomBuildOptions, Dispatc
     Ok(options)
 }
 
-fn parse_required_string(params: &ToolParams, key: &str) -> Result<String, DispatchError> {
-    let Some(value) = params.get(key).cloned() else {
+fn parse_required_string<'a>(params: &'a ToolParams, key: &str) -> Result<&'a str, DispatchError> {
+    let Some(value) = params.get(key) else {
         return Err(DispatchError::InvalidParams(format!(
             "{key} must be provided"
         )));
@@ -900,7 +901,7 @@ fn parse_required_string(params: &ToolParams, key: &str) -> Result<String, Dispa
             "{key} must not be empty"
         )));
     }
-    Ok(value)
+    Ok(value.as_str())
 }
 
 fn encode_base64(bytes: &[u8]) -> String {
