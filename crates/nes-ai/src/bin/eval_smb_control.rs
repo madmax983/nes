@@ -29,8 +29,9 @@ fn run() -> Result<(), String> {
     }
     if args.len() < 3 || args.len() > 5 {
         return Err(format!(
-            "{} missing or invalid number of arguments.\nUsage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]",
-            "Error:".with(Color::Red).bold()
+            "{} missing or invalid number of arguments.\n{} Usage: eval_smb_control <profile_toml> <checkpoint_base> [episodes] [artifact_dir]",
+            "Error:".with(Color::Red).bold(),
+            "Hint:".with(Color::Cyan).bold()
         ));
     }
 
