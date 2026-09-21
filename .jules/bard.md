@@ -7,9 +7,6 @@
 ## 2025-06-18 - [Add Missing Examples for Desktop/Web APIS]
 **Confusion:** The core runtime structures `ProfileEnv` and `NetplayClient` lacked context on why they were needed (thread handling vs I/O boundaries)
 **Clarification:** Added context directly referencing asynchronous network loops and `no_run` example blocks to explain how users connect safely.
-## 2025-06-18 - [Add Missing Examples for Desktop/Web APIS]
-**Confusion:** The core runtime structures `ProfileEnv` and `NetplayClient` lacked context on why they were needed (thread handling vs I/O boundaries)
-**Clarification:** Added context directly referencing asynchronous network loops and `no_run` example blocks to explain how users connect safely.
 ## 2025-06-18 - JSON Protocol Serialization and Relay Configs
 **Confusion:** `ClientMessage` and `ServerMessage` were undocumented, leaving developers unaware of how matchmaking and determinism worked. The Relay server config also lacked context on its simulator behavior.
 **Clarification:** Added narrative module and item-level docs explaining the 'why' (e.g., deterministic pulse of inputs, artificial latency injection) along with executable doctests that assert the exact JSON wire format.
@@ -26,3 +23,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2024-10-24 - Documenting API Structs
+**Confusion:** CoreSnapshot, RomLoadInfo, Player, Command, CoreQuery, EmulatorState, QueryResult, MapperDelta, and CoreError structs and enums lacked proper doc examples or intra-doc links.
+**Clarification:** Added examples to all listed structs and enums and fixed broken DOTS_PER_CPU_CYCLE intra-doc link by changing it to standard inline code block.
