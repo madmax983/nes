@@ -1183,6 +1183,29 @@ fn validate_symbol(symbol: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn parse_sign_prefix(token: &str) -> (i64, &str) {
+    if let Some(rest) = token.strip_prefix('-') {
+        return (-1_i64, rest.trim());
+    }
+    if let Some(rest) = token.strip_prefix('+') {
+        return (1_i64, rest.trim());
+    }
+    (1_i64, token)
+}
+
+fn parse_numeric_literal(rest: &str) -> Option<i64> {
+    if let Some(hex) = rest.strip_prefix('$') {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    if let Some(bin) = rest.strip_prefix('%') {
+        return i64::from_str_radix(bin, 2).ok();
+    }
+    if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
+        return i64::from_str_radix(hex, 16).ok();
+    }
+    rest.parse::<i64>().ok()
+}
+
 fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
     let token = input.trim();
     if token.is_empty() {
@@ -1192,23 +1215,8 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
         });
     }
 
-    let (sign, rest) = if let Some(rest) = token.strip_prefix('-') {
-        (-1_i64, rest.trim())
-    } else if let Some(rest) = token.strip_prefix('+') {
-        (1_i64, rest.trim())
-    } else {
-        (1_i64, token)
-    };
-
-    let parsed = if let Some(hex) = rest.strip_prefix('$') {
-        i64::from_str_radix(hex, 16).ok()
-    } else if let Some(bin) = rest.strip_prefix('%') {
-        i64::from_str_radix(bin, 2).ok()
-    } else if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
-        i64::from_str_radix(hex, 16).ok()
-    } else {
-        rest.parse::<i64>().ok()
-    };
+    let (sign, rest) = parse_sign_prefix(token);
+    let parsed = parse_numeric_literal(rest);
 
     let Some(value) = parsed else {
         if sign != 1 {
@@ -1930,6 +1938,19 @@ mod tests {
 
         let invalid_hex2 = decode_string_literal(r#""\x1Z""#).expect_err("invalid hex escape");
         assert!(invalid_hex2.contains("invalid hex escape sequence"));
+    }
+
+    #[test]
+    fn parse_expr_handles_various_prefixes() {
+        assert_eq!(parse_expr("-5", 1).unwrap(), Expr::Number(-5));
+        assert_eq!(parse_expr("+5", 1).unwrap(), Expr::Number(5));
+        assert_eq!(parse_expr("$A", 1).unwrap(), Expr::Number(10));
+        assert_eq!(parse_expr("-$A", 1).unwrap(), Expr::Number(-10));
+        assert_eq!(parse_expr("%1010", 1).unwrap(), Expr::Number(10));
+        assert_eq!(parse_expr("-%1010", 1).unwrap(), Expr::Number(-10));
+        assert_eq!(parse_expr("0xA", 1).unwrap(), Expr::Number(10));
+        assert_eq!(parse_expr("0XA", 1).unwrap(), Expr::Number(10));
+        assert_eq!(parse_expr("-0xA", 1).unwrap(), Expr::Number(-10));
     }
 
     #[test]
