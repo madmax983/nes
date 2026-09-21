@@ -10,6 +10,8 @@
 pub mod audio_exporter;
 /// Utility for discovering cheat codes by monitoring RAM changes.
 pub mod cheat_finder;
+/// Tracks which CPU addresses have been executed to build a code coverage map.
+pub mod code_coverage;
 /// Tracks emulator events for external logging and analysis.
 pub mod event_tracker;
 /// Visualizes the flow of CPU instructions and call graphs.
