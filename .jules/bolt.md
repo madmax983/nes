@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Eliminate format! allocation in strip_prefix]**
+**Learning:** Checking for CLI argument prefixes using `arg.strip_prefix(&format!("{flag}="))` forces a `String` heap allocation on every check.
+**Action:** Use sequential `if let` blocks on string slices: `if let Some(rest) = arg.strip_prefix(flag) { if let Some(val) = rest.strip_prefix('=') { ... } }` to eliminate the allocation while preserving exact logic and code coverage.
