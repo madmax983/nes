@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring nested number parsing logic in nes-dsl/src/lib.rs]**
+**Learning:** Argument parsing routines for number literals that support multiple prefixes (`$`, `%`, `0x`) often devolve into a "pyramid of doom" via cascading `if let Some` blocks returning a unified `Option`.
+**Action:** Extract a helper function (e.g., `parse_numeric_literal`) that abstracts the common shape of checking for prefixes and radix conversions, allowing sequential `if let Some` statements to return early inside the helper, flattening the parent expression logic.
