@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Refactoring string mapping to direct enums]**
+**Learning:** Found an anti-pattern in `crates/nes-desktop/src/input.rs` where keyboard inputs (`winit::event::VirtualKeyCode`) were being mapped to string slices (`"ArrowUp"`, `"KeyZ"`) and then mapped *again* in a separate module (`crates/nes-desktop/src/app.rs`) to actual domain enums (`nes_core::Button` or `nes_core::Command`). This introduced unnecessary intermediate allocations/lookups and cross-module coupling.
+**Action:** Replaced `map_virtual_keycode` with `map_virtual_keycode_to_button` to directly map external inputs to internal domain types, completely removing the string-based indirection.

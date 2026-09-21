@@ -1,5 +1,5 @@
 use nes_core::Command;
-use nes_desktop::app::{map_key_event_to_button_bit, map_key_event_to_command};
+
 use std::time::{Duration, Instant};
 use winit::event::{ElementState, VirtualKeyCode, WindowEvent};
 
@@ -72,18 +72,18 @@ pub(crate) fn classify_window_event(event: &WindowEvent<'_>) -> WindowEventDecis
     }
 }
 
-pub(crate) fn map_virtual_keycode(key: VirtualKeyCode) -> Option<&'static str> {
+pub(crate) fn map_virtual_keycode_to_button(key: VirtualKeyCode) -> Option<nes_core::Button> {
     match key {
-        VirtualKeyCode::Up => Some("ArrowUp"),
-        VirtualKeyCode::Down => Some("ArrowDown"),
-        VirtualKeyCode::Left => Some("ArrowLeft"),
-        VirtualKeyCode::Right => Some("ArrowRight"),
-        VirtualKeyCode::Z => Some("KeyZ"),
-        VirtualKeyCode::X => Some("KeyX"),
-        VirtualKeyCode::S => Some("KeyS"),
-        VirtualKeyCode::A => Some("KeyA"),
-        VirtualKeyCode::Return => Some("Enter"),
-        VirtualKeyCode::RShift => Some("ShiftRight"),
+        VirtualKeyCode::Up => Some(nes_core::Button::Up),
+        VirtualKeyCode::Down => Some(nes_core::Button::Down),
+        VirtualKeyCode::Left => Some(nes_core::Button::Left),
+        VirtualKeyCode::Right => Some(nes_core::Button::Right),
+        VirtualKeyCode::Z => Some(nes_core::Button::A),
+        VirtualKeyCode::X => Some(nes_core::Button::B),
+        VirtualKeyCode::S => Some(nes_core::Button::Select),
+        VirtualKeyCode::A => Some(nes_core::Button::Start),
+        VirtualKeyCode::Return => Some(nes_core::Button::Start),
+        VirtualKeyCode::RShift => Some(nes_core::Button::Select),
         _ => None,
     }
 }
@@ -113,20 +113,22 @@ pub(crate) fn classify_keyboard_input(
         return KeyboardDecision::RtaFinish;
     }
 
-    let Some(key_code) = map_virtual_keycode(key) else {
+    let Some(button) = map_virtual_keycode_to_button(key) else {
         return KeyboardDecision::Noop;
     };
 
     if mode.rollback_enabled {
-        let Some(mask) = map_key_event_to_button_bit(key_code) else {
-            return KeyboardDecision::Noop;
-        };
-        KeyboardDecision::UpdateKeyboardBits { mask, pressed }
+        KeyboardDecision::UpdateKeyboardBits {
+            mask: button.bit_mask(),
+            pressed,
+        }
     } else {
-        let Some(mapped) = map_key_event_to_command(key_code, pressed) else {
-            return KeyboardDecision::Noop;
+        let core = if pressed {
+            Command::PressButton(button)
+        } else {
+            Command::ReleaseButton(button)
         };
-        KeyboardDecision::ExecuteCore(mapped.core)
+        KeyboardDecision::ExecuteCore(core)
     }
 }
 
@@ -160,24 +162,48 @@ mod tests {
 
     #[test]
     fn map_virtual_keycode_maps_all_keys() {
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
         assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::Right),
-            Some("ArrowRight")
+            map_virtual_keycode_to_button(VirtualKeyCode::Up),
+            Some(Button::Up)
         );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::S), Some("KeyS"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::A), Some("KeyA"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
         assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::RShift),
-            Some("ShiftRight")
+            map_virtual_keycode_to_button(VirtualKeyCode::Down),
+            Some(Button::Down)
         );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::F5), None);
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::Left),
+            Some(Button::Left)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::Right),
+            Some(Button::Right)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::Z),
+            Some(Button::A)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::X),
+            Some(Button::B)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::S),
+            Some(Button::Select)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::A),
+            Some(Button::Start)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::Return),
+            Some(Button::Start)
+        );
+        assert_eq!(
+            map_virtual_keycode_to_button(VirtualKeyCode::RShift),
+            Some(Button::Select)
+        );
+        assert_eq!(map_virtual_keycode_to_button(VirtualKeyCode::F5), None);
+        assert_eq!(map_virtual_keycode_to_button(VirtualKeyCode::Escape), None);
     }
 
     #[test]
