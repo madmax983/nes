@@ -35,6 +35,9 @@ pub mod theme_filter;
 /// Tracks when sprites enter defined screen zones over time.
 pub mod zone_tracker;
 
+/// Post-processing filter applying CRT scanlines and chromatic aberration.
+#[cfg(feature = "nova")]
+pub mod crt_filter;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
