@@ -1,0 +1,3 @@
+Wait, the coverage report didn't update! The same lines are shown as uncovered.
+Ah, it is because I need to recreate the `lcov.info` file by running the instrumented build.
+Let's run `cargo llvm-cov -p nes-core --lcov --output-path lcov.info`

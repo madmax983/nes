@@ -1,0 +1,7 @@
+The coverage issue in `mapper/colordreams.rs` is on line 39 which is likely `pub fn selected_prg_bank(&self) -> u8` or `pub fn selected_chr_bank(&self) -> u8` depending on exactly what is at line 39. Let's see:
+Line 39:
+    pub fn selected_prg_bank(&self) -> u8 {
+        self.selected_prg_bank
+    }
+
+And `fme7.rs`: lines 100, 110, 166, 167, 168, 349. Let's look at those.

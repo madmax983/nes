@@ -1,0 +1,2 @@
+Awesome! `colordreams.rs` is fully covered.
+`cnrom.rs` is missing line 113. Wait, `cnrom.rs` line 113 is still missing? Let's check `cnrom.rs` line 113.

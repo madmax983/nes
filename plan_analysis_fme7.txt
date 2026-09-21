@@ -1,0 +1,5 @@
+Ah, wait. In `fme7.rs`, line 100:
+100: `        if chr_data.len() < CHR_WINDOW_BYTES {`
+Wait, `sed -n '100p'` printed `            prg_rom.resize(prg_rom.len() + (PRG_BANK_8K - prg_remainder), 0);`
+Why does the `lcov` output say lines 100, 110, 166, 167, 168, 349?
+Let's print with `nl` again.

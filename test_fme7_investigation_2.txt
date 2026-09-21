@@ -1,0 +1,25 @@
+Ah, so the lines for `fme7.rs` are:
+- line 100: `prg_rom.resize(prg_rom.len() + (PRG_BANK_8K - prg_remainder), 0);`
+  This happens if `prg_rom.len() % PRG_BANK_8K != 0`
+- line 110: `chr_data.resize(CHR_WINDOW_BYTES, 0);`
+  This happens if `chr_data.len() < CHR_WINDOW_BYTES`
+- line 166-168:
+  ```rust
+  self.wram = state.wram;
+  self.wram.resize(WRAM_BYTES, 0);
+  }
+  ```
+  This happens if `state.wram.len() != self.wram.len()` in `restore_state`.
+- line 349:
+  ```rust
+  _ => unreachable!("command masked to 0x0..=0xF"),
+  ```
+  Wait, this is an unreachable branch. Coverage tools sometimes mark unreachable branches as uncovered. But I can't write a test for an unreachable branch unless I can trigger it (which would be a bug if it's unreachable!). Wait, is it unreachable? `match self.command` where `command` is masked to 0x0..=0xF. `self.command` is set in `write_prg` for `addr` between `8000..=9FFF`:
+  `0x8000..=0x9FFF => self.command = value & 0x0F,`
+  So `command` is strictly `0x0..=0xF`.
+  Wait, can `fme7.rs` 349 be tested? Probably not, since it's unreachable. But we can ignore it if we just focus on others.
+Actually wait, what about lines 166-168? We can easily hit that by making `state.wram = vec![0; 4]` and restoring state.
+Line 100: `from_prg_chr` with PRG ROM size not multiple of 8KB.
+Line 110: `from_prg_chr` with CHR ROM size < 8KB.
+
+Let's also look at `mapper/mmc4.rs`, lines 100, 163, 164, 165.
