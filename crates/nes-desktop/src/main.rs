@@ -529,7 +529,7 @@ fn release_all_buttons(core: &mut NesCore) {
 }
 
 fn track_keyboard_bits_for_key(key: VirtualKeyCode, pressed: bool, keyboard_bits: &mut u8) {
-    if let Some(key_code) = map_virtual_keycode(key)
+    if let Some(key_code) = crate::input::map_virtual_keycode(key)
         && let Some(mask) = map_key_event_to_button_bit(key_code)
     {
         *keyboard_bits = update_button_bits(*keyboard_bits, mask, pressed);
@@ -1523,13 +1523,13 @@ mod tests {
         apply_overlay_keyboard_input, audio_queue_dropped, capture_path_for_frame,
         classify_window_event, connected_gamepad_ids, controller_state_delta_for_player,
         element_state_pressed, format_rom_read_error, gamepad_assignments_changed,
-        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, map_virtual_keycode,
-        menu_action_enabled, merge_local_input_bits, overlay_input_requires_redraw,
-        recommended_input_delay_frames, reconcile_core_pause_with_overlay, resync_restored_inputs,
-        rom_picker_supported, scaled_window_dimensions, select_active_gamepad_ids,
-        should_capture_frame, should_log_rollback, should_resume_after_rewind_hold,
-        should_trace_frame, should_update_input_delay, slot_action_for_hotkey,
-        track_keyboard_bits_for_key, update_button_bits, validate_action_allowed, write_frame_ppm,
+        gamepad_slot_changed, gamepad_snapshot_to_bits, is_player_two_slot, menu_action_enabled,
+        merge_local_input_bits, overlay_input_requires_redraw, recommended_input_delay_frames,
+        reconcile_core_pause_with_overlay, resync_restored_inputs, rom_picker_supported,
+        scaled_window_dimensions, select_active_gamepad_ids, should_capture_frame,
+        should_log_rollback, should_resume_after_rewind_hold, should_trace_frame,
+        should_update_input_delay, slot_action_for_hotkey, track_keyboard_bits_for_key,
+        update_button_bits, validate_action_allowed, write_frame_ppm,
     };
     use gilrs::GamepadId;
     use nes_core::{Button, Command, NesCore};
@@ -1610,21 +1610,42 @@ mod tests {
 
     #[test]
     fn map_virtual_keycode_maps_all_supported_keys() {
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Z), Some("KeyZ"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::X), Some("KeyX"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Return), Some("Enter"));
         assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::RShift),
+            crate::input::map_virtual_keycode(VirtualKeyCode::Z),
+            Some("KeyZ")
+        );
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::X),
+            Some("KeyX")
+        );
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::Return),
+            Some("Enter")
+        );
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::RShift),
             Some("ShiftRight")
         );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Up), Some("ArrowUp"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Down), Some("ArrowDown"));
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Left), Some("ArrowLeft"));
         assert_eq!(
-            map_virtual_keycode(VirtualKeyCode::Right),
+            crate::input::map_virtual_keycode(VirtualKeyCode::Up),
+            Some("ArrowUp")
+        );
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::Down),
+            Some("ArrowDown")
+        );
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::Left),
+            Some("ArrowLeft")
+        );
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::Right),
             Some("ArrowRight")
         );
-        assert_eq!(map_virtual_keycode(VirtualKeyCode::Escape), None);
+        assert_eq!(
+            crate::input::map_virtual_keycode(VirtualKeyCode::Escape),
+            None
+        );
     }
 
     #[test]

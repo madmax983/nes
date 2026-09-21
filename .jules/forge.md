@@ -51,3 +51,7 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+
+**[Duplicate map_virtual_keycode]**
+**Learning:** Found redundant `map_virtual_keycode` function definitions in `crates/nes-desktop/src/main.rs` and `crates/nes-desktop/src/input.rs` mapping VirtualKeyCode to string representations.
+**Action:** Removed the implementation from `main.rs` and updated usage to call `crate::input::map_virtual_keycode`, centralizing the mapping.
