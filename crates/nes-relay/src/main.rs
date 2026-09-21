@@ -1031,4 +1031,40 @@ mod tests {
             net_sim.sample_delay_ms();
         }
     }
+
+    #[test]
+    fn test_read_line_bounded_normal() {
+        let mut reader = std::io::BufReader::new(std::io::Cursor::new(b"hello\nworld"));
+        let mut line = String::new();
+        let bytes = super::read_line_bounded(&mut reader, &mut line, 100).unwrap();
+        assert_eq!(bytes, 6);
+        assert_eq!(line, "hello\n");
+    }
+
+    #[test]
+    fn test_read_line_bounded_limit() {
+        let mut reader = std::io::BufReader::new(std::io::Cursor::new(b"hello\nworld"));
+        let mut line = String::new();
+        let bytes = super::read_line_bounded(&mut reader, &mut line, 3).unwrap();
+        assert_eq!(bytes, 3);
+        assert_eq!(line, "hel");
+    }
+
+    #[test]
+    fn test_read_line_bounded_no_newline() {
+        let mut reader = std::io::BufReader::new(std::io::Cursor::new(b"hello"));
+        let mut line = String::new();
+        let bytes = super::read_line_bounded(&mut reader, &mut line, 100).unwrap();
+        assert_eq!(bytes, 5);
+        assert_eq!(line, "hello");
+    }
+
+    #[test]
+    fn test_read_line_bounded_limit_exactly_at_newline() {
+        let mut reader = std::io::BufReader::new(std::io::Cursor::new(b"hello\nworld"));
+        let mut line = String::new();
+        let bytes = super::read_line_bounded(&mut reader, &mut line, 6).unwrap();
+        assert_eq!(bytes, 6);
+        assert_eq!(line, "hello\n");
+    }
 }
