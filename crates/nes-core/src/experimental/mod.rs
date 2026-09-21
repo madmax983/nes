@@ -8,6 +8,10 @@
 
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
+/// Audio reactive visual glitcher.
+pub mod audio_glitcher;
+/// Audio waveform visualizer.
+pub mod audio_oscilloscope;
 /// Utility for discovering cheat codes by monitoring RAM changes.
 pub mod cheat_finder;
 /// Tracks emulator events for external logging and analysis.
