@@ -6,6 +6,9 @@
 //! gated behind the `nova` feature flag to keep the base emulator footprint small
 //! and ensure that core accuracy isn't impacted by experimental R&D.
 
+/// Applies a visual screen shake effect to the framebuffer based on audio volume.
+pub mod screen_shake;
+
 /// Export utilities for dumping audio streams.
 pub mod audio_exporter;
 /// Utility for discovering cheat codes by monitoring RAM changes.
