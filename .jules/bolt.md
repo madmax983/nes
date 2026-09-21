@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Avoid redundant heap allocation in FrameStack initialization]
+**Learning:** `Vec::clone()` is an expensive operation that copies the entire buffer on the heap. During environment reset in RL, pushing copies of a frame vector unnecessarily cloned it even on the final loop iteration.
+**Action:** When pushing elements in a loop that require cloning, move the final item to prevent a redundant copy and eliminate the allocation overhead.
