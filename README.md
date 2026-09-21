@@ -1,5 +1,7 @@
 # NES Emulator (Proof-Forward + MCP-First)
 
+> **⚠️ ECHO WARNING:** Some advanced experimental APIs (like `story_demo` or `NarrativeGenerator`) require compiling with the `nova` feature flag enabled! If your compiler says a type is not found, try adding `--features nova`.
+
 This repository hosts a Rust NES emulator workspace focused on systems learning, deterministic behavior, and strong correctness checks.
 
 ## Workspace
