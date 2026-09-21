@@ -35,3 +35,7 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+
+**[Optimize frame stack allocation in NES AI environment]**
+**Learning:** Initializing a collection with identical items by unconditionally cloning the item in a loop results in an unnecessary heap allocation and memory copy on the final iteration, as ownership of the original item could have been moved instead.
+**Action:** When populating a vector or stack with identical items in a loop, clone the item `N-1` times and move the original item on the final iteration to eliminate the redundant final clone.
