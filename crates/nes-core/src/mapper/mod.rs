@@ -4,7 +4,7 @@ mod axrom;
 mod camerica;
 mod cnrom;
 mod colordreams;
-mod fme7;
+pub(crate) mod fme7;
 mod gxrom;
 mod mmc1;
 mod mmc2;
