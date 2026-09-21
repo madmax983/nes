@@ -136,13 +136,17 @@ where
         apply(value)?;
         *idx += 2;
         Ok(true)
-    } else if let Some(value) = arg.strip_prefix(flag).and_then(|s| s.strip_prefix('=')) {
-        if value.is_empty() {
-            return Err(format!("missing value after {flag}="));
+    } else if let Some(rest) = arg.strip_prefix(flag) {
+        if let Some(value) = rest.strip_prefix('=') {
+            if value.is_empty() {
+                return Err(format!("missing value after {flag}="));
+            }
+            apply(value)?;
+            *idx += 1;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        apply(value)?;
-        *idx += 1;
-        Ok(true)
     } else {
         Ok(false)
     }
