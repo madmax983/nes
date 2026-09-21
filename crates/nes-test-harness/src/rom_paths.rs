@@ -1,9 +1,21 @@
+//! Strongly-typed config paths for test ROM resources.
+//!
+//! Exposes helper functions that pull directly from `nes.toml` to locate integration assets.
+
 use std::fs;
 use std::path::Path;
 
 use nes_config::{DEFAULT_CONFIG_PATH, NesConfig};
 
 #[allow(dead_code)]
+/// Retrieves the path to the Super Mario Bros test ROM.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::smb_rom_path;
+/// let path = smb_rom_path();
+/// ```
 pub fn smb_rom_path() -> String {
     let config = load_config();
     let rom_path = config
@@ -19,6 +31,14 @@ pub fn smb_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Retrieves the path to the `nestest` CPU instruction conformance ROM.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::nestest_rom_path;
+/// let path = nestest_rom_path();
+/// ```
 pub fn nestest_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.nestest.unwrap_or_else(|| {
@@ -28,6 +48,14 @@ pub fn nestest_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Retrieves the path to the Blargg CPU behavior test suite ROM.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::blargg_cpu_rom_path;
+/// let path = blargg_cpu_rom_path();
+/// ```
 pub fn blargg_cpu_rom_path() -> String {
     let config = load_config();
     let rom_path = config.roms.blargg_cpu.unwrap_or_else(|| {
@@ -39,6 +67,14 @@ pub fn blargg_cpu_rom_path() -> String {
 }
 
 #[allow(dead_code)]
+/// Discovers all `.nes` rom files inside the `bbbradsmith_audio_suite_dir`.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::bbbradsmith_audio_suite_rom_paths;
+/// let suites = bbbradsmith_audio_suite_rom_paths();
+/// ```
 pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
     let config = load_config();
     let suite_dir = config.roms.bbbradsmith_audio_suite_dir.unwrap_or_else(|| {
@@ -69,6 +105,14 @@ pub fn bbbradsmith_audio_suite_rom_paths() -> Vec<String> {
 }
 
 #[allow(dead_code)]
+/// Retrieves the directory path containing golden reference PCM audio captures.
+///
+/// ## Examples
+///
+/// ```no_run
+/// use nes_test_harness::bbbradsmith_audio_golden_dir_path;
+/// let path = bbbradsmith_audio_golden_dir_path();
+/// ```
 pub fn bbbradsmith_audio_golden_dir_path() -> String {
     let config = load_config();
     let golden_dir = config.roms.bbbradsmith_audio_golden_dir.unwrap_or_else(|| {

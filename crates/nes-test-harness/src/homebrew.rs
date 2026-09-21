@@ -1,7 +1,72 @@
+//! Utilities for building and interacting with the integrated homebrew test ROM.
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[must_use]
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
+/// Returns the standard workspace path where the generated homebrew ROM resides.
+///
+/// ## Examples
+///
+/// ```rust
+/// use nes_test_harness::default_homebrew_rom_path;
+/// let path = default_homebrew_rom_path();
+/// assert!(path.ends_with("homebrew.nes"));
+/// ```
 pub fn default_homebrew_rom_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -264,6 +329,7 @@ irq:
 #[cfg(test)]
 mod tests {
     use super::{build_homebrew_rom, default_homebrew_rom_path, write_homebrew_rom};
+
     use std::fs;
 
     #[test]
