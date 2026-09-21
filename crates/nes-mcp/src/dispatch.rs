@@ -829,28 +829,25 @@ fn parse_slot(params: &ToolParams) -> String {
 }
 
 fn parse_integer(raw: &str) -> Result<u64, DispatchError> {
-    if let Some(stripped) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
-        u64::from_str_radix(stripped, 16)
-            .map_err(|_| DispatchError::InvalidParams(format!("invalid integer literal '{raw}'")))
-    } else {
-        raw.parse::<u64>()
-            .map_err(|_| DispatchError::InvalidParams(format!("invalid integer literal '{raw}'")))
-    }
+    raw.strip_prefix("0x")
+        .or_else(|| raw.strip_prefix("0X"))
+        .map(|stripped| u64::from_str_radix(stripped, 16))
+        .unwrap_or_else(|| raw.parse::<u64>())
+        .map_err(|_| DispatchError::InvalidParams(format!("invalid integer literal '{raw}'")))
 }
 
 fn parse_rom_payload(params: &ToolParams) -> Result<Vec<u8>, DispatchError> {
     if let Some(path) = params.get("rom_path") {
-        return fs::read(path).map_err(|err| {
+        fs::read(path).map_err(|err| {
             DispatchError::InvalidParams(format!("unable to read rom_path '{path}': {err}"))
-        });
-    }
-
-    let Some(hex) = params.get("rom_hex") else {
-        return Err(DispatchError::InvalidParams(
+        })
+    } else if let Some(hex) = params.get("rom_hex") {
+        parse_hex_bytes(hex)
+    } else {
+        Err(DispatchError::InvalidParams(
             "provide rom_hex or rom_path".to_owned(),
-        ));
-    };
-    parse_hex_bytes(hex)
+        ))
+    }
 }
 
 fn parse_dsl_source(params: &ToolParams) -> Result<&str, DispatchError> {
