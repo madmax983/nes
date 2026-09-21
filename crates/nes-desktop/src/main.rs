@@ -612,62 +612,7 @@ fn run() -> Result<(), String> {
     let mut session = load_rom_session(&mut core, Path::new(&runtime.rom_path), &session_cheats)?;
     let step_mode = runtime.step_mode;
     let mut rta_manager = if let Some(rta_config) = runtime.rta.as_ref() {
-        let profiles = load_profiles(&rta_config.profiles_dir)?;
-        let profile = if rta_config.calibrate {
-            match select_profile(
-                &profiles,
-                &session.rom_hash,
-                rta_config.profile_id_override.as_deref(),
-                true,
-            ) {
-                Ok(selection) => selection.selected.profile,
-                Err(err) => {
-                    if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
-                        eprintln!(
-                            "[rta] calibration creating profile template '{}' ({err})",
-                            profile_id
-                        );
-                        RtaProfile {
-                            id: profile_id.clone(),
-                            rom_hashes: vec![session.rom_hash.clone()],
-                            status: ProfileStatus::Published,
-                            ..RtaProfile::default()
-                        }
-                    } else {
-                        return Err(format!(
-                            "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
-                            session.rom_hash
-                        ));
-                    }
-                }
-            }
-        } else {
-            select_profile(
-                &profiles,
-                &session.rom_hash,
-                rta_config.profile_id_override.as_deref(),
-                false,
-            )
-            .map_err(|err| {
-                format!(
-                    "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
-                    session.rom_hash
-                )
-            })?
-            .selected
-            .profile
-        };
-        let calibration = if rta_config.calibrate {
-            Some(CalibrationRecorder::new(profile.id.clone()))
-        } else {
-            None
-        };
-        Some(RtaManager::new(
-            profile,
-            session.rom_hash.clone(),
-            rta_config.runs_dir.clone(),
-            calibration,
-        ))
+        Some(setup_rta_manager(rta_config, &session.rom_hash)?)
     } else {
         None
     };
@@ -1472,8 +1417,212 @@ fn build_startup_table(
     table
 }
 
+fn setup_rta_manager(
+    rta_config: &nes_desktop::rta::RtaRuntimeConfig,
+    rom_hash: &str,
+) -> Result<RtaManager, String> {
+    let profiles = load_profiles(&rta_config.profiles_dir)?;
+    let profile = if rta_config.calibrate {
+        match select_profile(
+            &profiles,
+            rom_hash,
+            rta_config.profile_id_override.as_deref(),
+            true,
+        ) {
+            Ok(selection) => selection.selected.profile,
+            Err(err) => {
+                if let Some(profile_id) = rta_config.profile_id_override.as_ref() {
+                    eprintln!(
+                        "[rta] calibration creating profile template '{}' ({err})",
+                        profile_id
+                    );
+                    RtaProfile {
+                        id: profile_id.clone(),
+                        rom_hashes: vec![rom_hash.to_owned()],
+                        status: ProfileStatus::Published,
+                        ..RtaProfile::default()
+                    }
+                } else {
+                    return Err(format!(
+                        "RTA calibration requires --rta-profile <id> when no existing profile matches ROM hash {}: {err}",
+                        rom_hash
+                    ));
+                }
+            }
+        }
+    } else {
+        select_profile(
+            &profiles,
+            rom_hash,
+            rta_config.profile_id_override.as_deref(),
+            false,
+        )
+        .map_err(|err| {
+            format!(
+                "Failed to enter RTA mode for ROM hash {}: {err}. Provide --rta-profile <id> to override.",
+                rom_hash
+            )
+        })?
+        .selected
+        .profile
+    };
+    let calibration = if rta_config.calibrate {
+        Some(CalibrationRecorder::new(profile.id.clone()))
+    } else {
+        None
+    };
+    Ok(RtaManager::new(
+        profile,
+        rom_hash.to_owned(),
+        rta_config.runs_dir.clone(),
+        calibration,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn setup_rta_manager_calibrate_mode_without_override_but_matched_hash_succeeds() {
+        use nes_desktop::rta::{ProfileStatus, RtaProfile, RtaRuntimeConfig};
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir().join(format!(
+            "test_rta_cal_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let profile = RtaProfile {
+            id: "existing-profile".to_string(),
+            rom_hashes: vec!["matchedhash".to_string()],
+            status: ProfileStatus::Published,
+            ..RtaProfile::default()
+        };
+
+        let toml_string = toml::to_string(&profile).unwrap();
+        std::fs::write(dir.join("existing-profile.toml"), toml_string).unwrap();
+
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: true,
+            profile_id_override: None,
+        };
+
+        let manager = super::setup_rta_manager(&config, "matchedhash").expect("Should succeed");
+        assert!(manager.is_calibrating());
+        assert_eq!(manager.profile_id(), "existing-profile");
+    }
+
+    #[test]
+    fn setup_rta_manager_play_mode_with_match_succeeds() {
+        use nes_desktop::rta::{ProfileStatus, RtaProfile, RtaRuntimeConfig};
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir().join(format!(
+            "test_rta_play_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let profile = RtaProfile {
+            id: "existing-profile".to_string(),
+            rom_hashes: vec!["matchedhash".to_string()],
+            status: ProfileStatus::Published,
+            ..RtaProfile::default()
+        };
+
+        let toml_string = toml::to_string(&profile).unwrap();
+        std::fs::write(dir.join("existing-profile.toml"), toml_string).unwrap();
+
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: false,
+            profile_id_override: None,
+        };
+
+        let manager = super::setup_rta_manager(&config, "matchedhash").expect("Should succeed");
+        assert!(!manager.is_calibrating());
+        assert_eq!(manager.profile_id(), "existing-profile");
+    }
+
+    #[test]
+    fn setup_rta_manager_creates_manager_or_fails() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let config = RtaRuntimeConfig {
+            profiles_dir: PathBuf::from("non_existent_dir"),
+            runs_dir: PathBuf::from("."),
+            calibrate: false,
+            profile_id_override: None,
+        };
+
+        let err = super::setup_rta_manager(&config, "fakehash")
+            .expect_err("Should fail due to missing dir");
+        assert!(
+            err.contains("does not exist"),
+            "Expected file error, got {err}"
+        );
+    }
+
+    #[test]
+    fn setup_rta_manager_calibrate_without_override_fails() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir();
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: true,
+            profile_id_override: None,
+        };
+
+        let err = super::setup_rta_manager(&config, "fakehash").expect_err("Should fail");
+        assert!(err.contains("requires --rta-profile"), "Got err: {err}");
+    }
+
+    #[test]
+    fn setup_rta_manager_calibrate_with_override_succeeds() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir();
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: true,
+            profile_id_override: Some("new-profile".to_string()),
+        };
+
+        let manager = super::setup_rta_manager(&config, "fakehash").expect("Should succeed");
+        assert!(manager.is_calibrating());
+    }
+
+    #[test]
+    fn setup_rta_manager_play_mode_without_match_fails() {
+        use nes_desktop::rta::RtaRuntimeConfig;
+        use std::path::PathBuf;
+
+        let dir = std::env::temp_dir();
+        let config = RtaRuntimeConfig {
+            profiles_dir: dir.clone(),
+            runs_dir: PathBuf::from("."),
+            calibrate: false,
+            profile_id_override: None,
+        };
+
+        let err = super::setup_rta_manager(&config, "fakehash").expect_err("Should fail");
+        assert!(err.contains("Failed to enter RTA mode"), "Got err: {err}");
+    }
+
     #[test]
     fn build_startup_table_creates_expected_table_with_all_options() {
         use super::*;
