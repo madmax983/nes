@@ -9,14 +9,14 @@ Generate the fixed control snapshot locally from the bootstrap TAS:
 ```powershell
 cargo run -p nes-ai --bin prepare_smb_control -- `
   "./roms/homebrew/homebrew.nes" `
-  ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
-  ./artifacts/ai/snapshots/smb-1-1-control.state.json
+  ./crates/nes-ai/assets/bootstrap/homebrew_entry.tas.json `
+  ./artifacts/ai/snapshots/homebrew-control.state.json
 ```
 
 Then copy the example configuration:
 
 ```powershell
-cp config/ai/profiles/smb-control.example.toml config/ai/profiles/smb-control.toml
+cp config/ai/profiles/homebrew-control.example.toml config/ai/profiles/homebrew-control.toml
 ```
 
 Then point `rom_path` / `snapshot_path` at your local files.
@@ -27,7 +27,7 @@ Train from the local profile and optionally write checkpoints plus evaluation ar
 
 ```powershell
 cargo run -p nes-ai --bin train_smb_control -- `
-  ./config/ai/profiles/smb-control.toml `
+  ./config/ai/profiles/homebrew-control.toml `
   4 `
   ./artifacts/ai/checkpoints `
   ./artifacts/ai/eval
@@ -48,7 +48,7 @@ Evaluate a saved checkpoint base path:
 
 ```powershell
 cargo run -p nes-ai --bin eval_smb_control -- `
-  ./config/ai/profiles/smb-control.toml `
+  ./config/ai/profiles/homebrew-control.toml `
   ./artifacts/ai/checkpoints/policy-update-0002 `
   2 `
   ./artifacts/ai/eval

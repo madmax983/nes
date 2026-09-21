@@ -156,30 +156,30 @@ For in-process automation, `nes_core::tas` is now the stable foundation when `ne
 `nes-ai` trains from fixed save-state snapshots and writes replayable TAS artifacts.
 
 ```powershell
-# 1. Prepare the fixed SMB 1-1 control snapshot (using the bundled homebrew ROM for demonstration)
+# 1. Prepare the fixed control snapshot (using the bundled homebrew ROM for demonstration)
 cargo run -p nes-ai --bin prepare_smb_control -- `
   "./roms/homebrew/homebrew.nes" `
-  ./crates/nes-ai/assets/bootstrap/smb_1_1_entry.tas.json `
-  ./artifacts/ai/snapshots/smb-1-1-control.state.json
+  ./crates/nes-ai/assets/bootstrap/homebrew_entry.tas.json `
+  ./artifacts/ai/snapshots/homebrew-control.state.json
 ```
 
 Then copy the example configuration:
 
 ```powershell
-cp config/ai/profiles/smb-control.example.toml config/ai/profiles/smb-control.toml
+cp config/ai/profiles/homebrew-control.example.toml config/ai/profiles/homebrew-control.toml
 ```
 
 ```powershell
 # 2. Train from the local profile
 cargo run -p nes-ai --bin train_smb_control -- `
-  ./config/ai/profiles/smb-control.toml `
+  ./config/ai/profiles/homebrew-control.toml `
   4 `
   ./artifacts/ai/checkpoints `
   ./artifacts/ai/eval
 
 # 3. Evaluate a saved checkpoint base path (the recorder appends .mpk)
 cargo run -p nes-ai --bin eval_smb_control -- `
-  ./config/ai/profiles/smb-control.toml `
+  ./config/ai/profiles/homebrew-control.toml `
   ./artifacts/ai/checkpoints/policy-update-0002 `
   2 `
   ./artifacts/ai/eval
