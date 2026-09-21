@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
+pub mod input;
 
 // `alloc` is used unconditionally: under `std` these are the same types, so a
 // single set of imports serves both configurations.
