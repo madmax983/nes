@@ -1032,3 +1032,22 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod havoc_tests {
+    use super::*;
+    use std::io::{BufReader, Cursor};
+
+    #[test]
+    #[should_panic(expected = "assertion failed: line.len() <= limit")]
+    fn havoc_test_read_line_bounded_memory_exhaustion() {
+        let limit = 1048576; // Default limit
+        let data = vec![0x80; limit];
+        let mut reader = BufReader::new(Cursor::new(&data));
+        let mut line = String::new();
+        let _ = read_line_bounded(&mut reader, &mut line, limit).unwrap();
+        // utf8 lossy turns 1 invalid byte into a 3 byte replacement character.
+        // Meaning total length can be 3x the limit.
+        assert!(line.len() <= limit);
+    }
+}
