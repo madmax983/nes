@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Flattening nested `if` statements in input event handling]
+**Learning:** Found sequential `if` statements checking combinations of variables like `pressed`, `mode.rta_enabled` and `key` inside `classify_keyboard_input`. This creates vertical sprawl and repetitive logic.
+**Action:** Replaced sequential `if` statements with a single `match` block on the enum `key` using guard clauses (e.g. `VirtualKeyCode::Escape if pressed => ...`) to cleanly group key bindings and flatten logic flow.
