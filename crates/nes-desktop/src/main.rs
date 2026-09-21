@@ -1382,61 +1382,65 @@ fn build_startup_table(
         Cell::new("Value").fg(TableColor::White),
     ]);
 
-    table.add_row(vec![
-        Cell::new("ROM Path"),
-        Cell::new(session.rom_path.display().to_string()).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("ROM Info"),
-        Cell::new(format!(
+    let mut add_row = |key: &str, val: &dyn std::fmt::Display, color: Option<TableColor>| {
+        let mut value_cell = Cell::new(val.to_string());
+        if let Some(c) = color {
+            value_cell = value_cell.fg(c);
+        }
+        table.add_row(vec![Cell::new(key), value_cell]);
+    };
+
+    add_row(
+        "ROM Path",
+        &session.rom_path.display(),
+        Some(TableColor::Green),
+    );
+    add_row(
+        "ROM Info",
+        &format!(
             "Mapper {}, PRG {} bytes, reset vector ${:04X}",
             session.info.mapper_id, session.info.prg_rom_bytes, session.info.reset_pc
-        ))
-        .fg(TableColor::Green),
-    ]);
+        ),
+        Some(TableColor::Green),
+    );
     if let Some(config_path) = runtime.loaded_config_path.as_ref() {
-        table.add_row(vec![
-            Cell::new("Config"),
-            Cell::new(config_path.display().to_string()).fg(TableColor::Green),
-        ]);
+        add_row("Config", &config_path.display(), Some(TableColor::Green));
     }
-    table.add_row(vec![
-        Cell::new("Controls"),
-        Cell::new(
-            "keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
-        ).fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Menu"),
-        Cell::new(if native_menu_supported() {
+    add_row(
+        "Controls",
+        &"keyboard Z=A, X=B, Enter=Start, RightShift=Select, Arrows=D-pad, R=Rewind, F5=Save Slot, F8=Load Slot, Esc=Menu",
+        Some(TableColor::Green),
+    );
+    add_row(
+        "Menu",
+        &if native_menu_supported() {
             "native menu bar + Esc overlay"
         } else {
             "Esc overlay only on this platform"
-        })
-        .fg(TableColor::Green),
-    ]);
-    table.add_row(vec![
-        Cell::new("Gamepad"),
-        Cell::new("face buttons=A/B, Start/Select, D-pad or left stick").fg(TableColor::Green),
-    ]);
+        },
+        Some(TableColor::Green),
+    );
+    add_row(
+        "Gamepad",
+        &"face buttons=A/B, Start/Select, D-pad or left stick",
+        Some(TableColor::Green),
+    );
     match step_mode {
         StepMode::Frame => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new("frame").fg(TableColor::Green),
-            ]);
+            add_row("Step Mode", &"frame", Some(TableColor::Green));
         }
         StepMode::CpuBudget(steps) => {
-            table.add_row(vec![
-                Cell::new("Step Mode"),
-                Cell::new(format!("cpu ({steps} instructions/frame)")).fg(TableColor::Green),
-            ]);
+            add_row(
+                "Step Mode",
+                &format!("cpu ({steps} instructions/frame)"),
+                Some(TableColor::Green),
+            );
         }
     }
     if let Some(netplay) = runtime.netplay.as_ref() {
-        table.add_row(vec![
-            Cell::new("Netplay"),
-            Cell::new(format!(
+        add_row(
+            "Netplay",
+            &format!(
                 "relay={} room='{}' player={} delay={} rollback={} hash_every={}",
                 netplay.relay_addr,
                 netplay.room,
@@ -1444,28 +1448,25 @@ fn build_startup_table(
                 netplay.input_delay_frames,
                 netplay.max_rollback_frames,
                 netplay.hash_check_every_frames
-            ))
-            .fg(TableColor::Green),
-        ]);
+            ),
+            Some(TableColor::Green),
+        );
     }
     if let Some(rta) = rta_manager.as_ref() {
-        table.add_row(vec![
-            Cell::new("RTA"),
-            Cell::new(format!(
+        add_row(
+            "RTA",
+            &format!(
                 "enabled profile='{}' calibrate={}",
                 rta.profile_id(),
                 rta.is_calibrating()
-            ))
-            .fg(TableColor::Green),
-        ]);
+            ),
+            Some(TableColor::Green),
+        );
     }
     #[cfg(feature = "nova")]
     {
         if runtime.auto_player_enabled {
-            table.add_row(vec![
-                Cell::new("Nova"),
-                Cell::new("Auto Player Chaos Fuzzing Enabled"),
-            ]);
+            add_row("Nova", &"Auto Player Chaos Fuzzing Enabled", None);
         }
     }
 
