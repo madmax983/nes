@@ -86,6 +86,9 @@ where
     episode_done: bool,
     stalled_frames: u32,
     last_features: Option<P::Features>,
+    /// **⚡ Bolt Optimization:** Pre-allocated buffer to prevent heap allocations
+    /// during `fill_framebuffer_rgba`, saving ~245KB of allocation per frame step.
+    scratch_frame: Vec<u8>,
 }
 
 impl<P> ProfileEnv<P>
@@ -132,6 +135,7 @@ where
             episode_done: false,
             stalled_frames: 0,
             last_features: None,
+            scratch_frame: vec![0_u8; nes_core::FRAME_RGBA_BYTES],
         }
     }
 
@@ -171,8 +175,9 @@ where
         let features = self.profile.decode_features(&self.core);
         self.last_features = Some(features.clone());
 
+        self.core.fill_framebuffer_rgba(&mut self.scratch_frame);
         let frame = downsample_grayscale(
-            &self.core.framebuffer_rgba(),
+            &self.scratch_frame,
             self.profile.config().observation.width,
             self.profile.config().observation.height,
         );
@@ -236,8 +241,9 @@ where
             self.episode_frames = self.episode_frames.saturating_add(1);
         }
 
+        self.core.fill_framebuffer_rgba(&mut self.scratch_frame);
         let frame = downsample_grayscale(
-            &self.core.framebuffer_rgba(),
+            &self.scratch_frame,
             self.profile.config().observation.width,
             self.profile.config().observation.height,
         );
