@@ -884,18 +884,14 @@ fn run() -> Result<(), String> {
                     }
                     KeyboardDecision::ManualSaveState => {
                         if let Some(action) = slot_action_for_hotkey(true, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = build_ctx!();
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
+                            let mut ctx = build_ctx!();
+                            let _ = dispatch_app_action(action, &mut ctx, control_flow);
                         }
                     }
                     KeyboardDecision::ManualLoadState => {
                         if let Some(action) = slot_action_for_hotkey(false, overlay.selected_slot()) {
-                            let _ = {
-                                let mut ctx = build_ctx!();
-                                dispatch_app_action(action, &mut ctx, control_flow)
-                            };
+                            let mut ctx = build_ctx!();
+                            let _ = dispatch_app_action(action, &mut ctx, control_flow);
                         }
                     }
                     KeyboardDecision::SetRewindHeld(held) => {
