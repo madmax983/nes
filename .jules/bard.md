@@ -26,3 +26,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2026-07-30 - Broken rustdoc intra-doc link and missing examples
+**Confusion:** The crate documentation generation failed because `crates/nes-core/src/mapper/fme7.rs` had a broken intra-doc link `[`DOTS_PER_CPU_CYCLE`]` pointing to a private constant. Also, numerous core API functions lacked `## Examples`.
+**Clarification:** Changed the broken intra-doc link to standard markdown backticks `` `DOTS_PER_CPU_CYCLE` `` to resolve the error. Added numerous doc examples to `NesCore` methods in `crates/nes-core/src/api.rs`.
