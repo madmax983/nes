@@ -1060,7 +1060,12 @@ impl RtaManager {
     /// // Tick exactly once per frame update
     /// let events = manager.tick(1, Instant::now(), |addr| dummy_ram[(addr as usize) % 0x800]);
     /// ```
-    pub fn tick<F>(&mut self, frame: u64, now: Instant, mut read_u8: F) -> Vec<RtaEvent>
+    pub fn tick<F>(
+        &mut self,
+        frame: u64,
+        now: Instant,
+        mut read_u8: F,
+    ) -> smallvec::SmallVec<[RtaEvent; 2]>
     where
         F: FnMut(u16) -> u8,
     {
@@ -1070,7 +1075,7 @@ impl RtaManager {
 
         // Avoids `Vec::new()` without capacity on the hot path (called every frame).
         // RTA events per frame rarely exceed 2.
-        let mut events = Vec::<RtaEvent>::with_capacity(2);
+        let mut events = smallvec::SmallVec::<[RtaEvent; 2]>::new();
 
         self.tick_start(now, &mut read_u8, &mut events);
 
@@ -1089,8 +1094,12 @@ impl RtaManager {
         events
     }
 
-    fn tick_start<F>(&mut self, now: Instant, mut read_u8: F, events: &mut Vec<RtaEvent>)
-    where
+    fn tick_start<F>(
+        &mut self,
+        now: Instant,
+        mut read_u8: F,
+        events: &mut smallvec::SmallVec<[RtaEvent; 2]>,
+    ) where
         F: FnMut(u16) -> u8,
     {
         if self.state == RtaSessionState::Armed
@@ -1108,7 +1117,7 @@ impl RtaManager {
         &mut self,
         now: Instant,
         mut read_u8: F,
-        events: &mut Vec<RtaEvent>,
+        events: &mut smallvec::SmallVec<[RtaEvent; 2]>,
     ) -> bool
     where
         F: FnMut(u16) -> u8,
@@ -1135,7 +1144,7 @@ impl RtaManager {
         frame: u64,
         now: Instant,
         mut read_u8: F,
-        events: &mut Vec<RtaEvent>,
+        events: &mut smallvec::SmallVec<[RtaEvent; 2]>,
     ) where
         F: FnMut(u16) -> u8,
     {
@@ -1148,8 +1157,13 @@ impl RtaManager {
         }
     }
 
-    fn tick_end<F>(&mut self, frame: u64, now: Instant, mut read_u8: F, events: &mut Vec<RtaEvent>)
-    where
+    fn tick_end<F>(
+        &mut self,
+        frame: u64,
+        now: Instant,
+        mut read_u8: F,
+        events: &mut smallvec::SmallVec<[RtaEvent; 2]>,
+    ) where
         F: FnMut(u16) -> u8,
     {
         if self.trigger_fired(TriggerSlot::End, &mut read_u8) {

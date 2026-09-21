@@ -16,6 +16,7 @@ nes-core = { path = "../nes-core" }
 rand = { version = "0.8.5", optional = true }
 comfy-table = "7.1"
 crossterm = "0.28"
+smallvec = "1.13"
 nes-netplay = { path = "../nes-netplay" }
 nes-rewind = { path = "../nes-rewind" }
 nes-mcp = { path = "../nes-mcp", optional = true }
