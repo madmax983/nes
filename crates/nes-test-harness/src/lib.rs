@@ -431,20 +431,12 @@ pub fn detect_mapper_id(rom_bytes: &[u8]) -> Option<u16> {
     }
 }
 
-#[must_use]
-pub fn mapper_supported_by_core(mapper_id: u16) -> bool {
-    matches!(
-        mapper_id,
-        0 | 1 | 2 | 3 | 4 | 7 | 9 | 10 | 11 | 66 | 69 | 71 | 206
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         apu_write_hash, audio_stats, collect_apu_register_writes, compare_waveforms,
-        detect_mapper_id, mapper_supported_by_core, pearson_correlation, read_pcm_i16le,
-        rms_envelope, waveform_hash, write_pcm_i16le,
+        detect_mapper_id, pearson_correlation, read_pcm_i16le, rms_envelope, waveform_hash,
+        write_pcm_i16le,
     };
     use nes_core::NesCore;
 
@@ -610,17 +602,5 @@ mod tests {
         rom[6] = 0x10;
         rom[7] = 0x20;
         assert_eq!(detect_mapper_id(&rom), Some(0x21));
-    }
-
-    #[test]
-    fn mapper_supported_by_core_matches_core_surface() {
-        for id in [0, 1, 2, 3, 4, 7, 9, 10, 11, 66, 69, 71, 206] {
-            assert!(
-                mapper_supported_by_core(id),
-                "mapper {id} should be supported"
-            );
-        }
-        assert!(!mapper_supported_by_core(5));
-        assert!(!mapper_supported_by_core(163));
     }
 }

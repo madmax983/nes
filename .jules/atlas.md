@@ -25,3 +25,7 @@
 **Remove Duplicated map_virtual_keycode in main.rs**
 **Tangle:** The `map_virtual_keycode` method in `nes-desktop` was duplicated. It existed both in the newly created `input.rs` and in `main.rs`. This duplicated logic which could go out of sync and made the binary module unnecessarily large.
 **Blueprint:** Removed the duplicated `map_virtual_keycode` from `main.rs` since it was already correctly placed in the `input.rs` module and being utilized properly from there.
+
+**Extract Mapper Supported Logic to nes-core**
+**Tangle:** The `mapper_supported_by_core` function was duplicated and maintained manually in `nes-test-harness`, which went out of sync with `nes-core` (missing mapper 5). This leaked implementation details of `nes-core` into the test harness and violated DRY.
+**Blueprint:** Extracted the `is_mapper_supported` logic directly into `crates/nes-core/src/mapper/mod.rs` and re-exported it in `nes-core` facade. Updated `nes-test-harness` to rely on the centralized implementation, ensuring correct, cohesive boundaries.

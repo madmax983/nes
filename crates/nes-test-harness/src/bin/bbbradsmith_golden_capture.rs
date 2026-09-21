@@ -15,8 +15,7 @@ use comfy_table::{Cell, Color as TableColor, Table, presets::UTF8_FULL};
 use crossterm::style::{Color, Stylize};
 use nes_config::{NesConfig, parse_config_path_arg};
 use nes_test_harness::{
-    AudioStats, audio_stats, capture_audio_window, detect_mapper_id, mapper_supported_by_core,
-    waveform_hash, write_pcm_i16le,
+    AudioStats, audio_stats, capture_audio_window, detect_mapper_id, waveform_hash, write_pcm_i16le,
 };
 
 const AUDIO_WARMUP_FRAMES: u32 = 60;
@@ -164,7 +163,7 @@ fn run(stdout: &mut impl Write) -> Result<(), String> {
         let rom_bytes = fs::read(&rom_path)
             .map_err(|err| format!("failed to read ROM '{}': {err}", rom_path.display()))?;
         let mapper_id = detect_mapper_id(&rom_bytes).unwrap_or(u16::MAX);
-        if !mapper_supported_by_core(mapper_id) {
+        if !nes_core::is_mapper_supported(mapper_id) {
             print_processing_progress(stdout, &rom_name, Color::Yellow);
             rows.push(format_skipped_mapper_row(rom_name, mapper_id));
             skipped_mapper = skipped_mapper.saturating_add(1);

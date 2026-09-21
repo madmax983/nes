@@ -6,7 +6,7 @@ use nes_core::AUDIO_CHUNK_SAMPLES;
 use nes_test_harness::{
     apu_write_hash, audio_stats, bbbradsmith_audio_golden_dir_path,
     bbbradsmith_audio_suite_rom_paths, capture_audio_window, collect_apu_register_writes,
-    compare_waveforms, detect_mapper_id, mapper_supported_by_core, read_pcm_i16le, waveform_hash,
+    compare_waveforms, detect_mapper_id, read_pcm_i16le, waveform_hash,
 };
 
 const WRITE_TRACE_STEPS_PER_ROM: u32 = 750_000;
@@ -36,7 +36,7 @@ fn bbbradsmith_audio_suite_write_trace_is_deterministic_per_rom() {
             fs::read(&rom_path).unwrap_or_else(|err| panic!("failed to read '{rom_path}': {err}"));
         let rom_name = rom_name(&rom_path);
         let mapper_id = detect_mapper_id(&bytes).unwrap_or(u16::MAX);
-        if !mapper_supported_by_core(mapper_id) {
+        if !nes_core::is_mapper_supported(mapper_id) {
             skipped.push(format!("{rom_name} (mapper {mapper_id})"));
             continue;
         }
@@ -81,7 +81,7 @@ fn bbbradsmith_audio_suite_audio_windows_are_deterministic_and_well_formed() {
             fs::read(&rom_path).unwrap_or_else(|err| panic!("failed to read '{rom_path}': {err}"));
         let rom_name = rom_name(&rom_path);
         let mapper_id = detect_mapper_id(&bytes).unwrap_or(u16::MAX);
-        if !mapper_supported_by_core(mapper_id) {
+        if !nes_core::is_mapper_supported(mapper_id) {
             skipped.push(format!("{rom_name} (mapper {mapper_id})"));
             continue;
         }
@@ -140,7 +140,7 @@ fn bbbradsmith_audio_suite_matches_golden_pcm_tolerances() {
             fs::read(&rom_path).unwrap_or_else(|err| panic!("failed to read '{rom_path}': {err}"));
         let mapper_id = detect_mapper_id(&bytes).unwrap_or(u16::MAX);
         let rom_name = rom_name(&rom_path);
-        if !mapper_supported_by_core(mapper_id) {
+        if !nes_core::is_mapper_supported(mapper_id) {
             skipped.push(format!("{rom_name} (mapper {mapper_id})"));
             continue;
         }
