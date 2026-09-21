@@ -1123,11 +1123,14 @@ impl RtaManager {
                     .saturating_add(now.saturating_duration_since(paused_at));
                 events.push(RtaEvent::Resumed);
             }
-        } else if self.trigger_fired(TriggerSlot::Pause, &mut read_u8) {
+            return true;
+        }
+
+        if self.trigger_fired(TriggerSlot::Pause, &mut read_u8) {
             self.pause_started_at = Some(now);
             events.push(RtaEvent::Paused);
         }
-        is_paused
+        false
     }
 
     fn tick_splits<F>(

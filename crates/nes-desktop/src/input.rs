@@ -121,13 +121,13 @@ pub(crate) fn classify_keyboard_input(
         let Some(mask) = map_key_event_to_button_bit(key_code) else {
             return KeyboardDecision::Noop;
         };
-        KeyboardDecision::UpdateKeyboardBits { mask, pressed }
-    } else {
-        let Some(mapped) = map_key_event_to_command(key_code, pressed) else {
-            return KeyboardDecision::Noop;
-        };
-        KeyboardDecision::ExecuteCore(mapped.core)
+        return KeyboardDecision::UpdateKeyboardBits { mask, pressed };
     }
+
+    let Some(mapped) = map_key_event_to_command(key_code, pressed) else {
+        return KeyboardDecision::Noop;
+    };
+    KeyboardDecision::ExecuteCore(mapped.core)
 }
 
 #[must_use]
