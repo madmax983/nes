@@ -56,7 +56,59 @@ const NETPLAY_AUTO_DELAY_MAX_FRAMES: u32 = 12;
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("\n{}", err);
+        eprintln!("{}", format_cli_error(&err));
+    }
+}
+
+pub(crate) fn format_cli_error(err: &str) -> String {
+    if err.contains("ROM path not configured") {
+        let clean_err = err
+            .replace("Error:", "")
+            .replace("Hint:", "")
+            .replace("[38;5;9m[1m", "")
+            .replace("[38;5;14m[1m", "")
+            .replace("[0m", "");
+        let clean_err = clean_err.trim();
+        let parts: Vec<&str> = clean_err
+            .split(
+                ".
+",
+            )
+            .collect();
+        if parts.len() >= 2 {
+            format!(
+                "{} {}.
+{} {}",
+                "Error:".with(crossterm::style::Color::Red).bold(),
+                parts[0].trim(),
+                "Hint:".with(crossterm::style::Color::Cyan).bold(),
+                parts[1].trim()
+            )
+        } else {
+            let parts: Vec<&str> = clean_err.split(". ").collect();
+            if parts.len() >= 2 {
+                format!(
+                    "{} {}.
+{} {}",
+                    "Error:".with(crossterm::style::Color::Red).bold(),
+                    parts[0].trim(),
+                    "Hint:".with(crossterm::style::Color::Cyan).bold(),
+                    parts[1].trim()
+                )
+            } else {
+                format!(
+                    "{} {}",
+                    "Error:".with(crossterm::style::Color::Red).bold(),
+                    clean_err
+                )
+            }
+        }
+    } else {
+        format!(
+            "
+{}",
+            err
+        )
     }
 }
 
