@@ -63,7 +63,11 @@ impl Axrom {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: AxromState) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &AxromState) {
         self.selected_bank = state.selected_bank % self.bank_count;
         self.selected_nametable_bank = state.selected_nametable_bank & 0x01;
     }
@@ -120,7 +124,7 @@ mod tests {
         let state = mapper.state();
 
         let mut mapper_restored = Axrom::from_prg_rom(vec![0_u8; 64 * 1024]);
-        mapper_restored.restore_state(state);
+        mapper_restored.restore_state(&state);
 
         assert_eq!(mapper.selected_bank(), mapper_restored.selected_bank());
         assert_eq!(

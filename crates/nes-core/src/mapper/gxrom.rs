@@ -86,7 +86,11 @@ impl Gxrom {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: GxromState) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &GxromState) {
         self.selected_prg_bank = (usize::from(state.selected_prg_bank) % self.prg_bank_count) as u8;
         self.selected_chr_bank = (usize::from(state.selected_chr_bank) % self.chr_bank_count) as u8;
     }
@@ -319,7 +323,7 @@ mod tests {
         mapper.write_prg(0x8000, 0x00);
 
         // Restore
-        mapper.restore_state(state);
+        mapper.restore_state(&state);
         assert_eq!(mapper.selected_prg_bank(), 1);
         assert_eq!(mapper.selected_chr_bank(), 1);
     }

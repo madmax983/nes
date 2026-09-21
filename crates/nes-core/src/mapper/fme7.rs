@@ -153,7 +153,11 @@ impl Fme7 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Fme7State) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &Fme7State) {
         self.command = state.command;
         self.chr_banks = state.chr_banks;
         self.wram_control = state.wram_control;
@@ -165,7 +169,7 @@ impl Fme7 {
         if state.wram.len() == self.wram.len() {
             self.wram.copy_from_slice(&state.wram);
         } else {
-            self.wram = state.wram;
+            self.wram = state.wram.clone();
             self.wram.resize(WRAM_BYTES, 0);
         }
         // sub_cycle is transient timing state; reset the divider on restore.
@@ -587,7 +591,7 @@ mod tests {
         assert_eq!(state.wram[0], 0x9A);
 
         let mut restored = Fme7::from_prg_chr(prg_with_bank_markers(8), chr_with_bank_markers(16));
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.read_prg(0x8000), 3);
         {
             let mut window = [0_u8; CHR_WINDOW_BYTES];

@@ -150,7 +150,11 @@ impl Mmc4 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Mmc4State) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &Mmc4State) {
         self.prg_bank = state.prg_bank;
         self.chr_bank_fd0 = state.chr_bank_fd0;
         self.chr_bank_fe0 = state.chr_bank_fe0;
@@ -162,7 +166,7 @@ impl Mmc4 {
         if state.prg_ram.len() == self.prg_ram.len() {
             self.prg_ram.copy_from_slice(&state.prg_ram);
         } else {
-            self.prg_ram = state.prg_ram;
+            self.prg_ram = state.prg_ram.clone();
             self.prg_ram.resize(PRG_RAM_BYTES, 0);
         }
     }
@@ -462,7 +466,7 @@ mod tests {
         assert_eq!(state.prg_ram[0], 0x9A);
 
         let mut restored = Mmc4::from_prg_chr(prg_with_bank_markers(4), chr_with_bank_markers(8));
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.read_prg(0x8000), 2);
         assert_eq!(restored.mirroring(), NametableMirroring::Horizontal);
         assert_eq!(restored.read_prg(0x6000), 0x9A);

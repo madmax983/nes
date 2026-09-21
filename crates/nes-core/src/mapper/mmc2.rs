@@ -141,7 +141,11 @@ impl Mmc2 {
         }
     }
 
-    pub(crate) fn restore_state(&mut self, state: Mmc2State) {
+        /// Restores state from a snapshot.
+    ///
+    /// Performance note: Takes state by reference to avoid heap allocations
+    /// when restoring structs with large dynamically allocated fields.
+    pub(crate) fn restore_state(&mut self, state: &Mmc2State) {
         self.prg_bank = state.prg_bank;
         self.chr_bank_fd0 = state.chr_bank_fd0;
         self.chr_bank_fe0 = state.chr_bank_fe0;
@@ -444,7 +448,7 @@ mod tests {
 
         let state = m.state();
         let mut restored = Mmc2::from_prg_chr(prg_with_bank_markers(8), chr_with_bank_markers(8));
-        restored.restore_state(state);
+        restored.restore_state(&state);
         assert_eq!(restored.read_prg(0x8000), 4);
         assert_eq!(restored.mirroring(), NametableMirroring::Horizontal);
         {

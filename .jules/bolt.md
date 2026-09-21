@@ -35,3 +35,6 @@
 **[Unnecessary Vec Allocations in Tests]
 **Learning:** Found several test cases (`should_compute_apu_write_trace_hash`) creating multiple temporary heap allocations (`writes.clone()`) just to mutate a single field for negative assertions.
 **Action:** Replace `Vec::clone()` with in-place mutable updates using a `let mut writes = writes;` and reverting the state after assertion, effectively removing 7 heap allocations per test run.
+**[State Restoration Allocations]
+**Learning:** Found that `restore_state` in the mapper interfaces was taking `MapperState` by value. For complex mappers (MMC3, FME7, MMC5) this state includes dynamically allocated `Vec`s for WRAM/PRG RAM. The `api.rs` layer was unconditionally calling `state.clone()` before passing it.
+**Action:** Always verify if large state structs can be passed by reference `&T` to hot path methods (like state restorations), allowing internal dynamically allocated buffers to update via `.copy_from_slice()` instead of reallocating and moving memory.
