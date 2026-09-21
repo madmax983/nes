@@ -51,3 +51,6 @@
 **[Flattening deeply nested option unwrapping via Guard Clauses in classify_keyboard_input]**
 **Learning:** Functions like `classify_keyboard_input` used cascading `if let Some() { ... } else if let Some() { ... } else { ... }` blocks that indented the happy path. This causes 'Pyramid of Doom' readability smells.
 **Action:** Use guard clauses (`let Some(x) = y else { return ... };`) to flatten the logic so the successful execution path stays un-indented at the function root.
+**[Refactoring classify_keyboard_input]**
+**Learning:** Found deeply nested if-let checks for combinations of keys, pressed states, and modes in `crates/nes-desktop/src/input.rs` `classify_keyboard_input`.
+**Action:** Used `match (key, pressed)` to flatten the conditionals and explicitly model the key-press mappings as simple arms instead of sequential if-else cascades.
