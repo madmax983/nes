@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Records a sequential ring buffer of CPU instruction states.
+#[cfg(feature = "nova")]
+pub mod trace_buffer;
