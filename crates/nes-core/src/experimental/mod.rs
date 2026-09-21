@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Tracks frame-over-frame OAM sprite movement to predict future trajectories.
+#[cfg(feature = "nova")]
+pub mod sprite_trajectory;
