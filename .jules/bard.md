@@ -26,3 +26,6 @@
 ## 2024-04-27 - Documented Missing Core and Desktop Functions
 **Confusion:** Functions `add_rule` and `evaluate` in `nes-core/src/experimental/spatial_bot.rs`, and `read_framed_message` in `nes-desktop/src/mcp_host.rs` were missing documentation, which made it unclear what they were doing without looking at their implementations. Furthermore, the `read_framed_message` doctest failed initially because the `Content-Length` provided in the doctest did not exactly match the length of the string bytes `{"key":"val"}` (length is 13, not 12).
 **Clarification:** Added clear doc comments (`///`) describing what the functions do and added executable doctests for each to demonstrate valid usage. Updated the `Content-Length` in the doctest for `read_framed_message` from 12 to 13 to correctly match the payload size and allow the test to pass.
+## 2025-08-02 - Intra-Doc Link Requires Target to be Documented
+**Confusion:** The `on_ppu_dot` function had a broken intra-doc link `[`DOTS_PER_CPU_CYCLE`]` in `nes-core/src/mapper/fme7.rs`. While the fix is to use standard backticks, it is important to note that intra-doc links fail if they point to an item that is private and not documented.
+**Clarification:** Changed to standard backticks `` `DOTS_PER_CPU_CYCLE` `` to resolve the rustdoc error for `nes-core`.
