@@ -1204,7 +1204,9 @@ fn parse_expr(input: &str, line_no: usize) -> Result<Expr, DslError> {
         i64::from_str_radix(hex, 16).ok()
     } else if let Some(bin) = rest.strip_prefix('%') {
         i64::from_str_radix(bin, 2).ok()
-    } else if let Some(hex) = rest.strip_prefix("0x").or_else(|| rest.strip_prefix("0X")) {
+    } else if let Some(hex) = rest.strip_prefix("0x") {
+        i64::from_str_radix(hex, 16).ok()
+    } else if let Some(hex) = rest.strip_prefix("0X") {
         i64::from_str_radix(hex, 16).ok()
     } else {
         rest.parse::<i64>().ok()
