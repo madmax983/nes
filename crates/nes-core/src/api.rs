@@ -959,7 +959,7 @@ impl NesCore {
             let chr_size = CHR_8K_BYTES * core::mem::size_of::<u8>();
             let chr_layout =
                 alloc::alloc::Layout::from_size_align(chr_size, 1).expect("chr layout");
-            let chr_ptr = alloc::alloc::alloc(chr_layout) as *mut u8;
+            let chr_ptr = alloc::alloc::alloc(chr_layout);
             assert!(!chr_ptr.is_null(), "chr_scratch allocation failed");
             core::ptr::write_bytes(chr_ptr, 0, chr_size);
             core::ptr::write(
