@@ -16,7 +16,11 @@ mkdir -p "$BUILD"
 cd "$FW"
 
 echo "=== building release firmware (qemu feature) ==="
-cargo +esp build --release --features qemu --offline
+# NES_QEMU_APU_STUB: Espressif's QEMU faults on the APU mixer's float
+# instructions (guest IllegalInstruction before frame 1), so the QEMU
+# build stubs the mixer to silence via nes-core's build.rs cfg. Host
+# builds never set this; their mixer is fully exercised.
+NES_QEMU_APU_STUB=1 cargo +esp build --release --features qemu --offline
 
 echo "=== elf2image ==="
 ELF="$FW/target/xtensa-esp32s3-none-elf/release/nes-esp32-s3"

@@ -61,6 +61,10 @@ psram = []
 # Also enables `nes-embassy/no-apu-tables`: QEMU's flash MMU emulation
 # cannot handle the 131 KiB DROM (flash-mapped rodata) segment containing
 # the APU lookup tables, so the mixer is computed per-sample instead.
+# QEMU build invocations (run-qemu-s3.sh, esp32s3-qemu.yml) additionally
+# set NES_QEMU_APU_STUB=1: this QEMU fork also faults on the mixer's
+# float instructions, so the boot-test build stubs the mixer to silence
+# (see nes-core's build.rs). Real hardware never sets it.
 qemu = ["nes-embassy/no-apu-tables"]
 
 # The crates.io index metadata for nb 1.1.0 incorrectly lists a serde

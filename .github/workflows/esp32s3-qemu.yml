@@ -98,6 +98,12 @@ jobs:
         working-directory: ${{ env.FIRMWARE_DIR }}
         # The action sets the `esp` toolchain as the override; build-std is
         # configured in the firmware's .cargo/config.toml.
+        # NES_QEMU_APU_STUB: this QEMU fork faults on the APU mixer's
+        # float instructions (guest IllegalInstruction before frame 1),
+        # so the boot-test build stubs the mixer to silence through
+        # nes-core's build.rs cfg. Host builds never set it.
+        env:
+          NES_QEMU_APU_STUB: "1"
         run: cargo +esp build --release --features qemu
 
       - name: Assemble QEMU flash image
