@@ -84,7 +84,12 @@ jobs:
 
       - name: Download Espressif QEMU fork
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq libslirp0
+          # The prebuilt QEMU binary links more than libslirp: its direct
+          # NEEDED entries are libslirp, libSDL2, libpixman and libgcrypt
+          # (the rest are in the base image). Installing only libslirp0
+          # left the loader dead on libSDL2-2.0.so.0 (exit 127) before
+          # QEMU ever started.
+          sudo apt-get update -qq && sudo apt-get install -y -qq libslirp0 libsdl2-2.0-0 libpixman-1-0 libgcrypt20
           mkdir -p "$HOME/.esp-qemu"
           curl -L --fail --retry 3 -o /tmp/qemu.tar.xz \
             "https://github.com/espressif/qemu/releases/download/${QEMU_TAG}/${QEMU_PKG}"
