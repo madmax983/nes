@@ -62,11 +62,11 @@ pub const LCD_SPI_HZ: u32 = 40_000_000;
 /// Heap for the emulator + Embassy. NROM-class games fit comfortably;
 /// enable the `psram` feature for large banked games.
 ///
-/// QEMU builds use a smaller heap (200 KiB) to fit within the ESP32-S3's
-/// 414 KiB of usable DRAM alongside the static allocations. The EmuDriver
-/// needs ~200 KiB (77K NesCore + 123K frame + 1.5K audio).
+/// QEMU builds use a smaller heap to fit within the ESP32-S3's usable DRAM
+/// alongside the static allocations. In QEMU mode the driver's RGB565 frame
+/// buffer is a 1-pixel dummy (display is a stub), saving 123 KiB.
 #[cfg(feature = "qemu")]
-pub const HEAP_BYTES: usize = 200 * 1024;
+pub const HEAP_BYTES: usize = 224 * 1024;
 /// Heap for real hardware (320 KiB).
 #[cfg(not(feature = "qemu"))]
 pub const HEAP_BYTES: usize = 320 * 1024;

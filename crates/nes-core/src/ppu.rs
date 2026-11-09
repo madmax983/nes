@@ -448,7 +448,9 @@ impl Ppu {
         self.prefetched_sprite_valid = [false; 8];
         self.prefetched_sprite_plane0 = [0; 8];
         self.prefetched_sprite_plane1 = [0; 8];
-        self.framebuffer = blank_framebuffer();
+        // Reuse the existing framebuffer allocation (allocated in Ppu::new);
+        // a fresh blank_framebuffer() would do a second 61 KiB heap allocation.
+        self.framebuffer.fill(FRAMEBUFFER_BLANK);
         self.mark_render_state_dirty();
     }
 
@@ -586,7 +588,7 @@ impl Ppu {
         self.prefetched_sprite_valid = [false; 8];
         self.prefetched_sprite_plane0 = [0; 8];
         self.prefetched_sprite_plane1 = [0; 8];
-        self.framebuffer = blank_framebuffer();
+        self.framebuffer.fill(FRAMEBUFFER_BLANK);
         self.render_revision = 0;
         self.bg_tile_cache = BgTileCache::default();
         self.sprite_scanline_cache = SpriteScanlineCache::default();
@@ -644,7 +646,7 @@ impl Ppu {
         // record_chr_fetches is re-established by the core after load_state;
         // just clear any stale pending fetches.
         self.chr_fetch_len = 0;
-        self.framebuffer = blank_framebuffer();
+        self.framebuffer.fill(FRAMEBUFFER_BLANK);
         self.render_full_framebuffer();
     }
 

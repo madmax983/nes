@@ -20,9 +20,15 @@ cargo +esp build --release --features qemu --offline
 
 echo "=== elf2image ==="
 ELF="$FW/target/xtensa-esp32s3-none-elf/release/nes-esp32-s3"
+if [ ! -f "$ELF" ]; then
+  echo "MISSING ELF: $ELF"; exit 1
+fi
 PYTHONPATH="$HOME/workspace/esptools/py" python3 -m esptool --chip esp32s3 elf2image \
   --flash-mode dio --flash-freq 80m --flash-size 4MB \
   -o "$BUILD/nes-app.bin" "$ELF"
+if [ ! -f "$BUILD/nes-app.bin" ]; then
+  echo "MISSING IMAGE: $BUILD/nes-app.bin"; exit 1
+fi
 
 echo "=== assembling 4MiB flash at offset 0x0 ==="
 python3 - "$BUILD/nes-app.bin" "$BUILD/qemu_flash.bin" <<'EOF'
@@ -36,9 +42,20 @@ EOF
 
 echo "=== booting in QEMU ==="
 LOG="$BUILD/uart0.log"
+# Preserve QEMU/timeout exit status: 124 = timeout (expected for a
+# successful boot that runs the frame loop indefinitely), 0 = QEMU
+# exited on its own (suspicious unless the log shows completion),
+# other = QEMU crashed.
+set +e
 timeout 180 "$QEMU" -nographic -machine esp32s3 \
   -drive file="$BUILD/qemu_flash.bin",if=mtd,format=raw \
-  -serial file:"$LOG" -monitor none -no-reboot || true
+  -serial file:"$LOG" -monitor none -no-reboot
+QEMU_STATUS=$?
+set -e
+echo "qemu/timeout exit status: $QEMU_STATUS"
+if [ "$QEMU_STATUS" -ne 0 ] && [ "$QEMU_STATUS" -ne 124 ]; then
+  echo "QEMU CRASHED (exit $QEMU_STATUS)"; exit 1
+fi
 
 echo "--- uart0.log ---"
 cat "$LOG"

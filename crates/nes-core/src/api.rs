@@ -923,6 +923,53 @@ impl NesCore {
         }
     }
 
+    /// Creates a boxed core, initializing in place on the heap.
+    ///
+    /// Unlike `Box::new(Self::new())`, this never materializes the ~78 KiB
+    /// struct as a stack temporary, which would overflow the small main-task
+    /// stacks on embedded targets (ESP32-S3 QEMU and RTOS tasks).
+    ///
+    /// Uses the raw allocator directly because `Box::new_uninit()` miscomputes
+    /// layout sizes for large types on the ESP toolchain.
+    #[must_use]
+    pub fn new_boxed() -> alloc::boxed::Box<Self> {
+        unsafe {
+            let layout = alloc::alloc::Layout::new::<Self>();
+            let ptr = alloc::alloc::alloc(layout) as *mut Self;
+            assert!(!ptr.is_null(), "NesCore allocation failed");
+            // Initialize field by field. The individual constructor
+            // temporaries (Scheduler, Ppu, Cpu, Apu) are small enough for
+            // the stack; only the aggregate 78 KiB struct must avoid it.
+            core::ptr::write(&mut (*ptr).paused, false);
+            core::ptr::write(&mut (*ptr).speed_permille, DEFAULT_SPEED_PERMILLE);
+            core::ptr::write(&mut (*ptr).scheduler, Scheduler::new());
+            core::ptr::write(&mut (*ptr).ppu, Ppu::new());
+            core::ptr::write(&mut (*ptr).ports, ControllerPorts::default());
+            core::ptr::write(&mut (*ptr).mapper, None);
+            core::ptr::write(&mut (*ptr).cheat_codes, Vec::new());
+            core::ptr::write(&mut (*ptr).reset_pc, DEFAULT_START_PC);
+            core::ptr::write(&mut (*ptr).cpu, Cpu::new(DEFAULT_START_PC));
+            core::ptr::write(&mut (*ptr).apu, Apu::new());
+            core::ptr::write(&mut (*ptr).pending_oam_dma_page, None);
+            core::ptr::write(&mut (*ptr).last_cpu_trace, None);
+            core::ptr::write(&mut (*ptr).last_cpu_bus_trace, Vec::new());
+            core::ptr::write(&mut (*ptr).scratch_writes, Vec::new());
+            core::ptr::write(&mut (*ptr).scratch_mmio_reads, Vec::new());
+            // 8 KiB zeroed box via raw allocator (manual layout).
+            let chr_size = CHR_8K_BYTES * core::mem::size_of::<u8>();
+            let chr_layout =
+                alloc::alloc::Layout::from_size_align(chr_size, 1).expect("chr layout");
+            let chr_ptr = alloc::alloc::alloc(chr_layout) as *mut u8;
+            assert!(!chr_ptr.is_null(), "chr_scratch allocation failed");
+            core::ptr::write_bytes(chr_ptr, 0, chr_size);
+            core::ptr::write(
+                &mut (*ptr).chr_scratch,
+                alloc::boxed::Box::from_raw(chr_ptr as *mut [u8; CHR_8K_BYTES]),
+            );
+            alloc::boxed::Box::from_raw(ptr)
+        }
+    }
+
     /// Returns whether stepping is currently paused.
     #[must_use]
     pub fn is_paused(&self) -> bool {

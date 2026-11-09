@@ -1056,6 +1056,12 @@ impl Apu {
             return 0;
         }
 
+        // QEMU: skip all FPU math (the Espressif QEMU fork's Xtensa FPU
+        // emulation crashes during StepFrame). Audio is a stub in QEMU
+        // anyway; return silence.
+        #[cfg(feature = "no-apu-tables")]
+        return 0;
+
         let p1 = usize::from(self.pulse1.output());
         let p2 = usize::from(self.pulse2.output());
         let tri = usize::from(self.triangle.output());
