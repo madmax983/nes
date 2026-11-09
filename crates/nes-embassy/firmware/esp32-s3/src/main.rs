@@ -181,6 +181,7 @@ fn main() -> ! {
         qemu_hang();
     }
     esp_println::println!("nes: rom loaded, {} bytes", rom::ROM.len());
+    esp_println::println!("nes: entering frame loop");
 
     let mut frame: u64 = 0;
     loop {
