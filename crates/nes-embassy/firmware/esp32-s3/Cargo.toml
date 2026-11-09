@@ -77,6 +77,20 @@ qemu = ["nes-embassy/no-apu-tables"]
 # The vendored serde_yaml uses serde with no-default-features + alloc,
 # which works for both host and target.
 [patch.crates-io]
+# Vendored esp-hal 1.2.1 with ONE patch: in
+# src/soc/esp32s3/clocks.rs, the BBPLL calibration wait in
+# `enable_pll_clk_impl` is bounded (1M iterations). Upstream spins
+# forever waiting for the `bbpll_cal_done` bit; the ESP32-S3 QEMU
+# machine does not model the analog peripheral, so the bit never sets
+# and a pristine esp-hal hangs inside `esp_hal::init` before the
+# first print — the CI boot test's serial log stops right after the
+# ROM prints `entry`. On real hardware calibration completes in
+# microseconds, far below the bound, so the patch is inert there.
+# This patch previously existed only in a local cargo registry cache,
+# which is why local QEMU boots passed while CI (fresh crates.io
+# downloads) hung; it lives in the repo now so both build the same
+# source.
+esp-hal = { path = "vendor/esp-hal-1.2.1-patched" }
 nb = { path = "vendor/nb-1.1.0" }
 serde_yaml = { path = "vendor/serde_yaml-0.9.34-patched" }
 # Vendored serde with default features changed from ["std"] to ["alloc"].
