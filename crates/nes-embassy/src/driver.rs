@@ -68,8 +68,7 @@ impl EmuDriver {
         #[cfg(not(feature = "no-apu-tables"))]
         let frame = unsafe {
             let size: usize = FRAME_PIXELS * core::mem::size_of::<u16>();
-            let layout = alloc::alloc::Layout::from_size_align(size, 2)
-                .expect("frame layout");
+            let layout = alloc::alloc::Layout::from_size_align(size, 2).expect("frame layout");
             let ptr = alloc::alloc::alloc(layout) as *mut u16;
             assert!(!ptr.is_null(), "frame allocation failed");
             core::ptr::write_bytes(ptr as *mut u8, 0, size);
@@ -80,8 +79,7 @@ impl EmuDriver {
         // Audio buffer: same manual layout.
         let audio = unsafe {
             let size = AUDIO_CHUNK_SAMPLES * core::mem::size_of::<i16>();
-            let layout = alloc::alloc::Layout::from_size_align(size, 2)
-                .expect("audio layout");
+            let layout = alloc::alloc::Layout::from_size_align(size, 2).expect("audio layout");
             let ptr = alloc::alloc::alloc(layout) as *mut i16;
             assert!(!ptr.is_null(), "audio allocation failed");
             core::ptr::write_bytes(ptr as *mut u8, 0, size);
