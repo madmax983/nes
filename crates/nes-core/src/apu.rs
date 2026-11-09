@@ -1051,17 +1051,24 @@ impl Apu {
         self.noise.clock_half_frame();
     }
 
+    // ESP32-S3 QEMU builds only (see build.rs: `NES_QEMU_APU_STUB` is set
+    // by run-qemu-s3.sh / esp32s3-qemu.yml, never by host builds): the
+    // Espressif QEMU fork faults on the mixer's float instructions, so
+    // the boot test runs with silence. The real mixer below is the only
+    // implementation host builds ever see.
+    #[cfg(qemu_apu_stub)]
+    fn raw_mixed_sample(&self, _paused: bool) -> i16 {
+        0
+    }
+
+    #[cfg(not(qemu_apu_stub))]
     fn raw_mixed_sample(&self, paused: bool) -> i16 {
         if paused {
             return 0;
         }
 
-        // QEMU: skip all FPU math (the Espressif QEMU fork's Xtensa FPU
-        // emulation crashes during StepFrame). Audio is a stub in QEMU
-        // anyway; return silence.
-        #[cfg(feature = "no-apu-tables")]
-        return 0;
-
+        // The mixer's inputs are sampled in every configuration: these
+        // are pure integer reads of the channel state.
         let p1 = usize::from(self.pulse1.output());
         let p2 = usize::from(self.pulse2.output());
         let tri = usize::from(self.triangle.output());
@@ -1070,6 +1077,11 @@ impl Apu {
 
         #[cfg(not(feature = "no-apu-tables"))]
         let pulse_out = PULSE_TABLE[p1 + p2];
+        // `no-apu-tables`: compute the mixer directly per-sample, as the
+        // feature documents — the precomputed tables live in a DROM
+        // segment that is unavailable or broken on the target (e.g. the
+        // ESP32-S3 QEMU emulation). This must keep producing real mixed
+        // output: host builds with --all-features rely on it.
         #[cfg(feature = "no-apu-tables")]
         let pulse_out = if p1 + p2 == 0 {
             0.0
@@ -1159,7 +1171,9 @@ impl Default for Apu {
 /// (~1.78M times per second), eliminating f32 math and branches on the hot path
 /// and replacing them with array lookups reduces a massive overhead and significantly
 /// improves emulator performance.
+#[cfg(not(feature = "no-apu-tables"))]
 const PULSE_TABLE_LEN: usize = 31;
+#[cfg(not(feature = "no-apu-tables"))]
 const TND_TABLE_LEN: usize = 32_768;
 
 /// Pulse mixer lookup, indexed by `pulse1 + pulse2`.
@@ -1169,8 +1183,9 @@ const TND_TABLE_LEN: usize = 32_768;
 /// and the per-sample `OnceLock` check; on an embedded target it moves ~131KB
 /// out of RAM and into flash.
 ///
-/// Disabled by the `no-apu-tables` feature (for QEMU, where DROM is broken);
-/// the mixer is computed directly per-sample instead.
+/// Disabled by the `no-apu-tables` feature (for targets where DROM is
+/// broken, such as the ESP32-S3 QEMU emulation); in that configuration
+/// `raw_mixed_sample` computes the mix directly per-sample instead.
 #[cfg(not(feature = "no-apu-tables"))]
 static PULSE_TABLE: [f32; PULSE_TABLE_LEN] = build_pulse_table();
 
@@ -1228,6 +1243,7 @@ mod tests {
     /// if it ever diverged, every mixed sample would shift silently. Calling
     /// the builders here evaluates them at runtime and compares bit patterns
     /// against the same formulas computed independently.
+    #[cfg(not(feature = "no-apu-tables"))]
     #[test]
     fn const_pulse_table_matches_runtime_evaluation() {
         let runtime = build_pulse_table();
@@ -1250,6 +1266,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "no-apu-tables"))]
     #[test]
     fn const_tnd_table_matches_runtime_evaluation() {
         let runtime = build_tnd_table();
@@ -1282,6 +1299,7 @@ mod tests {
     /// Hardware invariants the tables must satisfy regardless of how they are
     /// built: silence maps to silence, both are monotonically non-decreasing,
     /// and the summed mix cannot saturate the output stage on its own.
+    #[cfg(not(feature = "no-apu-tables"))]
     #[test]
     fn mixer_tables_satisfy_hardware_invariants() {
         assert_eq!(PULSE_TABLE[0], 0.0);
