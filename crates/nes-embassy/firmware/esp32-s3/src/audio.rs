@@ -78,15 +78,7 @@ impl AudioOut {
         debug_assert_eq!(mono.len(), CHUNK_SAMPLES);
         debug_assert!(dma_buf.len() >= DMA_BYTES);
 
-        {
-            let out = dma_buf.as_mut_slice();
-            for (i, &sample) in mono.iter().enumerate() {
-                let bytes = sample.to_le_bytes();
-                let base = i * 4;
-                out[base..base + 2].copy_from_slice(&bytes);
-                out[base + 2..base + 4].copy_from_slice(&bytes);
-            }
-        }
+        fill_stereo(mono, dma_buf.as_mut_slice());
 
         #[cfg(feature = "qemu")]
         return Ok(dma_buf);
@@ -108,5 +100,33 @@ impl AudioOut {
                 }
             }
         }
+    }
+
+    /// QEMU-only synchronous variant: fills the DMA buffer with the
+    /// stereo-duplicated chunk and returns it without touching the
+    /// peripheral (QEMU models no audio codec).
+    #[cfg(feature = "qemu")]
+    pub fn push_chunk_sync(
+        &mut self,
+        mono: &[i16],
+        mut dma_buf: DmaTxBuf,
+    ) -> Result<DmaTxBuf, AudioError> {
+        debug_assert_eq!(mono.len(), CHUNK_SAMPLES);
+        debug_assert!(dma_buf.len() >= DMA_BYTES);
+
+        fill_stereo(mono, dma_buf.as_mut_slice());
+
+        Ok(dma_buf)
+    }
+}
+
+/// Duplicates a mono `i16` chunk into an interleaved stereo byte buffer
+/// (little-endian, left == right).
+fn fill_stereo(mono: &[i16], out: &mut [u8]) {
+    for (i, &sample) in mono.iter().enumerate() {
+        let bytes = sample.to_le_bytes();
+        let base = i * 4;
+        out[base..base + 2].copy_from_slice(&bytes);
+        out[base + 2..base + 4].copy_from_slice(&bytes);
     }
 }

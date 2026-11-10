@@ -16,6 +16,15 @@
 //! 1. **Policy (Actor)**: A probability distribution across all possible controller actions.
 //! 2. **Value (Critic)**: An estimate of the expected future reward from the current state.
 
+// burn's `Config` derive (see `HybridPolicyValueConfig` below) expands
+// to a struct initialization that names each field explicitly
+// (`frame_stack: frame_stack`, ...). Current clippy lints that
+// expansion as `redundant_field_names`, attributes it to the field
+// declarations, and an item-level `#[allow]` on the struct does not
+// reach the generated impl — so the allow lives at module scope,
+// for this one lint only.
+#![allow(clippy::redundant_field_names)]
+
 use burn_core as burn;
 use burn_core::prelude::{Backend, Config, Module, Tensor};
 use burn_nn::{

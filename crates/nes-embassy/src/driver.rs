@@ -39,28 +39,58 @@ pub fn buttons(pressed: &[Button]) -> u8 {
 ///
 /// All buffers are heap-allocated once in [`EmuDriver::new`]; `step_frame`
 /// never allocates.
+///
+/// In QEMU mode (`no-apu-tables` feature), the frame buffer is a 1-pixel dummy:
+/// the display is a stub and the 123 KiB RGB565 buffer would overflow the
+/// limited DRAM heap alongside the PPU's internal 61 KiB framebuffer.
 pub struct EmuDriver {
     core: Box<NesCore>,
     pad1: u8,
     pad2: u8,
+    #[cfg(not(feature = "no-apu-tables"))]
     frame: Box<[u16; FRAME_PIXELS]>,
+    #[cfg(feature = "no-apu-tables")]
+    frame: Box<[u16; 1]>,
     audio: Box<[i16; AUDIO_CHUNK_SAMPLES]>,
 }
 
 impl EmuDriver {
     /// Creates a driver with power-on core defaults and zeroed frame buffers.
     ///
-    /// The [`NesCore`] (~78 KiB) is heap-allocated. In release mode the
-    /// compiler constructs it directly on the heap via box placement,
-    /// avoiding a stack temporary that would overflow RTOS task stacks.
+    /// The [`NesCore`] (~78 KiB), frame buffer (~123 KiB, or 2 bytes dummy in
+    /// QEMU mode), and audio buffer are heap-allocated without large stack
+    /// temporaries, which would overflow the small main-task stacks on
+    /// embedded targets.
     #[must_use]
     pub fn new() -> Self {
+        // Frame buffer: in QEMU mode (no-apu-tables), use a 1-pixel dummy
+        // (2 bytes) since the display is a stub. Otherwise 122,880 bytes.
+        #[cfg(not(feature = "no-apu-tables"))]
+        let frame = unsafe {
+            let size: usize = FRAME_PIXELS * core::mem::size_of::<u16>();
+            let layout = alloc::alloc::Layout::from_size_align(size, 2).expect("frame layout");
+            let ptr = alloc::alloc::alloc(layout) as *mut u16;
+            assert!(!ptr.is_null(), "frame allocation failed");
+            core::ptr::write_bytes(ptr as *mut u8, 0, size);
+            Box::from_raw(ptr as *mut [u16; FRAME_PIXELS])
+        };
+        #[cfg(feature = "no-apu-tables")]
+        let frame: Box<[u16; 1]> = Box::new([0u16; 1]);
+        // Audio buffer: same manual layout.
+        let audio = unsafe {
+            let size = AUDIO_CHUNK_SAMPLES * core::mem::size_of::<i16>();
+            let layout = alloc::alloc::Layout::from_size_align(size, 2).expect("audio layout");
+            let ptr = alloc::alloc::alloc(layout) as *mut i16;
+            assert!(!ptr.is_null(), "audio allocation failed");
+            core::ptr::write_bytes(ptr as *mut u8, 0, size);
+            Box::from_raw(ptr as *mut [i16; AUDIO_CHUNK_SAMPLES])
+        };
         Self {
-            core: Box::new(NesCore::new()),
+            core: nes_core::NesCore::new_boxed(),
             pad1: 0,
             pad2: 0,
-            frame: Box::new([0; FRAME_PIXELS]),
-            audio: Box::new([0; AUDIO_CHUNK_SAMPLES]),
+            frame,
+            audio,
         }
     }
 
@@ -92,6 +122,9 @@ impl EmuDriver {
         self.core.execute(Command::SetControllerState(self.pad1))?;
         self.core.execute(Command::SetController2State(self.pad2))?;
         self.core.execute(Command::StepFrame)?;
+        // In QEMU mode the frame is a 1-pixel dummy (display is a stub);
+        // skip the 123 KiB RGB565 conversion.
+        #[cfg(not(feature = "no-apu-tables"))]
         self.core.fill_framebuffer_rgb565(&mut self.frame[..]);
         self.core.fill_audio_chunk_i16(&mut self.audio[..]);
         Ok(())
