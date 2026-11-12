@@ -38,3 +38,7 @@ pub mod zone_tracker;
 /// Visualizes PPU state including pattern tables and nametables with scroll boundaries.
 #[cfg(feature = "nova")]
 pub mod ppu_visualizer;
+
+/// Visualizes gamepad inputs directly on the framebuffer.
+#[cfg(feature = "nova")]
+pub mod input_visualizer;
